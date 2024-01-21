@@ -9,7 +9,7 @@ body {
     background-color: #cccccc;
 }
 
-nav, .content, footer {
+nav, .page, footer {
     background-color: #ffffff;
     margin-left: 10%;
     margin-right: 10%;
@@ -19,6 +19,9 @@ nav {
     border-top-style: hidden;
     border-top-left-radius: 1vw;
     border-top-right-radius: 1vw;
+
+    display: flex;
+    flex-direction: row;
 
     font-family: "Poppins", "Arial", sans-serif;
 
@@ -39,11 +42,10 @@ nav {
 }
 
 .nav_personal_name {
+    flex-grow: 1;
+
     font-size: 3vw;
     font-weight: 500;
-
-    /* Moves the other nav buttons over to the right... fix */
-    margin-right: 25%;
 }
 
 .nav_link {
@@ -62,7 +64,7 @@ nav {
     background-color: #d3d3d3;
 }
 
-.content {
+.page {
     border-style: hidden;
     border-bottom-left-radius: 1vw;
     border-bottom-right-radius: 1vw;

@@ -1,0 +1,48 @@
+* {
+    box-sizing: border-box;
+}
+
+#about {
+    display: flex;
+}
+
+#left_column {
+    vertical-align: top;
+}
+
+#right_column {
+    width: auto;
+}
+
+#education_list {
+    list-style: none;
+
+    font-size: 1.25vw;
+
+    margin: 0;
+
+    padding: 0;
+}
+
+.education {
+    display: flex;
+
+    height: 3vw;
+}
+
+.education_logo {
+    width: 25%;
+}
+
+.education_logo_img {
+    height: 100%;
+    width: auto;
+}
+
+.education_degree, .education_dates {
+    padding: 1%;
+}
+
+.education_degree {
+    flex-grow: 1;
+}

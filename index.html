@@ -4,27 +4,65 @@
         <title>Home - Christopher Priebe</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="css/base.css">
+        <link rel="stylesheet" href="css/index.css">
     </head>
     <nav>
-        <a class="nav_personal_name" href="index.html">Christopher Priebe</a> <a class="nav_link" href="research.html">Research</a> <a class="nav_link" href="projects.html">Projects</a>
+        <a class="nav_personal_name" href="index.html">Christopher Priebe</a>
+        <a class="nav_link" href="research.html">Research</a>
+        <a class="nav_link" href="projects.html">Projects</a>
     </nav>
     <body>
-        <div class="content">
-            <img src="images/headshot.jpg" alt="Headshot of Christopher Priebe" width="380" height="504" alt="Headshot">
-            <p>
-                Ph.D. Student<br>
-                <a href="https://cse.ucsd.edu/" target="_blank" title="UCSD CSE Website">Department of Computer Science & Engineering</a><br>
-                <a href="https://ucsd.edu/" target="_blank" title="UCSD Website">University of California San Diego</a><br>
-                Email: cpriebe (at) ucsd (dot) edu
-            </p>
+        <div class="page">
+            <div id="about">
+                <div id="left_column">
+                    <h2>About Me</h2>
+                    <p>
+                        Hello! Welcome to my website! I am a Ph.D. student in Computer Engineering at the University of California, San Diego (UCSD), where I am advised by Hadi Esmaeilzadeh. My research is focussed on compilers. I also hold an undergraduate degree in Electrical Engineering from Purdue University.
+                    </p>
+                    <p>
+                        Please bear with me while I build this website as I am actively learning HTML, CSS, and JavaScript. I will be adding more content soon!
+                    </p>
+                </div>
+                <div id="right_column">
+                    <img src="images/headshot.jpg" alt="Headshot of Christopher Priebe" width="100%" height="auto">
+                    <p>
+                        Ph.D. Student<br>
+                        <a href="https://cse.ucsd.edu/" target="_blank" title="UCSD CSE Website">Department of Computer Science & Engineering</a><br>
+                        <a href="https://ucsd.edu/" target="_blank" title="UCSD Website">University of California San Diego</a><br>
+                        Email: cpriebe (at) ucsd (dot) edu
+                    </p>
+                </div>
+            </div>
             <hr>
-            <h2>About Me</h2>
-            <p>
-                Hello! Welcome to my website! I am a Ph.D. student in Computer Engineering at the University of California, San Diego (UCSD), where I am advised by Hadi Esmaeilzadeh. My research is focussed on compilers. I also hold an undergraduate degree in Electrical Engineering from Purdue University.
-            </p>
-            <p>
-                Please bear with me while I build this website as I am actively learning HTML, CSS, and JavaScript. I will be adding more content soon!
-            </p>
+            <h2>Education</h2>
+            <ul id="education_list">
+                <li style="padding-bottom: 2%;">
+                    <div class="education">
+                        <div class="education_logo">
+                            <img class="education_logo_img" src="images/ucsd_logo.png" alt="UC San Diego logo">
+                        </div>
+                        <div class="education_degree">
+                            Doctor of Philosophy in Computer Engineering
+                        </div>
+                        <div class="education_dates">
+                            September 2022 - Present
+                        </div>
+                    </div>
+                </li>
+                <li>
+                    <div class="education">
+                        <div class="education_logo">
+                            <img class="education_logo_img" src="images/purdue_logo.png" alt="Purdue University logo">
+                        </div>
+                        <div class="education_degree">
+                            Bachelor of Science in Electrical Engineering
+                        </div>
+                        <div class="education_dates">
+                            August 2018 - May 2022
+                        </div>
+                    </div>
+                </li>
+            </ul>
         </div>
     </body>
     <footer>
