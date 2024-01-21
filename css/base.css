@@ -1,0 +1,84 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap");
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    background-color: #cccccc;
+}
+
+nav, .content, footer {
+    background-color: #ffffff;
+    margin-left: 10%;
+    margin-right: 10%;
+}
+
+nav {
+    border-top-style: hidden;
+    border-top-left-radius: 1vw;
+    border-top-right-radius: 1vw;
+
+    font-family: "Poppins", "Arial", sans-serif;
+
+    padding-top: 2.5%;
+    padding-bottom: 2.5%;
+    padding-left: 2.5%;
+    padding-right: 2.5%;
+}
+
+.nav_personal_name, .nav_link {
+    color: #000080;
+
+    display: inline-block;
+
+    text-decoration: none;
+
+    vertical-align: middle;
+}
+
+.nav_personal_name {
+    font-size: 3vw;
+    font-weight: 500;
+
+    /* Moves the other nav buttons over to the right... fix */
+    margin-right: 25%;
+}
+
+.nav_link {
+    border-style: hidden;
+    border-radius: 0.5vw;
+
+    font-size: 1.5vw;
+
+    padding-top: 1%;
+    padding-bottom: 1%;
+    padding-left: 1%;
+    padding-right: 1%;
+}
+
+.nav_link:hover {
+    background-color: #d3d3d3;
+}
+
+.content {
+    border-style: hidden;
+    border-bottom-left-radius: 1vw;
+    border-bottom-right-radius: 1vw;
+
+    font-family: "Roboto", "Arial", sans-serif;
+
+    padding-bottom: 2.5%;
+    padding-left: 2.5%;
+    padding-right: 2.5%;
+}
+
+footer {
+    border-style: hidden;
+    border-radius: 1vw;
+
+    margin-top: 1%;
+
+    padding: 1%;
+}
