@@ -9,10 +9,11 @@ body {
     background-color: #cccccc;
 }
 
+/* TODO: move the nav bar into the page wrapper element */
 nav, .page, footer {
     background-color: #ffffff;
-    margin-left: 10%;
-    margin-right: 10%;
+    margin-left: 10vw;
+    margin-right: 10vw;
 }
 
 nav {
@@ -26,7 +27,6 @@ nav {
     font-family: "Poppins", "Arial", sans-serif;
 
     padding-top: 2.5%;
-    padding-bottom: 2.5%;
     padding-left: 2.5%;
     padding-right: 2.5%;
 }
@@ -48,6 +48,7 @@ nav {
     font-weight: 500;
 }
 
+/* TODO: figure out why text isn't centered in the nav links */
 .nav_link {
     border-style: hidden;
     border-radius: 0.5vw;
@@ -71,6 +72,7 @@ nav {
 
     font-family: "Roboto", "Arial", sans-serif;
 
+    padding-top: 2.5%;
     padding-bottom: 2.5%;
     padding-left: 2.5%;
     padding-right: 2.5%;

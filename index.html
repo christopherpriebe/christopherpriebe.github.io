@@ -3,13 +3,15 @@
     <head>
         <title>Home - Christopher Priebe</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="keywords" content="christopher priebe,chris priebe,priebe">
         <link rel="stylesheet" href="css/base.css">
         <link rel="stylesheet" href="css/index.css">
     </head>
     <nav>
         <a class="nav_personal_name" href="index.html">Christopher Priebe</a>
         <a class="nav_link" href="research.html">Research</a>
-        <a class="nav_link" href="projects.html">Projects</a>
+        <!-- TODO: add project page! -->
+        <!-- <a class="nav_link" href="projects.html">Projects</a> -->
     </nav>
     <body>
         <div class="page">
@@ -17,10 +19,16 @@
                 <div id="left_column">
                     <h2>About Me</h2>
                     <p>
-                        Hello! Welcome to my website! I am a Ph.D. student in Computer Engineering at the University of California, San Diego (UCSD), where I am advised by Hadi Esmaeilzadeh. My research is focussed on compilers. I also hold an undergraduate degree in Electrical Engineering from Purdue University.
+                        Hello! Welcome to my website!
+                        I am a Ph.D. student in Computer Engineering at the University of California San Diego (UCSD), where I am advised by Hadi Esmaeilzadeh.
+                        I also hold an undergraduate degree in Electrical Engineering from Purdue University.
                     </p>
                     <p>
-                        Please bear with me while I build this website as I am actively learning HTML, CSS, and JavaScript. I will be adding more content soon!
+                        My research focus is an interplay of compilers, machine learning, and systems.
+                        More specifically, I am interested in compilers and systems for cross-domain applications (e.g., autonomous driving software that requires signal processing, machine learning, and control theory), multi-target compilers (i.e., compilers that can target CPUs, GPUs, and domain-specific accelerators efficiently), and machine-learning-based compiler optimizations to enable the aforementioned techniques.
+                    </p>
+                    <p>
+                        When I'm not in the office, I enjoy running, playing tennis, and weight training.
                     </p>
                 </div>
                 <div id="right_column">
@@ -31,13 +39,17 @@
                         <a href="https://ucsd.edu/" target="_blank" title="UCSD Website">University of California San Diego</a><br>
                         Email: cpriebe (at) ucsd (dot) edu
                     </p>
+                    <!-- TODO: Make better social media icons! -->
+                    <a href="https://www.linkedin.com/in/priebechristopher/" target="_blank">
+                        <img src="images/linkedin_icon.png" style="height: 40px;">
+                    </a>
                 </div>
             </div>
             <hr>
             <h2>Education</h2>
             <ul id="education_list">
-                <li style="padding-bottom: 2%;">
-                    <div class="education">
+                <li style="padding-bottom: 1%;">
+                    <div class="education_ucsd">
                         <div class="education_logo">
                             <img class="education_logo_img" src="images/ucsd_logo.png" alt="UC San Diego logo">
                         </div>
@@ -49,8 +61,8 @@
                         </div>
                     </div>
                 </li>
-                <li>
-                    <div class="education">
+                <li style="padding-top: 1%;">
+                    <div class="education_purdue">
                         <div class="education_logo">
                             <img class="education_logo_img" src="images/purdue_logo.png" alt="Purdue University logo">
                         </div>
@@ -66,6 +78,6 @@
         </div>
     </body>
     <footer>
-        <p><em>This page is created and maintained by Christopher Priebe and was last modified January 21st, 2024</em></p>
+        <p><em>This page is created and maintained by Christopher Priebe and was last modified January 26th, 2024</em></p>
     </footer>
 </html>

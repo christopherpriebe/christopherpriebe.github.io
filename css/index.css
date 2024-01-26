@@ -4,14 +4,17 @@
 
 #about {
     display: flex;
+    justify-content: space-between;
 }
 
 #left_column {
+    flex-basis: 40vw;
+
     vertical-align: top;
 }
 
 #right_column {
-    width: auto;
+    flex-basis: 25vw;
 }
 
 #education_list {
@@ -24,10 +27,16 @@
     padding: 0;
 }
 
-.education {
+.education_ucsd, .education_purdue {
     display: flex;
 
-    height: 3vw;
+    height: 4vw;
+
+    padding: 1%;
+}
+
+.education_ucsd {
+    border-color: #182B49;
 }
 
 .education_logo {
@@ -40,7 +49,7 @@
 }
 
 .education_degree, .education_dates {
-    padding: 1%;
+    padding: 0.5%;
 }
 
 .education_degree {
