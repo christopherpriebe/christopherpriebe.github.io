@@ -1,0 +1,5 @@
+---
+---
+
+@import "skins/{{ site.theme.skin | default: 'classic' }}";
+@import "initialize";

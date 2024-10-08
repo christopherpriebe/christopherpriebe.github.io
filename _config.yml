@@ -1,0 +1,76 @@
+# ==================================================
+# Site Settings
+# ==================================================
+title: Christopher Priebe
+email: christophermpriebe@gmail.com
+description: >- # this means to ignore newlines until "baseurl:"
+  Write an awesome description for your new site here. You can edit this
+  line in _config.yml. It will appear in your document head meta (for
+  Google search results) and in your feed.xml site description.
+baseurl: "" # the subpath of your site, e.g. /blog
+url: "" # the base hostname & protocol for your site, e.g. http://example.com
+
+footer_text: >
+  Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>.
+display_last_updated_date: true
+
+# ==================================================
+# User Profile
+# ==================================================
+profile:
+  first_name: Christopher
+  middle_name: M.
+  last_name: Priebe
+  title: Ph.D. Student
+  affiliation: University of California San Diego
+  location: La Jolla, CA
+  image: images/headshot.jpg
+  history:
+    - title: Ph.D. in Computer Engineering
+      logo: images/ucsd_logo.png
+      start_year: 2022
+      description: >
+        I am a Ph.D. student in the Department of Computer Science and Engineering at the University of California San Diego where I am advised by Professor <a href="https://cseweb.ucsd.edu/~hadi/">Hadi Esmaeilzadeh</a>. 
+        I work on compilers for cross-domain applications, multi-target compilers, and machine-learning-based compiler optimizations.
+    - title: B.S. in Electrical Engineering
+      logo: images/purdue_logo.png
+      start_year: 2018
+      end_year: 2022
+      description: >
+        I received my B.S. in Electrical Engineering from Purdue University in 2018.
+        While I was a student, I had the opportunity to work with the <a href="https://engineering.purdue.edu/SoC-Team">Purdue SoCet</a> team and take ECE 43700 "Computer Design and Prototyping" with Professor <a href="https://engineering.purdue.edu/~vijay/">T. N. Vijaykumar</a>, both of which inspired me to pursue a doctoral degree.
+        I also completed two summer internships at <a href="https://www.intel.com/">Intel</a> working on pre-silicon verification and an internship at <a href="https://www.navsea.navy.mil/Home/Warfare-Centers/NSWC-Crane/">NSWC Crane</a> working on digital design; all three were virtual due to the COVID-19 pandemic.
+  
+# ==================================================
+# Social Profiles
+# ==================================================
+
+github_username: christopherpriebe # GitHub username
+linkedin_username: priebechristopher # LinkedIn username
+
+# ==================================================
+# Jekyll Settings
+# ==================================================
+
+# plugins 
+# plugins:
+#   - jekyll-feed
+
+# includes & excludes
+include:
+  - _pages
+
+exclude:
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - package.json
+  - package-lock.json
+  - README.md
+  - vendor
+
+# ==================================================
+# Library Versions
+# ==================================================

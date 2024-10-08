@@ -1,0 +1,30 @@
+.site-header
+    background-color: $background-color
+
+/*
+ * Overwrite Bootstrap 3 CSS for navbar
+ */
+.navbar-default
+    background-color: $background-color
+    border-color: $background-color
+
+    .navbar-brand
+        color: $navbar-title-color
+        font-size: $navbar-title-size
+        line-height: $navbar-title-size
+        font-weight: bold
+        height: 100%
+
+        &:hover, &:focus
+            color: $navbar-title-hover-color
+    
+    .navbar-nav
+        > li > a
+            color: $navbar-link-color
+            font-size: $navbar-link-size
+
+            &:hover, &:focus
+                color: $navbar-link-hover-color
+
+footer
+    padding-top: 20px
