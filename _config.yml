@@ -49,6 +49,22 @@ github_username: christopherpriebe # GitHub username
 linkedin_username: priebechristopher # LinkedIn username
 
 # ==================================================
+# Collections
+# ==================================================
+
+collections:
+  news:
+    defaults:
+      layout: base
+    output: true
+    permalink: /:collection/:title/
+  projects:
+    default: 
+      layout: base
+    output: true
+    permalink: /:collection/:title/
+
+# ==================================================
 # Jekyll Settings
 # ==================================================
 

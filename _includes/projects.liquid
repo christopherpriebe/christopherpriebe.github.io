@@ -1,0 +1,17 @@
+<div class="row">
+    <div class="col-xs-12 col-md-6 col-lg-4">
+        <a href="{% if project.redirect %}{{ project.redirect }}{% else %}{{ project.url | relative_url }}{% endif %}">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    {% if project.img %}
+                        <img src="/assets/images/{{ project.img }}" alt="{{ project.title }}" class="img-responsive img-rounded">
+                    {% endif %}
+                    <h2 class="panel-title">{{ project.title }}</h2>
+                </div>
+                <div class="panel-body">
+                    <p class="card-text">{{ project.description }}</p>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
