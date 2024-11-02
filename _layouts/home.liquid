@@ -31,17 +31,18 @@ layout: base
     </div>
     <div id="history" class="row row-md-height-columns">
         <div class="col-xs-12 text-center">
-            {% for item in site.profile.history %}
+            {% assign sorted_history = site.history | sort: "end_year" %}
+            {% for item in sorted_history %}
                 <div class="row row-no-gutters history-item">
                     <div class="col-xs-3 col-md-1 text-right history-item-span">
                         <span>{{ item.start_year }} - {{ item.end_year }}</span>
                     </div>
                     <div class="col-xs-9 col-md-2 text-center history-item-logo">
                         <div class="history-item-dot"></div>
-                        <img src="/assets/{{ item.logo }}" class="img-rounded img-responsive" alt="Logo for experience" class="company-logo">
+                        <img src="/assets/{{ item.img }}" class="img-rounded img-responsive" alt="Logo for experience" class="company-logo">
                     </div>
                     <div class="col-xs-8 col-xs-offset-3 col-md-9 col-md-offset-0 text-left history-item-content">
-                        <p>{{ item.description }}</p>
+                        <p>{{ item.content }}</p>
                     </div>
                 </div>
             {% endfor %}
