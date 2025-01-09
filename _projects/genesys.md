@@ -36,7 +36,7 @@ These unique and functional artifacts represent years of research and multiple p
 GeneSys has already been used in multiple published papers {% cite dmx:hpca:2024 tandem:asplos:2024 dscs:asplos:2024 --file genesys.bib %} and course projects in CSE 240D at the University of California San Diego.
 
 My primary contribution to GeneSys has been the continued development of the system's compiler, which was originally written by Sean Kinzer.
-After taking on the mantle, I streamlined the setup and installation process by packaging the compiler with pip, implemented a new greedy memory allocation strategy based on {% cite greedy-memory-alloc-nn-inference:arxiv:2020 --file genesys.bib %} which significantly reduced the memory footprint in DRAM during execution, removed excess code bloat leftover from stitching multiple projects together during the initial development phase and expanded the neural network layer support of the compiler to accommodate more diverse models.
+After taking on the mantle, I streamlined the setup and installation process by packaging the compiler with pip, implemented a new greedy memory allocation strategy based on {% cite greedy-memory-alloc-nn-inference:arxiv:2020 --file genesys.bib %} which significantly reduced the memory footprint in DRAM during execution, removed excess code bloat leftover from stitching multiple projects together during the initial development phase, and expanded the neural network layer support of the compiler to accommodate more diverse models.
 
 For more information on the project as a whole, see the [GeneSys website](https://actlab-genesys.github.io/).
 
