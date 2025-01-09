@@ -7,18 +7,21 @@ layout: base
         <div class="col-xs-12 text-center">
             <div class="row">
                 <div class="col-xs-12 text-center-xs col-md-6 text-right-md">
-                    <img src="/assets/{{ site.profile.image }}" alt="Headshot of Christopher Priebe" class="bio-pic img-circle">
+                    <img src="{{ site.profile.image }}" alt="Headshot of Christopher Priebe" class="bio-pic img-circle">
                 </div>
                 <div class="col-xs-12 text-center-xs col-md-6 text-left-md">
                     <div class="h1">{{ site.profile.first_name }} {{ site.profile.middle_name }} {{ site.profile.last_name }}</div>
                     <div class="h4">{{ site.profile.title }}</div>
                     <div class="h5">{{ site.profile.affiliation }}, {{ site.profile.location }}</div>
 
-                    {% if site.github_username %}
-                        <a class="bio-social-icon-link" href="https://github.com/{{ site.github_username }}"><i class="fa fa-github bio-social-icon"></i></a>
+                    {% if site.resume_home_icon %}
+                        <a class="bio-social-icon-link" href="/cv/"><i class="fa-solid fa-rectangle-list bio-social-icon"></i></a> 
                     {% endif %}
-                    {%  if site.linkedin_username %}
-                        <a class="bio-social-icon-link" href="https://linkedin.com/in/{{ site.linkedin_username }}"><i class="fa fa-linkedin-square bio-social-icon"></i></a>
+                    {% if site.github_username %}
+                        <a class="bio-social-icon-link" href="https://github.com/{{ site.github_username }}"><i class="fa-brands fa-github bio-social-icon"></i></a>
+                    {% endif %}
+                    {% if site.linkedin_username %}
+                        <a class="bio-social-icon-link" href="https://linkedin.com/in/{{ site.linkedin_username }}"><i class="fa-brands fa-linkedin bio-social-icon"></i></a>
                     {% endif %}
                 </div>
             </div>
@@ -39,7 +42,7 @@ layout: base
                     </div>
                     <div class="col-xs-9 col-sm-4 col-md-2 text-center history-item-logo">
                         <div class="history-item-dot"></div>
-                        <img src="/assets/{{ item.img }}" class="img-rounded img-responsive" alt="Logo for experience" class="company-logo">
+                        <img src="{{ item.img }}" class="img-rounded img-responsive" alt="Logo for experience" class="company-logo">
                     </div>
                     <div class="col-xs-8 col-xs-offset-3 col-sm-7 col-sm-offset-0 col-md-9 col-md-offset-0 text-left history-item-content">
                         <p>{{ item.content }}</p>

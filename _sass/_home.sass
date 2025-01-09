@@ -2,7 +2,7 @@
     
 .bio-pic
     height: $home-profile-photo-height
-    width: 200px
+    width: $home-profile-photo-width 
     object-fit: cover
 
 .bio-social-icon
@@ -46,6 +46,9 @@
     border-left: 2px solid $history-line-color
     height: 100%
 
+    @include media_larger_than_mobile
+        padding-bottom: 0px 
+
 .history-item-logo img
     padding-left: 10px
     padding-bottom: 10px
@@ -55,12 +58,8 @@
     padding-bottom: 20px
     border-left: 2px solid $history-line-color
 
+    @include media_larger_than_mobile
+        border-left: 0px
+
 .history-item-content p
     padding-left: 10px
-
-@media screen and (min-width: $screen-sm-min)
-    .history-item-logo
-        padding-bottom: 0px
-        
-    .history-item-content
-        border-left: 0px

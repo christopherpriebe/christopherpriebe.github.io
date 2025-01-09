@@ -1,15 +1,5 @@
-*
-    box-sizing: border-box
-        
 html
     font-size: $base-font-size
-
-/*
- * Reset margin and padding of all elements
- */
-body, h1, h2, h3, h4, h5, h6, p, blockquote, pre, hr, dl, dd, ol, ul, figure
-    margin: 0
-    padding: 0
 
 /*
  * Basic styling
@@ -32,11 +22,27 @@ body
         padding-right: 0
 
 /*
- * Minimum screen width variables
+ * Minimum screen width variables and mixins
  */
 $screen-sm-min: 768px
 $screen-md-min: 992px
 $screen-lg-min: 1200px
+
+@mixin media_max($screen_width)
+    @media (max-width: $screen_width)
+        @content
+
+@mixin media_min($screen_width)
+    @media (min-width: $screen_width)
+        @content
+
+@mixin media_larger_than_mobile
+    @media (min-width: $screen-sm-min)
+        @content
+
+@mixin media_mobile
+    @media (max-width: $screen-sm-min)
+        @content
 
 /*
  * Bootstrap 3 responsive text alignment utility

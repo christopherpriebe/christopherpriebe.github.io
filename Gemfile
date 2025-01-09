@@ -7,7 +7,7 @@ source "https://rubygems.org"
 #     bundle exec jekyll serve
 #
 
-# Define version variables at the top of your Gemfile
+# Version variables 
 jekyll_version = "~> 3.9.5"
 minima_version = "~> 2.5"
 github_pages_version = "~> 231"
@@ -42,3 +42,5 @@ gem "wdm", wdm_version, :platforms => [:mingw, :x64_mingw, :mswin]
 # Lock `http_parser.rb` gem to `v0.6.x` on JRuby builds since newer versions of the gem
 # do not have a Java counterpart.
 gem "http_parser.rb", http_parser_version, :platforms => [:jruby]
+
+gem "jekyll-scholar", group: :jekyll_plugins

@@ -1,6 +1,6 @@
 ---
 title: B.S. in Electrical Engineering
-img: images/purdue_logo.png
+img: /assets/images/purdue_logo.png
 start_year: 2018
 end_year: 2022
 ---
