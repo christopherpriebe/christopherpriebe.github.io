@@ -1,15 +1,14 @@
 ---
 layout: single_column_page 
 title: GeneSys
+show_title: true
 sub_title: Open-Source Parameterizable NPU Generator with Full-Stack Multi-Target Compilation Stack
 description: >
     An open-source parameterizable neural processing unit (NPU) generator with a full-stack multi-target compilation stack.
     It allows users to produce complete acceleration systems for emerging deep learning models, such as convolutional neural networks (CNNs) and transformers, with minimal human intervention.
-# img: genesys_logo.jpg
 website: https://actlab-genesys.github.io/ 
 github: https://github.com/actlab-genesys/GeneSys
 importance: 1
-resume: true
 ---
 
 <figure>
@@ -18,8 +17,6 @@ resume: true
         <p>GeneSys workflow.</p>
     </figcaption>
 </figure>
-
----
 
 One of the major enabling factors in the significant advancement of deep learning (like convolutional and transformer-based neural networks) is the rapid growth of computing power in the 2010s.
 With the end of Dennard scaling {% cite dennard-scaling:jssc:1974 --file genesys.bib %} and the advent of dark silicon {% cite dark-silicon:isca:2011 --file genesys.bib %}, research and development has shifted towards adopting hardware accelerators for deep learning {% cite diannao:asplos:2014 dnnweaver:micro:2016 eyeriss:isca:2016 simba:micro:2019 gemmini:dac:2021 --file genesys.bib %}.

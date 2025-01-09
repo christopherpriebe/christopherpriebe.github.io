@@ -1,6 +1,7 @@
 ---
 layout: single_column_page 
 title: Credits
+show_title: true
 permalink: /credits/
 nav: false
 ---

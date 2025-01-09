@@ -4,6 +4,12 @@ layout: base
 
 <div class="container">
     <div class="row">
+        {% if page.title and page.show_title %}
+            <div class="col-12 text-center-xs text-left-md">
+                <h1>{{ page.title }}</h1>
+            </div>
+            <hr>
+        {% endif %}
         <div class="col-12">
             {{ content }}
         </div>
