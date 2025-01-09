@@ -1,7 +1,5 @@
 ---
-layout: single_column_page 
 title: GeneSys
-show_title: true
 sub_title: Open-Source Parameterizable NPU Generator with Full-Stack Multi-Target Compilation Stack
 description: >
     An open-source parameterizable neural processing unit (NPU) generator with a full-stack multi-target compilation stack.

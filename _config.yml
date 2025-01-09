@@ -50,6 +50,25 @@ resume_section_publications: false
 resume_section_projects: true
 
 # ==================================================
+# Front Matter Defaults
+# ==================================================
+defaults:
+  -
+    scope:
+      path: ""
+      type: "pages"
+    values:
+      nav: false
+  -
+    scope:
+      path: ""
+      type: "projects"
+    values:
+      layout: "single_column_page"
+      show_title: true
+
+
+# ==================================================
 # Jekyll Scholar
 # ==================================================
 

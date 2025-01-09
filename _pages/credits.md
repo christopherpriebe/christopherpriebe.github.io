@@ -3,7 +3,6 @@ layout: single_column_page
 title: Credits
 show_title: true
 permalink: /credits/
-nav: false
 ---
 
 This website is generated using [Jekyll](https://jekyllrb.com/) and built with [Bootstrap](https://getbootstrap.com/) (v3.3.7), [jQuery](https://jquery.com/) (v3.7.1), and [Font Awesome](https://fontawesome.com/) (v6.7.2).
