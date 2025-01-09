@@ -3,12 +3,12 @@
         <div class="row">
             <div class="col-xs-12">
                 <p class="text-center">
-                    &copy; Copyright {{ site.time | date: '%Y' }}
+                    &copy; Copyright {{ site.time | date: "%Y" }}
                     {{ site.profile.first_name }}
                     {{ site.profile.middle_name }}
                     {{ site.profile.last_name }}. {{ site.footer_text }}
                     {% if site.display_last_updated_date %}
-                        Last updated: {{ 'now' | date: '%B %d, %Y' }}.
+                        Last updated: {{ "now" | date: "%B %d, %Y" }}.
                     {% endif %}
                 </p>
             </div>

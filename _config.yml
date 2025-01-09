@@ -11,7 +11,7 @@ baseurl: "" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site, e.g. http://example.com
 
 footer_text: >
-  Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>.
+  Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>. For additional credits, see <a href="/credits/">this</a>.
 display_last_updated_date: true
 
 # ==================================================
@@ -24,29 +24,87 @@ profile:
   title: Ph.D. Student
   affiliation: University of California San Diego
   location: La Jolla, CA
-  image: images/headshot.jpg
-  history:
-    - title: Ph.D. in Computer Engineering
-      logo: images/ucsd_logo.png
-      start_year: 2022
-      description: >
-        I am a Ph.D. student in the Department of Computer Science and Engineering at the University of California San Diego where I am advised by Professor <a href="https://cseweb.ucsd.edu/~hadi/">Hadi Esmaeilzadeh</a>. 
-        I work on compilers for cross-domain applications, multi-target compilers, and machine-learning-based compiler optimizations.
-    - title: B.S. in Electrical Engineering
-      logo: images/purdue_logo.png
-      start_year: 2018
-      end_year: 2022
-      description: >
-        I received my B.S. in Electrical Engineering from Purdue University in 2018.
-        While I was a student, I had the opportunity to work with the <a href="https://engineering.purdue.edu/SoC-Team">Purdue SoCet</a> team and take ECE 43700 "Computer Design and Prototyping" with Professor <a href="https://engineering.purdue.edu/~vijay/">T. N. Vijaykumar</a>, both of which inspired me to pursue a doctoral degree.
-        I also completed two summer internships at <a href="https://www.intel.com/">Intel</a> working on pre-silicon verification and an internship at <a href="https://www.navsea.navy.mil/Home/Warfare-Centers/NSWC-Crane/">NSWC Crane</a> working on digital design; all three were virtual due to the COVID-19 pandemic.
-  
+  image: /assets/images/headshot.jpg
+ 
 # ==================================================
 # Social Profiles
 # ==================================================
 
 github_username: christopherpriebe # GitHub username
 linkedin_username: priebechristopher # LinkedIn username
+
+# ==================================================
+# Resume
+# ==================================================
+
+resume_home_icon: true
+resume_avatar: true
+resume_title: Graduate Student Researcher
+resume_social_links: true
+resume_executive_summary: >
+    I am a Ph.D. student in the Department of Computer Science and Engineering at the University of California San Diego. My research is an interplay of compilers, machine learning, and systems.
+resume_looking_for_work: true
+resume_section_experience: true
+resume_section_education: true
+resume_section_publications: false 
+resume_section_projects: true
+
+# ==================================================
+# Front Matter Defaults
+# ==================================================
+defaults:
+  -
+    scope:
+      path: ""
+      type: "pages"
+    values:
+      nav: false
+  -
+    scope:
+      path: ""
+      type: "projects"
+    values:
+      layout: "single_column_page"
+      show_title: true
+
+
+# ==================================================
+# Jekyll Scholar
+# ==================================================
+
+scholar:
+  last_name: [Priebe]
+  first_name: [Christopher]
+
+  style: apa
+  locale: en
+
+  source: /_bibliography/
+  bibtex_filters: [latex, smallcaps, superscript]
+
+  query: "@*"
+  group_by: year
+  group_order: descending
+
+# ==================================================
+# Collections
+# ==================================================
+
+collections:
+  history:
+    output: false
+  news:
+    defaults:
+      layout: base
+    output: true
+    permalink: /:collection/:title/
+  projects:
+    defaults: 
+      layout: base
+    output: true
+    permalink: /:collection/:title/
+  resume:
+    output: false
 
 # ==================================================
 # Jekyll Settings

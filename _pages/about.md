@@ -3,6 +3,7 @@ layout: about
 title: About
 permalink: /about/
 nav: true
+nav_order: 1
 headshot: images/headshot_waist_up.jpg
 ---
 

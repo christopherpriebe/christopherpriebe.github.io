@@ -1,0 +1,229 @@
+// Inspired (i.e., copied and slightly modified) by https://github.com/jglovier/resume-template/
+
+@font-face
+    font-family: "Open Sans" 
+    src: url("../fonts/OpenSans-VariableFont_wdth,wght.ttf") format("truetype")
+
+@font-face
+    font-family: "Lora"
+    src: url("../fonts/Lora-VariableFont_wght.ttf") format("truetype")
+
+@mixin sans 
+    font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif
+
+@mixin sans_light 
+    @include sans
+    font-weight: 300
+
+@mixin sans_regular 
+    @include sans
+    font-weight: 400
+
+@mixin sans_bold 
+    @include sans
+    font-weight: 700
+
+@mixin sans_extrabold 
+    @include sans
+    font-weight: 800
+
+@mixin serif 
+    font-family: "Lora", "Minion Pro", Palatino, Georgia, serif
+
+@mixin serif_regular 
+    @include serif
+    font-weight: 400
+
+@mixin serif_bold 
+    @include serif
+    font-weight: 700
+
+@mixin section_border
+    border-top: 4px solid #c7c7c7
+    border-bottom: 2px solid #c7c7c7
+    padding: .2rem 0 .4rem
+
+@mixin section_border_thin
+    border-top: 1px solid #c7c7c7
+    border-bottom: 1px solid #c7c7c7
+    padding: .2rem 0 .2rem
+
+#resume
+    @include serif
+    color: $resume-text-color
+    font-size: $resume-body-font-size
+    line-height: 1.5
+
+.resume-section-header
+    @include section_border
+    margin-bottom: 1.5rem
+
+    h2
+        @include sans
+        font-weight: 900
+        font-size: 1.75rem
+        letter-spacing: -0.05rem
+        margin: 0
+
+.resume-page-header
+    padding: 1.5rem 0
+
+    .resume-avatar
+        width: 95px
+        max-width: 100%
+        overflow: hidden
+        border-radius: 100px
+        margin: 0 auto
+        display: block
+
+    .resume-header-name
+        @include sans
+        font-size: 3rem
+        font-weight: 900
+        text-align: center
+        letter-spacing: -0.15rem
+        line-height: 1
+        margin: 1rem 0 0
+
+    .resume-header-contact-info
+        @include sans
+        text-align: center
+    
+    .resume-header-contact-info p a
+        color: inherit
+
+    .resume-title-bar
+        @include section_border
+        margin-top: 2rem
+        padding: .4rem 0
+
+        .resume-header-title
+            @inlude sans
+            font-weight: 300
+            font-size: 1.75rem
+            line-height: 2rem
+            letter-spacing: -.05rem
+            text-align: center
+            margin: 0 0 .5rem
+
+            @include media_larger_than_mobile
+                float: left
+                margin: 0
+    
+    .resume-executive-summary
+        @include media_larger_than_mobile
+            font-size: 1.125rem
+
+.resume-icon-links
+    margin: 0
+    padding: 0
+    list-style: none
+    position: relative
+    top: 4px
+    text-align: center
+    border-top: 2px solid #c7c7c7
+    padding-top: .4rem
+
+    @include media_larger_than_mobile
+        float: right
+        border-top: none
+        padding-top: 0
+
+    .resume-icon-link-item
+        display: inline-block
+        margin-left: 5px
+
+    .resume-icon-link
+        display: inline-block
+
+        &:hover .resume-icon path
+            fill: #333
+            transition: all .2s ease
+
+    .resume-icon
+        height: 28px
+
+.resume-content-section
+    margin: 0 0 3rem
+
+    .resume-item
+        margin-bottom: 2rem
+
+    .resume-item-title
+        @include sans_bold
+        margin: 0 0 0.75rem
+        font-size: 1.5rem
+        letter-spacing: -0.05rem
+        line-height: 1
+
+    .resume-item-details
+        font-size: 1.125rem
+        margin: 0 0 0.75rem
+        line-height: 1
+
+    .resume-item-list
+        padding-left: 3em
+
+    .resume-item-title,
+    .resume-item-details,
+    .resume-item-copy,
+    .resume-item-list
+        a
+            color: $resume-link-color
+            text-decoration: none
+            border-bottom: 1px solid
+
+            &:hover
+                border-bottom: none
+                color: $resume-link-hover-color
+
+    .resume-item-copy
+        margin: .75rem 0 0
+
+.print-only
+    display: none !important
+
+@media print
+    .no-print
+        display: none !important
+
+    .print-only
+        display: block !important
+    
+    body
+        font-size: 12px 
+        line-height: 1rem
+    
+    .page-header
+        padding: 1rem 0 .2rem
+    
+        .header-name
+            @include sans_bold
+            font-size: 2rem
+            margin: 0 0 .2rem
+
+    .section-header
+        @include section_border_thin
+        margin-bottom: 1rem
+        h2
+            font-size: 1.2rem
+            line-height: 1.5rem
+    
+    .content-section
+        margin: 0 0 1rem
+
+        .resume-item
+            margin-bottom: 1rem
+
+        .resume-item-title
+            font-size: 16px
+            line-height: .7em
+
+    .resume-item-details
+        font-size: 12px
+        margin: 0 0 0.75rem
+        line-height: 0.7em
+        font-style: italic
+
+        &.award-title
+            font-size: 11px
