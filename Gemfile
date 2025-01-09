@@ -8,9 +8,9 @@ source "https://rubygems.org"
 #
 
 # Version variables 
-jekyll_version = "~> 3.10.0"
-github_pages_version = "~> 232"
-jekyll_feed_version = "~> 0.17.0"
+jekyll_version = "~> 3.9.5"
+github_pages_version = "~> 231"
+jekyll_feed_version = "~> 0.17"
 tzinfo_version = ">= 1", "< 3"
 wdm_version = "~> 0.1.1"
 http_parser_version = "~> 0.6.0"
