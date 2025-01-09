@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en-US"><head>
+    <!-- Required meta tags -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+
+    <!-- Link Bootstrap CSS -->
+    <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+
+    <!-- Link Font Awesome CSS -->
+    <link rel="stylesheet" href="/assets/css/fontawesome.min.css">
+
+    <!-- Link normalize CSS -->
+    <link rel="stylesheet" href="/assets/css/normalize.css">
+
+    <!-- Link custom CSS -->
+    <link rel="stylesheet" href="/assets/css/style.css">
+
+    <!-- Configure title element of the page -->
+    <title>
+        
+        
+            Christopher Priebe - GeneSys
+        
+        
+        
+    </title>
+</head>
+<body><header class="site-header">
+    <!-- Create navigation bar with Bootstrap 3 -->
+<nav id="navbar" class="navbar navbar-default">
+    <div class="container-fluid">
+         
+            <div class="navbar-header">
+                <a class="navbar-brand" href="/">Christopher Priebe</a>
+            </div>
+        
+        <ul class="nav navbar-nav navbar-right">
+             
+            
+                
+            
+                
+            
+                
+            
+                
+            
+                
+            
+                
+                    <li><a href=/about/>About</a></li>
+                
+            
+                
+                    <li><a href=/projects/>Projects</a></li>
+                
+            
+        </ul>
+    </div>
+</nav>
+
+</header>
+<main class="page-content" aria-label="Content">
+            <div class="container">
+    <div class="row">
+        
+            <div class="col-12 text-center-xs text-left-md">
+                <h1>GeneSys</h1>
+            </div>
+            <hr>
+        
+        <div class="col-12">
+            <figure>
+    <img src="/assets/images/genesys_flow.jpg" class="img-rounded img-responsive center-block" alt="GeneSys workflow." style="width: 60%; padding-bottom: 15px;" />
+    <figcaption class="text-center">
+        <p>GeneSys workflow.</p>
+    </figcaption>
+</figure>
+
+<p>One of the major enabling factors in the significant advancement of deep learning (like convolutional and transformer-based neural networks) is the rapid growth of computing power in the 2010s.
+With the end of Dennard scaling <a class="citation" href="#dennard-scaling:jssc:1974">(Dennard et al., 1974)</a> and the advent of dark silicon <a class="citation" href="#dark-silicon:isca:2011">(Esmaeilzadeh et al., 2011)</a>, research and development has shifted towards adopting hardware accelerators for deep learning <a class="citation" href="#diannao:asplos:2014">(Chen et al., 2014; Sharma et al., 2016; Chen et al., 2016; Shao et al., 2019; Genc et al., 2021)</a>.
+Deep neural network (DNN) accelerators have found their way into production datacenters <a class="citation" href="#tpu:isca:2017">(Jouppi et al., 2017; Anderson et al., 2021; Jouppi et al., 2021)</a>, autonomous vehicles <a class="citation" href="#auto-driving-accelerator:asplos:2018">(Lin et al., 2018)</a>, internet of things (IoT) devices <a class="citation" href="#minerva:isca:2016">(Reagen et al., 2016; Whatmough et al., 2018)</a>, and biomedical devices <a class="citation" href="#ulp-srp:trets:2014">(Kim et al., 2014; Liu et al., 2021)</a>.
+Besides the challenging task of designing hardware accelerators that abide by various power, performance, and area constraints, there is also ongoing research on how to seamlessly integrate hardware accelerators in the software stack <a class="citation" href="#optimus:asplos:2020">(Ma et al., 2020; Yu et al., 2020; Korolija et al., 2020)</a>.
+Therefore, we must shift the focus from standalone hardware to holistic system design.</p>
+
+<p>The Alternative Computing Technologies (ACT) Lab, led by my advisor Hadi Esmaeilzadeh, is one of the few in academia to have developed a fully fledged programmable accelerator generator, called GeneSys.
+GeneSys is a full-stack system designed to accelerate deep learning models such as convolutional neural networks (CNNs) and transformers-based language models.
+It comprises a parameterizable neural processing unit (NPU) generator capable of creating hardware accelerators with various configurations, which has been both taped out and prototyped on AWS F1 FPGAs.
+GeneSys also features a multi-target compilation stack that supports algorithms beyond deep learning, OpenCL-based Linux drivers, user-friendly Python APIs, and an RTL verification framework with a regression suite including synthetic and state-of-the-art DNN benchmarks like ResNet50, BERT, and GPT2.
+Additionally, it includes hardware synthesis scripts, a software simulator for profiling, and comprehensive software support.
+These unique and functional artifacts represent years of research and multiple published papers by the ACT Lab <a class="citation" href="#tabla:hpca:2016">(Mahajan et al., 2016; Sharma et al., 2016; Sharma et al., 2018; Ghodrati et al., 2020; Kinzer et al., 2021; Kim et al., 2022)</a>.
+GeneSys has already been used in multiple published papers <a class="citation" href="#dmx:hpca:2024">(Wang et al., 2024; Ghodrati et al., 2024; Mahapatra et al., 2024)</a> and course projects in CSE 240D at the University of California San Diego.</p>
+
+<p>My primary contribution to GeneSys has been the continued development of the system’s compiler, which was originally written by Sean Kinzer.
+After taking on the mantle, I streamlined the setup and installation process by packaging the compiler with pip, implemented a new greedy memory allocation strategy based on <a class="citation" href="#greedy-memory-alloc-nn-inference:arxiv:2020">(Pisarchyk &amp; Lee, 2020)</a> which significantly reduced the memory footprint in DRAM during execution, removed excess code bloat leftover from stitching multiple projects together during the initial development phase, and expanded the neural network layer support of the compiler to accommodate more diverse models.
+I also had the opportunity to give oral presentations on the compiler through tutorials organized by ACT Lab.
+The tutorials were presented at the following venues:</p>
+<ul>
+  <li><em>IEEE/ACM International Symposium on Microarchitecture</em> (MICRO) on October 29th, 2023 in Toronto, Canada</li>
+  <li><em>IEEE International Symposium on High-Performance Computer Architecture</em> (HPCA) on March 2nd, 2024 in Edinburgh, Scotland</li>
+  <li><em>ACM International Conference on Architectural Support for Programming Languages and Operating Systems</em> (ASPLOS) on April 28th, 2024 in San Diego, California</li>
+  <li><em>International Symposium on Computer Architecture</em> (ISCA) on June 29th, 2024 in Buenos Aires, Argentina.</li>
+</ul>
+
+<p>For more information on the project as a whole, see the <a href="https://actlab-genesys.github.io/">GeneSys website</a>.</p>
+
+<h5>References</h5>
+<div class="bib-blog">
+    <h2 class="bibliography">2024</h2>
+<ol class="bibliography"><li><span id="dmx:hpca:2024">Wang, S.-T., Xu, H., Mamandipoor, A., Mahapatra, R., Ahn, B. H., Ghodrati, S., Kailas, K., Alian, M., &amp; Esmaeilzadeh, H. (2024). Data Motion Acceleration: Chaining Cross-Domain Multi Accelerators. <i>2024 IEEE International Symposium on High-Performance Computer Architecture (HPCA)</i>, 1043–1062. https://doi.org/10.1109/HPCA57654.2024.00083</span></li>
+<li><span id="tandem:asplos:2024">Ghodrati, S., Kinzer, S., Xu, H., Mahapatra, R., Kim, Y., Ahn, B. H., Wang, D. K., Karthikeyan, L., Yazdanbakhsh, A., Park, J., Kim, N. S., &amp; Esmaeilzadeh, H. (2024). Tandem Processor: Grappling with Emerging Operators in Neural Networks. <i>Proceedings of the 29th ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 2</i>, 1165–1182. https://doi.org/10.1145/3620665.3640365</span></li>
+<li><span id="dscs:asplos:2024">Mahapatra, R., Ghodrati, S., Ahn, B. H., Kinzer, S., Wang, S.-T., Xu, H., Karthikeyan, L., Sharma, H., Yazdanbakhsh, A., Alian, M., &amp; Esmaeilzadeh, H. (2024). In-Storage Domain-Specific Acceleration for Serverless Computing. <i>Proceedings of the 29th ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 2</i>, 530–548. https://doi.org/10.1145/3620665.3640413</span></li></ol>
+<h2 class="bibliography">2022</h2>
+<ol class="bibliography"><li><span id="yin-yang:ieeemicro:2022">Kim, J. K., Ahn, B. H., Kinzer, S., Ghodrati, S., Mahapatra, R., Yatham, B., Wang, S.-T., Kim, D., Sarikhani, P., Mahmoudi, B., Mahajan, D., Park, J., &amp; Esmaeilzadeh, H. (2022). Yin-Yang: Programming Abstractions for Cross-Domain Multi-Acceleration. <i>IEEE Micro</i>, <i>42</i>(5), 89–98. https://doi.org/10.1109/MM.2022.3189416</span></li></ol>
+<h2 class="bibliography">2021</h2>
+<ol class="bibliography"><li><span id="gemmini:dac:2021">Genc, H., Kim, S., Amid, A., Haj-Ali, A., Iyer, V., Prakash, P., Zhao, J., Grubb, D., Liew, H., Mao, H., Ou, A., Schmidt, C., Steffl, S., Wright, J., Stoica, I., Ragan-Kelley, J., Asanovic, K., Nikolic, B., &amp; Shao, Y. S. (2021). Gemmini: Enabling Systematic Deep-Learning Architecture Evaluation via Full-Stack Integration. <i>2021 58th ACM/IEEE Design Automation Conference (DAC)</i>, 769–774. https://doi.org/10.1109/DAC18074.2021.9586216</span></li>
+<li><span id="facebook-inference-accelerator:arxiv:2021">Anderson, M., Chen, B., Chen, S., Deng, S., Fix, J., Gschwind, M., Kalaiah, A., Kim, C., Lee, J., Liang, J., Liu, H., Lu, Y., Montgomery, J., Moorthy, A., Nadathur, S., Naghshineh, S., Nayak, A., Park, J., Petersen, C., … Rao, V. (2021). <i>First-Generation Inference Accelerator Deployment at Facebook</i>. https://arxiv.org/abs/2107.04140</span></li>
+<li><span id="tpuv4i:isca:2021">Jouppi, N. P., Yoon, D. H., Ashcraft, M., Gottscho, M., Jablin, T. B., Kurian, G., Laudon, J., Li, S., Ma, P., Ma, X., Norrie, T., Patil, N., Prasad, S., Young, C., Zhou, Z., &amp; Patterson, D. (2021). Ten Lessons from Three Generations Shaped Google’s TPUv4i. <i>Proceedings of the 48th Annual International Symposium on Computer Architecture</i>, 1–14. https://doi.org/10.1109/ISCA52012.2021.00010</span></li>
+<li><span id="bioaip:isscc:2021">Liu, J., Zhu, Z., Zhou, Y., Wang, N., Dai, G., Liu, Q., Xiao, J., Xie, Y., Zhong, Z., Liu, H., Chang, L., &amp; Zhou, J. (2021). 4.5 BioAIP: A Reconfigurable Biomedical AI Processor with Adaptive Learning for Versatile Intelligent Health Monitoring. <i>2021 IEEE International Solid-State Circuits Conference (ISSCC)</i>, 62–64. https://doi.org/10.1109/ISSCC42613.2021.9365996</span></li>
+<li><span id="polymath:hpca:2021">Kinzer, S., Kim, J. K., Ghodrati, S., Yatham, B., Althoff, A., Mahajan, D., Lerner, S., &amp; Esmaeilzadeh, H. (2021). A Computational Stack for Cross-Domain Acceleration. <i>2021 IEEE International Symposium on High-Performance Computer Architecture (HPCA)</i>, 54–70. https://doi.org/10.1109/HPCA51647.2021.00015</span></li></ol>
+<h2 class="bibliography">2020</h2>
+<ol class="bibliography"><li><span id="optimus:asplos:2020">Ma, J., Zuo, G., Loughlin, K., Cheng, X., Liu, Y., Eneyew, A. M., Qi, Z., &amp; Kasikci, B. (2020). A Hypervisor for Shared-Memory FPGA Platforms. <i>Proceedings of the Twenty-Fifth International Conference on Architectural Support for Programming Languages and Operating Systems</i>, 827–844. https://doi.org/10.1145/3373376.3378482</span></li>
+<li><span id="ava:asplos:2020">Yu, H., Peters, A. M., Akshintala, A., &amp; Rossbach, C. J. (2020). AvA: Accelerated Virtualization of Accelerators. <i>Proceedings of the Twenty-Fifth International Conference on Architectural Support for Programming Languages and Operating Systems</i>, 807–825. https://doi.org/10.1145/3373376.3378466</span></li>
+<li><span id="coyote:osdi:2020">Korolija, D., Roscoe, T., &amp; Alonso, G. (2020). Do OS Abstractions Make Sense on FPGAs? <i>Proceedings of the 14th USENIX Conference on Operating Systems Design and Implementation</i>, 991–1010. https://www.usenix.org/conference/osdi20/presentation/roscoe</span></li>
+<li><span id="planaria:micro:2020">Ghodrati, S., Ahn, B. H., Kyung Kim, J., Kinzer, S., Yatham, B. R., Alla, N., Sharma, H., Alian, M., Ebrahimi, E., Kim, N. S., Young, C., &amp; Esmaeilzadeh, H. (2020). Planaria: Dynamic Architecture Fission for Spatial Multi-Tenant Acceleration of Deep Neural Networks. <i>2020 53rd Annual IEEE/ACM International Symposium on Microarchitecture (MICRO)</i>, 681–697. https://doi.org/10.1109/MICRO50266.2020.00062</span></li>
+<li><span id="greedy-memory-alloc-nn-inference:arxiv:2020">Pisarchyk, Y., &amp; Lee, J. (2020). <i>Efficient Memory Management for Deep Neural Net Inference</i>. https://arxiv.org/abs/2001.03288</span></li></ol>
+<h2 class="bibliography">2019</h2>
+<ol class="bibliography"><li><span id="simba:micro:2019">Shao, Y. S., Clemons, J., Venkatesan, R., Zimmer, B., Fojtik, M., Jiang, N., Keller, B., Klinefelter, A., Pinckney, N., Raina, P., Tell, S. G., Zhang, Y., Dally, W. J., Emer, J., Gray, C. T., Khailany, B., &amp; Keckler, S. W. (2019). Simba: Scaling Deep-Learning Inference with Multi-Chip-Module-Based Architecture. <i>Proceedings of the 52nd Annual IEEE/ACM International Symposium on Microarchitecture</i>, 14–27. https://doi.org/10.1145/3352460.3358302</span></li></ol>
+<h2 class="bibliography">2018</h2>
+<ol class="bibliography"><li><span id="auto-driving-accelerator:asplos:2018">Lin, S.-C., Zhang, Y., Hsu, C.-H., Skach, M., Haque, M. E., Tang, L., &amp; Mars, J. (2018). The Architectural Implications of Autonomous Driving: Constraints and Acceleration. <i>Proceedings of the Twenty-Third International Conference on Architectural Support for Programming Languages and Operating Systems</i>, 751–766. https://doi.org/10.1145/3173162.3173191</span></li>
+<li><span id="iot-accelerator:jssc:2018">Whatmough, P. N., Lee, S. K., Brooks, D., &amp; Wei, G.-Y. (2018). DNN Engine: A 28-nm Timing-Error Tolerant Sparse Deep Neural Network Processor for IoT Applications. <i>IEEE Journal of Solid-State Circuits</i>, <i>53</i>(9), 2722–2731. https://doi.org/10.1109/JSSC.2018.2841824</span></li>
+<li><span id="bit-fusion:isca:2018">Sharma, H., Park, J., Suda, N., Lai, L., Chau, B., Kim, J. K., Chandra, V., &amp; Esmaeilzadeh, H. (2018). Bit Fusion: Bit-Level Dynamically Composable Architecture for Accelerating Deep Neural Networks. <i>Proceedings of the 45th Annual International Symposium on Computer Architecture</i>, 764–775. https://doi.org/10.1109/ISCA.2018.00069</span></li></ol>
+<h2 class="bibliography">2017</h2>
+<ol class="bibliography"><li><span id="tpu:isca:2017">Jouppi, N. P., Young, C., Patil, N., Patterson, D., Agrawal, G., Bajwa, R., Bates, S., Bhatia, S., Boden, N., Borchers, A., Boyle, R., Cantin, P.-luc, Chao, C., Clark, C., Coriell, J., Daley, M., Dau, M., Dean, J., Gelb, B., … Yoon, D. H. (2017). In-Datacenter Performance Analysis of a Tensor Processing Unit. <i>2017 ACM/IEEE 44th Annual International Symposium on Computer Architecture (ISCA)</i>, 1–12. https://doi.org/10.1145/3079856.3080246</span></li></ol>
+<h2 class="bibliography">2016</h2>
+<ol class="bibliography"><li><span id="dnnweaver:micro:2016">Sharma, H., Park, J., Mahajan, D., Amaro, E., Kim, J. K., Shao, C., Mishra, A., &amp; Esmaeilzadeh, H. (2016). From High-Level Deep Neural Models to FPGAs. <i>2016 49th Annual IEEE/ACM International Symposium on Microarchitecture (MICRO)</i>, 1–12. https://doi.org/10.1109/MICRO.2016.7783720</span></li>
+<li><span id="eyeriss:isca:2016">Chen, Y.-H., Emer, J., &amp; Sze, V. (2016). Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow for Convolutional Neural Networks. <i>Proceedings of the 43rd International Symposium on Computer Architecture</i>, 367–379. https://doi.org/10.1109/ISCA.2016.40</span></li>
+<li><span id="minerva:isca:2016">Reagen, B., Whatmough, P., Adolf, R., Rama, S., Lee, H., Lee, S. K., Hernández-Lobato, J. M., Wei, G.-Y., &amp; Brooks, D. (2016). Minerva: Enabling Low-Power, Highly-Accurate Deep Neural Network Accelerators. <i>2016 ACM/IEEE 43rd Annual International Symposium on Computer Architecture (ISCA)</i>, 267–278. https://doi.org/10.1109/ISCA.2016.32</span></li>
+<li><span id="tabla:hpca:2016">Mahajan, D., Park, J., Amaro, E., Sharma, H., Yazdanbakhsh, A., Kim, J. K., &amp; Esmaeilzadeh, H. (2016). TABLA: A Unified Template-Based Framework for Accelerating Statistical Machine Learning. <i>2016 IEEE International Symposium on High Performance Computer Architecture (HPCA)</i>, 14–26. https://doi.org/10.1109/HPCA.2016.7446050</span></li></ol>
+<h2 class="bibliography">2014</h2>
+<ol class="bibliography"><li><span id="diannao:asplos:2014">Chen, T., Du, Z., Sun, N., Wang, J., Wu, C., Chen, Y., &amp; Temam, O. (2014). DianNao: A Small-Footprint High-Throughput Accelerator for Ubiquitous Machine-Learning. <i>Proceedings of the 19th International Conference on Architectural Support for Programming Languages and Operating Systems</i>, 269–284. https://doi.org/10.1145/2541940.2541967</span></li>
+<li><span id="ulp-srp:trets:2014">Kim, C., Chung, M., Cho, Y., Konijnenburg, M., Ryu, S., &amp; Kim, J. (2014). ULP-SRP: Ultra Low-Power Samsung Reconfigurable Processor for Biomedical Applications. <i>ACM Trans. Reconfigurable Technol. Syst.</i>, <i>7</i>(3). https://doi.org/10.1145/2629610</span></li></ol>
+<h2 class="bibliography">2011</h2>
+<ol class="bibliography"><li><span id="dark-silicon:isca:2011">Esmaeilzadeh, H., Blem, E., St. Amant, R., Sankaralingam, K., &amp; Burger, D. (2011). Dark Silicon and the End of Multicore Scaling. <i>Proceedings of the 38th Annual International Symposium on Computer Architecture</i>, 365–376. https://doi.org/10.1145/2000064.2000108</span></li></ol>
+<h2 class="bibliography">1974</h2>
+<ol class="bibliography"><li><span id="dennard-scaling:jssc:1974">Dennard, R. H., Gaensslen, F. H., Yu, H.-N., Rideout, V. L., Bassous, E., &amp; LeBlanc, A. R. (1974). Design of Ion-Implanted MOSFET’s with Very Small Physical Dimensions. <i>IEEE Journal of Solid-State Circuits</i>, <i>9</i>(5), 256–268. https://doi.org/10.1109/JSSC.1974.1050511</span></li></ol>
+</div>
+
+
+        </div>
+</div>
+
+        </main><footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-xs-12">
+                <p class="text-center">
+                    &copy; Copyright 2025
+                    Christopher
+                    M.
+                    Priebe. Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>. For additional credits, see <a href="/credits/">this</a>.
+
+                    
+                        Last updated: January 09, 2025.
+                    
+                </p>
+            </div>
+        </div>
+    </div>
+</footer><!-- Link Bootstrap JS -->
+<script src="/assets/js/bootstrap.min.js"></script>
+
+        <!-- Link jQuery JS -->
+<script src="/assets/js/jquery.min.js"></script>
+
+    </body>
+
+</html>
