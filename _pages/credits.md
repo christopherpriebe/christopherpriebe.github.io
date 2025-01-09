@@ -13,3 +13,4 @@ Additional credits (in no particular order):
 - [Andrej Karpathy](https://karpathy.ai/), as the home page of his website inspired the home page of this website.
 - [Joel Glovier](https://joelglovier.com/), as the CV page of this website uses a modified version of his [resume-template](https://github.com/jglovier/resume-template) Jekyll theme.
 - [Nicolas Gallagher](http://nicolasgallagher.com/) for [normalize.css](https://github.com/necolas/normalize.css) (v8.0.1).
+- [James Ives](https://jamesiv.es/) for [github-pages-deploy-action](https://github.com/JamesIves/github-pages-deploy-action).
