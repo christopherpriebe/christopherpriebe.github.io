@@ -11,7 +11,7 @@ baseurl: "" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site, e.g. http://example.com
 
 footer_text: >
-  Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>.
+  Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>. For additional credits, see <a href="/credits/">this</a>.
 display_last_updated_date: true
 
 # ==================================================
@@ -24,7 +24,7 @@ profile:
   title: Ph.D. Student
   affiliation: University of California San Diego
   location: La Jolla, CA
-  image: images/headshot.jpg
+  image: /assets/images/headshot.jpg
  
 # ==================================================
 # Social Profiles
@@ -34,21 +34,58 @@ github_username: christopherpriebe # GitHub username
 linkedin_username: priebechristopher # LinkedIn username
 
 # ==================================================
+# Resume
+# ==================================================
+
+resume_home_icon: true
+resume_avatar: true
+resume_title: Graduate Student Researcher
+resume_social_links: true
+resume_executive_summary: >
+    I am a Ph.D. student in the Department of Computer Science and Engineering at the University of California San Diego. My research is an interplay of compilers, machine learning, and systems.
+resume_looking_for_work: true
+resume_section_experience: true
+resume_section_education: true
+resume_section_publications: false 
+resume_section_projects: true
+
+# ==================================================
+# Jekyll Scholar
+# ==================================================
+
+scholar:
+  last_name: [Priebe]
+  first_name: [Christopher]
+
+  style: apa
+  locale: en
+
+  source: /_bibliography/
+  bibtex_filters: [latex, smallcaps, superscript]
+
+  query: "@*"
+  group_by: year
+  group_order: descending
+
+# ==================================================
 # Collections
 # ==================================================
 
 collections:
   history:
+    output: false
   news:
     defaults:
       layout: base
     output: true
     permalink: /:collection/:title/
   projects:
-    default: 
+    defaults: 
       layout: base
     output: true
     permalink: /:collection/:title/
+  resume:
+    output: false
 
 # ==================================================
 # Jekyll Settings
