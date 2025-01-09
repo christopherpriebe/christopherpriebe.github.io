@@ -37,6 +37,12 @@ GeneSys has already been used in multiple published papers {% cite dmx:hpca:2024
 
 My primary contribution to GeneSys has been the continued development of the system's compiler, which was originally written by Sean Kinzer.
 After taking on the mantle, I streamlined the setup and installation process by packaging the compiler with pip, implemented a new greedy memory allocation strategy based on {% cite greedy-memory-alloc-nn-inference:arxiv:2020 --file genesys.bib %} which significantly reduced the memory footprint in DRAM during execution, removed excess code bloat leftover from stitching multiple projects together during the initial development phase, and expanded the neural network layer support of the compiler to accommodate more diverse models.
+I also had the opportunity to give oral presentations on the compiler through tutorials organized by ACT Lab.
+The tutorials were presented at the following venues:
+- *IEEE/ACM International Symposium on Microarchitecture* (MICRO) on October 29th, 2023 in Toronto, Canada
+- *IEEE International Symposium on High-Performance Computer Architecture* (HPCA) on March 2nd, 2024 in Edinburgh, Scotland
+- *ACM International Conference on Architectural Support for Programming Languages and Operating Systems* (ASPLOS) on April 28th, 2024 in San Diego, California
+- *International Symposium on Computer Architecture* (ISCA) on June 29th, 2024 in Buenos Aires, Argentina.
 
 For more information on the project as a whole, see the [GeneSys website](https://actlab-genesys.github.io/).
 
