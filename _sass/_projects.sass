@@ -1,16 +1,13 @@
-// Give the card a shadow and make it move up when hovered
 .projects-panel
-    // margin-top: 20px
-    // margin-bottom: 20px
-    // padding: 20px
-    // border-radius: 10px
     box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2)
     transition: 0.3s
+
     &:hover
         box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2)
         transform: translateY(-10px)
     
-.projects-panel-head
+    .projects-panel-head
+        background-color: $projects-panel-head-color
 
 .projects-panel-head-title
     font-size: $base-font-size * 1.5
