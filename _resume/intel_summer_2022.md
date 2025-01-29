@@ -6,4 +6,4 @@ duration: May 2022 - August 2022
 show: true
 order: 300
 ---
-I developed Python automation scripts to streamline waveform orgainzation based on regression results and implemented formal verification properties in SystemVerilog to validate an FSM's functionality.
+I developed Python scripts to automate waveform organization based on regression results and implemented formal verification properties in SystemVerilog for an FSM.
