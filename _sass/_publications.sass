@@ -1,0 +1,113 @@
+#pubs-chart-container
+    margin: 20px
+    max-width: 100%
+
+    #pubs-chart
+        display: flex
+        align-items: flex-end
+        gap: 10px
+        height: 200px
+        border-bottom: 1px solid
+        padding: 10px
+        overflow-x: auto
+
+    .pub-bar
+        display: flex
+        flex-direction: column-reverse
+        align-items: center
+        cursor: pointer
+
+        .pub
+            width: 20px
+            height: 8px
+            margin-bottom: 1px
+            border-radius: 1px
+
+        .pub-year-label
+            font-size: 12px
+            margin-top: 5px
+            text-align: center
+
+    #pubs-legend
+        display: flex
+        gap: 15px
+        flex-wrap: wrap
+        font-size: 12px
+        margin-top: 15px
+
+    .legend-item
+        display: flex
+        align-items: center
+        gap: 5px
+
+        .legend-color
+            width: 15px
+            height: 8px
+            border-radius: 1px
+
+// .tooltip
+//   position: absolute
+//   z-index: 1000
+//   padding: 5px
+//   font-size: 12px
+//   background: rgba(0, 0, 0, 0.8)
+//   color: white
+//   border-radius: 3px
+//   display: none
+
+
+.publications
+    margin-top: 2rem
+
+    h1
+        font-size: 2rem
+        text-align: center
+        margin-top: 1em
+        margin-bottom: 1em
+
+    h2
+        margin-bottom: 1rem
+
+    span
+        font-size: 1.5rem
+
+    h2.bibliography
+        border-top: 1px solid
+        padding-top: 1rem
+        margin-top: 2rem
+        text-align: right
+
+    ol.bibliography
+        list-style: none
+        padding: 0
+        margin-top: 0
+
+        li
+            margin-bottom: 1rem
+            abbr.a
+                text-decoration: none
+
+        .title
+            font-weight: bold
+
+        .author
+            a
+                border-bottom: 1px dashed
+
+            &:hover
+                border-bottom-style: solid
+                text-decoration: none
+
+    //   .preview
+    //     max-width: 100%
+    //     margin-bottom: 0.5rem
+    //     border-radius: 4px
+
+    //   .links
+    //     margin-top: 0.5rem
+
+    //     a.btn
+    //       border: 1px solid
+    //       padding: 0.25rem 1rem
+    //       margin-left: 0
+    //       font-size: 0.875rem

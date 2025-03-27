@@ -86,6 +86,9 @@ scholar:
   group_by: year
   group_order: descending
 
+  bibliography_template: bib
+
+
 # ==================================================
 # Collections
 # ==================================================
