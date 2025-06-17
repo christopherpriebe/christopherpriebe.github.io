@@ -17,12 +17,14 @@ layout: base
                     {% if site.resume_home_icon %}
                         <a class="bio-social-icon-link" href="/cv/"><i class="fa-solid fa-rectangle-list bio-social-icon"></i></a> 
                     {% endif %}
-                    {% if site.github_username %}
-                        <a class="bio-social-icon-link" href="https://github.com/{{ site.github_username }}"><i class="fa-brands fa-github bio-social-icon"></i></a>
-                    {% endif %}
-                    {% if site.linkedin_username %}
-                        <a class="bio-social-icon-link" href="https://linkedin.com/in/{{ site.linkedin_username }}"><i class="fa-brands fa-linkedin bio-social-icon"></i></a>
-                    {% endif %}
+
+                    {% for social in site.data.socials %}
+                        {% case social[0] %}
+                            {% when "github_username" %} <a class="bio-social-icon-link" href="https://github.com/{{ social[1] }}"><i class="fa-brands fa-github bio-social-icon"></i></a>
+                            {% when "google_scholar_user_id" %} <a class="bio-social-icon-link" href="https://scholar.google.com/citations?user={{ social[1] }}"><i class="fa-brands fa-google-scholar bio-social-icon"></i></a>
+                            {% when "linkedin_username" %} <a class="bio-social-icon-link" href="https://linkedin.com/in/{{ site.linkedin_username }}"><i class="fa-brands fa-linkedin bio-social-icon"></i></a>
+                        {% endcase %}
+                    {% endfor %}
                 </div>
             </div>
         </div>
