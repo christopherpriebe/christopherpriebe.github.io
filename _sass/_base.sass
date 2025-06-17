@@ -6,6 +6,7 @@ html
  */
 body
     background-color: $background-color
+    color: $text-color
     margin-top: $base-top-padding
     margin-left: $base-side-padding
     margin-right: $base-side-padding
@@ -126,3 +127,11 @@ $screen-lg-min: 1200px
         > [class*='col-']
             display: flex
             flex-direction: column
+
+.hover-shadow-panel
+    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2)
+    transition: 0.3s
+
+    &:hover
+        box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2)
+        transform: translateY(-10px)

@@ -1,0 +1,30 @@
+github:
+  logo: fa-brands fa-github
+  url: https://github.com/christopherpriebe
+  description: All of my academic and personal software projects are available on GitHub.
+  is_home_link: true
+google_scholar:
+  logo: fa-brands fa-google-scholar
+  url: https://scholar.google.com/citations?user=E9z3HwIAAAAJ
+  description: All of my academic publications are available on Google Scholar.
+  is_home_link: true
+instagram:
+  logo: fa-brands fa-instagram
+  url: https://www.instagram.com/thechrispriebe/
+  description: My personal photos are shared on Instagram; I only accept follow requests from people I know.
+  is_home_link: false
+letterbox:
+  logo: fa-brands fa-letterboxd
+  url: https://letterboxd.com/chrisp1934/
+  description: I share my movie ratings on Letterboxd.
+  is_home_link: false
+linkedin:
+  logo: fa-brands fa-linkedin
+  username: https://www.linkedin.com/in/priebechristopher/
+  description: My professional profile is available on LinkedIn.
+  is_home_link: true
+yelp_user_id:
+  logo: fa-brands fa-yelp
+  url: https://www.yelp.com/user_details?userid=2sRtil8vkkKVYymip8QYUg
+  description: I share my restaurant reviews on Yelp.
+  is_home_link: false

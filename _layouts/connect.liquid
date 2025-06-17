@@ -1,0 +1,20 @@
+---
+layout: base
+---
+
+<div class="container">
+    <div class="row">
+        <p>
+            The best way to reach me is via email at christophermpriebe (at) gmail (dot) com.
+            You can also find me on various social media platforms.
+        </p>
+        <hr>
+    </div>
+    <div class="row">
+        <div class="col-xs-12 socials">
+            {% for social in site.data.socials %}
+                {% include social.liquid %}
+            {% endfor %}
+        </div>
+    </div>
+</div>

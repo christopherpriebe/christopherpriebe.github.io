@@ -1,0 +1,127 @@
+---
+layout: base 
+---
+
+<div class="container">
+    <div id="pubs-chart-container" class="row">
+        <div class="col-xs-12">
+            <div id="pubs-chart"></div>
+            <div id="pubs-legend"></div>
+            <div id="pubs-tooltip"></div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-xs-12">
+            <h2>Publications by Year</h2>
+            <h3>Conference Papers</h3>
+            <div id="conference-papers" class="publications">
+            {% bibliography --query @inproceedings %}
+            </div>
+            {% comment %} <h3>Journal Papers</h3>
+            <div id="journal-papers" class="bib-section">
+            {% bibliography --query @article %}
+            </div> {% endcomment %}
+            <h3>Preprints</h3>
+            <div id="preprints" class="publications">
+            {% bibliography --query @misc %}
+            </div> 
+        </div>
+    </div>
+</div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const typeColors = {
+        conference: "#84CFE2",
+        journal: "#7B66DA",
+        preprint: "#D3D3D3",
+        other: "#9E9E9E"
+    }
+
+    const typeSelectors = {
+        conference: "#conference-papers",
+        journal: "#journal-papers",
+        preprint: "#preprints"
+    }
+
+    const pubs = []
+
+    Object.keys(typeSelectors).forEach(type => {
+        const container = document.querySelector(typeSelectors[type])
+        if (!container) return
+
+        const entries = container.querySelectorAll("li")
+        entries.forEach(li => {
+            const html = li.innerHTML
+            const yearMatch = html.match(/(19|20)\d{2}/g)
+            const year = yearMatch ? parseInt(yearMatch[yearMatch.length - 1]) : null
+            const titleDiv = li.querySelector(".row .col-xs-12:nth-child(2) .title")
+            const title = titleDiv ? titleDiv.textContent.trim() : ''
+
+            if (year) {
+                pubs.push({ year, type, title })
+            }
+        })
+    })
+
+    const pubsByYear = {}
+    pubs.forEach(pub => {
+        if (!pubsByYear[pub.year]) pubsByYear[pub.year] = []
+        pubsByYear[pub.year].push(pub)
+    })
+
+    const chart = document.getElementById("pubs-chart")
+    const tooltip = document.getElementById("pubs-tooltip")
+    const sortedYears = Object.keys(pubsByYear).sort()
+
+    sortedYears.forEach(year => {
+        const bar = document.createElement("div")
+        bar.className = "pub-bar"
+
+        pubsByYear[year].forEach(pub => {
+            const rect = document.createElement("div")
+            rect.className = "pub"
+            rect.style.backgroundColor = typeColors[pub.type] || typeColors.other
+            rect.setAttribute("data-title", pub.title)
+            rect.setAttribute("data-year", pub.year)
+            rect.setAttribute("data-type", pub.type)
+
+            const mouseOffsetX = 0
+            const mouseOffsetY = 0
+            rect.addEventListener("mouseenter", e => {
+                tooltip.innerHTML = `<strong>${pub.title}</strong><br><em>${pub.type}</em>`
+                tooltip.style.display = "block"
+                tooltip.style.left = `${e.clientX + mouseOffsetX}px`
+                tooltip.style.top = `${e.clientY + mouseOffsetY}px`
+            })
+
+            rect.addEventListener("mousemove", e => {
+                tooltip.style.left = `${e.clientX + mouseOffsetX}px`
+                tooltip.style.top = `${e.clientY + mouseOffsetY}px`
+            })
+
+            rect.addEventListener("mouseleave", () => {
+                tooltip.style.display = "none"
+            })
+
+            bar.appendChild(rect)
+        })
+
+        const label = document.createElement("div")
+        label.className = "pub-year-label"
+        label.innerText = year
+        bar.appendChild(label)
+
+        chart.appendChild(bar)
+    })
+
+    const legend = document.getElementById("pubs-legend")
+    Object.entries(typeColors).forEach(([type, color]) => {
+        const item = document.createElement("div")
+        item.className = "legend-item"
+        item.innerHTML = `<div class="legend-color" style="background:${color}"></div> ${type}`
+        legend.appendChild(item)
+    })
+})
+</script>
