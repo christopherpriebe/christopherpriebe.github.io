@@ -12,13 +12,15 @@
         overflow-x: auto
 
     .pub-bar
+        flex-grow: 1
         display: flex
         flex-direction: column-reverse
         align-items: center
         cursor: pointer
 
         .pub
-            width: 20px
+            width: 100% 
+            max-width: 100px
             height: 8px
             margin-bottom: 1px
             border-radius: 1px
@@ -45,15 +47,15 @@
             height: 8px
             border-radius: 1px
 
-// .tooltip
-//   position: absolute
-//   z-index: 1000
-//   padding: 5px
-//   font-size: 12px
-//   background: rgba(0, 0, 0, 0.8)
-//   color: white
-//   border-radius: 3px
-//   display: none
+#pubs-tooltip
+    position: absolute
+    z-index: 1000
+    padding: 5px
+    font-size: 12px
+    background: rgba(0, 0, 0, 0.8)
+    color: white
+    border-radius: 3px
+    display: none
 
 
 .publications
@@ -84,30 +86,39 @@
 
         li
             margin-bottom: 1rem
-            abbr.a
-                text-decoration: none
+            .badge
+                a
+                    color: $WHITE
 
-        .title
-            font-weight: bold
+            .title
+                font-weight: bold
 
-        .author
-            a
-                border-bottom: 1px dashed
+            .author
+                .self
+                    display: inline-block
+                    font-style: normal
+                    color: $publications-self-color
+                    border-bottom: 1px solid
+                a
+                    border-bottom: 1px dashed
+                    color: $text-color
+                    &:hover
+                        border-bottom-style: solid
+                        color: $text-color
+                        text-decoration: none
 
-            &:hover
-                border-bottom-style: solid
-                text-decoration: none
+            .links
+                margin-top: 0.5rem
+                a
+                    background-color: $publications-links-button-background-color
+                    border-color: $publications-links-button-background-color
+                    color: $publications-links-button-text-color
+                    &:hover
+                        background-color: $publications-links-buttom-hover-background-color
+                        border-color: $publications-links-buttom-hover-background-color
+                        color: $publications-links-button-hover-text-color
 
-    //   .preview
-    //     max-width: 100%
-    //     margin-bottom: 0.5rem
-    //     border-radius: 4px
-
-    //   .links
-    //     margin-top: 0.5rem
-
-    //     a.btn
-    //       border: 1px solid
-    //       padding: 0.25rem 1rem
-    //       margin-left: 0
-    //       font-size: 0.875rem
+            .abstract
+                margin-top: 10px
+                padding: 5px
+                border: dashed 1px $text-color

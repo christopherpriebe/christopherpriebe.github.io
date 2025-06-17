@@ -74,7 +74,7 @@
                     {%- if forloop.last and author_array_limit == author_array_size -%}and&nbsp;{%- endif -%}
                 {%- endif -%}
                 {%- if author_is_self -%}
-                    <em>{{ author.first }} {{ author_last_html }}</em>
+                    <div class="self">{{ author.first }} {{ author_last_html }}</div>
                 {%- else -%}
                     {%- if coauthor_url -%}
                         <a href="{{ coauthor_url }}">{{- author.first }} {{ author_last_html -}}</a>
@@ -132,25 +132,41 @@
             {%- elsif entry.school -%}
                 {% assign venue = entry.school -%}
             {%- endif -%}
-            {{ venue }}{%- if entry.month -%}, {{ entry.month | capitalize }}{%- endif -%}{%- if entry.year -%}, {{ entry.year }}{%- endif -%}
+            {{ venue }}{%- if venue != "" -%}, {% endif -%}{%- if entry.month -%}{{ entry.month | capitalize }}.&nbsp;{%- endif -%}{%- if entry.year -%}{{ entry.year }}{%- endif -%}
         </div>
 
-        {% comment %} <div class="links mt-2">
-            {% if entry.pdf %}
-            <a href="{{ entry.pdf | prepend: '/assets/pdf/' | relative_url }}" class="btn btn-sm btn-default">PDF</a>
+        <div class="links">
+            {% if entry.abstract %}
+                <a class="btn btn-sm" id="abs-btn-{{ entry.key }}">Abstract</a>
             {% endif %}
             {% if entry.arxiv %}
-            <a href="http://arxiv.org/abs/{{ entry.arxiv }}" class="btn btn-sm btn-default">arXiv</a>
+                <a href="http://arxiv.org/abs/{{ entry.arxiv }}" class="btn btn-sm">arXiv</a>
             {% endif %}
-            {% if entry.doi %}
-            <a href="https://doi.org/{{ entry.doi }}" class="btn btn-sm btn-default">DOI</a>
+            {% if entry.html %}
+                {% if entry.html contains "://" %}
+                    <a href="{{ entry.html }}" class="btn btn-sm">HTML</a>
+                {% else %}
+                    <a href="{{ entry.html | prepend: '/assets/html/' | relative_url }}" class="btn btn-sm">HTML</a>
+                {% endif %}
             {% endif %}
-            {% if entry.code %}
-            <a href="{{ entry.code }}" class="btn btn-sm btn-default">Code</a>
+            {% if entry.pdf %}
+                <a href="{{ entry.pdf | prepend: '/assets/pdf/' | relative_url }}" class="btn btn-sm">PDF</a>
             {% endif %}
-            {% if entry.video %}
-            <a href="{{ entry.video }}" class="btn btn-sm btn-default">Video</a>
-            {% endif %}
-        </div> {% endcomment %}
+        </div>
+        {% if entry.abstract %}
+            <p class="abstract hidden" id="abs-{{ entry.key }}">{{ entry.abstract }}</p>
+        {% endif %}
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    var btn = document.getElementById("abs-btn-{{ entry.key }}");
+    var abstractDiv = document.getElementById("abs-{{ entry.key }}");
+    if (btn && abstractDiv) {
+        btn.addEventListener("click", function() {
+            abstractDiv.classList.toggle("hidden");
+        });
+    }
+});
+</script>

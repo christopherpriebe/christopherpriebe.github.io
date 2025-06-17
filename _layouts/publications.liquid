@@ -7,7 +7,7 @@ layout: base
         <div class="col-xs-12">
             <div id="pubs-chart"></div>
             <div id="pubs-legend"></div>
-            {% comment %} <div class="tooltip" id="pub-tooltip"></div> {% endcomment %}
+            <div id="pubs-tooltip"></div>
         </div>
     </div>
     <div class="row">
@@ -20,11 +20,11 @@ layout: base
             {% comment %} <h3>Journal Papers</h3>
             <div id="journal-papers" class="bib-section">
             {% bibliography --query @article %}
-            </div>
-            <h3>Preprints</h3>
-            <div id="preprints" class="bib-section">
-            {% bibliography --query @misc %}
             </div> {% endcomment %}
+            <h3>Preprints</h3>
+            <div id="preprints" class="publications">
+            {% bibliography --query @misc %}
+            </div> 
         </div>
     </div>
 </div>
@@ -56,7 +56,8 @@ document.addEventListener("DOMContentLoaded", function () {
             const html = li.innerHTML
             const yearMatch = html.match(/(19|20)\d{2}/g)
             const year = yearMatch ? parseInt(yearMatch[yearMatch.length - 1]) : null
-            const title = li.textContent.trim()
+            const titleDiv = li.querySelector(".row .col-xs-12:nth-child(2) .title")
+            const title = titleDiv ? titleDiv.textContent.trim() : ''
 
             if (year) {
                 pubs.push({ year, type, title })
@@ -71,7 +72,7 @@ document.addEventListener("DOMContentLoaded", function () {
     })
 
     const chart = document.getElementById("pubs-chart")
-    const tooltip = document.querySelector(".tooltip")
+    const tooltip = document.getElementById("pubs-tooltip")
     const sortedYears = Object.keys(pubsByYear).sort()
 
     sortedYears.forEach(year => {
@@ -86,16 +87,18 @@ document.addEventListener("DOMContentLoaded", function () {
             rect.setAttribute("data-year", pub.year)
             rect.setAttribute("data-type", pub.type)
 
+            const mouseOffsetX = 0
+            const mouseOffsetY = 0
             rect.addEventListener("mouseenter", e => {
-                tooltip.innerHTML = `<strong>${pub.title}</strong><br><em>${pub.type}</em>, ${pub.year}`
+                tooltip.innerHTML = `<strong>${pub.title}</strong><br><em>${pub.type}</em>`
                 tooltip.style.display = "block"
-                tooltip.style.left = `${e.pageX + 10}px`
-                tooltip.style.top = `${e.pageY - 10}px`
+                tooltip.style.left = `${e.clientX + mouseOffsetX}px`
+                tooltip.style.top = `${e.clientY + mouseOffsetY}px`
             })
 
             rect.addEventListener("mousemove", e => {
-                tooltip.style.left = `${e.pageX + 10}px`
-                tooltip.style.top = `${e.pageY - 10}px`
+                tooltip.style.left = `${e.clientX + mouseOffsetX}px`
+                tooltip.style.top = `${e.clientY + mouseOffsetY}px`
             })
 
             rect.addEventListener("mouseleave", () => {
