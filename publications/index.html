@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en-US"><head>
+    <!-- Required meta tags -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+
+    <!-- Link Bootstrap CSS -->
+    <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+
+    <!-- Link Font Awesome CSS -->
+    <link rel="stylesheet" href="/assets/css/fontawesome.min.css">
+
+    <!-- Link normalize CSS -->
+    <link rel="stylesheet" href="/assets/css/normalize.css">
+
+    <!-- Link custom CSS -->
+    <link rel="stylesheet" href="/assets/css/style.css">
+
+    <!-- Configure title element of the page -->
+    <title>
+        
+        
+            Christopher Priebe - Publications
+        
+        
+        
+    </title>
+</head>
+<body><header class="site-header">
+    <!-- Create navigation bar with Bootstrap 3 -->
+<nav id="navbar" class="navbar navbar-default">
+    <div class="container-fluid">
+         
+            <div class="navbar-header">
+                <a class="navbar-brand" href="/">Christopher Priebe</a>
+            </div>
+        
+        <ul class="nav navbar-nav navbar-right">
+             
+            
+                
+            
+                
+            
+                
+            
+                
+            
+                
+            
+                
+                    <li><a href=/about/>About</a></li>
+                
+            
+                
+                    <li><a href=/publications/>Publications</a></li>
+                
+            
+                
+                    <li><a href=/projects/>Projects</a></li>
+                
+            
+                
+                    <li><a href=/connect/>Connect</a></li>
+                
+            
+        </ul>
+    </div>
+</nav>
+
+</header>
+<main class="page-content" aria-label="Content">
+            <div class="container">
+    <div id="pubs-chart-container" class="row">
+        <div class="col-xs-12">
+            <div id="pubs-chart"></div>
+            <div id="pubs-legend"></div>
+            <div id="pubs-tooltip"></div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-xs-12">
+            <h2>Publications by Year</h2>
+            <h3>Conference Papers</h3>
+            <div id="conference-papers" class="publications">
+            <h2 class="bibliography">2025</h2>
+<ol class="bibliography"><li>
+
+<div class="row">
+    
+
+    <div class="col-xs-12 col-sm-1 abbr"><abbr class="badge rounded w-100"style="background-color:#53B6F4"><a href="https://iscaconf.org/">ISCA</a></abbr>
+    </div>
+
+    <div class="col-xs-12 col-sm-10">
+        <div class="title"><b>In-Storage Acceleration of Retrieval Augmented Generation as a Service</b></div>
+
+        <div class="author">Rohan Mahapatra,&nbsp;Harsha Santhanam,&nbsp;<div class="self">Christopher Priebe</div>,&nbsp;Hanyang Xu,&nbsp;and&nbsp;<a href="https://cseweb.ucsd.edu/~hadi/">Hadi Esmaeilzadeh</a>
+        </div>
+
+        <div class="periodical">In the International Symposium on Computer Architecture, Jun.&nbsp;2025</div>
+
+        <div class="links">
+            
+                <a class="btn btn-sm" id="abs-btn-ragx:isca:2025">Abstract</a>
+            
+            
+            
+                
+                    <a href="https://camps.aptaracorp.com/ACM_PMS/PMS/ACM/ISCA25/46/14e555f0-1fa4-11f0-ada9-16bb50361d1f/OUT/isca25-46.html" class="btn btn-sm">HTML</a>
+                
+            
+            
+                <a href="/assets/pdf/in_storage_acceleration_rag_ISCA_2025.pdf" class="btn btn-sm">PDF</a>
+            
+        </div>
+        
+            <p class="abstract hidden" id="abs-ragx:isca:2025">Retrieval-augmented generation (RAG) services are rapidly gaining adoption in enterprise settings as they combine information retrieval systems (e.g., databases) with large language models (LLMs) to enhance response generation and reduce hallucinations. By augmenting an LLM’s fixed pre-trained knowledge with real-time information retrieval, RAG enables models to effectively extend their context to large knowledge bases by selectively retrieving only the most relevant information. As a result, RAG provides the effect of dynamic updates to the LLM’s knowledge without requiring expensive and time-consuming retraining. While some deployments keep the entire database in memory, RAG services are increasingly shifting toward persistent storage to accommodate ever-growing knowledge bases, enhance utility, and improve cost-efficiency. However, this transition fundamentally reshapes the system’s performance profile: empirical analysis reveals that the Search & Retrieval phase emerges as the dominant contributor to end-to-end latency. This phase typically involves (1) running a smaller language model to generate query embeddings, (2) executing similarity and relevance checks over varying data structures, and (3) performing frequent, long-latency accesses to persistent storage. To address this triad of challenges, we propose a metamorphic in-storage accelerator architecture that provides the necessary programmability to support diverse RAG algorithms, dynamic data structures, and varying computational patterns. The architecture also supports in-storage execution of smaller language models for query embedding generation while final LLM generation is executed on DGX A100 systems. Experimental results show up to 4.3x and 1.5x improvement in end-to-end throughput compared to conventional retrieval pipelines using Xeon CPUs with NVMe storage and A100 GPUs with DRAM, respectively.</p>
+        
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    var btn = document.getElementById("abs-btn-ragx:isca:2025");
+    var abstractDiv = document.getElementById("abs-ragx:isca:2025");
+    if (btn && abstractDiv) {
+        btn.addEventListener("click", function() {
+            abstractDiv.classList.toggle("hidden");
+        });
+    }
+});
+</script>
+</li></ol>
+            </div>
+            
+            <h3>Preprints</h3>
+            <div id="preprints" class="publications">
+            <h2 class="bibliography">2025</h2>
+<ol class="bibliography"><li>
+
+<div class="row">
+    
+
+    <div class="col-xs-12 col-sm-1 abbr">
+    </div>
+
+    <div class="col-xs-12 col-sm-10">
+        <div class="title"><b>Compiler Optimization via LLM Reasoning for Efficient Model Serving</b></div>
+
+        <div class="author">Sujun Tang,&nbsp;<div class="self">Christopher Priebe</div>,&nbsp;Rohan Mahapatra,&nbsp;<a href="https://lianhui.ucsd.edu/">Lianhui Qin</a>,&nbsp;and&nbsp;<a href="https://cseweb.ucsd.edu/~hadi/">Hadi Esmaeilzadeh</a>
+        </div>
+
+        <div class="periodical">Jun.&nbsp;2025</div>
+
+        <div class="links">
+            
+                <a class="btn btn-sm" id="abs-btn-reasoning-compiler:arxiv:2025">Abstract</a>
+            
+            
+                <a href="http://arxiv.org/abs/2506.01374" class="btn btn-sm">arXiv</a>
+            
+            
+                
+                    <a href="https://arxiv.org/html/2506.01374v1" class="btn btn-sm">HTML</a>
+                
+            
+            
+        </div>
+        
+            <p class="abstract hidden" id="abs-reasoning-compiler:arxiv:2025">While model serving has unlocked unprecedented capabilities, the high cost of serving large-scale models continues to be a significant barrier to widespread accessibility and rapid innovation. Compiler optimizations have long driven substantial performance improvements, but existing compilers struggle with neural workloads due to the exponentially large and highly interdependent space of possible transformations. Although existing stochastic search techniques can be effective, they are often sample-inefficient and fail to leverage the structural context underlying compilation decisions. We set out to investigate the research question of whether reasoning with large language models (LLMs), without any retraining, can leverage the context-aware decision space of compiler optimization to significantly improve sample efficiency. To that end, we introduce a novel compilation framework (dubbed Reasoning Compiler) that formulates optimization as a sequential, context-aware decision process, guided by a large language model and structured Monte Carlo tree search (MCTS). The LLM acts as a proposal mechanism, suggesting hardware-aware transformations that reflect the current program state and accumulated performance feedback. Monte Carlo tree search (MCTS) incorporates the LLM-generated proposals to balance exploration and exploitation, facilitating structured, context-sensitive traversal of the expansive compiler optimization space. By achieving substantial speedups with markedly fewer samples than leading neural compilers, our approach demonstrates the potential of LLM-guided reasoning to transform the landscape of compiler optimization.</p>
+        
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    var btn = document.getElementById("abs-btn-reasoning-compiler:arxiv:2025");
+    var abstractDiv = document.getElementById("abs-reasoning-compiler:arxiv:2025");
+    if (btn && abstractDiv) {
+        btn.addEventListener("click", function() {
+            abstractDiv.classList.toggle("hidden");
+        });
+    }
+});
+</script>
+</li></ol>
+            </div> 
+        </div>
+    </div>
+</div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const typeColors = {
+        conference: "#84CFE2",
+        journal: "#7B66DA",
+        preprint: "#D3D3D3",
+        other: "#9E9E9E"
+    }
+
+    const typeSelectors = {
+        conference: "#conference-papers",
+        journal: "#journal-papers",
+        preprint: "#preprints"
+    }
+
+    const pubs = []
+
+    Object.keys(typeSelectors).forEach(type => {
+        const container = document.querySelector(typeSelectors[type])
+        if (!container) return
+
+        const entries = container.querySelectorAll("li")
+        entries.forEach(li => {
+            const html = li.innerHTML
+            const yearMatch = html.match(/(19|20)\d{2}/g)
+            const year = yearMatch ? parseInt(yearMatch[yearMatch.length - 1]) : null
+            const titleDiv = li.querySelector(".row .col-xs-12:nth-child(2) .title")
+            const title = titleDiv ? titleDiv.textContent.trim() : ''
+
+            if (year) {
+                pubs.push({ year, type, title })
+            }
+        })
+    })
+
+    const pubsByYear = {}
+    pubs.forEach(pub => {
+        if (!pubsByYear[pub.year]) pubsByYear[pub.year] = []
+        pubsByYear[pub.year].push(pub)
+    })
+
+    const chart = document.getElementById("pubs-chart")
+    const tooltip = document.getElementById("pubs-tooltip")
+    const sortedYears = Object.keys(pubsByYear).sort()
+
+    sortedYears.forEach(year => {
+        const bar = document.createElement("div")
+        bar.className = "pub-bar"
+
+        pubsByYear[year].forEach(pub => {
+            const rect = document.createElement("div")
+            rect.className = "pub"
+            rect.style.backgroundColor = typeColors[pub.type] || typeColors.other
+            rect.setAttribute("data-title", pub.title)
+            rect.setAttribute("data-year", pub.year)
+            rect.setAttribute("data-type", pub.type)
+
+            const mouseOffsetX = 0
+            const mouseOffsetY = 0
+            rect.addEventListener("mouseenter", e => {
+                tooltip.innerHTML = `<strong>${pub.title}</strong><br><em>${pub.type}</em>`
+                tooltip.style.display = "block"
+                tooltip.style.left = `${e.clientX + mouseOffsetX}px`
+                tooltip.style.top = `${e.clientY + mouseOffsetY}px`
+            })
+
+            rect.addEventListener("mousemove", e => {
+                tooltip.style.left = `${e.clientX + mouseOffsetX}px`
+                tooltip.style.top = `${e.clientY + mouseOffsetY}px`
+            })
+
+            rect.addEventListener("mouseleave", () => {
+                tooltip.style.display = "none"
+            })
+
+            bar.appendChild(rect)
+        })
+
+        const label = document.createElement("div")
+        label.className = "pub-year-label"
+        label.innerText = year
+        bar.appendChild(label)
+
+        chart.appendChild(bar)
+    })
+
+    const legend = document.getElementById("pubs-legend")
+    Object.entries(typeColors).forEach(([type, color]) => {
+        const item = document.createElement("div")
+        item.className = "legend-item"
+        item.innerHTML = `<div class="legend-color" style="background:${color}"></div> ${type}`
+        legend.appendChild(item)
+    })
+})
+</script>
+
+        </main><footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-xs-12">
+                <p class="text-center">
+                    &copy; Copyright 2025
+                    Christopher
+                    M.
+                    Priebe. Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>. For additional credits, see <a href="/credits/">this</a>.
+
+                    
+                        Last updated: June 18, 2025.
+                    
+                </p>
+            </div>
+        </div>
+    </div>
+</footer><!-- Link Bootstrap JS -->
+<script src="/assets/js/bootstrap.min.js"></script>
+
+        <!-- Link jQuery JS -->
+<script src="/assets/js/jquery.min.js"></script>
+
+    </body>
+
+</html>
