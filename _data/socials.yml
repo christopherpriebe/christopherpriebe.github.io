@@ -20,7 +20,7 @@ letterbox:
   is_home_link: false
 linkedin:
   logo: fa-brands fa-linkedin
-  username: https://www.linkedin.com/in/priebechristopher/
+  url: https://www.linkedin.com/in/priebechristopher/
   description: My professional profile is available on LinkedIn.
   is_home_link: true
 yelp_user_id:
