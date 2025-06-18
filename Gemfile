@@ -1,27 +1,15 @@
 source "https://rubygems.org"
 
-# Hello! This is where you manage which Jekyll version is used to run.
-# When you want to use a different version, change it below, save the
-# file and run `bundle install`. Run Jekyll with `bundle exec`, like so:
-#
-#     bundle exec jekyll serve
-#
-
 # Version variables 
-jekyll_version = "~> 3.9.5"
-github_pages_version = "~> 231"
+jekyll_version = "~> 4.4.1"
+jekyll_scholar_version = "~> 7.2.0"
+
 jekyll_feed_version = "~> 0.17"
 tzinfo_version = ">= 1", "< 3"
 wdm_version = "~> 0.1.1"
 http_parser_version = "~> 0.6.0"
 
-# This will help ensure the proper Jekyll version is running.
-# Happy Jekylling!
-# gem "jekyll", jekyll_version
-
-# If you want to use GitHub Pages, remove the "gem "jekyll"" above and
-# uncomment the line below. To upgrade, run `bundle update github-pages`.
-gem "github-pages", github_pages_version, group: :jekyll_plugins
+gem "jekyll", jekyll_version
 
 # If you have any plugins, put them here!
 # group :jekyll_plugins do
@@ -42,4 +30,4 @@ gem "wdm", wdm_version, :platforms => [:mingw, :x64_mingw, :mswin]
 # do not have a Java counterpart.
 gem "http_parser.rb", http_parser_version, :platforms => [:jruby]
 
-gem "jekyll-scholar", group: :jekyll_plugins
+gem "jekyll-scholar", jekyll_scholar_version, group: :jekyll_plugins
