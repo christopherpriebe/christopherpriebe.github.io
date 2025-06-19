@@ -8,6 +8,11 @@ google_scholar:
   url: https://scholar.google.com/citations?user=E9z3HwIAAAAJ
   description: All of my academic publications are available on Google Scholar.
   is_home_link: true
+linkedin:
+  logo: fa-brands fa-linkedin
+  url: https://www.linkedin.com/in/priebechristopher/
+  description: My professional profile is available on LinkedIn.
+  is_home_link: true
 instagram:
   logo: fa-brands fa-instagram
   url: https://www.instagram.com/thechrispriebe/
@@ -18,11 +23,6 @@ letterbox:
   url: https://letterboxd.com/chrisp1934/
   description: I share my movie ratings on Letterboxd.
   is_home_link: false
-linkedin:
-  logo: fa-brands fa-linkedin
-  url: https://www.linkedin.com/in/priebechristopher/
-  description: My professional profile is available on LinkedIn.
-  is_home_link: true
 yelp_user_id:
   logo: fa-brands fa-yelp
   url: https://www.yelp.com/user_details?userid=2sRtil8vkkKVYymip8QYUg
