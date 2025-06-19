@@ -10,11 +10,9 @@ layout: base
         </p>
         <hr>
     </div>
-    <div class="row">
-        <div class="col-xs-12 socials">
-            {% for social in site.data.socials %}
-                {% include social.liquid %}
-            {% endfor %}
-        </div>
+    <div class="row socials">
+        {% for social in site.data.socials %}
+            {% include social.liquid %}
+        {% endfor %}
     </div>
 </div>
