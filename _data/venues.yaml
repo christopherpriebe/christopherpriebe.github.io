@@ -1,3 +1,6 @@
 "ISCA":
   color: "#53B6F4"
   url: https://iscaconf.org/
+"NeurIPS":
+  color: "#624487"
+  url: https://neurips.cc/

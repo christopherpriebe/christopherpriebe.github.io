@@ -21,10 +21,10 @@ layout: base
             <div id="journal-papers" class="bib-section">
             {% bibliography --query @article %}
             </div> {% endcomment %}
-            <h3>Preprints</h3>
+            {% comment %} <h3>Preprints</h3>
             <div id="preprints" class="publications">
             {% bibliography --query @misc %}
-            </div> 
+            </div>  {% endcomment %}
         </div>
     </div>
 </div>
