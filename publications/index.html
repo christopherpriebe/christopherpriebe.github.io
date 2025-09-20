@@ -90,6 +90,48 @@
 <div class="row">
     
 
+    <div class="col-xs-12 col-sm-1 abbr"><abbr class="badge rounded w-100"style="background-color:#624487"><a href="https://neurips.cc/">NeurIPS</a></abbr>
+    </div>
+
+    <div class="col-xs-12 col-sm-10">
+        <div class="title"><b>Compiler Optimization via LLM Reasoning for Efficient Model Serving</b></div>
+
+        <div class="author">Sujun Tang,&nbsp;<div class="self">Christopher Priebe</div>,&nbsp;Rohan Mahapatra,&nbsp;<a href="https://lianhui.ucsd.edu/">Lianhui Qin</a>,&nbsp;and&nbsp;<a href="https://cseweb.ucsd.edu/~hadi/">Hadi Esmaeilzadeh</a>
+        </div>
+
+        <div class="periodical">In the International Conference on Neural Information Processing Systems, Dec.&nbsp;2025</div>
+
+        <div class="links">
+            
+                <a class="btn btn-sm" id="abs-btn-reasoning-compiler:neurips:2025">Abstract</a>
+            
+            
+            
+            
+        </div>
+        
+            <p class="abstract hidden" id="abs-reasoning-compiler:neurips:2025">While model serving has unlocked unprecedented capabilities, the high cost of serving large-scale models continues to be a significant barrier to widespread accessibility and rapid innovation. Compiler optimizations have long driven substantial performance improvements, but existing compilers struggle with neural workloads due to the exponentially large and highly interdependent space of possible transformations. Although existing stochastic search techniques can be effective, they are often sample-inefficient and fail to leverage the structural context underlying compilation decisions. We set out to investigate the research question of whether reasoning with large language models (LLMs), without any retraining, can leverage the context-aware decision space of compiler optimization to significantly improve sample efficiency. To that end, we introduce a novel compilation framework (dubbed Reasoning Compiler) that formulates optimization as a sequential, context-aware decision process, guided by a large language model and structured Monte Carlo tree search (MCTS). The LLM acts as a proposal mechanism, suggesting hardware-aware transformations that reflect the current program state and accumulated performance feedback. Monte Carlo tree search (MCTS) incorporates the LLM-generated proposals to balance exploration and exploitation, facilitating structured, context-sensitive traversal of the expansive compiler optimization space. By achieving substantial speedups with markedly fewer samples than leading neural compilers, our approach demonstrates the potential of LLM-guided reasoning to transform the landscape of compiler optimization.</p>
+        
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    var btn = document.getElementById("abs-btn-reasoning-compiler:neurips:2025");
+    var abstractDiv = document.getElementById("abs-reasoning-compiler:neurips:2025");
+    if (btn && abstractDiv) {
+        btn.addEventListener("click", function() {
+            abstractDiv.classList.toggle("hidden");
+        });
+    }
+});
+</script>
+</li>
+<li>
+
+<div class="row">
+    
+
     <div class="col-xs-12 col-sm-1 abbr"><abbr class="badge rounded w-100"style="background-color:#53B6F4"><a href="https://iscaconf.org/">ISCA</a></abbr>
     </div>
 
@@ -135,58 +177,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </li></ol>
             </div>
             
-            <h3>Preprints</h3>
-            <div id="preprints" class="publications">
-            <h2 class="bibliography">2025</h2>
-<ol class="bibliography"><li>
-
-<div class="row">
-    
-
-    <div class="col-xs-12 col-sm-1 abbr">
-    </div>
-
-    <div class="col-xs-12 col-sm-10">
-        <div class="title"><b>Compiler Optimization via LLM Reasoning for Efficient Model Serving</b></div>
-
-        <div class="author">Sujun Tang,&nbsp;<div class="self">Christopher Priebe</div>,&nbsp;Rohan Mahapatra,&nbsp;<a href="https://lianhui.ucsd.edu/">Lianhui Qin</a>,&nbsp;and&nbsp;<a href="https://cseweb.ucsd.edu/~hadi/">Hadi Esmaeilzadeh</a>
-        </div>
-
-        <div class="periodical">Jun.&nbsp;2025</div>
-
-        <div class="links">
             
-                <a class="btn btn-sm" id="abs-btn-reasoning-compiler:arxiv:2025">Abstract</a>
-            
-            
-                <a href="http://arxiv.org/abs/2506.01374" class="btn btn-sm">arXiv</a>
-            
-            
-                
-                    <a href="https://arxiv.org/html/2506.01374v1" class="btn btn-sm">HTML</a>
-                
-            
-            
-        </div>
-        
-            <p class="abstract hidden" id="abs-reasoning-compiler:arxiv:2025">While model serving has unlocked unprecedented capabilities, the high cost of serving large-scale models continues to be a significant barrier to widespread accessibility and rapid innovation. Compiler optimizations have long driven substantial performance improvements, but existing compilers struggle with neural workloads due to the exponentially large and highly interdependent space of possible transformations. Although existing stochastic search techniques can be effective, they are often sample-inefficient and fail to leverage the structural context underlying compilation decisions. We set out to investigate the research question of whether reasoning with large language models (LLMs), without any retraining, can leverage the context-aware decision space of compiler optimization to significantly improve sample efficiency. To that end, we introduce a novel compilation framework (dubbed Reasoning Compiler) that formulates optimization as a sequential, context-aware decision process, guided by a large language model and structured Monte Carlo tree search (MCTS). The LLM acts as a proposal mechanism, suggesting hardware-aware transformations that reflect the current program state and accumulated performance feedback. Monte Carlo tree search (MCTS) incorporates the LLM-generated proposals to balance exploration and exploitation, facilitating structured, context-sensitive traversal of the expansive compiler optimization space. By achieving substantial speedups with markedly fewer samples than leading neural compilers, our approach demonstrates the potential of LLM-guided reasoning to transform the landscape of compiler optimization.</p>
-        
-    </div>
-</div>
-
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-    var btn = document.getElementById("abs-btn-reasoning-compiler:arxiv:2025");
-    var abstractDiv = document.getElementById("abs-reasoning-compiler:arxiv:2025");
-    if (btn && abstractDiv) {
-        btn.addEventListener("click", function() {
-            abstractDiv.classList.toggle("hidden");
-        });
-    }
-});
-</script>
-</li></ol>
-            </div> 
         </div>
     </div>
 </div>
@@ -299,7 +290,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     Priebe. Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>. For additional credits, see <a href="/credits/">this</a>.
 
                     
-                        Last updated: June 19, 2025.
+                        Last updated: September 20, 2025.
                     
                 </p>
             </div>
