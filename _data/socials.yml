@@ -18,13 +18,3 @@ instagram:
   url: https://www.instagram.com/thechrispriebe/
   description: My personal photos are shared on Instagram; I only accept follow requests from people I know.
   is_home_link: false
-letterbox:
-  logo: fa-brands fa-letterboxd
-  url: https://letterboxd.com/chrisp1934/
-  description: I share my movie ratings on Letterboxd.
-  is_home_link: false
-yelp_user_id:
-  logo: fa-brands fa-yelp
-  url: https://www.yelp.com/user_details?userid=2sRtil8vkkKVYymip8QYUg
-  description: I share my restaurant reviews on Yelp.
-  is_home_link: false
