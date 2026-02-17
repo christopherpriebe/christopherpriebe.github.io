@@ -2,8 +2,8 @@
 type: experience
 organization_name: AMD
 position_name: Machine Learning Compilers Intern
-duration: September 2025 - Present
+duration: September 2025 - December 2025
 show: true
-order: 50
+order: 250
 ---
-I am currently contributing to support for modern AI workloads on AMD GPUs through the Triton compiler infrastructure.
+Worked on compiler optimizations for matrix multiplication within the AMD backend of the Triton compiler.
