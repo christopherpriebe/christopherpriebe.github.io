@@ -1,8 +1,13 @@
 {
   "dependencies": {
+    "@fortawesome/fontawesome-svg-core": "6.7.2",
+    "@fortawesome/free-brands-svg-icons": "6.7.0",
+    "@fortawesome/free-regular-svg-icons": "6.7.2",
+    "@fortawesome/free-solid-svg-icons": "6.7.2",
     "bootstrap": "3.3.7",
     "jquery": "3.7.1",
-    "node": "^22.9.0"
+    "node": "^22.9.0",
+    "webpack": "^5.105.2"
   },
   "name": "christopherpriebe.com",
   "description": "Christopher Priebe's personal website.",
