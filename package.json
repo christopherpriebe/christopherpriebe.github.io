@@ -1,6 +1,26 @@
 {
   "dependencies": {
-    "bootstrap": "^3.4.1",
-    "jquery": "^3.7.1"
-  }
+    "bootstrap": "3.3.7",
+    "jquery": "3.7.1",
+    "node": "^22.9.0"
+  },
+  "name": "christopherpriebe.com",
+  "description": "Christopher Priebe's personal website.",
+  "version": "0.0.1",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "./script/server.sh",
+    "build": "./script/install.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/christopherpriebe/christopherpriebe.github.io.git"
+  },
+  "author": "Christopher Priebe",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/christopherpriebe/christopherpriebe.github.io/issues"
+  },
+  "homepage": "https://christopherpriebe.com/"
 }
