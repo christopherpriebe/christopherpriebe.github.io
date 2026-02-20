@@ -12,4 +12,3 @@ Gemfile.lock
 node_modules
 assets/css/main.css
 assets/js/*
-!assets/js/bundle.js
