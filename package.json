@@ -26,13 +26,12 @@
     "@fortawesome/free-solid-svg-icons": "6.7.2",
     "bootstrap": "3.3.7",
     "jquery": "3.7.1",
-    "normalize.css": "8.0.1",
+    "normalize.css": "8.0.1"
+  },
+  "devDependencies": {
     "css-loader": "^7.1.4",
     "mini-css-extract-plugin": "^2.10.0",
     "webpack": "^5.105.2",
-    "node": "^22.9.0"
-  },
-  "devDependencies": {
     "webpack-cli": "^6.0.1"
   }
 }
