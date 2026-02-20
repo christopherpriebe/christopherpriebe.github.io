@@ -4,11 +4,12 @@
   "version": "0.0.1",
   "private": true,
   "main": "index.js",
-  "scripts": {
+"scripts": {
     "start": "./script/server.sh",
-    "build": "webpack --mode production && ./script/install.sh",
-    "dev": "webpack --mode development --watch && ./script/install.sh"
-  },
+    "build": "webpack --mode production",
+    "install": "./script/install.sh",
+    "dev": "webpack --mode development --watch"
+},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/christopherpriebe/christopherpriebe.github.io.git"
