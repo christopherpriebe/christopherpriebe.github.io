@@ -62,4 +62,4 @@ The `resume` layout is specifically for a resume/CV page.
 - All pages created under the `projects` collection (i.e., in the `_projects` folder) are defaulted to have `layout: single_page_column` and `show_title: true`.
 
 ## TODOs
-- Automatically grab Bootstrap and other libraries and convert to minimal CSS/JS using a script (and a GitHub action for the deployment)
+No outstanding TODOs.

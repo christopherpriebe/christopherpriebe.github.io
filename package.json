@@ -1,6 +1,38 @@
 {
+  "name": "christopherpriebe.com",
+  "description": "Christopher Priebe's personal website.",
+  "version": "0.0.1",
+  "private": true,
+  "main": "index.js",
+"scripts": {
+    "start": "./script/server.sh",
+    "build": "webpack --mode production",
+    "install": "./script/install.sh",
+    "dev": "webpack --mode development --watch"
+},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/christopherpriebe/christopherpriebe.github.io.git"
+  },
+  "author": "Christopher Priebe",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/christopherpriebe/christopherpriebe.github.io/issues"
+  },
+  "homepage": "https://christopherpriebe.com/",
   "dependencies": {
-    "bootstrap": "^3.4.1",
-    "jquery": "^3.7.1"
+    "@fortawesome/fontawesome-svg-core": "6.7.2",
+    "@fortawesome/free-brands-svg-icons": "6.7.2",
+    "@fortawesome/free-regular-svg-icons": "6.7.2",
+    "@fortawesome/free-solid-svg-icons": "6.7.2",
+    "bootstrap": "3.3.7",
+    "jquery": "3.7.1",
+    "normalize.css": "8.0.1"
+  },
+  "devDependencies": {
+    "css-loader": "^7.1.4",
+    "mini-css-extract-plugin": "^2.10.0",
+    "webpack": "^5.105.2",
+    "webpack-cli": "^6.0.1"
   }
 }
