@@ -5,7 +5,7 @@ show_title: true
 permalink: /credits/
 ---
 
-This website is generated using [Jekyll](https://jekyllrb.com/) and built with [Bootstrap](https://getbootstrap.com/) (v3.3.7), [jQuery](https://jquery.com/) (v3.7.1), and [Font Awesome](https://fontawesome.com/) (v6.7.2).
+This website is generated using [Jekyll](https://jekyllrb.com/) and built with [Bootstrap](https://getbootstrap.com/) (v3.3.7), [jQuery](https://jquery.com/) (v3.7.1), [Font Awesome](https://fontawesome.com/) (v6.7.2), and [Leaflet](https://leafletjs.com/) (v1.9.4).
 This website also leverages [npm](https://www.npmjs.com/), [normalize.css](https://github.com/necolas/normalize.css) (v8.0.1) by [Nicolas Gallagher](http://nicolasgallagher.com/), and [webpack](https://webpack.js.org/) with [css-loader](https://github.com/webpack/css-loader) and [mini-css-extract-plugin](https://github.com/webpack/mini-css-extract-plugin).
 Additional fonts are obtained from [Google Fonts](https://fonts.google.com/): [Open Sans](https://fonts.google.com/specimen/Open+Sans), [Lora](https://fonts.google.com/specimen/Lora).
 

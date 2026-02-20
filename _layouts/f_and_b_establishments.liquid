@@ -1,0 +1,68 @@
+---
+layout: base
+---
+
+<div class="container">
+  <div class="row">
+    <div class="col-xs-12">
+      <h1>{{ page.title }}</h1>
+    </div>
+  </div>
+
+  {% comment %} {% capture legend %}
+  <div class="well well-sm">
+    <strong>Legend:</strong>
+    <span class="jr jr-1">◌</span> Worth the visit
+    &nbsp;&nbsp;
+    <span class="jr jr-2">◍</span> Worth planning around
+    &nbsp;&nbsp;
+    <span class="jr jr-3">●</span> Worth the trip
+    &nbsp;&nbsp;
+    <span class="val-badge">◈ Exceptional value</span>
+  </div>
+  {% endcapture %} {% endcomment %}
+
+  {% include map/marker_map.liquid
+      id="f-and-b-establishments-map"
+      data=site.data.f_and_b_establishments
+      popup_type="generic"
+      legend=legend
+      zoom=2
+  %}
+</div>
+
+{% comment %} <input type="text" id="search" placeholder="Search restaurants..." />
+<select id="cuisineFilter">
+  <option value="">All Cuisines</option>
+  {% assign all_cuisines = site.data.restaurant_reviews | map: "last" | map: "cuisines" | uniq | flatten | uniq | sort %}
+  {% for cuisine in all_cuisines %}
+    <option value="{{ cuisine }}">{{ cuisine }}</option>
+  {% endfor %}
+</select>
+
+<div id="restaurant_reviews" class="row">
+    {% for restaurant in site.data.restaurant_reviews %}
+        {% include restaurant_review.liquid %}
+    {% endfor %}
+</div>
+
+<script>
+  const searchInput = document.getElementById('search');
+  const cuisineFilter = document.getElementById('cuisineFilter');
+  const cards = document.querySelectorAll('.restaurant-card');
+
+  function filter() {
+    const q = searchInput.value.toLowerCase();
+    const f = cuisineFilter.value.toLowerCase();
+
+    cards.forEach(card => {
+      const name = card.dataset.name;
+      const cuisines = card.dataset.cuisines;
+      const show = (!f || cuisines.includes(f)) && (name.includes(q) || cuisines.includes(q));
+      card.style.display = show ? 'block' : 'none';
+    });
+  }
+
+  searchInput.addEventListener('input', filter);
+  cuisineFilter.addEventListener('change', filter);
+</script> {% endcomment %}

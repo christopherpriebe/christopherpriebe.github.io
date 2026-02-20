@@ -1,0 +1,8 @@
+- name: Siamo Napoli
+  slug: siamo_napoli_north_park
+  coordinates: [32.7493733,-117.1299181]
+  address: 3959 30th St, San Diego, CA 92104
+- name: Mabel's Gone Fishing
+  slug: mabels_gone_fishing_north_park
+  coordinates: [32.7467755,-117.1302519]
+  address: 3770 30th St, San Diego, CA 92104

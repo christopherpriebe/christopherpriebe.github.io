@@ -1,0 +1,55 @@
+{%- assign items = include.data -%}
+{%- assign map_id = include.id | default: "map" -%}
+{%- assign list_id = map_id | append: "-list" -%}
+
+<div class="row">
+  <div class="col-sm-8">
+    <div id="{{ map_id }}" class="img-rounded"></div>
+    {% if include.legend %}
+      <hr>
+      {{ include.legend }}
+    {% endif %}
+  </div>
+
+  <div class="col-sm-4">
+    {% if include.filters %}
+      {{ include.filters }}
+    {% endif %}
+
+    {% comment %} <div class="map-sidebar list-group" id="{{ list_id }}" style="max-height:70vh;overflow-y:auto;">
+      {%- for item in items -%}
+        {%- include {{ include.list_include }} item=item -%}
+      {%- endfor -%}
+    </div> {% endcomment %}
+  </div>
+</div>
+
+<script>
+  // Liquid emits data for this map instance
+  window.__MAP_DATA__ = window.__MAP_DATA__ || {};
+  window.__MAP_DATA__[{{ map_id | jsonify }}] = [
+    {%- for item in items -%}
+      {%- if item.coordinates and item.coordinates.size == 2 -%}
+      {
+        slug: {{ item.slug | default: forloop.index | jsonify }},
+        lat: {{ item.coordinates[0] }},
+        lng: {{ item.coordinates[1] }},
+        _item: {{ item | jsonify }}
+      }{%- unless forloop.last -%},{%- endunless -%}
+      {%- endif -%}
+    {%- endfor -%}
+  ];
+</script>
+
+<script>
+  // Tell your bundle which map(s) to init on this page
+  window.__MAP_INIT__ = window.__MAP_INIT__ || [];
+  window.__MAP_INIT__.push({
+    mapId: {{ map_id | jsonify }},
+    listId: {{ list_id | jsonify }},
+    popupType: {{ include.popup_type | default: "generic" | jsonify }},
+    zoom: {{ include.zoom | default: 2 }},
+    // optionally pass center as [lat,lng]
+    center: {{ include.center | default: "" | jsonify }}
+  });
+</script>
