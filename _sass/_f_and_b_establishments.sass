@@ -3,3 +3,41 @@
 #f-and-b-establishments-map
     height: 70vh
     min-height: 420px
+
+.jr-marker
+    width: 16px
+    height: 16px
+    border-radius: 50%
+    border: 2px solid #111
+    background: #fff
+    box-shadow: 0 1px 3px rgba(0,0,0,.25)
+
+.jr-marker.jr-0
+  width: 10px
+  height: 10px
+  border-width: 1px
+  opacity: 0.75
+
+.jr-marker.jr-1
+  background: $f-and-b-establishment-jr-1
+
+.jr-marker.jr-2
+  background: $f-and-b-establishment-jr-2
+  position: relative
+
+.jr-marker.jr-2:after
+  content: ""
+  position: absolute
+  left: 50%
+  top: 50%
+  width: 6px
+  height: 6px
+  margin-left: -3px
+  margin-top: -3px
+  border-radius: 50%
+  background: #111
+
+.jr-marker.jr-3
+  width: 18px
+  height: 18px
+  background: $f-and-b-establishment-jr-3
