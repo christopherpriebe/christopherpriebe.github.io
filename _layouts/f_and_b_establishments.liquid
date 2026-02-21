@@ -3,66 +3,64 @@ layout: base
 ---
 
 <div class="container">
-  <div class="row">
-    <div class="col-xs-12">
-      <h1>{{ page.title }}</h1>
+    <div class="row">
+        <div class="col-xs-12">
+            <h1>{{ page.title }}</h1>
+        </div>
     </div>
-  </div>
 
-  {% comment %} {% capture legend %}
-  <div class="well well-sm">
-    <strong>Legend:</strong>
-    <span class="jr jr-1">◌</span> Worth the visit
-    &nbsp;&nbsp;
-    <span class="jr jr-2">◍</span> Worth planning around
-    &nbsp;&nbsp;
-    <span class="jr jr-3">●</span> Worth the trip
-    &nbsp;&nbsp;
-    <span class="val-badge">◈ Exceptional value</span>
-  </div>
-  {% endcapture %} {% endcomment %}
+    {% include map/marker_map.liquid
+        id="f-and-b-establishments-map"
+        data=site.data.f_and_b_establishments
+        popup_type="f_and_b_establishment"
+        legend=legend
+        zoom=2
+    %}
 
-  {% include map/marker_map.liquid
-      id="f-and-b-establishments-map"
-      data=site.data.f_and_b_establishments
-      popup_type="generic"
-      legend=legend
-      zoom=2
-  %}
+    <div class="row">
+        <div class="col-xs-12">
+            <h2>More on my Rating System</h2>
+            <p>
+                I enjoy the simplicity of the Michelin Guide's rating system, but believe some of its definitions have become harder to interpret in practice.
+                For example, Michelin's original framing describes one star as "a very good restaurant in its category" and two stars as "excellent cooking, worth a detour."
+                In my experience, the prestige of the designation often shifts expectations upward, as many one-star restaurants are treated (by marketing and diners alike) as "worth a detour," which blurs the intended distinction.
+            </p>
+            <p>
+                Additionally, I've felt inconsistency in fine dining.
+                I've had one-star meals abroad that were so far beyond certain one-star meals I've had in the United States that it made the shared "one star" label feel almost meaningless as a cross-city comparison.
+                Part of this is taste.
+                Michelin inspectors and I don't always share the same preferences, which is okay.
+                They're trying to be broadly representative, and I'm just one guy with my own biases.
+                The bigger issue for me is that Michelin's ratings can become hard to interpret when you compare restaurants across regions with very different competitive baselines.
+            </p>
+            <p>
+                So rather than trying to score establishments on an absolute "quality" scale, my system focuses on intention and effort: how much planning a place deserves for a traveler.
+                Michelin asked a great question in the early days, "is it worth a stop / detour / special trip?", and I'm bringing that question back as the primary axis.
+            </p>
+            <p>
+                My tiers work like this:
+                <br>
+                Tier 0 <i class="fa-regular fa-circle jr-marker jr-0" style="height: 1em; width: 1em;"></i>: places I genuinely recommend that are great if you're nearby, but not a destination on their own.
+                <br>
+                Tier 1 <i class="fa-regular fa-circle jr-marker jr-1" style="height: 1em; width: 1em;"></i>:
+                <strong>Worth the visit</strong> - worth going out of your way for if you're already in the area (or in the city).
+                <br>
+                Tier 2 <i class="fa-regular fa-circle-dot jr-marker jr-2" style="height: 1em; width: 1em;"></i>:
+                <strong>Worth planning around</strong> - worth making a main attraction of a trip you were already going to take.
+                <br>
+                Tier 3 <i class="fa-solid fa-circle jr-marker jr-3" style="height: 1em; width: 1em;"></i>:
+                <strong>Worth the trip</strong> - worth building travel around, potentially long-distance, primarily for the experience.
+            </p>
+            <p>
+                From these definitions emerges a natural structure for assignment: Selected establishments are places I genuinely recommend within their local context.
+                Tier 1 establishments represent the strongest experiences within a city, places that are clearly worth seeking out if you're already there.
+                Tier 2 establishments are those that stand out not just locally, but across cities, among the best I've experienced in their particular cuisine.
+                Tier 3 establishments are rare experiences that transcend cuisine or geography and justify travel on their own.
+            </p>
+            <p>
+                In this way, Selected and Tier 1 ratings are primarily local-context distinctions, while Tier 2 and Tier 3 ratings are intentionally normalized across regions and countries.
+                The goal isn't to declare absolute culinary superiority, but to give readers a clearer signal of how much intention an establishment deserves.
+            </p>
+        </div>
+    </div>
 </div>
-
-{% comment %} <input type="text" id="search" placeholder="Search restaurants..." />
-<select id="cuisineFilter">
-  <option value="">All Cuisines</option>
-  {% assign all_cuisines = site.data.restaurant_reviews | map: "last" | map: "cuisines" | uniq | flatten | uniq | sort %}
-  {% for cuisine in all_cuisines %}
-    <option value="{{ cuisine }}">{{ cuisine }}</option>
-  {% endfor %}
-</select>
-
-<div id="restaurant_reviews" class="row">
-    {% for restaurant in site.data.restaurant_reviews %}
-        {% include restaurant_review.liquid %}
-    {% endfor %}
-</div>
-
-<script>
-  const searchInput = document.getElementById('search');
-  const cuisineFilter = document.getElementById('cuisineFilter');
-  const cards = document.querySelectorAll('.restaurant-card');
-
-  function filter() {
-    const q = searchInput.value.toLowerCase();
-    const f = cuisineFilter.value.toLowerCase();
-
-    cards.forEach(card => {
-      const name = card.dataset.name;
-      const cuisines = card.dataset.cuisines;
-      const show = (!f || cuisines.includes(f)) && (name.includes(q) || cuisines.includes(q));
-      card.style.display = show ? 'block' : 'none';
-    });
-  }
-
-  searchInput.addEventListener('input', filter);
-  cuisineFilter.addEventListener('change', filter);
-</script> {% endcomment %}
