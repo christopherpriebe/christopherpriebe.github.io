@@ -1,0 +1,62 @@
+{%- assign r = include.item -%}
+{%- assign slug = r.slug | default: r.name -%}
+{%- assign jr = r.journey_rating | default: 0 -%}
+{%- assign pr = r.price_rating | default: 0 -%}
+
+<a class="list-group-item map-card"
+   data-slug="{{ slug | escape }}"
+   data-name="{{ r.name | escape }}"
+   data-city="{{ r.city | escape }}"
+   data-neighborhood="{{ r.neighborhood | escape }}"
+   data-country="{{ r.country | escape }}"
+   data-journey="{{ jr }}"
+   data-price="{{ pr }}"
+   data-value="{% if r.value_recognition %}1{% else %}0{% endif %}"
+   data-cuisines="{% if r.cuisines %}{{ r.cuisines | join: ' ' | downcase | escape }}{% endif %}">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>{{ r.name | escape }}</strong>
+      <span class="muted">
+        {% if r.neighborhood %} · {{ r.neighborhood | escape }}{% endif %}
+      </span>
+    </div>
+
+    <div class="pull-right" style="white-space:nowrap;">
+      {%- if jr == 3 -%}
+        <i class="fa-solid fa-circle jr jr-3"></i>
+      {%- elsif jr == 2 -%}
+        <i class="fa-regular fa-circle-dot jr jr-2"></i>
+      {%- elsif jr == 1 -%}
+        <i class="fa-regular fa-circle jr jr-1"></i>
+      {%- else -%}
+        <i class="fa-regular fa-circle jr jr-0"></i>
+      {%- endif -%}
+
+      {%- if r.value_recognition -%}
+        <span class="val-badge">◈</span>
+      {%- endif -%}
+    </div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">
+    {%- if r.city -%}{{ r.city | escape }}{%- endif -%}
+    {%- if r.state -%}, {{ r.state | escape }}{%- endif -%}
+    {%- if r.country -%} · {{ r.country | escape }}{%- endif -%}
+  </div>
+
+  <div class="muted" style="margin-top:4px;">
+    {%- if r.cuisines and r.cuisines.size > 0 -%}
+      {{ r.cuisines | join: ", " | escape }}
+    {%- endif -%}
+
+    {%- if pr and pr > 0 -%}
+      &nbsp;·&nbsp; Price: {{ pr }}
+    {%- endif -%}
+  </div>
+
+  {%- if r.tldr -%}
+    <div style="margin-top:6px;">{{ r.tldr | escape }}</div>
+  {%- endif -%}
+
+</a>

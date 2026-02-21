@@ -8,9 +8,9 @@ function getErrorText(fieldName) {
 export const CUISINES = {
     italian:   { label: "Italian", emoji: "🇮🇹" },
     pizza:     { label: "Pizza", emoji: "🍕" },
-    barbecue:       { label: "BBQ", emoji: "🍖" },
+    barbecue:  { label: "BBQ", emoji: "🍖" },
     mexican:   { label: "Mexican", emoji: "🇲🇽" },
-    tacos:   { label: "Tacos", emoji: "🌮" },
+    tacos:     { label: "Tacos", emoji: "🌮" },
     japanese:  { label: "Japanese", emoji: "🇯🇵" },
     sushi:     { label: "Sushi", emoji: "🍣" },
     thai:      { label: "Thai", emoji: "🇹🇭" },
@@ -214,69 +214,167 @@ function buildFoodPopup(item) {
         </div>`;
 }
 
+function getListItems(listId) {
+  return Array.prototype.slice.call(document.querySelectorAll(`#${listId} .map-card`));
+}
+
+function applyFilters(config, markerLayer, markerBySlug) {
+  const q = (document.getElementById("filter-q")?.value || "").trim().toLowerCase();
+  const journey = document.getElementById("filter-journey")?.value || "";
+  const price = document.getElementById("filter-price")?.value || "";
+  const cuisine = document.getElementById("filter-cuisine")?.value || "";
+  const valueOnly = !!document.getElementById("filter-value")?.checked;
+
+  const items = getListItems(config.listId);
+  const allowed = [];
+
+  items.forEach((el) => {
+    const name = (el.getAttribute("data-name") || "").toLowerCase();
+    const city = (el.getAttribute("data-city") || "").toLowerCase();
+    const neighborhood = (el.getAttribute("data-neighborhood") || "").toLowerCase();
+    const cuisines = (el.getAttribute("data-cuisines") || "").toLowerCase();
+
+    const elJourney = el.getAttribute("data-journey") || "0";
+    const elPrice = el.getAttribute("data-price") || "";
+    const elValue = (el.getAttribute("data-value") || "0") === "1";
+    const slug = el.getAttribute("data-slug");
+
+    let ok = true;
+
+    if (journey && elJourney !== journey) ok = false;
+    if (price && elPrice !== price) ok = false;
+    if (valueOnly && !elValue) ok = false;
+    if (cuisine && cuisines.split(/\s+/).indexOf(cuisine) === -1) ok = false;
+
+    if (q) {
+      const hay = `${name} ${city} ${neighborhood} ${cuisines}`;
+      if (hay.indexOf(q) === -1) ok = false;
+    }
+
+    el.style.display = ok ? "" : "none";
+    if (ok && slug) allowed.push(slug);
+  });
+
+  // Update markers to match
+  markerLayer.clearLayers();
+  allowed.forEach((slug) => {
+    const m = markerBySlug[slug];
+    if (m) m.addTo(markerLayer);
+  });
+}
+
+function wireFilters(config, markerLayer, markerBySlug) {
+  const ids = ["filter-q", "filter-journey", "filter-price", "filter-cuisine", "filter-value"];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener(id === "filter-q" ? "input" : "change", () =>
+      applyFilters(config, markerLayer, markerBySlug)
+    );
+  });
+
+  const clearBtn = document.getElementById("filter-clear");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      const q = document.getElementById("filter-q");
+      const j = document.getElementById("filter-journey");
+      const p = document.getElementById("filter-price");
+      const c = document.getElementById("filter-cuisine");
+      const v = document.getElementById("filter-value");
+      if (q) q.value = "";
+      if (j) j.value = "";
+      if (p) p.value = "";
+      if (c) c.value = "";
+      if (v) v.checked = false;
+      applyFilters(config, markerLayer, markerBySlug);
+    });
+  }
+}
+
 function buildGenericPopup(item) {
     const title = `<strong>${escapeHtml(item.name || getErrorText("name"))}</strong>`;
     return `<div>${title}</div>`;
 }
 
 export function initMap(config) {
-    const { mapId, listId, popupType = "generic", zoom = 2, center = "" } = config;
+  const { mapId, listId, popupType = "generic", zoom = 2, center = "" } = config;
 
-    const mapEl = document.getElementById(mapId);
-    if (!mapEl) return;
+  const mapEl = document.getElementById(mapId);
+  if (!mapEl) return;
 
-    const dataset =
-        (window.__MAP_DATA__ && window.__MAP_DATA__[mapId]) ? window.__MAP_DATA__[mapId] : [];
+  const dataset =
+    (window.__MAP_DATA__ && window.__MAP_DATA__[mapId]) ? window.__MAP_DATA__[mapId] : [];
 
-    const map = L.map(mapId, { scrollWheelZoom: true });
+  const map = L.map(mapId, { scrollWheelZoom: true });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors"
-    }).addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
 
-    const markerLayer = L.layerGroup().addTo(map);
-    const markerBySlug = {};
+  const markerLayer = L.layerGroup().addTo(map);
+  const markerBySlug = {};
 
-    dataset.forEach((d) => {
+  // 1) Create markers FIRST so markerBySlug is populated
+  dataset.forEach((d) => {
     const item = d._item || {};
-    const popupHtml = (popupType === "f_and_b_establishment") ? buildFoodPopup(item) : buildGenericPopup(item);
+
+    const popupHtml =
+      (popupType === "f_and_b_establishment") ? buildFoodPopup(item) : buildGenericPopup(item);
 
     const m = L.marker([d.lat, d.lng], { icon: makeJourneyIcon(item.journey_rating) });
-        m.bindTooltip(`<strong>${escapeHtml(item.name || "")}</strong>`, { sticky: true });
-        m.bindPopup(buildFoodPopup(item), { maxWidth: 340 });
-        m.addTo(markerLayer);
-        markerBySlug[d.slug] = m;
-    });
 
-    if (center) {
-        try {
-            const parsed = JSON.parse(center);
-            if (Array.isArray(parsed) && parsed.length === 2) map.setView(parsed, zoom);
-            else map.setView([20, 0], zoom);
-        } catch {
-            map.setView([20, 0], zoom);
-        }
-    } else if (dataset.length) {
-        const latlngs = dataset.map(d => [d.lat, d.lng]);
-        map.fitBounds(latlngs, { padding: [30, 30] });
-    } else {
-        map.setView([20, 0], zoom);
-    }
+    m.bindTooltip(`<strong>${escapeHtml(item.name || "")}</strong>`, { sticky: true });
 
-    const list = document.getElementById(listId);
-    if (list) {
-        list.addEventListener("click", (e) => {
-            let el = e.target;
-            while (el && el !== document && !el.getAttribute("data-slug")) el = el.parentNode;
-            if (!el || !el.getAttribute) return;
-            const slug = el.getAttribute("data-slug");
-            const m = markerBySlug[slug];
-            if (m) {
-                const ll = m.getLatLng();
-                map.setView(ll, Math.max(map.getZoom(), 14));
-                m.openPopup();
-            }
-        });
+    // 2) Use popupHtml (you were ignoring it)
+    m.bindPopup(popupHtml, { maxWidth: 340 });
+
+    m.addTo(markerLayer);
+    markerBySlug[d.slug] = m;
+  });
+
+  // 3) Now wire filters and run them once (so they can hide markers)
+  const listEl = listId ? document.getElementById(listId) : null;
+
+// Only activate list-based filtering if the list is present
+if (listEl) {
+  wireFilters(config, markerLayer, markerBySlug);
+  applyFilters(config, markerLayer, markerBySlug);
+} else {
+  // No list: just show all markers (already added)
+}
+
+  // View logic (unchanged)
+  if (center) {
+    try {
+      const parsed = JSON.parse(center);
+      if (Array.isArray(parsed) && parsed.length === 2) map.setView(parsed, zoom);
+      else map.setView([20, 0], zoom);
+    } catch {
+      map.setView([20, 0], zoom);
     }
+  } else if (dataset.length) {
+    const latlngs = dataset.map(d => [d.lat, d.lng]);
+    map.fitBounds(latlngs, { padding: [30, 30] });
+  } else {
+    map.setView([20, 0], zoom);
+  }
+
+  // Sidebar click -> open marker (unchanged)
+  const list = listId ? document.getElementById(listId) : null;
+if (list) {
+  list.addEventListener("click", (e) => {
+    let el = e.target;
+    while (el && el !== document && !el.getAttribute("data-slug")) el = el.parentNode;
+    if (!el || !el.getAttribute) return;
+
+    const slug = el.getAttribute("data-slug");
+    const m = markerBySlug[slug];
+    if (m) {
+      const ll = m.getLatLng();
+      map.setView(ll, Math.max(map.getZoom(), 14));
+      m.openPopup();
+    }
+  });
+}
 }

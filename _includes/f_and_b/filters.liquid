@@ -1,0 +1,64 @@
+<div class="panel panel-default">
+  <div class="panel-heading"><strong>Filter</strong></div>
+  <div class="panel-body">
+    <div class="form-group">
+      <input id="filter-q" type="text" class="form-control" placeholder="Search name, city, neighborhood…">
+    </div>
+
+    <div class="row">
+      <div class="col-xs-6">
+        <select id="filter-journey" class="form-control">
+          <option value="">All designations</option>
+          <option value="0">Selected</option>
+          <option value="1">Tier 1</option>
+          <option value="2">Tier 2</option>
+          <option value="3">Tier 3</option>
+        </select>
+      </div>
+      <div class="col-xs-6">
+        <select id="filter-price" class="form-control">
+          <option value="">Any price</option>
+          <option value="1">Price 1</option>
+          <option value="2">Price 2</option>
+          <option value="3">Price 3</option>
+          <option value="4">Price 4</option>
+          <option value="5">Price 5</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="col-xs-12">
+        <select id="filter-cuisine" class="form-control">
+          <option value="">All cuisines</option>
+          {%- comment -%}
+          MVP: hardcode options or generate from a cuisine registry later.
+          For now you can list your known cuisine keys.
+          {%- endcomment -%}
+          <option value="italian">Italian</option>
+          <option value="pizza">Pizza</option>
+          <option value="mexican">Mexican</option>
+          <option value="tacos">Tacos</option>
+          <option value="barbecue">BBQ</option>
+          <option value="sushi">Sushi</option>
+          <option value="japanese">Japanese</option>
+          <option value="thai">Thai</option>
+          <option value="chinese">Chinese</option>
+          <option value="korean">Korean</option>
+          <option value="vietnamese">Vietnamese</option>
+          <option value="indian">Indian</option>
+          <option value="french">French</option>
+          <option value="seafood">Seafood</option>
+          <option value="bakery">Bakery</option>
+          <option value="cafe">Cafe</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="checkbox" style="margin-top:10px;">
+      <label><input id="filter-value" type="checkbox"> Value recognition only</label>
+    </div>
+
+    <button id="filter-clear" type="button" class="btn btn-default btn-xs">Clear</button>
+  </div>
+</div>

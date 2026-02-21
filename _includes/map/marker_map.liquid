@@ -1,31 +1,48 @@
 {%- assign items = include.data -%}
 {%- assign map_id = include.id | default: "map" -%}
-{%- assign list_id = map_id | append: "-list" -%}
+
+{%- assign list_id = "" -%}
+{%- if include.list_id -%}
+  {%- assign list_id = include.list_id -%}
+{%- elsif include.list_include -%}
+  {%- assign list_id = map_id | append: "-list" -%}
+{%- endif -%}
+
+{%- assign has_sidebar = false -%}
+{%- if include.filters or include.list_include -%}
+  {%- assign has_sidebar = true -%}
+{%- endif -%}
 
 <div class="row">
-  <div class="col-sm-8">
+  <div class="{% if has_sidebar %}col-sm-8{% else %}col-xs-12{% endif %}">
     <div id="{{ map_id }}" class="img-rounded"></div>
+
     {% if include.legend %}
       <hr>
       {{ include.legend }}
     {% endif %}
   </div>
 
-  <div class="col-sm-4">
-    {% if include.filters %}
-      {{ include.filters }}
+  {% if has_sidebar %}
+    <div class="col-sm-4">
+      {% if include.filters_include %}
+        {% include {{ include.filters_include }} %}
     {% endif %}
 
-    {% comment %} <div class="map-sidebar list-group" id="{{ list_id }}" style="max-height:70vh;overflow-y:auto;">
-      {%- for item in items -%}
-        {%- include {{ include.list_include }} item=item -%}
-      {%- endfor -%}
-    </div> {% endcomment %}
-  </div>
+      {% if include.list_include %}
+        <div class="map-sidebar list-group"
+             id="{{ list_id }}"
+             style="max-height:70vh;overflow-y:auto;">
+          {%- for item in items -%}
+            {%- include {{ include.list_include }} item=item -%}
+          {%- endfor -%}
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
 </div>
 
 <script>
-  // Liquid emits data for this map instance
   window.__MAP_DATA__ = window.__MAP_DATA__ || {};
   window.__MAP_DATA__[{{ map_id | jsonify }}] = [
     {%- for item in items -%}
@@ -42,14 +59,12 @@
 </script>
 
 <script>
-  // Tell your bundle which map(s) to init on this page
   window.__MAP_INIT__ = window.__MAP_INIT__ || [];
   window.__MAP_INIT__.push({
     mapId: {{ map_id | jsonify }},
-    listId: {{ list_id | jsonify }},
+    listId: {{ list_id | jsonify }},   // "" if no list
     popupType: {{ include.popup_type | default: "generic" | jsonify }},
     zoom: {{ include.zoom | default: 2 }},
-    // optionally pass center as [lat,lng]
     center: {{ include.center | default: "" | jsonify }}
   });
 </script>
