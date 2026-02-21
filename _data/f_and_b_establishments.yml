@@ -1,3 +1,18 @@
+- name: Another Broken Egg Cafe
+  slug: another_broken_egg_cafe_west_lafayette
+  coordinates: [40.4305614,-86.9152691]
+  address: "516 Northwestern Ave #1500, West Lafayette, IN 47906"
+  city: West Lafayette
+  state: Indiana
+  country: United States of America
+  cuisines: ["american", "breakfast"]
+  price_rating: 1
+  website: https://www.anotherbrokenegg.com/locations/west-lafayette-in/
+  map_url: https://maps.app.goo.gl/752x6q3BqPxxSJwz9
+  awards:
+    other: []
+  visits: [2018-06-17, 2022-05-01]
+  last_updated: 2026-02-20
 - name: Bistro 501
   slug: bistro_501_lafayette
   coordinates: [40.4189974,-86.8942879]
@@ -7,6 +22,7 @@
   country: United States of America
   cuisines: ["french"]
   price_rating: 3
+  journey_rating: 1
   website: https://bistro501.com/
   reservation_url: https://tmt.spotapps.co/reservations?spot_id=114758
   map_url: https://maps.app.goo.gl/52tKbP9aKTkjc1bx9
@@ -23,12 +39,28 @@
   country: United States of America
   cuisines: ["american"]
   price_rating: 2
+  journey_rating: 1
   website: https://www.eastendmain.com/
   reservation_url: https://resy.com/cities/indianapolis-in/venues/east-end-grill
   map_url: https://maps.app.goo.gl/TtNvwvEHM2PQpcrk6
   awards:
     other: []
   visits: [2018-06-17, 2018-10-13, 2019-04-26, 2019-10-20, 2020-02-14]
+  last_updated: 2026-02-20
+- name: Yatagarasu
+  slug: yatagarasu_lafayette
+  coordinates: [40.4190727,-86.8934158]
+  address: 533 Main St, Lafayette, IN 47901
+  city: Lafayette
+  state: Indiana
+  country: United States of America
+  cuisines: ["japanese", "ramen"]
+  price_rating: 1
+  website: https://www.yatagarasuramen.com/
+  map_url: https://maps.app.goo.gl/ZjQpJawrkTbB1oob6
+  awards:
+    other: []
+  visits: [2019-06-23, 2019-06-30, 2019-07-07, 2019-07-14, 2019-07-21]
   last_updated: 2026-02-20
 - name: Lou Malnati's Pizzeria
   slug: lou_malnatis_naperville
@@ -46,6 +78,38 @@
   awards:
     other: []
   visits: [2019-07-20]
+  last_updated: 2026-02-20
+- name: Harry's Chocolate Shop
+  slug: harrys_chocolate_shop_west_lafayette
+  coordinates: [40.4241343,-86.9088931]
+  address: 329 W State St, West Lafayette, IN 47906
+  city: West Lafayette
+  state: Indiana
+  country: United States of America
+  cuisines: ["dive bar"]
+  price_rating: 1
+  journey_rating: 1
+  website: https://www.harryschocolateshop.com/
+  map_url: https://maps.app.goo.gl/UPpdrT9b1b5BV5Ws6
+  awards:
+    other: []
+  visits: [2021-02-21, 2021-08-13, 2021-08-16, 2021-08-19, 2021-09-17, 2021-10-09, 2021-11-22, 2021-12-16, 2022-01-22, 2022-01-28, 2022-01-30, 2022-05-03, 2022-05-20]
+  last_updated: 2026-02-20
+- name: The Bryant Food and Drink Co.
+  slug: bryant_food_and_drink_co_west_lafayette
+  coordinates: [40.4678274,-86.943299]
+  address: 1820 Sagamore Pkwy W, West Lafayette, IN 47906
+  city: West Lafayette
+  state: Indiana
+  country: United States of America
+  cuisines: ["american"]
+  price_rating: 2
+  website: https://www.thebryantwl.com/
+  reservation_url: https://resy.com/cities/indianapolis-in/venues/the-bryant-food-and-drink-company
+  map_url: https://maps.app.goo.gl/6KaUtiuS9PKvZ8xe9
+  awards:
+    other: []
+  visits: [2021-05-08]
   last_updated: 2026-02-20
 - name: Yakitori Taisho
   slug: yakitori_taisho_san_diego
@@ -404,8 +468,18 @@
       years_of_3_stars: []
       years_of_bib: []
       years_of_green: []
-    other: []
+    other: [
+      "The World's 50 Best One to Watch Award: 2019",
+      "The World's 50 Best Restaurants Highest New Entry Award: 2021",
+      "The World's 50 Best Restaurants 2021-2025: currently at #16; peaked in 2023 at #7; debuted in 2021 at #15",
+    ]
   visits: [2025-06-12]
+  tldr: >
+    Lido 84 delivers thoughtful, minimalist fine dining through simple food, great service, and either a picturesque view of Lake Garda during lunch or a cozy atmosphere during dinner.
+    The kitchen, led by executive chef Riccardo Camanini, produces carefully balanced dishes that blend Italian traditions with thoughtful, minimalist execution.
+    A prime example of this is the signature dish, cacio e pepe en vessie, which features the classic Roman pasta dish prepared "en vessie" (in a pig's bladder, an ancient Roman technique), resulting in a unique "super-al-dente" texture.
+    The occasional theatrical touches, such as the tableside presentations, felt at odds with the understated nature of the food.
+    Still, the overall execution was impeccable, making Lido 84 a must-visit for anyone seeking a memorable meal in the Lake Garda region.
   last_updated: 2026-02-20
 - name: Emozioni Ristorante
   slug: emozioni_lake_garda
