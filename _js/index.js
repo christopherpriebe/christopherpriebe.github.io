@@ -12,6 +12,6 @@ dom.watch();
 
 import { initMap } from "./map";
 document.addEventListener("DOMContentLoaded", () => {
-  const queue = window.__MAP_INIT__ || [];
-  queue.forEach((cfg) => initMap(cfg));
+    const queue = window.__MAP_INIT__ || [];
+    queue.forEach((cfg) => initMap(cfg));
 });
