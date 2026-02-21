@@ -1,8 +1,1148 @@
+- name: Bistro 501
+  slug: bistro_501_lafayette
+  coordinates: [40.4189974,-86.8942879]
+  address: 501 Main St, Lafayette, IN 47901
+  city: Lafayette
+  state: Indiana
+  country: United States of America
+  cuisines: ["french"]
+  price_rating: 3
+  website: https://bistro501.com/
+  reservation_url: https://tmt.spotapps.co/reservations?spot_id=114758
+  map_url: https://maps.app.goo.gl/52tKbP9aKTkjc1bx9
+  awards:
+    other: []
+  visits: [2018-08-13, 2021-09-24]
+  last_updated: 2026-02-20
+- name: East End Grill
+  slug: east_end_grill_lafayette
+  coordinates: [40.4192332,-86.8879294]
+  address: 1016 Main St, Lafayette, IN 47901
+  city: Lafayette
+  state: Indiana
+  country: United States of America
+  cuisines: ["american"]
+  price_rating: 2
+  website: https://www.eastendmain.com/
+  reservation_url: https://resy.com/cities/indianapolis-in/venues/east-end-grill
+  map_url: https://maps.app.goo.gl/TtNvwvEHM2PQpcrk6
+  awards:
+    other: []
+  visits: [2018-06-17, 2018-10-13, 2019-04-26, 2019-10-20, 2020-02-14]
+  last_updated: 2026-02-20
+- name: Lou Malnati's Pizzeria
+  slug: lou_malnatis_naperville
+  coordinates: [41.77302,-88.1508072]
+  address: 131 W Jefferson Ave, Naperville, IL 60540
+  neighborhood: Naperville Park District
+  city: Naperville
+  state: Illinois
+  country: United States of America
+  cuisines: ["pizza"]
+  price_rating: 2
+  website: https://www.loumalnatis.com/naperville-downtown/
+  reservation_url: https://www.opentable.com/r/lou-malnatis-naperville
+  map_url: https://maps.app.goo.gl/6hcQx4nQjrQvRVc76
+  awards:
+    other: []
+  visits: [2019-07-20]
+  last_updated: 2026-02-20
+- name: Yakitori Taisho
+  slug: yakitori_taisho_san_diego
+  coordinates: [32.8334101,-117.1816138]
+  address: 5185 Clairemont Mesa Blvd, San Diego, CA 92117
+  neighborhood: Clairemont
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["japanese", "yakitori"]
+  price_rating: 2
+  website: https://sandiegoyakyudori.com/page/taisho
+  reservation_url: https://www.exploretock.com/yakitori-taisho-san-diego
+  map_url: https://maps.app.goo.gl/6ZZXqNj8AacVBEFJ7
+  awards:
+    other: []
+  visits: [2022-12-02]
+  last_updated: 2026-02-20
+- name: Plumeria Vegetarian Restaurant
+  slug: plumeria_university_heights
+  coordinates: [32.7621439,-117.1486367]
+  address: 4661 Park Blvd, San Diego, CA 92116
+  neighborhood: University Heights
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["thai", "vegetarian", "vegan"]
+  price_rating: 2
+  website: https://myplumeria.com/
+  map_url: https://maps.app.goo.gl/iCqj4kdFZkPq16rp9
+  awards:
+    other: []
+  visits: [2023-02-03, 2023-02-10, 2023-08-30]
+  last_updated: 2026-02-20
+- name: Ciccia Osteria
+  slug: ciccia_osteria_san_diego
+  coordinates: [32.6974263,-117.1414472]
+  address: 2233 Logan Ave, San Diego, CA 92113
+  neighborhood: Barrio Logan
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["italian"]
+  price_rating: 2
+  website: https://cicciasandiego.com/
+  reservation_url: https://www.opentable.com/r/ciccia-osteria-san-diego
+  map_url: https://maps.app.goo.gl/hWUdXSVptFAsLWJ16
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2021, 2022, 2023, 2024, 2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2023-02-14, 2023-04-16, 2023-07-27, 2023-09-01, 2023-09-14, 2024-01-27, 2024-06-09, 2024-09-21, 2025-08-23]
+  last_updated: 2026-02-20
+- name: Byblos Downtown
+  slug: byblos_downtown_toronto
+  coordinates: [43.6474902,-79.3907713]
+  address: 11 Duncan St, Toronto, ON M5V 3M2, Canada
+  neighborhood: Wellington Place
+  city: Toronto
+  state: Ontario
+  country: Canada
+  cuisines: ["mediterranean"]
+  price_rating: 3
+  website: https://byblosdowntown.com/
+  reservation_url: https://www.opentable.com/r/byblos-toronto
+  map_url: https://maps.app.goo.gl/swmPAtTkAR95p1Qf8
+  awards:
+    other: []
+  visits: [2023-10-30]
+  last_updated: 2026-02-20
+- name: Noto
+  slug: noto_edinburgh
+  coordinates: [55.9540311,-3.2020354]
+  address: 47a Thistle St, Edinburgh EH2 1DY, United Kingdom
+  neighborhood: Edinburgh New Town
+  city: Edinburgh
+  state: Scotland
+  country: United Kingdom
+  cuisines: ["asian", "fusion"]
+  price_rating: 3
+  journey_rating: 1
+  website: https://notoedinburgh.co.uk/
+  reservation_url: https://www.sevenrooms.com/explore/notouk/reservations/create/search/
+  map_url: https://maps.app.goo.gl/xxthu5tyrg4oXb149
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2021, 2022, 2023, 2024, 2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2024-03-05]
+  last_updated: 2026-02-20
+- name: The Palmerston
+  slug: palmerston_edinburgh
+  coordinates: [55.9473073,-3.2177332]
+  address: 1 Palmerston Pl, Edinburgh EH12 5AF, United Kingdom
+  neighborhood: West End
+  city: Edinburgh
+  state: Scotland
+  country: United Kingdom
+  cuisines: ["european"]
+  price_rating: 2
+  website: https://www.thepalmerstonedinburgh.co.uk/
+  map_url: https://maps.app.goo.gl/pvjQvsPUoU3cKjVq5
+  awards:
+    other: []
+  visits: [2024-03-06]
+  last_updated: 2026-02-20
+- name: EE NAMI Tonkatsu Izakaya
+  slug: ee_nami_san_diego
+  coordinates: [32.8354785,-117.1917596]
+  address: 4706 Clairemont Mesa Blvd, San Diego, CA 92117
+  neighborhood: Clairemont
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["japanese", "tonkatsu"]
+  price_rating: 2
+  website: http://eenamisd.com/
+  reservation_url: https://www.exploretock.com/ee-nami-tonkatsu-izakaya-san-diego
+  map_url: https://maps.app.goo.gl/Nq4x5BDjauyVjFg8A
+  visits: [2024-08-25]
+  last_updated: 2026-02-20
+- name: El Preferido de Palermo
+  slug: el_preferido_palermo_buenos_aires
+  coordinates: [-34.5854093,-58.4279161]
+  address: Jorge Luis Borges 2108, C1425FFD Cdad. Autónoma de Buenos Aires, Argentina
+  neighborhood: Palermo
+  city: Buenos Aires
+  country: Argentina
+  cuisines: ["argentine"]
+  price_rating: 3
+  journey_rating: 1
+  reservation_url: https://elpreferido.meitre.com/
+  map_url: https://maps.app.goo.gl/mv6EbQrmyD4LxKvC8
+  visits: [2024-07-09]
+  last_updated: 2026-02-20
+- name: Don Julio Parilla
+  slug: don_julio_palermo_buenos_aires
+  coordinates: [-34.586312,-58.4268438]
+  address: Guatemala 4699, C1425 Cdad. Autónoma de Buenos Aires, Argentina
+  neighborhood: Palermo
+  city: Buenos Aires
+  country: Argentina
+  cuisines: ["argentine", "steakhouse"]
+  price_rating: 3
+  website: https://www.parrilladonjulio.com/
+  reservation_url: https://donjulio.meitre.com/
+  map_url: https://maps.app.goo.gl/9M66WbEKmfwZ8t838
+  awards:
+    michelin:
+      stars: 1
+      bib: false
+      green: true
+      years_of_1_star: [2024, 2025, 2026]
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: []
+      years_of_green: [2024, 2025, 2026]
+    other: []
+  visits: [2024-07-11]
+  last_updated: 2026-02-20
+- name: Don Zoilo
+  slug: don_zoilo_buenos_aires
+  coordinates: [-34.6046067,-58.4497158]
+  address: Av. Dr. Honorio Pueyrredón 1406, C1416 Cdad. Autónoma de Buenos Aires, Argentina
+  neighborhood: Palermo
+  city: Buenos Aires
+  country: Argentina
+  cuisines: ["argentine", "steakhouse"]
+  price_rating: 2
+  map_url: https://maps.app.goo.gl/ZpdtDFEFfdrhY6Ku7
+  visits: []
+  last_updated: 2026-02-20
+- name: Cocobang
+  slug: cocobang_san_francisco
+  coordinates: [37.7876399,-122.4140883]
+  address: 550 Taylor St, San Francisco, CA 94102
+  neighborhood: Tenderloin
+  city: San Francisco
+  state: California
+  country: United States of America
+  cuisines: ["korean"]
+  price_rating: 1
+  website: https://cocobang.org/
+  map_url: https://maps.app.goo.gl/vyw2vP58WxpmbobYA
+  visits: [2024-09-19]
+  last_updated: 2026-02-20
+- name: Cesarina
+  slug: cesarina_san_diego
+  coordinates: [32.7433132,-117.2371919]
+  address: 4161 Voltaire St, San Diego, CA 92107
+  neighborhood: Ocean Beach
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["italian"]
+  price_rating: 2
+  website: https://cesarinarestaurant.com/
+  reservation_url: https://www.opentable.com/r/cesarina-san-diego
+  map_url: https://maps.app.goo.gl/HRhQtYB5jAJcwLFr5
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2021, 2022, 2023, 2024, 2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2024-10-21]
+  last_updated: 2026-02-20
+- name: The Mansion Restaurant
+  slug: mansion_restaurant_dallas
+  coordinates: [32.8040911,-96.8117588]
+  address: 2821 Turtle Creek Blvd, Dallas, TX 75219
+  neighborhood: Oak Lawn
+  city: Dallas
+  state: Texas
+  country: United States of America
+  cuisines: ["american"]
+  price_rating: 3
+  website: https://www.rosewoodhotels.com/en/mansion-on-turtle-creek-dallas/dining/mansion-restaurant
+  reservation_url: https://www.opentable.com/r/the-rosewood-mansion-restaurant-on-turtle-creek-dallas
+  map_url: https://maps.app.goo.gl/mQyyNufGUacxp6o67
+  awards:
+    other: []
+  visits: [2024-12-32]
+  last_updated: 2026-02-20
 - name: Siamo Napoli
   slug: siamo_napoli_north_park
   coordinates: [32.7493733,-117.1299181]
   address: 3959 30th St, San Diego, CA 92104
+  neighborhood: North Park
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["italian", "pizza"]
+  price_rating: 2
+  website: https://www.siamonapolisd.com/
+  reservation_url: https://www.opentable.com/r/siamo-napoli-san-diego
+  map_url: https://maps.app.goo.gl/tW15Gieqkpf6yHfd7
+  visits: [2025-04-20]
+  last_updated: 2026-02-20
+- name: It's Raw Poke Shop
+  slug: its_raw_poke_shop_san_diego
+  coordinates: [32.7465617,-117.2537211]
+  address: 4991 Newport Ave STE A, San Diego, CA 92107
+  neighborhood: Ocean Beach
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["hawaiian", "poke"]
+  price_rating: 1
+  website: https://itsrawpokeshop.com/
+  map_url: https://maps.app.goo.gl/8MEAcxtYPW16s8jPA
+  visits: [2025-04-27, 2025-05-13]
+  last_updated: 2026-02-20
 - name: Mabel's Gone Fishing
   slug: mabels_gone_fishing_north_park
   coordinates: [32.7467755,-117.1302519]
   address: 3770 30th St, San Diego, CA 92104
+  neighborhood: North Park
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["seafood"]
+  price_rating: 3
+  journey_rating: 1
+  website: https://www.mabelsgonefishing.com/
+  reservation_url: https://www.exploretock.com/mabels-gone-fishing-san-diego
+  map_url: https://maps.app.goo.gl/37ZFhkiywheDwrsj8
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2023, 2024, 2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-05-12]
+  last_updated: 2026-02-20
+- name: Gelatoteca Suso
+  slug: gelatoteca_suso_venice_rialto
+  coordinates: [45.4389903,12.3371175]
+  address: Salizada S. Giovanni Grisostomo, 5801, 30121 Venezia VE, Italy
+  neighborhood: Cannaregio
+  city: Venice
+  state: Veneto
+  country: Italy
+  cuisines: ["gelato"]
+  price_rating: 1
+  website: https://suso.gelatoteca.it/
+  reservation_url: null
+  map_url: https://maps.app.goo.gl/tkEChN35gccB7f8EA
+  awards:
+    other: []
+  visits: []
+  last_updated: 2026-02-20
+- name: Estro
+  slug: estro_venice
+  coordinates: [45.4360287,12.3250667]
+  address: Sestiere Dorsoduro, 3778, 30123 Venezia VE, Italy
+  neighborhood: Dorsoduro
+  city: Venice
+  state: Veneto
+  country: Italy
+  cuisines: ["italian", "venetian"]
+  price_rating: 3
+  journey_rating: 1
+  website: https://www.estrovenezia.com/
+  reservation_url: https://www.estrovenezia.com/en/book-a-table/
+  map_url: https://maps.app.goo.gl/YAWkf7T7Gbp6bP2J9
+  awards:
+    other: []
+  visits: [2025-06-06]
+  last_updated: 2026-02-20
+- name: Lido 84
+  slug: lido_84_lake_garda
+  coordinates: [45.6252976,10.5759639]
+  address: Corso Giuseppe Zanardelli, 196, 25083 Gardone Riviera BS, Italy
+  neighborhood: null
+  city: Gardone Riviera
+  state: Lombardia
+  country: Italy
+  cuisines: ["italian"]
+  price_rating: 3
+  journey_rating: 2
+  website: https://www.ristorantelido84.com/
+  reservation_url: https://www.ristorantelido84.com/prenotazione/
+  map_url: https://maps.app.goo.gl/jgo5XWBuH6K1B95w8
+  awards:
+    michelin:
+      stars: 1
+      bib: false
+      green: false
+      years_of_1_star: [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: []
+      years_of_green: []
+    other: []
+  visits: [2025-06-12]
+  last_updated: 2026-02-20
+- name: Emozioni Ristorante
+  slug: emozioni_lake_garda
+  coordinates: [45.8855321,10.8478449]
+  address: Viale Giosuè Carducci, 17, 38066 Riva del Garda TN, Italy
+  neighborhood: null
+  city: Riva del Garda
+  state: Veneto
+  country: Italy
+  cuisines: ["italian"]
+  price_rating: 3
+  journey_rating: 0
+  website: https://ristoranteemozioniriva.it/
+  map_url: https://maps.app.goo.gl/E4EFYZ6MoeexQiU57
+  awards:
+    other: []
+  visits: [2025-06-09]
+  last_updated: 2026-02-20
+- name: Osteria Le Servite
+  slug: le_servite_lake_garda
+  coordinates: [45.8999726,10.8657385]
+  address: Via Passirone, 68, 38062 Arco TN, Italy
+  neighborhood: null
+  city: Arco
+  state: Trentino-Alto Adige
+  country: Italy
+  cuisines: ["italian"]
+  price_rating: 3
+  journey_rating: 0
+  website: https://www.leservite.com/
+  map_url: https://maps.app.goo.gl/jUjd2uZZChSCzGza6
+  awards:
+    other: []
+  visits: [2025-06-10]
+  last_updated: 2026-02-20
+- name: Gelateria La Romana
+  slug: gelateria_la_romana_borgo_trento
+  coordinates: [45.4455893,10.9889618]
+  address: Via IV Novembre, 13, 37126 Verona VR, Italy
+  neighborhood: Borgo Trento
+  city: Verona
+  state: Veneto
+  country: Italy
+  cuisines: ["gelato"]
+  price_rating: 1
+  journey_rating: 1
+  website: https://www.gelateriaromana.com/it/gelaterie/gelateria-la-romana-verona
+  map_url: https://maps.app.goo.gl/wJiiHuBWNK1ni2Uk7
+  awards:
+    other: []
+  visits: [2025-06-11]
+  last_updated: 2026-02-20
+- name: Tanner's Prime Burgers
+  slug: tanners_prime_burgers_oceanside
+  coordinates: [33.1727657,-117.3624606]
+  address: 510 Vista Way, Oceanside, CA 92054
+  neighborhood: South Oceanside
+  city: Oceanside
+  state: California
+  country: United States of America
+  cuisines: ["american", "burgers"]
+  price_rating: 1
+  website: https://www.tannersprimeburgers.com/
+  map_url: https://maps.app.goo.gl/5dV9weWDKqfgQtBB7
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-06-24]
+  last_updated: 2026-02-20
+- name: Mike's Red Tacos
+  slug: mikes_red_tacos_genesee
+  coordinates: [32.8213042,-117.1836203]
+  address: "4310 Genesee Ave #105-106, San Diego, CA 92117"
+  neighborhood: Clairemont
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["mexican", "birria"]
+  price_rating: 1
+  website: https://www.mikesredtacos.com/
+  map_url: https://maps.app.goo.gl/4yWKqegx99SZwy638
+  awards:
+    other: []
+  visits: [2025-05-16, 2025-06-02]
+  last_updated: 2026-02-20
+- name: Jay's BBQ Shack
+  slug: jays_bbq_shack_abilene
+  coordinates: [32.4376733,-99.7327007]
+  address: 602 S 11th St, Abilene, TX 79602
+  city: Abilene
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  website: https://jaysbbqshack.com/
+  map_url: https://maps.app.goo.gl/MywV5b2svnsKH9KN8
+  awards:
+    other: []
+  visits: [2025-09-05]
+  last_updated: 2026-02-20
+- name: Interstellar BBQ
+  slug: interstellar_austin
+  coordinates: [30.454602,-97.8170974]
+  address: 1701 E 6th St, Austin, TX 78702
+  neighborhood: null
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  journey_rating: 1
+  website: https://www.theinterstellarbbq.com/
+  map_url: https://maps.app.goo.gl/qtwqSjL5vmR9FceC6
+  awards:
+    michelin:
+      stars: 1
+      bib: false
+      green: false
+      years_of_1_star: [2025, 2026]
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: []
+      years_of_green: []
+    other: []
+  visits: [2025-09-21]
+  last_updated: 2026-02-20
+- name: Eaker Barbecue
+  slug: eakers_fredricksburg
+  coordinates: [30.2814756,-98.8842627]
+  address: 607 W Main St, Fredericksburg, TX 78624
+  neighborhood: null
+  city: Fredericksburg
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  website: https://www.eakerbarbecue.com/
+  map_url: https://maps.app.goo.gl/Jamwwsdn4qhUWnJx5
+  awards:
+    other: []
+  visits: [2025-10-04]
+  last_updated: 2026-02-20
+- name: Micklethwait Barbecue
+  slug: micklethwait_austin
+  coordinates: [30.2732074,-97.6927401]
+  address: 4602 Tanney St, Austin, TX 78721
+  neighborhood: East MLK
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  website: https://craftmeatsaustin.com/
+  map_url: https://maps.app.goo.gl/DS55nYnYzq1nfixJ7
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-10-09]
+  last_updated: 2026-02-20
+- name: Franklin Barbecue
+  slug: franklin_austin
+  coordinates: [30.2701296,-97.7339168]
+  address: 900 E 11th St, Austin, TX 78702
+  neighborhood: East Austin
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  website: https://franklinbbq.com/
+  map_url: https://maps.app.goo.gl/G4cRdopUhG5fo5o47
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-10-11]
+  last_updated: 2026-02-20
+- name: Barbs B Q
+  slug: barbs_b_q_lockhart
+  coordinates: [29.8837155,-97.6745487]
+  address: 102 E Market St, Lockhart, TX 78644
+  city: Lockhart
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  journey_rating: 2
+  website: https://www.barbsbq.com/
+  map_url: https://maps.app.goo.gl/3muie4kGSsBfo4pA7
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-10-18]
+  last_updated: 2026-02-20
+- name: LeRoy and Lewis Barbecue
+  slug: leroy_and_lewis_austin
+  coordinates: [30.2098612,-97.7898807]
+  address: 5621 Emerald Forest Dr, Austin, TX 78745
+  neighborhood: South Austin
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  journey_rating: 1
+  website: https://leroyandlewisbbq.com/
+  map_url: https://maps.app.goo.gl/1r2A6jdLMgKuoDCe7
+  awards:
+    michelin:
+      stars: 1
+      bib: false
+      green: false
+      years_of_1_star: [2025, 2026]
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: []
+      years_of_green: []
+    other: []
+  visits: [2025-10-19]
+  last_updated: 2026-02-20
+- name: Rollin Smoke BBQ
+  slug: rollin_smoke_austin
+  coordinates: [30.2579611,-97.728873]
+  address: 1700 E Cesar Chavez St, Austin, TX 78702
+  neighborhood: East Cesar Chavez
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  website: https://rollinsmokeatxbbq.com/
+  map_url: https://maps.app.goo.gl/5jbNsQhSe81yC5hMA
+  awards:
+    other: []
+  visits: [2025-10-29]
+  last_updated: 2026-02-20
+- name: Mum Foods Smokehouse and Delicatessen
+  slug: mum_foods_austin
+  coordinates: [30.3058679,-97.6823342]
+  address: 5811 Manor Rd, Austin, TX 78723
+  neighborhood: Pecan Springs-Springdale
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue", "deli"]
+  price_rating: 2
+  website: https://www.mumfoodsatx.com/
+  map_url: https://maps.app.goo.gl/dnRKJUwFq74pJryj6
+  awards:
+    other: []
+  visits: [2025-10-30]
+  last_updated: 2026-02-20
+- name: Parish Barbecue
+  slug: parish_barbecue_austin
+  coordinates: [30.2871879,-97.7057344]
+  address: 3220 Manor Rd, Austin, TX 78723
+  neighborhood: East MLK
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  journey_rating: 1
+  website: https://parishbarbecue.com/
+  map_url: https://maps.app.goo.gl/gNX2UcLcoigwtfz58
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-11-06]
+  last_updated: 2026-02-20
+- name: Louie's Craft BBQ
+  slug: louies_craft_buda
+  coordinates: [30.0816455,-97.8458534]
+  address: 122 Main St, Buda, TX 78610
+  city: Buda
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  website: https://www.louiescraftbbq.com/
+  map_url: https://maps.app.goo.gl/qfmmMYA2hK9FCkPZ7
+  awards:
+    other: []
+  visits: [2025-11-20]
+  last_updated: 2026-02-20
+- name: Burnt Bean Company
+  slug: burnt_bean_co_seguin
+  coordinates: [29.5684966,-97.9673371]
+  address: 108 S Austin St, Seguin, TX 78155
+  city: Seguin
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  journey_rating: 2
+  website: https://www.burntbeanco.com/
+  map_url: https://maps.app.goo.gl/stSdGh4FLxkf4ZUX9
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-11-23]
+  last_updated: 2026-02-20
+- name: Lucia
+  slug: lucia_dallas
+  coordinates: [32.747029,-96.831103]
+  address: 287 N Bishop Ave, Dallas, TX 75208
+  neighborhood: Bishop Arts District
+  city: Dallas
+  state: Texas
+  country: United States of America
+  cuisines: ["italian"]
+  price_rating: 3
+  website: https://www.luciadallas.com/
+  reservation_url: https://resy.com/cities/dallas-fort-worth-tx/venues/lucia
+  map_url: https://maps.app.goo.gl/4G8iYijPabg4Kusj7
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-11-26]
+  last_updated: 2026-02-20
+- name: Smokey Joe's BBQ
+  slug: smokey_joes_dallas
+  coordinates: [32.6700954,-96.8257925]
+  address: 6403 S R L Thornton Fwy, Dallas, TX 75232
+  neighborhood: Wolf Creek
+  city: Dallas
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  website: https://smokeyjoesbbqdallas.com/
+  map_url: https://maps.app.goo.gl/5yC6hW3a6vYy5TMT8
+  awards:
+    other: []
+  visits: [2025-11-29]
+  last_updated: 2026-02-20
+- name: Barley Swine
+  slug: barley_swine_austin
+  coordinates: [30.3413192,-97.7408616]
+  address: "6555 Burnet Rd #400, Austin, TX 78757"
+  neighborhood: Brentwood
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["American"]
+  price_rating: 3
+  website: https://www.barleyswine.com/
+  reservation_url: https://www.exploretock.com/barleyswine
+  map_url: https://maps.app.goo.gl/nNFWeAFqxbdw58xw7
+  awards:
+    michelin:
+      stars: 1
+      bib: true
+      green: false
+      years_of_1_star: [2025, 2026]
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: []
+      years_of_green: []
+    other: []
+  visits: [2025-11-30]
+  last_updated: 2026-02-20
+- name: Nixtaco
+  slug: nixtaco_roseville
+  coordinates: [38.7298307,-121.2587141]
+  address: "1805 Cirby Way #12, Roseville, CA 95661"
+  neighborhood: Meadow Oaks
+  city: Roseville
+  state: California
+  country: United States of America
+  cuisines: ["mexican", "tacos"]
+  price_rating: 2
+  website: https://www.nixta.co/
+  reservation_url: https://www.exploretock.com/nixtacomexicankitchen
+  map_url: https://maps.app.goo.gl/JKbtQZy26MaorKLm8
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2021, 2022, 2023, 2024, 2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-12-07]
+  last_updated: 2026-02-20
+- name: Moreno Barbecue
+  slug: moreno_barbecue_southpark_meadows
+  coordinates: [30.154686,-97.797075]
+  address: 9900 S I-35 Frontage Rd Ste M700, Austin, TX 78748
+  neighborhood: Southpark Meadows
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  website: https://www.morenobbq.com/
+  map_url: https://maps.app.goo.gl/jgNk7TnY4s27zdUXA
+  awards:
+    other: []
+  visits: [2025-12-10]
+  last_updated: 2026-02-20
+- name: Paprika ATX
+  slug: paprika_atx_austin
+  coordinates: [30.3338232,-97.7237118]
+  address: 6539 N Lamar Blvd, Austin, TX 78752
+  neighborhood: Highland
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["mexican", "tacos"]
+  price_rating: 1
+  website: https://paprikaatx.com/
+  map_url: https://maps.app.goo.gl/4qyiMr2gcCeonAGN8
+  awards:
+    other: []
+  visits: [2025-12-11]
+  last_updated: 2026-02-20
+- name: Julie's Noodles
+  slug: julies_noodles_austin
+  coordinates: [30.3610717,-97.7183578]
+  address: "8557 Research Blvd #110, Austin, TX 78758"
+  neighborhood: North Austin Civic Association
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["chinese"]
+  price_rating: 1
+  website: https://juliesnoodlesaustin.com/
+  map_url: https://maps.app.goo.gl/ZmPYvxADReboX5Me7
+  awards:
+    other: []
+  visits: [2025-12-11]
+  last_updated: 2026-02-20
+- name: Meat & Bread
+  slug: meat_and_bread_austin
+  coordinates: [30.2670774,-97.7523833]
+  address: 360 Nueces St STE 20, Austin, TX 78701
+  neighborhood: Downtown Austin
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["sandwiches"]
+  price_rating: 1
+  website: https://www.meatandbread.com/
+  map_url: https://maps.app.goo.gl/QLjWy8pnR4keHB626
+  awards:
+    other: []
+  visits: [2025-12-12]
+  last_updated: 2026-02-20
+- name: Cuantos Tacos
+  slug: cuantos_tacos_austin
+  coordinates: [30.2726632,-97.7307387]
+  address: 1108 E 12th St, Austin, TX 78702
+  neighborhood: East Austin
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["mexican", "tacos"]
+  price_rating: 1
+  website: https://www.cuantostacosaustin.com/
+  map_url: https://maps.app.goo.gl/xKwX1rgtn7wGXznW8
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-12-12]
+  last_updated: 2026-02-20
+- name: Discada
+  slug: discada_austin
+  coordinates: [30.2579611,-97.728873]
+  address: 1700 E Cesar Chavez St, Austin, TX 78702
+  neighborhood: East Cesar Chavez
+  city: Austin
+  state: Texas
+  country: United States of America
+  cuisines: ["mexican", "tacos"]
+  price_rating: 1
+  website: https://www.discadatx.com/
+  map_url: https://maps.app.goo.gl/skkJEyBqRRYBtuLp8
+  awards:
+    other: []
+  visits: [2025-12-13]
+  last_updated: 2026-02-20
+- name: Một Hai Ba
+  slug: mot_hai_ba_dallas
+  coordinates: [32.8123512,-96.764873]
+  address: 6047 Lewis St, Dallas, TX 75206
+  neighborhood: Lower Greenville
+  city: Dallas
+  state: Texas
+  country: United States of America
+  cuisines: ["vietnamese", "fusion"]
+  price_rating: 3
+  website: https://www.mothaibadallas.com/
+  reservation_url: https://www.opentable.com/r/mot-hai-ba-lakewood-dallas
+  map_url: https://maps.app.goo.gl/SHPKykLr2UB1iimy9
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-12-17]
+  last_updated: 2026-02-20
+- name: Cattleack Barbecue
+  slug: cattleack_farmers_branch
+  coordinates: [32.9346184,-96.8388353]
+  address: 13628 Gamma Rd, Farmers Branch, TX 75244
+  city: Farmers Branch
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  website: https://cattleackbbq.com/
+  map_url: https://maps.app.goo.gl/dTynLPwPa1vtNnRP6
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-12-18]
+  last_updated: 2026-02-20
+- name: Goldee's Barbecue
+  slug: goldees_fort_worth
+  coordinates: [32.6213895,-97.2365073]
+  address: 4645 Dick Price Rd, Fort Worth, TX 76140
+  city: Fort Worth
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  journey_rating: 2
+  website: https://goldeesbbq.com/
+  map_url: https://maps.app.goo.gl/b3xQSPL9Wx6RWBtp7
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2025-12-21]
+  last_updated: 2026-02-20
+- name: Alma Argentina
+  slug: alma_argentina_kissimmee
+  coordinates: [28.3305793,-81.5386563]
+  address: 6266 W Irlo Bronson Memorial Hwy, Kissimmee, FL 34747
+  city: Kissimmee
+  state: Florida
+  country: United States of America
+  cuisines: ["argentine"]
+  price_rating: 2
+  map_url: https://maps.app.goo.gl/z73qSHymoq9vJEHSA
+  awards:
+    other: []
+  visits: [2026-01-03]
+  last_updated: 2026-02-20
+- name: Azuki Sushi Lounge
+  slug: azuki_sushi_lounge_san_diego
+  coordinates: [32.7296593,-117.1626318]
+  address: 2321 Fifth Ave, San Diego, CA 92101
+  neighborhood: Bankers Hill
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["japanese", "sushi"]
+  price_rating: 3
+  website: https://azukisushi.com/
+  reservation_url: https://www.opentable.com/r/azuki-sushi-lounge
+  map_url: https://maps.app.goo.gl/UoDjtPwMAHkmRFCBA
+  awards:
+    other: []
+  visits: [2022-10-21, 2026-01-05]
+  last_updated: 2026-02-20
+- name: Cowboy Star Restaurant and Butcher Shop
+  slug: cowboy_star_san_diego
+  coordinates: [32.7121596,-117.1585076]
+  address: 640 Tenth Ave, San Diego, CA 92101
+  neighborhood: East Village
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["american", "steakhouse"]
+  price_rating: 3
+  website: https://www.cowboystar.com/
+  reservation_url: https://www.opentable.com/r/cowboy-star-san-diego
+  map_url: https://maps.app.goo.gl/T1jEgS3fvMPKRUSi7
+  awards:
+    other: []
+  visits: [2026-01-06]
+  last_updated: 2026-02-20
+- name: L'Effervescence
+  slug: l_effervescence_tokyo
+  coordinates: [35.6602183,139.7168301]
+  address: 2 Chome-26-4 Nishiazabu, Minato City, Tokyo 106-0031, Japan
+  neighborhood: Azabu
+  city: Minato City
+  state: Tokyo
+  country: Japan
+  cuisines: ["french", "japanese", "haute"]
+  price_rating: 4
+  journey_rating: 2
+  website: https://www.leffervescence.jp/
+  reservation_url: https://omakase.in/ja/r/tm207964
+  map_url: https://maps.app.goo.gl/x5bvrsjEpe8NZeSJ9
+  awards:
+    michelin:
+      stars: 3
+      bib: false
+      green: true
+      years_of_1_star: [2012, 2013, 2014]
+      years_of_2_stars: [2015, 2016, 2017, 2018, 2019, 2020]
+      years_of_3_stars: [2021, 2022, 2023, 2024, 2025, 2026]
+      years_of_bib: []
+      years_of_green: [2021, 2022, 2023, 2024, 2025, 2026]
+    other: []
+  visits: [2026-02-06]
+  last_updated: 2026-02-20
+- name: RAMEN MATSUI
+  slug: ramen_matsui_tokyo
+  coordinates: [35.6890748,139.7129262]
+  address: Japan, 〒160-0004 Tokyo, Shinjuku City, Yotsuya, 4 Chome-25-10 ダイアパレス御苑前 B-2
+  neighborhood: Yotsuya
+  city: Shinjuku City
+  state: Tokyo
+  country: Japan
+  cuisines: ["japanese", "ramen"]
+  price_rating: 1
+  reservation_url: https://www.tablecheck.com/shops/ramen-matsui/reserve
+  map_url: https://maps.app.goo.gl/7PCVaqoCfpPXkYXM7
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2026-02-07]
+  last_updated: 2026-02-20
+- name: Sushi Azabu
+  slug: sushi_azabu_tokyo
+  coordinates: [35.6609087,139.7379144]
+  address: Japan, 〒106-0041 Tokyo, Minato City, Azabudai, 1 Chome-3-1 3F
+  neighborhood: Azabudai
+  city: Minato City
+  state: Tokyo
+  country: Japan
+  cuisines: ["japanese", "sushi", "omakase"]
+  price_rating: 3
+  website: https://balconyby6th.com/sushiazabu/
+  reservation_url: https://www.tablecheck.com/shops/sushi-azabu/reserve
+  map_url: https://maps.app.goo.gl/P6LGHAYvi3nVgaRF6
+  awards:
+    other: []
+  visits: [2026-02-07]
+  last_updated: 2026-02-20
