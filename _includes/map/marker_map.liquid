@@ -9,13 +9,26 @@
 {%- endif -%}
 
 {%- assign has_sidebar = false -%}
-{%- if include.filters or include.list_include -%}
+{%- if include.filters_include or include.list_include -%}
   {%- assign has_sidebar = true -%}
 {%- endif -%}
 
+{% if include.popup_template %}
+  <template id="{{ map_id }}-popup-template">
+    {% include {{ include.popup_template }} %}
+  </template>
+{% endif %}
+
+{% if include.tooltip_template %}
+  <template id="{{ map_id }}-tooltip-template">
+    {% include {{ include.tooltip_template }} %}
+  </template>
+{% endif %}
+
 <div class="row">
   <div class="{% if has_sidebar %}col-sm-8{% else %}col-xs-12{% endif %}">
-    <div id="{{ map_id }}" class="img-rounded"></div>
+    <!-- IMPORTANT: give the map a height -->
+    <div id="{{ map_id }}" class="img-rounded" style="height:70vh;min-height:420px;"></div>
 
     {% if include.legend %}
       <hr>
@@ -27,7 +40,7 @@
     <div class="col-sm-4">
       {% if include.filters_include %}
         {% include {{ include.filters_include }} %}
-    {% endif %}
+      {% endif %}
 
       {% if include.list_include %}
         <div class="map-sidebar list-group"
@@ -62,8 +75,9 @@
   window.__MAP_INIT__ = window.__MAP_INIT__ || [];
   window.__MAP_INIT__.push({
     mapId: {{ map_id | jsonify }},
-    listId: {{ list_id | jsonify }},   // "" if no list
-    popupType: {{ include.popup_type | default: "generic" | jsonify }},
+    listId: {{ list_id | jsonify }},
+    popupTemplateId: {{ (map_id | append: "-popup-template") | jsonify }},
+    tooltipTemplateId: {{ (map_id | append: "-tooltip-template") | jsonify }},
     zoom: {{ include.zoom | default: 2 }},
     center: {{ include.center | default: "" | jsonify }}
   });
