@@ -1,6 +1,6 @@
 - name: Another Broken Egg Cafe
   slug: another_broken_egg_cafe_west_lafayette
-  coordinates: [40.4305614,-86.9152691]
+  coordinates: [40.4307049,-86.913023]
   address: "516 Northwestern Ave #1500, West Lafayette, IN 47906"
   city: West Lafayette
   state: Indiana
@@ -15,7 +15,7 @@
   last_updated: 2026-02-20
 - name: Bistro 501
   slug: bistro_501_lafayette
-  coordinates: [40.4189974,-86.8942879]
+  coordinates: [40.419071,-86.891691]
   address: 501 Main St, Lafayette, IN 47901
   city: Lafayette
   state: Indiana
@@ -32,7 +32,7 @@
   last_updated: 2026-02-20
 - name: East End Grill
   slug: east_end_grill_lafayette
-  coordinates: [40.4192332,-86.8879294]
+  coordinates: [40.4192075,-86.8855944]
   address: 1016 Main St, Lafayette, IN 47901
   city: Lafayette
   state: Indiana
@@ -49,7 +49,7 @@
   last_updated: 2026-02-20
 - name: Yatagarasu
   slug: yatagarasu_lafayette
-  coordinates: [40.4190727,-86.8934158]
+  coordinates: [40.4190731,-86.8914059]
   address: 533 Main St, Lafayette, IN 47901
   city: Lafayette
   state: Indiana
@@ -64,7 +64,7 @@
   last_updated: 2026-02-20
 - name: Lou Malnati's Pizzeria
   slug: lou_malnatis_naperville
-  coordinates: [41.77302,-88.1508072]
+  coordinates: [41.7731572,-88.1507558]
   address: 131 W Jefferson Ave, Naperville, IL 60540
   neighborhood: Naperville Park District
   city: Naperville
@@ -81,7 +81,7 @@
   last_updated: 2026-02-20
 - name: Harry's Chocolate Shop
   slug: harrys_chocolate_shop_west_lafayette
-  coordinates: [40.4241343,-86.9088931]
+  coordinates: [40.4238116,-86.9090675]
   address: 329 W State St, West Lafayette, IN 47906
   city: West Lafayette
   state: Indiana
@@ -97,7 +97,7 @@
   last_updated: 2026-02-20
 - name: The Bryant Food and Drink Co.
   slug: bryant_food_and_drink_co_west_lafayette
-  coordinates: [40.4678274,-86.943299]
+  coordinates: [40.4678247,-86.9406727]
   address: 1820 Sagamore Pkwy W, West Lafayette, IN 47906
   city: West Lafayette
   state: Indiana
@@ -113,7 +113,7 @@
   last_updated: 2026-02-20
 - name: Yakitori Taisho
   slug: yakitori_taisho_san_diego
-  coordinates: [32.8334101,-117.1816138]
+  coordinates: [32.8333424,-117.1790792]
   address: 5185 Clairemont Mesa Blvd, San Diego, CA 92117
   neighborhood: Clairemont
   city: San Diego
@@ -130,7 +130,7 @@
   last_updated: 2026-02-20
 - name: Plumeria Vegetarian Restaurant
   slug: plumeria_university_heights
-  coordinates: [32.7621439,-117.1486367]
+  coordinates: [32.7620968,-117.1461717]
   address: 4661 Park Blvd, San Diego, CA 92116
   neighborhood: University Heights
   city: San Diego
@@ -146,7 +146,7 @@
   last_updated: 2026-02-20
 - name: Ciccia Osteria
   slug: ciccia_osteria_san_diego
-  coordinates: [32.6974263,-117.1414472]
+  coordinates: [32.6974545,-117.1388611]
   address: 2233 Logan Ave, San Diego, CA 92113
   neighborhood: Barrio Logan
   city: San Diego
@@ -172,7 +172,7 @@
   last_updated: 2026-02-20
 - name: Byblos Downtown
   slug: byblos_downtown_toronto
-  coordinates: [43.6474902,-79.3907713]
+  coordinates: [43.6474564,-79.3881676]
   address: 11 Duncan St, Toronto, ON M5V 3M2, Canada
   neighborhood: Wellington Place
   city: Toronto
@@ -189,7 +189,7 @@
   last_updated: 2026-02-20
 - name: Noto
   slug: noto_edinburgh
-  coordinates: [55.9540311,-3.2020354]
+  coordinates: [55.954056,-3.1993458]
   address: 47a Thistle St, Edinburgh EH2 1DY, United Kingdom
   neighborhood: Edinburgh New Town
   city: Edinburgh
@@ -216,7 +216,7 @@
   last_updated: 2026-02-20
 - name: The Palmerston
   slug: palmerston_edinburgh
-  coordinates: [55.9473073,-3.2177332]
+  coordinates: [55.9472652,-3.2151071]
   address: 1 Palmerston Pl, Edinburgh EH12 5AF, United Kingdom
   neighborhood: West End
   city: Edinburgh
@@ -232,7 +232,7 @@
   last_updated: 2026-02-20
 - name: EE NAMI Tonkatsu Izakaya
   slug: ee_nami_san_diego
-  coordinates: [32.8354785,-117.1917596]
+  coordinates: [32.8354783,-117.1892262]
   address: 4706 Clairemont Mesa Blvd, San Diego, CA 92117
   neighborhood: Clairemont
   city: San Diego
@@ -247,7 +247,7 @@
   last_updated: 2026-02-20
 - name: El Preferido de Palermo
   slug: el_preferido_palermo_buenos_aires
-  coordinates: [-34.5854093,-58.4279161]
+  coordinates: [-34.5854427,-58.4253881]
   address: Jorge Luis Borges 2108, C1425FFD Cdad. Autónoma de Buenos Aires, Argentina
   neighborhood: Palermo
   city: Buenos Aires
@@ -261,7 +261,7 @@
   last_updated: 2026-02-20
 - name: Don Julio Parilla
   slug: don_julio_palermo_buenos_aires
-  coordinates: [-34.586312,-58.4268438]
+  coordinates: [-34.5862916,-58.4242774]
   address: Guatemala 4699, C1425 Cdad. Autónoma de Buenos Aires, Argentina
   neighborhood: Palermo
   city: Buenos Aires
@@ -286,7 +286,7 @@
   last_updated: 2026-02-20
 - name: Don Zoilo
   slug: don_zoilo_buenos_aires
-  coordinates: [-34.6046067,-58.4497158]
+  coordinates: [-34.6046599,-58.448086]
   address: Av. Dr. Honorio Pueyrredón 1406, C1416 Cdad. Autónoma de Buenos Aires, Argentina
   neighborhood: Palermo
   city: Buenos Aires
@@ -298,7 +298,7 @@
   last_updated: 2026-02-20
 - name: Cocobang
   slug: cocobang_san_francisco
-  coordinates: [37.7876399,-122.4140883]
+  coordinates: [37.7876288,-122.4115227]
   address: 550 Taylor St, San Francisco, CA 94102
   neighborhood: Tenderloin
   city: San Francisco
@@ -312,7 +312,7 @@
   last_updated: 2026-02-20
 - name: Cesarina
   slug: cesarina_san_diego
-  coordinates: [32.7433132,-117.2371919]
+  coordinates: [32.7432752,-117.2345097]
   address: 4161 Voltaire St, San Diego, CA 92107
   neighborhood: Ocean Beach
   city: San Diego
@@ -338,7 +338,7 @@
   last_updated: 2026-02-20
 - name: The Mansion Restaurant
   slug: mansion_restaurant_dallas
-  coordinates: [32.8040911,-96.8117588]
+  coordinates: [32.8034141,-96.806794]
   address: 2821 Turtle Creek Blvd, Dallas, TX 75219
   neighborhood: Oak Lawn
   city: Dallas
@@ -370,7 +370,7 @@
   last_updated: 2026-02-20
 - name: It's Raw Poke Shop
   slug: its_raw_poke_shop_san_diego
-  coordinates: [32.7465617,-117.2537211]
+  coordinates: [32.7420796,-117.2432775]
   address: 4991 Newport Ave STE A, San Diego, CA 92107
   neighborhood: Ocean Beach
   city: San Diego
@@ -428,7 +428,7 @@
   last_updated: 2026-02-20
 - name: Estro
   slug: estro_venice
-  coordinates: [45.4360287,12.3250667]
+  coordinates: [45.4360424,12.3250595]
   address: Sestiere Dorsoduro, 3778, 30123 Venezia VE, Italy
   neighborhood: Dorsoduro
   city: Venice
@@ -483,7 +483,7 @@
   last_updated: 2026-02-20
 - name: Emozioni Ristorante
   slug: emozioni_lake_garda
-  coordinates: [45.8855321,10.8478449]
+  coordinates: [45.8855585,10.8477827]
   address: Viale Giosuè Carducci, 17, 38066 Riva del Garda TN, Italy
   neighborhood: null
   city: Riva del Garda
@@ -534,7 +534,7 @@
   last_updated: 2026-02-20
 - name: Tanner's Prime Burgers
   slug: tanners_prime_burgers_oceanside
-  coordinates: [33.1727657,-117.3624606]
+  coordinates: [33.1722614,-117.3594272]
   address: 510 Vista Way, Oceanside, CA 92054
   neighborhood: South Oceanside
   city: Oceanside
@@ -559,7 +559,7 @@
   last_updated: 2026-02-20
 - name: Mike's Red Tacos
   slug: mikes_red_tacos_genesee
-  coordinates: [32.8213042,-117.1836203]
+  coordinates: [32.8217277,-117.1836609]
   address: "4310 Genesee Ave #105-106, San Diego, CA 92117"
   neighborhood: Clairemont
   city: San Diego
@@ -575,7 +575,7 @@
   last_updated: 2026-02-20
 - name: Jay's BBQ Shack
   slug: jays_bbq_shack_abilene
-  coordinates: [32.4376733,-99.7327007]
+  coordinates: [32.4372426,-99.7300009]
   address: 602 S 11th St, Abilene, TX 79602
   city: Abilene
   state: Texas
@@ -590,8 +590,8 @@
   last_updated: 2026-02-20
 - name: Interstellar BBQ
   slug: interstellar_austin
-  coordinates: [30.454602,-97.8170974]
-  address: 1701 E 6th St, Austin, TX 78702
+  coordinates: [30.4614582,-97.8151755]
+  address: 12233 Ranch Rd 620 N suite 105, Austin, TX 78750
   neighborhood: null
   city: Austin
   state: Texas
@@ -614,9 +614,25 @@
     other: []
   visits: [2025-09-21]
   last_updated: 2026-02-20
+- name: Otto's German Bistro
+  slug: ottos_german_bistro_fredericksburg
+  coordinates: [30.2730298,-98.8664688]
+  address: 316 E Austin St, Fredericksburg, TX 78624
+  city: Fredericksburg
+  state: Texas
+  country: United States of America
+  cuisines: ["german"]
+  price_rating: 2
+  website: https://www.ottosfbg.com/
+  reservation_url: https://www.exploretock.com/ottosfbg
+  map_url: https://maps.app.goo.gl/A2iuJwAcSXkpapah9
+  awards:
+    other: []
+  visits: [2025-10-04]
+  last_updated: 2026-02-20
 - name: Eaker Barbecue
   slug: eakers_fredricksburg
-  coordinates: [30.2814756,-98.8842627]
+  coordinates: [30.2814052,-98.881674]
   address: 607 W Main St, Fredericksburg, TX 78624
   neighborhood: null
   city: Fredericksburg
@@ -632,7 +648,7 @@
   last_updated: 2026-02-20
 - name: Micklethwait Barbecue
   slug: micklethwait_austin
-  coordinates: [30.2732074,-97.6927401]
+  coordinates: [30.2731465,-97.6901538]
   address: 4602 Tanney St, Austin, TX 78721
   neighborhood: East MLK
   city: Austin
@@ -657,7 +673,7 @@
   last_updated: 2026-02-20
 - name: Franklin Barbecue
   slug: franklin_austin
-  coordinates: [30.2701296,-97.7339168]
+  coordinates: [30.2701463,-97.7312847]
   address: 900 E 11th St, Austin, TX 78702
   neighborhood: East Austin
   city: Austin
@@ -682,7 +698,7 @@
   last_updated: 2026-02-20
 - name: Barbs B Q
   slug: barbs_b_q_lockhart
-  coordinates: [29.8837155,-97.6745487]
+  coordinates: [29.8836843,-97.6719579]
   address: 102 E Market St, Lockhart, TX 78644
   city: Lockhart
   state: Texas
@@ -707,7 +723,7 @@
   last_updated: 2026-02-20
 - name: LeRoy and Lewis Barbecue
   slug: leroy_and_lewis_austin
-  coordinates: [30.2098612,-97.7898807]
+  coordinates: [30.2103173,-97.7872144]
   address: 5621 Emerald Forest Dr, Austin, TX 78745
   neighborhood: South Austin
   city: Austin
@@ -733,7 +749,7 @@
   last_updated: 2026-02-20
 - name: Rollin Smoke BBQ
   slug: rollin_smoke_austin
-  coordinates: [30.2579611,-97.728873]
+  coordinates: [30.2580025,-97.7263252]
   address: 1700 E Cesar Chavez St, Austin, TX 78702
   neighborhood: East Cesar Chavez
   city: Austin
@@ -749,7 +765,7 @@
   last_updated: 2026-02-20
 - name: Mum Foods Smokehouse and Delicatessen
   slug: mum_foods_austin
-  coordinates: [30.3058679,-97.6823342]
+  coordinates: [30.305872,-97.6797482]
   address: 5811 Manor Rd, Austin, TX 78723
   neighborhood: Pecan Springs-Springdale
   city: Austin
@@ -765,7 +781,7 @@
   last_updated: 2026-02-20
 - name: Parish Barbecue
   slug: parish_barbecue_austin
-  coordinates: [30.2871879,-97.7057344]
+  coordinates: [30.287169,-97.7031306]
   address: 3220 Manor Rd, Austin, TX 78723
   neighborhood: East MLK
   city: Austin
@@ -791,7 +807,7 @@
   last_updated: 2026-02-20
 - name: Louie's Craft BBQ
   slug: louies_craft_buda
-  coordinates: [30.0816455,-97.8458534]
+  coordinates: [30.0884651,-97.8180774]
   address: 122 Main St, Buda, TX 78610
   city: Buda
   state: Texas
@@ -806,7 +822,7 @@
   last_updated: 2026-02-20
 - name: Burnt Bean Company
   slug: burnt_bean_co_seguin
-  coordinates: [29.5684966,-97.9673371]
+  coordinates: [29.5685264,-97.9646581]
   address: 108 S Austin St, Seguin, TX 78155
   city: Seguin
   state: Texas
@@ -831,7 +847,7 @@
   last_updated: 2026-02-20
 - name: Lucia
   slug: lucia_dallas
-  coordinates: [32.747029,-96.831103]
+  coordinates: [32.7470126,-96.8284019]
   address: 287 N Bishop Ave, Dallas, TX 75208
   neighborhood: Bishop Arts District
   city: Dallas
@@ -857,7 +873,7 @@
   last_updated: 2026-02-20
 - name: Smokey Joe's BBQ
   slug: smokey_joes_dallas
-  coordinates: [32.6700954,-96.8257925]
+  coordinates: [32.6700945,-96.823293]
   address: 6403 S R L Thornton Fwy, Dallas, TX 75232
   neighborhood: Wolf Creek
   city: Dallas
@@ -873,7 +889,7 @@
   last_updated: 2026-02-20
 - name: Barley Swine
   slug: barley_swine_austin
-  coordinates: [30.3413192,-97.7408616]
+  coordinates: [30.3412027,-97.7383293]
   address: "6555 Burnet Rd #400, Austin, TX 78757"
   neighborhood: Brentwood
   city: Austin
@@ -899,7 +915,7 @@
   last_updated: 2026-02-20
 - name: Nixtaco
   slug: nixtaco_roseville
-  coordinates: [38.7298307,-121.2587141]
+  coordinates: [38.7298369,-121.256589]
   address: "1805 Cirby Way #12, Roseville, CA 95661"
   neighborhood: Meadow Oaks
   city: Roseville
@@ -925,7 +941,7 @@
   last_updated: 2026-02-20
 - name: Moreno Barbecue
   slug: moreno_barbecue_southpark_meadows
-  coordinates: [30.154686,-97.797075]
+  coordinates: [30.154692190951504,-97.79452585262433]
   address: 9900 S I-35 Frontage Rd Ste M700, Austin, TX 78748
   neighborhood: Southpark Meadows
   city: Austin
@@ -941,7 +957,7 @@
   last_updated: 2026-02-20
 - name: Paprika ATX
   slug: paprika_atx_austin
-  coordinates: [30.3338232,-97.7237118]
+  coordinates: [30.3337121,-97.7211323]
   address: 6539 N Lamar Blvd, Austin, TX 78752
   neighborhood: Highland
   city: Austin
@@ -957,7 +973,7 @@
   last_updated: 2026-02-20
 - name: Julie's Noodles
   slug: julies_noodles_austin
-  coordinates: [30.3610717,-97.7183578]
+  coordinates: [30.3614383,-97.7151936]
   address: "8557 Research Blvd #110, Austin, TX 78758"
   neighborhood: North Austin Civic Association
   city: Austin
@@ -973,7 +989,7 @@
   last_updated: 2026-02-20
 - name: Meat & Bread
   slug: meat_and_bread_austin
-  coordinates: [30.2670774,-97.7523833]
+  coordinates: [30.2671452,-97.7495442]
   address: 360 Nueces St STE 20, Austin, TX 78701
   neighborhood: Downtown Austin
   city: Austin
@@ -989,7 +1005,7 @@
   last_updated: 2026-02-20
 - name: Cuantos Tacos
   slug: cuantos_tacos_austin
-  coordinates: [30.2726632,-97.7307387]
+  coordinates: [30.2727299,-97.7283136]
   address: 1108 E 12th St, Austin, TX 78702
   neighborhood: East Austin
   city: Austin
@@ -1014,7 +1030,7 @@
   last_updated: 2026-02-20
 - name: Discada
   slug: discada_austin
-  coordinates: [30.2579611,-97.728873]
+  coordinates: [30.2580025,-97.7263252]
   address: 1700 E Cesar Chavez St, Austin, TX 78702
   neighborhood: East Cesar Chavez
   city: Austin
@@ -1030,7 +1046,7 @@
   last_updated: 2026-02-20
 - name: Một Hai Ba
   slug: mot_hai_ba_dallas
-  coordinates: [32.8123512,-96.764873]
+  coordinates: [32.812212,-96.762574]
   address: 6047 Lewis St, Dallas, TX 75206
   neighborhood: Lower Greenville
   city: Dallas
@@ -1056,7 +1072,7 @@
   last_updated: 2026-02-20
 - name: Cattleack Barbecue
   slug: cattleack_farmers_branch
-  coordinates: [32.9346184,-96.8388353]
+  coordinates: [32.9337725,-96.8366235]
   address: 13628 Gamma Rd, Farmers Branch, TX 75244
   city: Farmers Branch
   state: Texas
@@ -1080,7 +1096,7 @@
   last_updated: 2026-02-20
 - name: Goldee's Barbecue
   slug: goldees_fort_worth
-  coordinates: [32.6213895,-97.2365073]
+  coordinates: [32.621762,-97.234355]
   address: 4645 Dick Price Rd, Fort Worth, TX 76140
   city: Fort Worth
   state: Texas
@@ -1105,7 +1121,7 @@
   last_updated: 2026-02-20
 - name: Alma Argentina
   slug: alma_argentina_kissimmee
-  coordinates: [28.3305793,-81.5386563]
+  coordinates: [28.330500038334193,-81.5336470140035]
   address: 6266 W Irlo Bronson Memorial Hwy, Kissimmee, FL 34747
   city: Kissimmee
   state: Florida
@@ -1119,7 +1135,7 @@
   last_updated: 2026-02-20
 - name: Azuki Sushi Lounge
   slug: azuki_sushi_lounge_san_diego
-  coordinates: [32.7296593,-117.1626318]
+  coordinates: [32.72965817577756,-117.1601349815172]
   address: 2321 Fifth Ave, San Diego, CA 92101
   neighborhood: Bankers Hill
   city: San Diego
@@ -1136,7 +1152,7 @@
   last_updated: 2026-02-20
 - name: Cowboy Star Restaurant and Butcher Shop
   slug: cowboy_star_san_diego
-  coordinates: [32.7121596,-117.1585076]
+  coordinates: [32.71214091434202,-117.15573101724738]
   address: 640 Tenth Ave, San Diego, CA 92101
   neighborhood: East Village
   city: San Diego
@@ -1153,7 +1169,7 @@
   last_updated: 2026-02-20
 - name: L'Effervescence
   slug: l_effervescence_tokyo
-  coordinates: [35.6602183,139.7168301]
+  coordinates: [35.66021533212167,139.71942399201512]
   address: 2 Chome-26-4 Nishiazabu, Minato City, Tokyo 106-0031, Japan
   neighborhood: Azabu
   city: Minato City
@@ -1180,7 +1196,7 @@
   last_updated: 2026-02-20
 - name: RAMEN MATSUI
   slug: ramen_matsui_tokyo
-  coordinates: [35.6890748,139.7129262]
+  coordinates: [35.68902830561954,139.71546097688335]
   address: Japan, 〒160-0004 Tokyo, Shinjuku City, Yotsuya, 4 Chome-25-10 ダイアパレス御苑前 B-2
   neighborhood: Yotsuya
   city: Shinjuku City
@@ -1205,7 +1221,7 @@
   last_updated: 2026-02-20
 - name: Sushi Azabu
   slug: sushi_azabu_tokyo
-  coordinates: [35.6609087,139.7379144]
+  coordinates: [35.66084551038472,139.7406455060333]
   address: Japan, 〒106-0041 Tokyo, Minato City, Azabudai, 1 Chome-3-1 3F
   neighborhood: Azabudai
   city: Minato City
