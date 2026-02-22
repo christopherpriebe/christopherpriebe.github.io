@@ -348,12 +348,12 @@ function buildContext(item, slug) {
 
   const priceHtml = getPriceMeter(item.price_rating);
   const links = buildLinksHtml(item);
-  const tldr = escapeHtml(item.tldr || "");
+  const summary = escapeHtml(item.summary || "");
   const awardsHtml = awardsList(item.awards);
 
   const safeSlug = escapeHtml(String(slug || ""));
 
-  const tldrCollapseId = `tldr-${safeSlug}`;
+  const summaryCollapseId = `summary-${safeSlug}`;
   const awardsCollapseId = `awards-${safeSlug}`;
 
   const priceBlock = priceHtml
@@ -364,18 +364,18 @@ function buildContext(item, slug) {
     ? `<div style="margin-top:8px;">${links}</div>`
     : "";
 
-  const tldrPanel = tldr
+  const summaryPanel = summary
     ? `
       <div class="panel panel-default" style="margin-top:8px;">
         <div class="panel-heading" style="padding:6px 10px;">
-          <a data-toggle="collapse" href="#${tldrCollapseId}" style="display:block;">
-            <strong>TL;DR</strong>
+          <a data-toggle="collapse" href="#${summaryCollapseId}" style="display:block;">
+            <strong>Summary</strong>
             <span class="pull-right muted">toggle</span>
           </a>
         </div>
-        <div id="${tldrCollapseId}" class="panel-collapse collapse">
+        <div id="${summaryCollapseId}" class="panel-collapse collapse">
           <div class="panel-body" style="padding:8px 10px;">
-            ${tldr}
+            ${summary}
           </div>
         </div>
       </div>
@@ -411,7 +411,7 @@ function buildContext(item, slug) {
       ? `<div style="margin-top:6px;"><span class="val-badge">◈ Exceptional value</span></div>`
       : "",
     awards_panel: awardsPanel,
-    tldr_panel: tldrPanel,
+    summary_panel: summaryPanel,
     links_block: linksBlock,
   };
 }

@@ -474,7 +474,7 @@
       "The World's 50 Best Restaurants 2021-2025: currently at #16; peaked in 2023 at #7; debuted in 2021 at #15",
     ]
   visits: [2025-06-12]
-  tldr: >
+  summary: >
     Lido 84 delivers thoughtful, minimalist fine dining through simple food, great service, and either a picturesque view of Lake Garda during lunch or a cozy atmosphere during dinner.
     The kitchen, led by executive chef Riccardo Camanini, produces carefully balanced dishes that blend Italian traditions with thoughtful, minimalist execution.
     A prime example of this is the signature dish, cacio e pepe en vessie, which features the classic Roman pasta dish prepared "en vessie" (in a pig's bladder, an ancient Roman technique), resulting in a unique "super-al-dente" texture.
@@ -573,6 +573,21 @@
     other: []
   visits: [2025-05-16, 2025-06-02]
   last_updated: 2026-02-20
+- name: Rollin' Smoke BBQ
+  slug: rollin_smoke_bbq_anthony
+  coordinates: [31.9830837,-106.6050888]
+  address: 200 S Main St, Anthony, TX 79821
+  city: Anthony
+  state: Texas
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  website: https://rollin-smoke-bbq-108141.square.site/
+  map_url: https://maps.app.goo.gl/YERtYr4gZKHNtSMn6
+  awards:
+    other: []
+  visits: [2025-09-05]
+  last_updated: 2026-02-20
 - name: Jay's BBQ Shack
   slug: jays_bbq_shack_abilene
   coordinates: [32.4372426,-99.7300009]
@@ -614,6 +629,21 @@
     other: []
   visits: [2025-09-21]
   last_updated: 2026-02-20
+- name: Austin Street Creamery
+  slug: austin_street_creamery_fredericksburg
+  coordinates: [30.2775592,-98.8733191]
+  address: 211 W Austin St, Fredericksburg, TX 78624
+  city: Fredericksburg
+  state: Texas
+  country: United States of America
+  cuisines: ["ice cream"]
+  price_rating: 1
+  journey_rating: 1
+  map_url: https://maps.app.goo.gl/dyfawy4vEZHMAQDf8
+  awards:
+    other: []
+  visits: [2025-10-03]
+  last_updated: 2026-02-20
 - name: Otto's German Bistro
   slug: ottos_german_bistro_fredericksburg
   coordinates: [30.2730298,-98.8664688]
@@ -634,12 +664,12 @@
   slug: eakers_fredricksburg
   coordinates: [30.2814052,-98.881674]
   address: 607 W Main St, Fredericksburg, TX 78624
-  neighborhood: null
   city: Fredericksburg
   state: Texas
   country: United States of America
   cuisines: ["barbecue"]
   price_rating: 2
+  journey_rating: 1
   website: https://www.eakerbarbecue.com/
   map_url: https://maps.app.goo.gl/Jamwwsdn4qhUWnJx5
   awards:
