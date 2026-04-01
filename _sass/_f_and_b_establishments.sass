@@ -72,6 +72,19 @@
     background: var(--pin-fill)
     box-sizing: border-box
     box-shadow: 0 calc(8px * var(--pin-scale)) calc(16px * var(--pin-scale)) rgba(15, 23, 42, .18)
+    z-index: 1
+
+    &::before
+        content: ""
+        position: absolute
+        left: 50%
+        bottom: calc(var(--pin-border-width) * var(--pin-scale) * -.9)
+        width: calc(var(--pin-head) * var(--pin-scale) * .34)
+        height: calc(var(--pin-head) * var(--pin-scale) * .22)
+        margin-left: calc((var(--pin-head) * var(--pin-scale) * .34) / -2)
+        background: var(--pin-fill)
+        border-radius: 0 0 calc(6px * var(--pin-scale)) calc(6px * var(--pin-scale))
+        z-index: 1
 
     &::after
         content: ""
