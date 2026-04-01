@@ -4,6 +4,119 @@
     height: 70vh
     min-height: 420px
 
+
+
+
+
+:root
+  --tier-ink: 222 47% 18%
+  --tier-ink-strong: 222 55% 14%
+  --tier-accent: 222 70% 55%
+
+$pin-size: 24px
+$head-top: 5px
+$head-size: 13px
+
+=ring($size, $width, $color, $alpha: 1)
+  width: $size
+  height: $size
+  border: $width solid hsl($color / #{$alpha})
+  border-radius: 999px
+  box-sizing: border-box
+
+=halo($color, $a1: .20, $a2: .10)
+  box-shadow: 0 0 0 4px hsl($color / #{$a1}), 0 0 0 10px hsl($color / #{$a2})
+
+.fa-tier
+  position: relative
+  display: inline-block
+  line-height: 1
+  transform: translate(-50%, -100%)
+  cursor: pointer
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.18))
+
+  // IMPORTANT:
+  // Do NOT use `isolation: isolate` here.
+  // We *want* negative z-index rings to fall behind other markers too.
+  z-index: 0
+
+  > i
+    position: relative
+    z-index: 2
+    font-size: $pin-size
+    color: hsl(var(--tier-ink))
+
+  &::before,
+  &::after
+    content: ""
+    position: absolute
+    left: 50%
+    top: $head-top
+    transform: translateX(-50%)
+    pointer-events: none
+    display: none
+
+    // The fix: rings are always behind pins (even other pins)
+    z-index: -1
+
+// Tier 0 — pin only
+.fa-tier.t0
+  &::before,
+  &::after
+    display: none
+
+// Tier 1 — single ring
+.fa-tier.t1
+  &::before
+    display: block
+    +ring($head-size, 2px, var(--tier-ink), 1)
+
+// Tier 2 — double ring + stronger ink
+.fa-tier.t2
+  > i
+    color: hsl(var(--tier-ink-strong))
+
+  &::before
+    display: block
+    +ring($head-size, 2px, var(--tier-ink-strong), 1)
+
+  &::after
+    display: block
+    top: $head-top - 3px
+    +ring($head-size + 8px, 2px, var(--tier-ink-strong), .95)
+
+// Tier 3 — landmark halo + accent outer ring
+.fa-tier.t3
+  > i
+    color: hsl(var(--tier-ink-strong))
+
+  &::before
+    display: block
+    +ring($head-size, 2px, var(--tier-ink-strong), 1)
+
+  &::after
+    display: block
+    top: $head-top - 4px
+    +ring($head-size + 10px, 2px, var(--tier-accent), .42)
+    +halo(var(--tier-accent), .18, .10)
+
+// Hover emphasis (still behind pins)
+.fa-tier.t1:hover::before
+  border-color: hsl(var(--tier-accent) / .55)
+
+.fa-tier.t2:hover::after
+  border-color: hsl(var(--tier-accent) / .45)
+
+.fa-tier.t3:hover::after
+  border-color: hsl(var(--tier-accent) / .60)
+  +halo(var(--tier-accent), .28, .14)
+
+.fa-tier:focus-visible
+  outline: none
+
+
+
+
 .jr-marker
     width: 16px
     height: 16px
@@ -19,7 +132,7 @@
     opacity: 0.75
 
 .jr-marker.jr-1
-    background: $f-and-b-establishment-jr-1
+    background: #fff
 
 .jr-marker.jr-2
     background: $f-and-b-establishment-jr-2
@@ -38,12 +151,13 @@
     background: #111
 
 .jr-marker.jr-3
-    width: 18px
-    height: 18px
-    background: $f-and-b-establishment-jr-3
+    width: 20px
+    height: 20px
+    color: $f-and-b-establishment-jr-3
+    padding: 2px
 
 .leaflet-popup-content
-    margin: 10px
+    margin: 16px
     max-height: 360px
     max-width: 360px
     overflow-y: auto
@@ -51,6 +165,7 @@
 .fnb-popup .fnb-header
     position: sticky
     top: 0
+    background: #fff
     padding-bottom: 6px
     z-index: 2
 
