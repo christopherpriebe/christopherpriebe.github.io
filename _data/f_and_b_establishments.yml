@@ -448,7 +448,6 @@
   slug: lido_84_lake_garda
   coordinates: [45.6252976,10.5759639]
   address: Corso Giuseppe Zanardelli, 196, 25083 Gardone Riviera BS, Italy
-  neighborhood: null
   city: Gardone Riviera
   state: Lombardia
   country: Italy
@@ -1266,3 +1265,20 @@
     other: []
   visits: [2026-02-07]
   last_updated: 2026-02-20
+- name: Rioja
+  slug: rioja_denver
+  coordinates: [39.747938,-104.999459]
+  address: 1431 Larimer St, Denver, CO 80202
+  neighborhood: Union Station
+  city: Denver
+  state: Colorado
+  country: United States of America
+  cuisines: []
+  price_rating: 3
+  website: https://www.riojadenver.com/
+  reservation_url: https://www.opentable.com/r/rioja-denver
+  map_url: https://maps.app.goo.gl/mA2vsTgEvnorEbFU6
+  awards:
+    other: []
+  visits: [2026-03-16]
+  last_updated: 2026-03-19
