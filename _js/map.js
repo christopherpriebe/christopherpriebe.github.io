@@ -75,27 +75,44 @@ export function getCuisinesHtml(keys) {
   return `<div class="muted" style="margin-top:4px;">${parts.join(" · ")}</div>`;
 }
 
-function getJourneyClass(journeyRating) {
+function getJourneyTier(journeyRating) {
   const n = parseInt(journeyRating, 10) || 0;
-  return `jr-${Math.max(0, Math.min(3, n))}`;
+  return Math.max(0, Math.min(3, n));
 }
 
-function makeJourneyIcon(journeyRating) {
-  return L.divIcon({
-    className: "",
-    html: `<div class="jr-marker ${getJourneyClass(journeyRating)}"></div>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
-    popupAnchor: [0, -10],
-  });
+function getJourneyLabel(journeyRating) {
+  const tier = getJourneyTier(journeyRating);
+  if (tier === 3) return "Worth the trip";
+  if (tier === 2) return "Worth planning around";
+  if (tier === 1) return "Worth the visit";
+  return "Selected";
+}
+
+const JOURNEY_MARKER_METRICS = {
+  0: { iconSize: [30, 36], iconAnchor: [15, 25], popupAnchor: [0, -22], zIndexOffset: 0 },
+  1: { iconSize: [34, 42], iconAnchor: [17, 30], popupAnchor: [0, -26], zIndexOffset: 100 },
+  2: { iconSize: [50, 60], iconAnchor: [25, 38], popupAnchor: [0, -34], zIndexOffset: 200 },
+  3: { iconSize: [62, 74], iconAnchor: [31, 45], popupAnchor: [0, -42], zIndexOffset: 300 },
+};
+
+function getJourneyPinMarkup(journeyRating, variant = "map") {
+  const tier = getJourneyTier(journeyRating);
+  const attrs = (variant === "map")
+    ? 'aria-hidden="true"'
+    : `role="img" aria-label="${escapeHtml(getJourneyLabel(tier))}"`;
+
+  return `
+    <span class="journey-pin journey-pin--${variant} journey-pin--t${tier}" ${attrs}>
+      <span class="journey-pin__aura" aria-hidden="true"></span>
+      <span class="journey-pin__body" aria-hidden="true">
+        <span class="journey-pin__core"></span>
+      </span>
+    </span>
+  `.trim();
 }
 
 function getJourneySymbol(journeyRating) {
-  const n = parseInt(journeyRating, 10) || 0;
-  if (n === 3) return '<i class="fa-solid fa-circle jr-marker jr-3"></i>';
-  if (n === 2) return '<i class="fa-regular fa-circle-dot jr-marker jr-2"></i>';
-  if (n === 1) return '<i class="fa-regular fa-circle jr-marker jr-1"></i>';
-  return '<i class="fa-regular fa-circle jr-marker jr-0"></i>';
+  return getJourneyPinMarkup(journeyRating, "inline");
 }
 
 function getPriceMeter(priceRating) {
@@ -453,7 +470,9 @@ export function initMap(config) {
 
   dataset.forEach((d) => {
     const item = d._item || {};
-    const ctx = buildContext(item);
+    const ctx = buildContext(item, d.slug);
+    const tier = getJourneyTier(item.journey_rating);
+    const markerMetrics = JOURNEY_MARKER_METRICS[tier];
 
     const popupHtml = popupTpl
       ? renderTemplate(popupTpl, ctx)
@@ -463,7 +482,19 @@ export function initMap(config) {
       ? renderTemplate(tooltipTpl, ctx)
       : `<strong>${ctx.name}</strong>`;
 
-    const m = L.marker([d.lat, d.lng], { icon: makeJourneyIcon(item.journey_rating) });
+    const m = L.marker([d.lat, d.lng], {
+      icon: L.divIcon({
+        className: "journey-marker-icon",
+        html: getJourneyPinMarkup(tier, "map"),
+        iconSize: markerMetrics.iconSize,
+        iconAnchor: markerMetrics.iconAnchor,
+        popupAnchor: markerMetrics.popupAnchor,
+      }),
+      alt: `${item.name || "Establishment"} (${getJourneyLabel(tier)})`,
+      riseOnHover: true,
+      title: item.name || "",
+      zIndexOffset: markerMetrics.zIndexOffset,
+    });
     m.bindTooltip(tooltipHtml, { sticky: true });
     m.bindPopup(popupHtml, { maxWidth: 340 });
 

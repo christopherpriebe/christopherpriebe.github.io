@@ -11,150 +11,179 @@
 :root
   --tier-ink: 222 47% 18%
   --tier-ink-strong: 222 55% 14%
-  --tier-accent: 222 70% 55%
+  --tier-accent: 202 79% 47%
+  --tier-highlight: 39 94% 57%
+  --tier-surface: 0 0% 100%
+  --tier-surface-soft: 210 33% 98%
 
-$pin-size: 24px
-$head-top: 5px
-$head-size: 13px
+.journey-marker-icon
+    background: transparent
+    border: 0
 
-=ring($size, $width, $color, $alpha: 1)
-  width: $size
-  height: $size
-  border: $width solid hsl($color / #{$alpha})
-  border-radius: 999px
-  box-sizing: border-box
-
-=halo($color, $a1: .20, $a2: .10)
-  box-shadow: 0 0 0 4px hsl($color / #{$a1}), 0 0 0 10px hsl($color / #{$a2})
-
-.fa-tier
-  position: relative
-  display: inline-block
-  line-height: 1
-  transform: translate(-50%, -100%)
-  cursor: pointer
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,.18))
-
-  // IMPORTANT:
-  // Do NOT use `isolation: isolate` here.
-  // We *want* negative z-index rings to fall behind other markers too.
-  z-index: 0
-
-  > i
+.journey-pin
+    --pin-scale: 1
+    --pin-head: 20px
+    --pin-tail: 10px
+    --pin-ring: 0px
+    --pin-ring-width: 0px
+    --pin-border-width: 2px
+    --pin-border: hsl(var(--tier-ink))
+    --pin-fill: hsl(var(--tier-surface))
+    --pin-core: hsl(var(--tier-ink))
+    --pin-core-ring: hsl(var(--tier-surface) / .96)
+    --pin-aura-opacity: 0
+    --pin-ring-color: transparent
+    --pin-glow: transparent
     position: relative
-    z-index: 2
-    font-size: $pin-size
-    color: hsl(var(--tier-ink))
+    display: inline-block
+    width: calc((var(--pin-head) + var(--pin-ring) + 14px) * var(--pin-scale))
+    height: calc((var(--pin-head) + var(--pin-tail) + var(--pin-ring) + 12px) * var(--pin-scale))
+    line-height: 1
+    overflow: visible
+    pointer-events: none
 
-  &::before,
-  &::after
-    content: ""
+.journey-pin__aura,
+.journey-pin__body,
+.journey-pin__core
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, opacity .18s ease
+
+.journey-pin__aura
     position: absolute
     left: 50%
-    top: $head-top
-    transform: translateX(-50%)
-    pointer-events: none
-    display: none
+    top: calc(2px * var(--pin-scale))
+    width: calc((var(--pin-head) + var(--pin-ring)) * var(--pin-scale))
+    height: calc((var(--pin-head) + var(--pin-ring)) * var(--pin-scale))
+    margin-left: calc(((var(--pin-head) + var(--pin-ring)) * var(--pin-scale)) / -2)
+    border: calc(var(--pin-ring-width) * var(--pin-scale)) solid var(--pin-ring-color)
+    border-radius: 999px
+    box-sizing: border-box
+    box-shadow: 0 0 0 calc(6px * var(--pin-scale)) var(--pin-glow)
+    opacity: var(--pin-aura-opacity)
 
-    // The fix: rings are always behind pins (even other pins)
-    z-index: -1
+.journey-pin__body
+    position: absolute
+    left: 50%
+    top: calc(4px * var(--pin-scale))
+    width: calc(var(--pin-head) * var(--pin-scale))
+    height: calc(var(--pin-head) * var(--pin-scale))
+    margin-left: calc((var(--pin-head) * var(--pin-scale)) / -2)
+    border: calc(var(--pin-border-width) * var(--pin-scale)) solid var(--pin-border)
+    border-radius: 999px
+    background: var(--pin-fill)
+    box-sizing: border-box
+    box-shadow: 0 calc(8px * var(--pin-scale)) calc(16px * var(--pin-scale)) rgba(15, 23, 42, .18)
 
-// Tier 0 — pin only
-.fa-tier.t0
-  &::before,
-  &::after
-    display: none
+    &::after
+        content: ""
+        position: absolute
+        left: 50%
+        bottom: calc(var(--pin-tail) * var(--pin-scale) * -.42)
+        width: calc(var(--pin-tail) * var(--pin-scale))
+        height: calc(var(--pin-tail) * var(--pin-scale))
+        margin-left: calc((var(--pin-tail) * var(--pin-scale)) / -2)
+        border-right: calc(var(--pin-border-width) * var(--pin-scale)) solid var(--pin-border)
+        border-bottom: calc(var(--pin-border-width) * var(--pin-scale)) solid var(--pin-border)
+        border-bottom-right-radius: calc(3px * var(--pin-scale))
+        background: var(--pin-fill)
+        box-sizing: border-box
+        transform: rotate(45deg)
+        z-index: -1
 
-// Tier 1 — single ring
-.fa-tier.t1
-  &::before
-    display: block
-    +ring($head-size, 2px, var(--tier-ink), 1)
-
-// Tier 2 — double ring + stronger ink
-.fa-tier.t2
-  > i
-    color: hsl(var(--tier-ink-strong))
-
-  &::before
-    display: block
-    +ring($head-size, 2px, var(--tier-ink-strong), 1)
-
-  &::after
-    display: block
-    top: $head-top - 3px
-    +ring($head-size + 8px, 2px, var(--tier-ink-strong), .95)
-
-// Tier 3 — landmark halo + accent outer ring
-.fa-tier.t3
-  > i
-    color: hsl(var(--tier-ink-strong))
-
-  &::before
-    display: block
-    +ring($head-size, 2px, var(--tier-ink-strong), 1)
-
-  &::after
-    display: block
-    top: $head-top - 4px
-    +ring($head-size + 10px, 2px, var(--tier-accent), .42)
-    +halo(var(--tier-accent), .18, .10)
-
-// Hover emphasis (still behind pins)
-.fa-tier.t1:hover::before
-  border-color: hsl(var(--tier-accent) / .55)
-
-.fa-tier.t2:hover::after
-  border-color: hsl(var(--tier-accent) / .45)
-
-.fa-tier.t3:hover::after
-  border-color: hsl(var(--tier-accent) / .60)
-  +halo(var(--tier-accent), .28, .14)
-
-.fa-tier:focus-visible
-  outline: none
-
-
-
-
-.jr-marker
-    width: 16px
-    height: 16px
-    border-radius: 50%
-    border: 2px solid #111
-    background: #fff
-    box-shadow: 0 1px 3px rgba(0,0,0,.25)
-
-.jr-marker.jr-0
-    width: 10px
-    height: 10px
-    border-width: 1px
-    opacity: 0.75
-
-.jr-marker.jr-1
-    background: #fff
-
-.jr-marker.jr-2
-    background: $f-and-b-establishment-jr-2
-    position: relative
-
-.jr-marker.jr-2:after
-    content: ""
+.journey-pin__core
     position: absolute
     left: 50%
     top: 50%
-    width: 6px
-    height: 6px
-    margin-left: -3px
-    margin-top: -3px
+    width: calc(var(--pin-core-size) * var(--pin-scale))
+    height: calc(var(--pin-core-size) * var(--pin-scale))
+    margin-left: calc((var(--pin-core-size) * var(--pin-scale)) / -2)
+    margin-top: calc((var(--pin-core-size) * var(--pin-scale)) / -2)
     border-radius: 50%
-    background: #111
+    background: var(--pin-core)
+    box-shadow: 0 0 0 calc(3px * var(--pin-scale)) var(--pin-core-ring)
 
-.jr-marker.jr-3
-    width: 20px
-    height: 20px
-    color: $f-and-b-establishment-jr-3
-    padding: 2px
+.journey-pin--map
+    display: block
+
+.journey-pin--inline
+    --pin-scale: .72
+    vertical-align: middle
+    margin: 0 .18em 0 .05em
+
+.journey-pin--list
+    --pin-scale: .56
+    margin: 0
+
+.journey-pin--t0
+    --pin-head: 16px
+    --pin-tail: 8px
+    --pin-core-size: 5px
+    --pin-border-width: 1.75px
+    --pin-border: hsl(var(--tier-ink) / .78)
+    --pin-fill: hsl(var(--tier-surface-soft))
+    --pin-core: hsl(var(--tier-ink) / .76)
+
+.journey-pin--t1
+    --pin-head: 20px
+    --pin-tail: 10px
+    --pin-core-size: 6px
+
+.journey-pin--t2
+    --pin-head: 26px
+    --pin-tail: 12px
+    --pin-core-size: 7px
+    --pin-border: hsl(var(--tier-ink-strong))
+    --pin-fill: linear-gradient(180deg, hsl(var(--tier-surface)) 0%, hsl(210 50% 97%) 100%)
+    --pin-core: hsl(var(--tier-accent))
+    --pin-ring: 10px
+    --pin-ring-width: 2px
+    --pin-ring-color: hsl(var(--tier-accent) / .45)
+    --pin-glow: hsl(var(--tier-accent) / .12)
+    --pin-aura-opacity: 1
+
+.journey-pin--t3
+    --pin-head: 32px
+    --pin-tail: 14px
+    --pin-core-size: 8px
+    --pin-border: hsl(var(--tier-ink-strong))
+    --pin-fill: linear-gradient(180deg, hsl(var(--tier-ink-strong)) 0%, hsl(218 40% 24%) 100%)
+    --pin-core: hsl(var(--tier-highlight))
+    --pin-core-ring: hsl(var(--tier-surface) / .92)
+    --pin-ring: 16px
+    --pin-ring-width: 2px
+    --pin-ring-color: hsl(var(--tier-highlight) / .68)
+    --pin-glow: hsl(var(--tier-highlight) / .20)
+    --pin-aura-opacity: 1
+
+.journey-pin--t3 .journey-pin__body
+    box-shadow: 0 calc(10px * var(--pin-scale)) calc(20px * var(--pin-scale)) rgba(15, 23, 42, .24)
+
+.leaflet-marker-icon:hover .journey-pin__aura,
+.leaflet-marker-icon:focus .journey-pin__aura
+    box-shadow: 0 0 0 calc(8px * var(--pin-scale)) var(--pin-glow)
+
+.leaflet-marker-icon:hover .journey-pin__body,
+.leaflet-marker-icon:focus .journey-pin__body
+    transform: translateY(calc(-1px * var(--pin-scale)))
+
+.fnb-tier-list
+    margin: 12px 0 0
+    padding: 0
+
+    > li
+        display: flex
+        align-items: flex-start
+        gap: 10px
+        margin-bottom: 12px
+
+    .journey-pin--inline
+        --pin-scale: .82
+        flex: 0 0 auto
+        margin: 0
+
+.map-card__meta
+    display: inline-flex
+    align-items: center
+    gap: 6px
 
 .leaflet-popup-content
     margin: 16px
