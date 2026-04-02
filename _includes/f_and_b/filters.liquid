@@ -6,24 +6,50 @@
     </div>
 
     <div class="row">
-      <div class="col-xs-6">
-        <select id="filter-journey" class="form-control">
-          <option value="">All designations</option>
-          <option value="0">Selected</option>
-          <option value="1">Tier 1</option>
-          <option value="2">Tier 2</option>
-          <option value="3">Tier 3</option>
-        </select>
+      <div class="col-xs-12">
+        <div class="fnb-filter-group">
+          <div class="fnb-filter-group__label">Designation</div>
+          <input id="filter-journey" type="hidden" value="">
+          <div class="fnb-toggle-row" data-filter-group="filter-journey" data-filter-multi="true" role="group" aria-label="Filter by designation">
+            <button type="button" class="fnb-filter-chip fnb-filter-chip--icon" data-filter-value="0" aria-label="Selected" title="Selected" aria-pressed="false">
+              <span class="journey-pin journey-pin--inline journey-pin--t0" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="fnb-filter-chip fnb-filter-chip--icon" data-filter-value="1" aria-label="Worth the visit" title="Worth the visit" aria-pressed="false">
+              <span class="journey-pin journey-pin--inline journey-pin--t1" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="fnb-filter-chip fnb-filter-chip--icon" data-filter-value="2" aria-label="Worth planning around" title="Worth planning around" aria-pressed="false">
+              <span class="journey-pin journey-pin--inline journey-pin--t2" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="fnb-filter-chip fnb-filter-chip--icon" data-filter-value="3" aria-label="Worth the trip" title="Worth the trip" aria-pressed="false">
+              <span class="journey-pin journey-pin--inline journey-pin--t3" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
       </div>
-      <div class="col-xs-6">
-        <select id="filter-price" class="form-control">
-          <option value="">Any price</option>
-          <option value="1">Price 1</option>
-          <option value="2">Price 2</option>
-          <option value="3">Price 3</option>
-          <option value="4">Price 4</option>
-          <option value="5">Price 5</option>
-        </select>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="col-xs-12">
+        <div class="fnb-filter-group">
+          <div class="fnb-filter-group__label">Price</div>
+          <div class="fnb-price-filter-row">
+            <input id="filter-price" type="hidden" value="">
+            <div class="fnb-price-filter" data-filter-group="filter-price" data-filter-fill-through="true" role="group" aria-label="Filter by price">
+              {% for p in (1..5) %}
+                <button type="button" class="fnb-price-filter__square" data-filter-value="{{ p }}" aria-label="Up to price {{ p }}" title="Up to price {{ p }}" aria-pressed="false"></button>
+              {% endfor %}
+            </div>
+            <input id="filter-price-mode" type="hidden" value="">
+            <div class="fnb-toggle-row fnb-toggle-row--compact" data-filter-group="filter-price-mode" role="group" aria-label="Price filter mode">
+              <button type="button" class="fnb-filter-chip fnb-filter-chip--mode" data-filter-value="eq" aria-pressed="false">
+                Exactly
+              </button>
+              <button type="button" class="fnb-filter-chip fnb-filter-chip--mode" data-filter-value="gte" aria-pressed="false">
+                At least
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -55,10 +81,12 @@
       </div>
     </div>
 
-    <div class="checkbox" style="margin-top:10px;">
-      <label><input id="filter-value" type="checkbox"> Value recognition only</label>
-    </div>
+    <div class="fnb-filter-actions">
+      <div class="checkbox" style="margin:0;">
+        <label><input id="filter-value" type="checkbox"> Value recognition only</label>
+      </div>
 
-    <button id="filter-clear" type="button" class="btn btn-default btn-xs">Clear</button>
+      <button id="filter-clear" type="button" class="btn btn-default btn-xs">Clear</button>
+    </div>
   </div>
 </div>

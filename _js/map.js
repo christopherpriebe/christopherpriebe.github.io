@@ -182,17 +182,20 @@ function getJourneySymbol(journeyRating) {
   return getJourneyPinMarkup(journeyRating, "inline");
 }
 
-function getPriceMeter(priceRating) {
+function getPriceMeter(priceRating, { showLabel = true } = {}) {
   const n = Math.max(0, Math.min(5, parseInt(priceRating, 10) || 0));
   if (!n) return "";
 
-  let out = "Price: ";
-  for (let i = 1; i <= 5; i++) {
-    out += (i <= n)
-      ? '<i class="fa-solid fa-square" style="margin-right:2px;"></i>'
-      : '<i class="fa-regular fa-square" style="margin-right:2px;"></i>';
-  }
-  return out;
+  const squares = Array.from({ length: 5 }, (_, i) => (
+    `<span class="price-meter__square${i < n ? " is-filled" : ""}" aria-hidden="true"></span>`
+  )).join("");
+
+  return `
+    <span class="price-meter" aria-label="Price ${n} out of 5">
+      ${showLabel ? '<span class="price-meter__label">Price</span>' : ""}
+      <span class="price-meter__track">${squares}</span>
+    </span>
+  `.trim();
 }
 
 function normalizeYears(years) {
@@ -337,16 +340,87 @@ function getListItems(listId) {
   return Array.prototype.slice.call(document.querySelectorAll(`#${listId} .map-card`));
 }
 
+function parseMultiFilterValue(value) {
+  return String(value || "")
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function getToggleFilterDefaultValue(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return "";
+  return input.getAttribute("data-filter-default") || input.defaultValue || "";
+}
+
+function syncToggleFilterGroup(inputId) {
+  const input = document.getElementById(inputId);
+  const group = document.querySelector(`[data-filter-group="${inputId}"]`);
+  if (!input || !group) return;
+
+  const isMulti = group.getAttribute("data-filter-multi") === "true";
+  const fillThrough = group.getAttribute("data-filter-fill-through") === "true";
+  const selected = isMulti ? new Set(parseMultiFilterValue(input.value)) : null;
+  const value = input.value || "";
+  const numericValue = parseInt(value, 10);
+  group.querySelectorAll("[data-filter-value]").forEach((button) => {
+    const buttonValue = button.getAttribute("data-filter-value") || "";
+    const buttonNumericValue = parseInt(buttonValue, 10);
+    const active = isMulti
+      ? selected.has(buttonValue)
+      : fillThrough && Number.isFinite(numericValue) && Number.isFinite(buttonNumericValue)
+        ? buttonNumericValue <= numericValue
+        : buttonValue === value;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function wireToggleFilter(inputId, onChange) {
+  const input = document.getElementById(inputId);
+  const group = document.querySelector(`[data-filter-group="${inputId}"]`);
+  if (!input || !group) return;
+
+  const isMulti = group.getAttribute("data-filter-multi") === "true";
+  syncToggleFilterGroup(inputId);
+
+  group.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-filter-value]");
+    if (!button || !group.contains(button)) return;
+
+    const clickedValue = button.getAttribute("data-filter-value") || "";
+    let nextValue = clickedValue;
+
+    if (isMulti) {
+      const selected = new Set(parseMultiFilterValue(input.value));
+      if (selected.has(clickedValue)) selected.delete(clickedValue);
+      else if (clickedValue) selected.add(clickedValue);
+      nextValue = Array.from(selected).sort().join(" ");
+    } else {
+      const currentValue = input.value || "";
+      nextValue = (clickedValue && clickedValue === currentValue) ? "" : clickedValue;
+    }
+
+    input.value = nextValue;
+    syncToggleFilterGroup(inputId);
+    onChange();
+  });
+}
+
 function applyFilters(config, markerLayer, markerBySlug) {
   const qEl = document.getElementById("filter-q");
   const journeyEl = document.getElementById("filter-journey");
   const priceEl = document.getElementById("filter-price");
+  const priceModeEl = document.getElementById("filter-price-mode");
   const cuisineEl = document.getElementById("filter-cuisine");
   const valueEl = document.getElementById("filter-value");
 
   const q = (qEl ? qEl.value : "").trim().toLowerCase();
   const journey = journeyEl ? journeyEl.value : "";
+  const journeySelections = new Set(parseMultiFilterValue(journey));
   const price = priceEl ? priceEl.value : "";
+  const priceValue = parseInt(price, 10);
+  const priceMode = priceModeEl ? priceModeEl.value : "";
   const cuisine = cuisineEl ? cuisineEl.value : "";
   const valueOnly = !!(valueEl && valueEl.checked);
 
@@ -366,8 +440,14 @@ function applyFilters(config, markerLayer, markerBySlug) {
 
     let ok = true;
 
-    if (journey && elJourney !== journey) ok = false;
-    if (price && elPrice !== price) ok = false;
+    if (journeySelections.size && !journeySelections.has(elJourney)) ok = false;
+    if (price && Number.isFinite(priceValue)) {
+      const elPriceValue = parseInt(elPrice, 10);
+      if (!Number.isFinite(elPriceValue)) ok = false;
+      else if (priceMode === "eq" && elPriceValue !== priceValue) ok = false;
+      else if (priceMode === "gte" && elPriceValue < priceValue) ok = false;
+      else if (!priceMode && elPriceValue > priceValue) ok = false;
+    }
     if (valueOnly && !elValue) ok = false;
 
     if (cuisine) {
@@ -392,7 +472,7 @@ function applyFilters(config, markerLayer, markerBySlug) {
 }
 
 function wireFilters(config, markerLayer, markerBySlug) {
-  const ids = ["filter-q", "filter-journey", "filter-price", "filter-cuisine", "filter-value"];
+  const ids = ["filter-q", "filter-cuisine", "filter-value"];
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -401,20 +481,29 @@ function wireFilters(config, markerLayer, markerBySlug) {
     el.addEventListener(evt, () => applyFilters(config, markerLayer, markerBySlug));
   });
 
+  wireToggleFilter("filter-journey", () => applyFilters(config, markerLayer, markerBySlug));
+  wireToggleFilter("filter-price", () => applyFilters(config, markerLayer, markerBySlug));
+  wireToggleFilter("filter-price-mode", () => applyFilters(config, markerLayer, markerBySlug));
+
   const clearBtn = document.getElementById("filter-clear");
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
       const q = document.getElementById("filter-q");
       const j = document.getElementById("filter-journey");
       const p = document.getElementById("filter-price");
+      const pm = document.getElementById("filter-price-mode");
       const c = document.getElementById("filter-cuisine");
       const v = document.getElementById("filter-value");
 
       if (q) q.value = "";
       if (j) j.value = "";
       if (p) p.value = "";
+      if (pm) pm.value = getToggleFilterDefaultValue("filter-price-mode");
       if (c) c.value = "";
       if (v) v.checked = false;
+      syncToggleFilterGroup("filter-journey");
+      syncToggleFilterGroup("filter-price");
+      syncToggleFilterGroup("filter-price-mode");
 
       applyFilters(config, markerLayer, markerBySlug);
     });
