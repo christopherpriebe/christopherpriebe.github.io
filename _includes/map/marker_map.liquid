@@ -38,19 +38,22 @@
 
   {% if has_sidebar %}
     <div class="col-sm-4">
-      {% if include.filters_include %}
-        {% include {{ include.filters_include }} %}
-      {% endif %}
+      <div class="map-sidebar-column">
+        {% if include.filters_include %}
+          <div class="map-sidebar-filters">
+            {% include {{ include.filters_include }} %}
+          </div>
+        {% endif %}
 
-      {% if include.list_include %}
-        <div class="map-sidebar list-group"
-             id="{{ list_id }}"
-             style="max-height:70vh;overflow-y:auto;">
-          {%- for item in items -%}
-            {%- include {{ include.list_include }} item=item -%}
-          {%- endfor -%}
-        </div>
-      {% endif %}
+        {% if include.list_include %}
+          <div class="map-sidebar list-group map-sidebar-list"
+               id="{{ list_id }}">
+            {%- for item in items -%}
+              {%- include {{ include.list_include }} item=item -%}
+            {%- endfor -%}
+          </div>
+        {% endif %}
+      </div>
     </div>
   {% endif %}
 </div>

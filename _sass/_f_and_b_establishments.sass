@@ -164,6 +164,31 @@
     align-items: center
     gap: 6px
 
+.map-sidebar-column
+    display: flex
+    flex-direction: column
+    gap: 12px
+
+.map-sidebar-filters .panel
+    margin-bottom: 0
+
+.map-sidebar-list
+    margin-bottom: 0
+    background: #fff
+    border: 1px solid #ddd
+    border-radius: 10px
+    overflow: hidden
+
+@media (min-width: 768px)
+    .map-sidebar-column
+        height: 70vh
+        min-height: 420px
+
+    .map-sidebar-list
+        flex: 1 1 auto
+        min-height: 0
+        overflow-y: auto
+
 .leaflet-popup-content
     margin: 16px
     max-height: 360px
