@@ -15,18 +15,23 @@
   --tier-highlight: 39 94% 57%
   --tier-surface: 0 0% 100%
   --tier-surface-soft: 210 33% 98%
+  --pin-bulb-center-y-ratio: .328125
+  --pin-bulb-diameter-ratio: .6041667
 
 .journey-marker-icon
     background: transparent
     border: 0
+    display: flex
+    align-items: flex-start
+    justify-content: center
 
 .journey-pin
     --pin-scale: 1
-    --pin-head: 20px
-    --pin-tail: 10px
+    --pin-body-width: 22px
+    --pin-body-height: 30px
+    --pin-aura-size: calc(var(--pin-body-width) * var(--pin-bulb-diameter-ratio))
     --pin-ring: 0px
     --pin-ring-width: 0px
-    --pin-border-width: 2px
     --pin-border: hsl(var(--tier-ink))
     --pin-fill: hsl(var(--tier-surface))
     --pin-core: hsl(var(--tier-ink))
@@ -36,83 +41,49 @@
     --pin-glow: transparent
     position: relative
     display: inline-block
-    width: calc((var(--pin-head) + var(--pin-ring) + 14px) * var(--pin-scale))
-    height: calc((var(--pin-head) + var(--pin-tail) + var(--pin-ring) + 12px) * var(--pin-scale))
-    line-height: 1
+    width: calc(var(--pin-body-width) * var(--pin-scale))
+    height: calc(var(--pin-body-height) * var(--pin-scale))
+    line-height: 0
     overflow: visible
     pointer-events: none
 
 .journey-pin__aura,
-.journey-pin__body,
-.journey-pin__core
-    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, opacity .18s ease
+.journey-pin__svg
+    transition: transform .18s ease, filter .18s ease, opacity .18s ease
 
 .journey-pin__aura
     position: absolute
     left: 50%
-    top: calc(2px * var(--pin-scale))
-    width: calc((var(--pin-head) + var(--pin-ring)) * var(--pin-scale))
-    height: calc((var(--pin-head) + var(--pin-ring)) * var(--pin-scale))
-    margin-left: calc(((var(--pin-head) + var(--pin-ring)) * var(--pin-scale)) / -2)
+    top: calc((var(--pin-body-height) * var(--pin-bulb-center-y-ratio) * var(--pin-scale)) - (((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale)) / 2))
+    width: calc((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale))
+    height: calc((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale))
+    margin-left: calc(((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale)) / -2)
     border: calc(var(--pin-ring-width) * var(--pin-scale)) solid var(--pin-ring-color)
     border-radius: 999px
     box-sizing: border-box
     box-shadow: 0 0 0 calc(6px * var(--pin-scale)) var(--pin-glow)
     opacity: var(--pin-aura-opacity)
 
-.journey-pin__body
-    position: absolute
-    left: 50%
-    top: calc(4px * var(--pin-scale))
-    width: calc(var(--pin-head) * var(--pin-scale))
-    height: calc(var(--pin-head) * var(--pin-scale))
-    margin-left: calc((var(--pin-head) * var(--pin-scale)) / -2)
-    border: calc(var(--pin-border-width) * var(--pin-scale)) solid var(--pin-border)
-    border-radius: 999px
-    background: var(--pin-fill)
-    box-sizing: border-box
-    box-shadow: 0 calc(8px * var(--pin-scale)) calc(16px * var(--pin-scale)) rgba(15, 23, 42, .18)
-    z-index: 1
+.journey-pin__svg
+    display: block
+    width: 100%
+    height: 100%
+    overflow: visible
+    filter: drop-shadow(0 calc(2px * var(--pin-scale)) calc(4px * var(--pin-scale)) rgba(15, 23, 42, .18))
+    transform-origin: 50% 100%
 
-    &::before
-        content: ""
-        position: absolute
-        left: 50%
-        bottom: calc(var(--pin-border-width) * var(--pin-scale) * -.9)
-        width: calc(var(--pin-head) * var(--pin-scale) * .34)
-        height: calc(var(--pin-head) * var(--pin-scale) * .22)
-        margin-left: calc((var(--pin-head) * var(--pin-scale) * .34) / -2)
-        background: var(--pin-fill)
-        border-radius: 0 0 calc(6px * var(--pin-scale)) calc(6px * var(--pin-scale))
-        z-index: 1
-
-    &::after
-        content: ""
-        position: absolute
-        left: 50%
-        bottom: calc(var(--pin-tail) * var(--pin-scale) * -.42)
-        width: calc(var(--pin-tail) * var(--pin-scale))
-        height: calc(var(--pin-tail) * var(--pin-scale))
-        margin-left: calc((var(--pin-tail) * var(--pin-scale)) / -2)
-        border-right: calc(var(--pin-border-width) * var(--pin-scale)) solid var(--pin-border)
-        border-bottom: calc(var(--pin-border-width) * var(--pin-scale)) solid var(--pin-border)
-        border-bottom-right-radius: calc(3px * var(--pin-scale))
-        background: var(--pin-fill)
-        box-sizing: border-box
-        transform: rotate(45deg)
-        z-index: -1
+.journey-pin__shape
+    fill: var(--pin-fill)
+    stroke: var(--pin-border)
+    stroke-width: 4
+    stroke-linecap: round
+    stroke-linejoin: round
+    paint-order: stroke fill
 
 .journey-pin__core
-    position: absolute
-    left: 50%
-    top: 50%
-    width: calc(var(--pin-core-size) * var(--pin-scale))
-    height: calc(var(--pin-core-size) * var(--pin-scale))
-    margin-left: calc((var(--pin-core-size) * var(--pin-scale)) / -2)
-    margin-top: calc((var(--pin-core-size) * var(--pin-scale)) / -2)
-    border-radius: 50%
-    background: var(--pin-core)
-    box-shadow: 0 0 0 calc(3px * var(--pin-scale)) var(--pin-core-ring)
+    fill: var(--pin-core)
+    stroke: var(--pin-core-ring)
+    stroke-width: 3
 
 .journey-pin--map
     display: block
@@ -127,25 +98,21 @@
     margin: 0
 
 .journey-pin--t0
-    --pin-head: 16px
-    --pin-tail: 8px
-    --pin-core-size: 5px
-    --pin-border-width: 1.75px
+    --pin-body-width: 18px
+    --pin-body-height: 25px
     --pin-border: hsl(var(--tier-ink) / .78)
     --pin-fill: hsl(var(--tier-surface-soft))
     --pin-core: hsl(var(--tier-ink) / .76)
 
 .journey-pin--t1
-    --pin-head: 20px
-    --pin-tail: 10px
-    --pin-core-size: 6px
+    --pin-body-width: 22px
+    --pin-body-height: 30px
 
 .journey-pin--t2
-    --pin-head: 26px
-    --pin-tail: 12px
-    --pin-core-size: 7px
+    --pin-body-width: 28px
+    --pin-body-height: 38px
     --pin-border: hsl(var(--tier-ink-strong))
-    --pin-fill: linear-gradient(180deg, hsl(var(--tier-surface)) 0%, hsl(210 50% 97%) 100%)
+    --pin-fill: hsl(210 50% 97%)
     --pin-core: hsl(var(--tier-accent))
     --pin-ring: 10px
     --pin-ring-width: 2px
@@ -154,11 +121,10 @@
     --pin-aura-opacity: 1
 
 .journey-pin--t3
-    --pin-head: 32px
-    --pin-tail: 14px
-    --pin-core-size: 8px
-    --pin-border: hsl(var(--tier-ink-strong))
-    --pin-fill: linear-gradient(180deg, hsl(var(--tier-ink-strong)) 0%, hsl(218 40% 24%) 100%)
+    --pin-body-width: 34px
+    --pin-body-height: 45px
+    --pin-border: hsl(219 33% 14%)
+    --pin-fill: hsl(218 40% 24%)
     --pin-core: hsl(var(--tier-highlight))
     --pin-core-ring: hsl(var(--tier-surface) / .92)
     --pin-ring: 16px
@@ -167,15 +133,15 @@
     --pin-glow: hsl(var(--tier-highlight) / .20)
     --pin-aura-opacity: 1
 
-.journey-pin--t3 .journey-pin__body
-    box-shadow: 0 calc(10px * var(--pin-scale)) calc(20px * var(--pin-scale)) rgba(15, 23, 42, .24)
+.journey-pin--t3 .journey-pin__svg
+    filter: drop-shadow(0 calc(2px * var(--pin-scale)) calc(6px * var(--pin-scale)) rgba(15, 23, 42, .24))
 
 .leaflet-marker-icon:hover .journey-pin__aura,
 .leaflet-marker-icon:focus .journey-pin__aura
     box-shadow: 0 0 0 calc(8px * var(--pin-scale)) var(--pin-glow)
 
-.leaflet-marker-icon:hover .journey-pin__body,
-.leaflet-marker-icon:focus .journey-pin__body
+.leaflet-marker-icon:hover .journey-pin__svg,
+.leaflet-marker-icon:focus .journey-pin__svg
     transform: translateY(calc(-1px * var(--pin-scale)))
 
 .fnb-tier-list

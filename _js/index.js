@@ -10,8 +10,9 @@ import { fab } from "@fortawesome/free-brands-svg-icons";
 library.add(fas, far, fab);
 dom.watch();
 
-import { initMap } from "./map";
+import { enhanceJourneyPins, initMap } from "./map";
 document.addEventListener("DOMContentLoaded", () => {
+    enhanceJourneyPins();
     const queue = window.__MAP_INIT__ || [];
     queue.forEach((cfg) => initMap(cfg));
 });

@@ -95,6 +95,76 @@ const JOURNEY_MARKER_METRICS = {
   3: { iconSize: [62, 74], iconAnchor: [31, 45], popupAnchor: [0, -42], zIndexOffset: 300 },
 };
 
+// All pin geometry is expressed in a normalized SVG viewBox so one set of values
+// scales cleanly across every tier size.
+const JOURNEY_PIN_GEOMETRY = {
+  viewBoxWidth: 48,
+  viewBoxHeight: 64,
+  centerX: 24,
+  bulbCenterY: 21,
+  bulbRadius: 14.5,
+  shoulderY: 25,
+  waistControlX: 8,
+  waistControlY: 39,
+  tipControlX: 7,
+  tipControlY: 9,
+  tipY: 46.5,
+  coreY: 22,
+  coreR: 5.5,
+};
+
+function getJourneyPinPath({
+  centerX,
+  bulbCenterY,
+  bulbRadius,
+  shoulderY,
+  waistControlX,
+  waistControlY,
+  tipControlX,
+  tipControlY,
+  tipY,
+}) {
+  const shoulderOffset = Math.sqrt(
+    Math.max(0, (bulbRadius * bulbRadius) - ((shoulderY - bulbCenterY) ** 2))
+  );
+  const leftShoulderX = centerX - shoulderOffset;
+  const rightShoulderX = centerX + shoulderOffset;
+  const topY = bulbCenterY - bulbRadius;
+
+  return [
+    `M ${centerX} ${tipY}`,
+    `C ${centerX - tipControlX} ${tipY - tipControlY}, ${centerX - waistControlX} ${waistControlY}, ${leftShoulderX} ${shoulderY}`,
+    `A ${bulbRadius} ${bulbRadius} 0 0 1 ${centerX} ${topY}`,
+    `A ${bulbRadius} ${bulbRadius} 0 0 1 ${rightShoulderX} ${shoulderY}`,
+    `C ${centerX + waistControlX} ${waistControlY}, ${centerX + tipControlX} ${tipY - tipControlY}, ${centerX} ${tipY}`,
+    "Z",
+  ].join(" ");
+}
+
+const JOURNEY_PIN_PATH = getJourneyPinPath(JOURNEY_PIN_GEOMETRY);
+
+function getJourneyPinInnerMarkup() {
+  return `
+    <span class="journey-pin__aura" aria-hidden="true"></span>
+    <svg class="journey-pin__svg" viewBox="0 0 ${JOURNEY_PIN_GEOMETRY.viewBoxWidth} ${JOURNEY_PIN_GEOMETRY.viewBoxHeight}" aria-hidden="true" focusable="false">
+      <path class="journey-pin__shape" d="${JOURNEY_PIN_PATH}"></path>
+      <circle class="journey-pin__core" cx="${JOURNEY_PIN_GEOMETRY.centerX}" cy="${JOURNEY_PIN_GEOMETRY.coreY}" r="${JOURNEY_PIN_GEOMETRY.coreR}"></circle>
+    </svg>
+  `.trim();
+}
+
+export function enhanceJourneyPins(root = document) {
+  const nodes = (root.matches && root.matches(".journey-pin"))
+    ? [root]
+    : Array.from(root.querySelectorAll(".journey-pin"));
+
+  nodes.forEach((el) => {
+    if (el.getAttribute("data-journey-ready") === "1") return;
+    el.innerHTML = getJourneyPinInnerMarkup();
+    el.setAttribute("data-journey-ready", "1");
+  });
+}
+
 function getJourneyPinMarkup(journeyRating, variant = "map") {
   const tier = getJourneyTier(journeyRating);
   const attrs = (variant === "map")
@@ -102,11 +172,8 @@ function getJourneyPinMarkup(journeyRating, variant = "map") {
     : `role="img" aria-label="${escapeHtml(getJourneyLabel(tier))}"`;
 
   return `
-    <span class="journey-pin journey-pin--${variant} journey-pin--t${tier}" ${attrs}>
-      <span class="journey-pin__aura" aria-hidden="true"></span>
-      <span class="journey-pin__body" aria-hidden="true">
-        <span class="journey-pin__core"></span>
-      </span>
+    <span class="journey-pin journey-pin--${variant} journey-pin--t${tier}" data-journey-ready="1" ${attrs}>
+      ${getJourneyPinInnerMarkup()}
     </span>
   `.trim();
 }
