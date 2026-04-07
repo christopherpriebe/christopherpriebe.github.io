@@ -64,7 +64,7 @@
     {%- for item in items -%}
       {%- if item.coordinates and item.coordinates.size == 2 -%}
       {
-        slug: {{ item.slug | default: forloop.index | jsonify }},
+        slug: {{ item.slug | default: item.name | jsonify }},
         lat: {{ item.coordinates[0] }},
         lng: {{ item.coordinates[1] }},
         _item: {{ item | jsonify }}

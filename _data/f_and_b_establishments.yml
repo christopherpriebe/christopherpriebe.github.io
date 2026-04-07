@@ -351,7 +351,7 @@
   map_url: https://maps.app.goo.gl/mQyyNufGUacxp6o67
   awards:
     other: []
-  visits: [2024-12-32]
+  visits: [2024-12-31]
   last_updated: 2026-02-20
 - name: Siamo Napoli
   slug: siamo_napoli_north_park
@@ -924,7 +924,7 @@
   city: Austin
   state: Texas
   country: United States of America
-  cuisines: ["American"]
+  cuisines: ["american"]
   price_rating: 3
   website: https://www.barleyswine.com/
   reservation_url: https://www.exploretock.com/barleyswine
@@ -932,7 +932,7 @@
   awards:
     michelin:
       stars: 1
-      bib: true
+      bib: false
       green: false
       years_of_1_star: [2025, 2026]
       years_of_2_stars: []

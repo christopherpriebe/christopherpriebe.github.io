@@ -5,16 +5,16 @@
 {%- assign card_description = include.description | default: card.description -%}
 
 <div class="col-xs-12 col-md-4 icon-card-col">
-    <a class="icon-card-link" href="{{ card_url }}">
+    <a class="icon-card-link" href="{{ card_url | escape }}">
         <div class="panel panel-default hover-shadow-panel icon-card">
             <div class="panel-heading projects-panel-head text-center">
-                <i class="{{ card_icon }} icon-card-icon" aria-hidden="true"></i>
+                <i class="{{ card_icon | escape }} icon-card-icon" aria-hidden="true"></i>
             </div>
             <div class="panel-body icon-card-body">
                 {% if card_title %}
-                    <p class="icon-card-title">{{ card_title }}</p>
+                    <p class="icon-card-title">{{ card_title | escape }}</p>
                 {% endif %}
-                <p>{{ card_description }}</p>
+                <p>{{ card_description | escape }}</p>
             </div>
         </div>
     </a>
