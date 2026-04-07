@@ -1,0 +1,2509 @@
+<!DOCTYPE html>
+<html lang="en-US"><head>
+    <!-- Required meta tags -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+
+    <!-- Link main CSS -->
+    <link rel="stylesheet" href="/assets/css/main.css">
+
+    <!-- Link custom CSS -->
+    <link rel="stylesheet" href="/assets/css/style.css">
+
+    <!-- Configure title element of the page -->
+    <title>
+        
+        
+            Christopher Priebe - Food & Beverage Establishments
+        
+        
+        
+    </title>
+</head>
+<body><header class="site-header">
+    <!-- Create navigation bar with Bootstrap 3 -->
+<nav id="navbar" class="navbar navbar-default">
+    <div class="container-fluid">
+         
+            <div class="navbar-header">
+                <a class="navbar-brand" href="/">Christopher Priebe</a>
+            </div>
+        
+        <ul class="nav navbar-nav navbar-right">
+             
+            
+                
+            
+                
+            
+                
+            
+                
+            
+                
+            
+                
+            
+                
+                    <li><a href=/about/>About</a></li>
+                
+            
+                
+                    <li><a href=/publications/>Publications</a></li>
+                
+            
+                
+                    <li><a href=/projects/>Projects</a></li>
+                
+            
+                
+                    <li><a href=/connect/>Connect</a></li>
+                
+            
+                
+                    <li><a href=/other/>Other</a></li>
+                
+            
+        </ul>
+    </div>
+</nav>
+
+</header>
+<main class="page-content" aria-label="Content">
+            <div class="container">
+    <div class="row">
+        <div class="col-xs-12">
+            <h1>Food & Beverage Establishments</h1>
+        </div>
+    </div>
+
+    
+  <template id="f-and-b-establishments-map-popup-template">
+    
+<div class="fnb-popup">
+  <div class="fnb-header">
+    <strong>{{name}}</strong> {{journey_symbol}}
+    <div class="muted">{{location}}</div>
+    <div class="muted">{{address}}</div>
+    {{cuisines_html}}
+    {{price_block}}
+    {{value_html}}
+  </div>
+
+  <div class="fnb-body">
+    {{awards_panel}}
+    {{summary_panel}}
+    {{links_block}}
+  </div>
+</div>
+
+
+  </template>
+
+
+
+  <template id="f-and-b-establishments-map-tooltip-template">
+    
+<strong>{{name}}</strong>
+
+
+  </template>
+
+
+<div class="row">
+  <div class="col-sm-8">
+    <!-- IMPORTANT: give the map a height -->
+    <div id="f-and-b-establishments-map" class="img-rounded" style="height:70vh;min-height:420px;"></div>
+
+    
+  </div>
+
+  
+    <div class="col-sm-4">
+      <div class="map-sidebar-column">
+        
+          <div class="map-sidebar-filters">
+            <div class="panel panel-default">
+  <div class="panel-heading"><strong>Filter</strong></div>
+  <div class="panel-body">
+    <div class="form-group">
+      <input id="filter-q" type="text" class="form-control" placeholder="Search name, city, neighborhood…">
+    </div>
+
+    <div class="row">
+      <div class="col-xs-12">
+        <div class="fnb-filter-group">
+          <div class="fnb-filter-group__label">Designation</div>
+          <input id="filter-journey" type="hidden" value="">
+          <div class="fnb-toggle-row" data-filter-group="filter-journey" data-filter-multi="true" role="group" aria-label="Filter by designation">
+            <button type="button" class="fnb-filter-chip fnb-filter-chip--icon" data-filter-value="0" aria-label="Selected" title="Selected" aria-pressed="false">
+              <span class="journey-pin journey-pin--inline journey-pin--t0" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="fnb-filter-chip fnb-filter-chip--icon" data-filter-value="1" aria-label="Worth the visit" title="Worth the visit" aria-pressed="false">
+              <span class="journey-pin journey-pin--inline journey-pin--t1" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="fnb-filter-chip fnb-filter-chip--icon" data-filter-value="2" aria-label="Worth planning around" title="Worth planning around" aria-pressed="false">
+              <span class="journey-pin journey-pin--inline journey-pin--t2" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="fnb-filter-chip fnb-filter-chip--icon" data-filter-value="3" aria-label="Worth the trip" title="Worth the trip" aria-pressed="false">
+              <span class="journey-pin journey-pin--inline journey-pin--t3" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="col-xs-12">
+        <div class="fnb-filter-group">
+          <div class="fnb-filter-group__label">Price</div>
+          <div class="fnb-price-filter-row">
+            <input id="filter-price" type="hidden" value="">
+            <div class="fnb-price-filter" data-filter-group="filter-price" data-filter-fill-through="true" role="group" aria-label="Filter by price">
+              
+                <button type="button" class="fnb-price-filter__square" data-filter-value="1" aria-label="Up to price 1" title="Up to price 1" aria-pressed="false"></button>
+              
+                <button type="button" class="fnb-price-filter__square" data-filter-value="2" aria-label="Up to price 2" title="Up to price 2" aria-pressed="false"></button>
+              
+                <button type="button" class="fnb-price-filter__square" data-filter-value="3" aria-label="Up to price 3" title="Up to price 3" aria-pressed="false"></button>
+              
+                <button type="button" class="fnb-price-filter__square" data-filter-value="4" aria-label="Up to price 4" title="Up to price 4" aria-pressed="false"></button>
+              
+                <button type="button" class="fnb-price-filter__square" data-filter-value="5" aria-label="Up to price 5" title="Up to price 5" aria-pressed="false"></button>
+              
+            </div>
+            <input id="filter-price-mode" type="hidden" value="">
+            <div class="fnb-toggle-row fnb-toggle-row--compact" data-filter-group="filter-price-mode" role="group" aria-label="Price filter mode">
+              <button type="button" class="fnb-filter-chip fnb-filter-chip--mode" data-filter-value="eq" aria-pressed="false">
+                Exactly
+              </button>
+              <button type="button" class="fnb-filter-chip fnb-filter-chip--mode" data-filter-value="gte" aria-pressed="false">
+                At least
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="col-xs-12">
+        <select id="filter-cuisine" class="form-control">
+          <option value="">All cuisines</option><option value="italian">Italian</option>
+          <option value="pizza">Pizza</option>
+          <option value="mexican">Mexican</option>
+          <option value="tacos">Tacos</option>
+          <option value="barbecue">BBQ</option>
+          <option value="sushi">Sushi</option>
+          <option value="japanese">Japanese</option>
+          <option value="thai">Thai</option>
+          <option value="chinese">Chinese</option>
+          <option value="korean">Korean</option>
+          <option value="vietnamese">Vietnamese</option>
+          <option value="indian">Indian</option>
+          <option value="french">French</option>
+          <option value="seafood">Seafood</option>
+          <option value="bakery">Bakery</option>
+          <option value="cafe">Cafe</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="fnb-filter-actions">
+      <div class="checkbox" style="margin:0;">
+        <label><input id="filter-value" type="checkbox"> Value recognition only</label>
+      </div>
+
+      <button id="filter-clear" type="button" class="btn btn-default btn-xs">Clear</button>
+    </div>
+  </div>
+</div>
+
+          </div>
+        
+
+        
+          <div class="map-sidebar list-group map-sidebar-list"
+               id="f-and-b-establishments-map-list"><a class="list-group-item map-card"
+   data-slug="another_broken_egg_cafe_west_lafayette"
+   data-name="Another Broken Egg Cafe"
+   data-city="West Lafayette"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="american breakfast">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Another Broken Egg Cafe</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">West Lafayette, Indiana&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">american, breakfast&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="bistro_501_lafayette"
+   data-name="Bistro 501"
+   data-city="Lafayette"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="1"
+   data-price="3"
+   data-value="0"
+   data-cuisines="french">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Bistro 501</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Lafayette, Indiana&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">french&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="east_end_grill_lafayette"
+   data-name="East End Grill"
+   data-city="Lafayette"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="1"
+   data-price="2"
+   data-value="0"
+   data-cuisines="american">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>East End Grill</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Lafayette, Indiana&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">american&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="yatagarasu_lafayette"
+   data-name="Yatagarasu"
+   data-city="Lafayette"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="japanese ramen">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Yatagarasu</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Lafayette, Indiana&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">japanese, ramen&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="lou_malnatis_naperville"
+   data-name="Lou Malnati&#39;s Pizzeria"
+   data-city="Naperville"
+   data-neighborhood="Naperville Park District"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="pizza">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Lou Malnati&#39;s Pizzeria</strong>
+      <span class="muted">
+         · Naperville Park District
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Naperville, Illinois&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">pizza&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="harrys_chocolate_shop_west_lafayette"
+   data-name="Harry&#39;s Chocolate Shop"
+   data-city="West Lafayette"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="1"
+   data-price="1"
+   data-value="0"
+   data-cuisines="dive_bar">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Harry&#39;s Chocolate Shop</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">West Lafayette, Indiana&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">dive_bar&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="bryant_food_and_drink_co_west_lafayette"
+   data-name="The Bryant Food and Drink Co."
+   data-city="West Lafayette"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="american">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>The Bryant Food and Drink Co.</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">West Lafayette, Indiana&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">american&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="yakitori_taisho_san_diego"
+   data-name="Yakitori Taisho"
+   data-city="San Diego"
+   data-neighborhood="Clairemont"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="japanese yakitori">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Yakitori Taisho</strong>
+      <span class="muted">
+         · Clairemont
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">japanese, yakitori&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="plumeria_university_heights"
+   data-name="Plumeria Vegetarian Restaurant"
+   data-city="San Diego"
+   data-neighborhood="University Heights"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="thai vegetarian vegan">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Plumeria Vegetarian Restaurant</strong>
+      <span class="muted">
+         · University Heights
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">thai, vegetarian, vegan&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="ciccia_osteria_san_diego"
+   data-name="Ciccia Osteria"
+   data-city="San Diego"
+   data-neighborhood="Barrio Logan"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="italian">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Ciccia Osteria</strong>
+      <span class="muted">
+         · Barrio Logan
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">italian&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="byblos_downtown_toronto"
+   data-name="Byblos Downtown"
+   data-city="Toronto"
+   data-neighborhood="Wellington Place"
+   data-country="Canada"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="mediterranean">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Byblos Downtown</strong>
+      <span class="muted">
+         · Wellington Place
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Toronto, Ontario&nbsp;· Canada</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">mediterranean&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="noto_edinburgh"
+   data-name="Noto"
+   data-city="Edinburgh"
+   data-neighborhood="Edinburgh New Town"
+   data-country="United Kingdom"
+   data-journey="1"
+   data-price="3"
+   data-value="0"
+   data-cuisines="asian fusion">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Noto</strong>
+      <span class="muted">
+         · Edinburgh New Town
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Edinburgh, Scotland&nbsp;· United Kingdom</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">asian, fusion&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="palmerston_edinburgh"
+   data-name="The Palmerston"
+   data-city="Edinburgh"
+   data-neighborhood="West End"
+   data-country="United Kingdom"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="european">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>The Palmerston</strong>
+      <span class="muted">
+         · West End
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Edinburgh, Scotland&nbsp;· United Kingdom</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">european&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="ee_nami_san_diego"
+   data-name="EE NAMI Tonkatsu Izakaya"
+   data-city="San Diego"
+   data-neighborhood="Clairemont"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="japanese tonkatsu">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>EE NAMI Tonkatsu Izakaya</strong>
+      <span class="muted">
+         · Clairemont
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">japanese, tonkatsu&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="el_preferido_palermo_buenos_aires"
+   data-name="El Preferido de Palermo"
+   data-city="Buenos Aires"
+   data-neighborhood="Palermo"
+   data-country="Argentina"
+   data-journey="1"
+   data-price="3"
+   data-value="0"
+   data-cuisines="argentine">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>El Preferido de Palermo</strong>
+      <span class="muted">
+         · Palermo
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Buenos Aires&nbsp;· Argentina</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">argentine&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="don_julio_palermo_buenos_aires"
+   data-name="Don Julio Parilla"
+   data-city="Buenos Aires"
+   data-neighborhood="Palermo"
+   data-country="Argentina"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="argentine steakhouse">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Don Julio Parilla</strong>
+      <span class="muted">
+         · Palermo
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Buenos Aires&nbsp;· Argentina</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">argentine, steakhouse&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="don_zoilo_buenos_aires"
+   data-name="Don Zoilo"
+   data-city="Buenos Aires"
+   data-neighborhood="Palermo"
+   data-country="Argentina"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="argentine steakhouse">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Don Zoilo</strong>
+      <span class="muted">
+         · Palermo
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Buenos Aires&nbsp;· Argentina</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">argentine, steakhouse&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="cocobang_san_francisco"
+   data-name="Cocobang"
+   data-city="San Francisco"
+   data-neighborhood="Tenderloin"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="korean">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Cocobang</strong>
+      <span class="muted">
+         · Tenderloin
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Francisco, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">korean&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="cesarina_san_diego"
+   data-name="Cesarina"
+   data-city="San Diego"
+   data-neighborhood="Ocean Beach"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="italian">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Cesarina</strong>
+      <span class="muted">
+         · Ocean Beach
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">italian&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="mansion_restaurant_dallas"
+   data-name="The Mansion Restaurant"
+   data-city="Dallas"
+   data-neighborhood="Oak Lawn"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="american">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>The Mansion Restaurant</strong>
+      <span class="muted">
+         · Oak Lawn
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Dallas, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">american&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="siamo_napoli_north_park"
+   data-name="Siamo Napoli"
+   data-city="San Diego"
+   data-neighborhood="North Park"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="italian pizza">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Siamo Napoli</strong>
+      <span class="muted">
+         · North Park
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">italian, pizza&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="its_raw_poke_shop_san_diego"
+   data-name="It&#39;s Raw Poke Shop"
+   data-city="San Diego"
+   data-neighborhood="Ocean Beach"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="hawaiian poke">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>It&#39;s Raw Poke Shop</strong>
+      <span class="muted">
+         · Ocean Beach
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">hawaiian, poke&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="mabels_gone_fishing_north_park"
+   data-name="Mabel&#39;s Gone Fishing"
+   data-city="San Diego"
+   data-neighborhood="North Park"
+   data-country="United States of America"
+   data-journey="1"
+   data-price="3"
+   data-value="0"
+   data-cuisines="seafood">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Mabel&#39;s Gone Fishing</strong>
+      <span class="muted">
+         · North Park
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">seafood&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="gelatoteca_suso_venice_rialto"
+   data-name="Gelatoteca Suso"
+   data-city="Venice"
+   data-neighborhood="Cannaregio"
+   data-country="Italy"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="gelato">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Gelatoteca Suso</strong>
+      <span class="muted">
+         · Cannaregio
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Venice, Veneto&nbsp;· Italy</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">gelato&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="estro_venice"
+   data-name="Estro"
+   data-city="Venice"
+   data-neighborhood="Dorsoduro"
+   data-country="Italy"
+   data-journey="1"
+   data-price="3"
+   data-value="0"
+   data-cuisines="italian venetian">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Estro</strong>
+      <span class="muted">
+         · Dorsoduro
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Venice, Veneto&nbsp;· Italy</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">italian, venetian&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="lido_84_lake_garda"
+   data-name="Lido 84"
+   data-city="Gardone Riviera"
+   data-neighborhood=""
+   data-country="Italy"
+   data-journey="2"
+   data-price="3"
+   data-value="0"
+   data-cuisines="italian">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Lido 84</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t2" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Gardone Riviera, Lombardia&nbsp;· Italy</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">italian&nbsp;·&nbsp; Price: 3</div>
+  </div><div style="margin-top:6px;">Lido 84 delivers thoughtful, minimalist fine dining through simple food, great service, and either a picturesque view of Lake Garda during lunch or a cozy atmosphere during dinner. The kitchen, led by executive chef Riccardo Camanini, produces carefully balanced dishes that blend Italian traditions with thoughtful, minimalist execution. A prime example of this is the signature dish, cacio e pepe en vessie, which features the classic Roman pasta dish prepared &quot;en vessie&quot; (in a pig&#39;s bladder, an ancient Roman technique), resulting in a unique &quot;super-al-dente&quot; texture. The occasional theatrical touches, such as the tableside presentations, felt at odds with the understated nature of the food. Still, the overall execution was impeccable, making Lido 84 a must-visit for anyone seeking a memorable meal in the Lake Garda region.
+</div></a>
+<a class="list-group-item map-card"
+   data-slug="emozioni_lake_garda"
+   data-name="Emozioni Ristorante"
+   data-city="Riva del Garda"
+   data-neighborhood=""
+   data-country="Italy"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="italian">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Emozioni Ristorante</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Riva del Garda, Veneto&nbsp;· Italy</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">italian&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="le_servite_lake_garda"
+   data-name="Osteria Le Servite"
+   data-city="Arco"
+   data-neighborhood=""
+   data-country="Italy"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="italian">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Osteria Le Servite</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Arco, Trentino-Alto Adige&nbsp;· Italy</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">italian&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="gelateria_la_romana_borgo_trento"
+   data-name="Gelateria La Romana"
+   data-city="Verona"
+   data-neighborhood="Borgo Trento"
+   data-country="Italy"
+   data-journey="1"
+   data-price="1"
+   data-value="0"
+   data-cuisines="gelato">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Gelateria La Romana</strong>
+      <span class="muted">
+         · Borgo Trento
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Verona, Veneto&nbsp;· Italy</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">gelato&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="tanners_prime_burgers_oceanside"
+   data-name="Tanner&#39;s Prime Burgers"
+   data-city="Oceanside"
+   data-neighborhood="South Oceanside"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="american burgers">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Tanner&#39;s Prime Burgers</strong>
+      <span class="muted">
+         · South Oceanside
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Oceanside, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">american, burgers&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="mikes_red_tacos_genesee"
+   data-name="Mike&#39;s Red Tacos"
+   data-city="San Diego"
+   data-neighborhood="Clairemont"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="mexican birria">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Mike&#39;s Red Tacos</strong>
+      <span class="muted">
+         · Clairemont
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">mexican, birria&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="rollin_smoke_bbq_anthony"
+   data-name="Rollin&#39; Smoke BBQ"
+   data-city="Anthony"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Rollin&#39; Smoke BBQ</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Anthony, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="jays_bbq_shack_abilene"
+   data-name="Jay&#39;s BBQ Shack"
+   data-city="Abilene"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Jay&#39;s BBQ Shack</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Abilene, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="interstellar_austin"
+   data-name="Interstellar BBQ"
+   data-city="Austin"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="1"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Interstellar BBQ</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="austin_street_creamery_fredericksburg"
+   data-name="Austin Street Creamery"
+   data-city="Fredericksburg"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="1"
+   data-price="1"
+   data-value="0"
+   data-cuisines="ice_cream">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Austin Street Creamery</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Fredericksburg, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">ice_cream&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="ottos_german_bistro_fredericksburg"
+   data-name="Otto&#39;s German Bistro"
+   data-city="Fredericksburg"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="german">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Otto&#39;s German Bistro</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Fredericksburg, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">german&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="eakers_fredricksburg"
+   data-name="Eaker Barbecue"
+   data-city="Fredericksburg"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="1"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Eaker Barbecue</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Fredericksburg, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="micklethwait_austin"
+   data-name="Micklethwait Barbecue"
+   data-city="Austin"
+   data-neighborhood="East MLK"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Micklethwait Barbecue</strong>
+      <span class="muted">
+         · East MLK
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="franklin_austin"
+   data-name="Franklin Barbecue"
+   data-city="Austin"
+   data-neighborhood="East Austin"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Franklin Barbecue</strong>
+      <span class="muted">
+         · East Austin
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="barbs_b_q_lockhart"
+   data-name="Barbs B Q"
+   data-city="Lockhart"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="2"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Barbs B Q</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t2" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Lockhart, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="leroy_and_lewis_austin"
+   data-name="LeRoy and Lewis Barbecue"
+   data-city="Austin"
+   data-neighborhood="South Austin"
+   data-country="United States of America"
+   data-journey="1"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>LeRoy and Lewis Barbecue</strong>
+      <span class="muted">
+         · South Austin
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="rollin_smoke_austin"
+   data-name="Rollin Smoke BBQ"
+   data-city="Austin"
+   data-neighborhood="East Cesar Chavez"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Rollin Smoke BBQ</strong>
+      <span class="muted">
+         · East Cesar Chavez
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="mum_foods_austin"
+   data-name="Mum Foods Smokehouse and Delicatessen"
+   data-city="Austin"
+   data-neighborhood="Pecan Springs-Springdale"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue deli">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Mum Foods Smokehouse and Delicatessen</strong>
+      <span class="muted">
+         · Pecan Springs-Springdale
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue, deli&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="parish_barbecue_austin"
+   data-name="Parish Barbecue"
+   data-city="Austin"
+   data-neighborhood="East MLK"
+   data-country="United States of America"
+   data-journey="1"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Parish Barbecue</strong>
+      <span class="muted">
+         · East MLK
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t1" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="louies_craft_buda"
+   data-name="Louie&#39;s Craft BBQ"
+   data-city="Buda"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Louie&#39;s Craft BBQ</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Buda, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="burnt_bean_co_seguin"
+   data-name="Burnt Bean Company"
+   data-city="Seguin"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="2"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Burnt Bean Company</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t2" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Seguin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="lucia_dallas"
+   data-name="Lucia"
+   data-city="Dallas"
+   data-neighborhood="Bishop Arts District"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="italian">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Lucia</strong>
+      <span class="muted">
+         · Bishop Arts District
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Dallas, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">italian&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="smokey_joes_dallas"
+   data-name="Smokey Joe&#39;s BBQ"
+   data-city="Dallas"
+   data-neighborhood="Wolf Creek"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Smokey Joe&#39;s BBQ</strong>
+      <span class="muted">
+         · Wolf Creek
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Dallas, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="barley_swine_austin"
+   data-name="Barley Swine"
+   data-city="Austin"
+   data-neighborhood="Brentwood"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="american">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Barley Swine</strong>
+      <span class="muted">
+         · Brentwood
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">american&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="nixtaco_roseville"
+   data-name="Nixtaco"
+   data-city="Roseville"
+   data-neighborhood="Meadow Oaks"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="mexican tacos">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Nixtaco</strong>
+      <span class="muted">
+         · Meadow Oaks
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Roseville, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">mexican, tacos&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="moreno_barbecue_southpark_meadows"
+   data-name="Moreno Barbecue"
+   data-city="Austin"
+   data-neighborhood="Southpark Meadows"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Moreno Barbecue</strong>
+      <span class="muted">
+         · Southpark Meadows
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="paprika_atx_austin"
+   data-name="Paprika ATX"
+   data-city="Austin"
+   data-neighborhood="Highland"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="mexican tacos">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Paprika ATX</strong>
+      <span class="muted">
+         · Highland
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">mexican, tacos&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="julies_noodles_austin"
+   data-name="Julie&#39;s Noodles"
+   data-city="Austin"
+   data-neighborhood="North Austin Civic Association"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="chinese">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Julie&#39;s Noodles</strong>
+      <span class="muted">
+         · North Austin Civic Association
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">chinese&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="meat_and_bread_austin"
+   data-name="Meat &amp; Bread"
+   data-city="Austin"
+   data-neighborhood="Downtown Austin"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="sandwiches">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Meat &amp; Bread</strong>
+      <span class="muted">
+         · Downtown Austin
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">sandwiches&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="cuantos_tacos_austin"
+   data-name="Cuantos Tacos"
+   data-city="Austin"
+   data-neighborhood="East Austin"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="mexican tacos">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Cuantos Tacos</strong>
+      <span class="muted">
+         · East Austin
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">mexican, tacos&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="discada_austin"
+   data-name="Discada"
+   data-city="Austin"
+   data-neighborhood="East Cesar Chavez"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="mexican tacos">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Discada</strong>
+      <span class="muted">
+         · East Cesar Chavez
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Austin, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">mexican, tacos&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="mot_hai_ba_dallas"
+   data-name="Một Hai Ba"
+   data-city="Dallas"
+   data-neighborhood="Lower Greenville"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="vietnamese fusion">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Một Hai Ba</strong>
+      <span class="muted">
+         · Lower Greenville
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Dallas, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">vietnamese, fusion&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="cattleack_farmers_branch"
+   data-name="Cattleack Barbecue"
+   data-city="Farmers Branch"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Cattleack Barbecue</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Farmers Branch, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="goldees_fort_worth"
+   data-name="Goldee&#39;s Barbecue"
+   data-city="Fort Worth"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="2"
+   data-price="2"
+   data-value="0"
+   data-cuisines="barbecue">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Goldee&#39;s Barbecue</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t2" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Fort Worth, Texas&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">barbecue&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="alma_argentina_kissimmee"
+   data-name="Alma Argentina"
+   data-city="Kissimmee"
+   data-neighborhood=""
+   data-country="United States of America"
+   data-journey="0"
+   data-price="2"
+   data-value="0"
+   data-cuisines="argentine">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Alma Argentina</strong>
+      <span class="muted">
+        
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Kissimmee, Florida&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">argentine&nbsp;·&nbsp; Price: 2</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="azuki_sushi_lounge_san_diego"
+   data-name="Azuki Sushi Lounge"
+   data-city="San Diego"
+   data-neighborhood="Bankers Hill"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="japanese sushi">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Azuki Sushi Lounge</strong>
+      <span class="muted">
+         · Bankers Hill
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">japanese, sushi&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="cowboy_star_san_diego"
+   data-name="Cowboy Star Restaurant and Butcher Shop"
+   data-city="San Diego"
+   data-neighborhood="East Village"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="american steakhouse">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Cowboy Star Restaurant and Butcher Shop</strong>
+      <span class="muted">
+         · East Village
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">San Diego, California&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">american, steakhouse&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="l_effervescence_tokyo"
+   data-name="L&#39;Effervescence"
+   data-city="Minato City"
+   data-neighborhood="Azabu"
+   data-country="Japan"
+   data-journey="2"
+   data-price="4"
+   data-value="0"
+   data-cuisines="french japanese haute">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>L&#39;Effervescence</strong>
+      <span class="muted">
+         · Azabu
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t2" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Minato City, Tokyo&nbsp;· Japan</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">french, japanese, haute&nbsp;·&nbsp; Price: 4</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="ramen_matsui_tokyo"
+   data-name="RAMEN MATSUI"
+   data-city="Shinjuku City"
+   data-neighborhood="Yotsuya"
+   data-country="Japan"
+   data-journey="0"
+   data-price="1"
+   data-value="0"
+   data-cuisines="japanese ramen">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>RAMEN MATSUI</strong>
+      <span class="muted">
+         · Yotsuya
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Shinjuku City, Tokyo&nbsp;· Japan</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">japanese, ramen&nbsp;·&nbsp; Price: 1</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="sushi_azabu_tokyo"
+   data-name="Sushi Azabu"
+   data-city="Minato City"
+   data-neighborhood="Azabudai"
+   data-country="Japan"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="japanese sushi omakase">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Sushi Azabu</strong>
+      <span class="muted">
+         · Azabudai
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Minato City, Tokyo&nbsp;· Japan</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">japanese, sushi, omakase&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+<a class="list-group-item map-card"
+   data-slug="rioja_denver"
+   data-name="Rioja"
+   data-city="Denver"
+   data-neighborhood="Union Station"
+   data-country="United States of America"
+   data-journey="0"
+   data-price="3"
+   data-value="0"
+   data-cuisines="">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>Rioja</strong>
+      <span class="muted">
+         · Union Station
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t0" aria-hidden="true"></span></div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">Denver, Colorado&nbsp;· United States of America</div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">&nbsp;·&nbsp; Price: 3</div>
+  </div></a>
+</div>
+        
+      </div>
+    </div>
+  
+</div>
+
+<script>
+  window.__MAP_DATA__ = window.__MAP_DATA__ || {};
+  window.__MAP_DATA__["f-and-b-establishments-map"] = [{
+        slug: "another_broken_egg_cafe_west_lafayette",
+        lat: 40.4307049,
+        lng: -86.913023,
+        _item: {"name":"Another Broken Egg Cafe","slug":"another_broken_egg_cafe_west_lafayette","coordinates":[40.4307049,-86.913023],"address":"516 Northwestern Ave #1500, West Lafayette, IN 47906","city":"West Lafayette","state":"Indiana","country":"United States of America","cuisines":["american","breakfast"],"price_rating":1,"website":"https://www.anotherbrokenegg.com/locations/west-lafayette-in/","map_url":"https://maps.app.goo.gl/752x6q3BqPxxSJwz9","awards":{"other":[]},"visits":["2018-06-17","2022-05-01"],"last_updated":"2026-02-20"}
+      },{
+        slug: "bistro_501_lafayette",
+        lat: 40.419071,
+        lng: -86.891691,
+        _item: {"name":"Bistro 501","slug":"bistro_501_lafayette","coordinates":[40.419071,-86.891691],"address":"501 Main St, Lafayette, IN 47901","city":"Lafayette","state":"Indiana","country":"United States of America","cuisines":["french"],"price_rating":3,"journey_rating":1,"website":"https://bistro501.com/","reservation_url":"https://tmt.spotapps.co/reservations?spot_id=114758","map_url":"https://maps.app.goo.gl/52tKbP9aKTkjc1bx9","awards":{"other":[]},"visits":["2018-08-13","2021-09-24"],"last_updated":"2026-02-20"}
+      },{
+        slug: "east_end_grill_lafayette",
+        lat: 40.4192075,
+        lng: -86.8855944,
+        _item: {"name":"East End Grill","slug":"east_end_grill_lafayette","coordinates":[40.4192075,-86.8855944],"address":"1016 Main St, Lafayette, IN 47901","city":"Lafayette","state":"Indiana","country":"United States of America","cuisines":["american"],"price_rating":2,"journey_rating":1,"website":"https://www.eastendmain.com/","reservation_url":"https://resy.com/cities/indianapolis-in/venues/east-end-grill","map_url":"https://maps.app.goo.gl/TtNvwvEHM2PQpcrk6","awards":{"other":[]},"visits":["2018-06-17","2018-10-13","2019-04-26","2019-10-20","2020-02-14"],"last_updated":"2026-02-20"}
+      },{
+        slug: "yatagarasu_lafayette",
+        lat: 40.4190731,
+        lng: -86.8914059,
+        _item: {"name":"Yatagarasu","slug":"yatagarasu_lafayette","coordinates":[40.4190731,-86.8914059],"address":"533 Main St, Lafayette, IN 47901","city":"Lafayette","state":"Indiana","country":"United States of America","cuisines":["japanese","ramen"],"price_rating":1,"website":"https://www.yatagarasuramen.com/","map_url":"https://maps.app.goo.gl/ZjQpJawrkTbB1oob6","awards":{"other":[]},"visits":["2019-06-23","2019-06-30","2019-07-07","2019-07-14","2019-07-21"],"last_updated":"2026-02-20"}
+      },{
+        slug: "lou_malnatis_naperville",
+        lat: 41.7731572,
+        lng: -88.1507558,
+        _item: {"name":"Lou Malnati's Pizzeria","slug":"lou_malnatis_naperville","coordinates":[41.7731572,-88.1507558],"address":"131 W Jefferson Ave, Naperville, IL 60540","neighborhood":"Naperville Park District","city":"Naperville","state":"Illinois","country":"United States of America","cuisines":["pizza"],"price_rating":2,"website":"https://www.loumalnatis.com/naperville-downtown/","reservation_url":"https://www.opentable.com/r/lou-malnatis-naperville","map_url":"https://maps.app.goo.gl/6hcQx4nQjrQvRVc76","awards":{"other":[]},"visits":["2019-07-20"],"last_updated":"2026-02-20"}
+      },{
+        slug: "harrys_chocolate_shop_west_lafayette",
+        lat: 40.4238116,
+        lng: -86.9090675,
+        _item: {"name":"Harry's Chocolate Shop","slug":"harrys_chocolate_shop_west_lafayette","coordinates":[40.4238116,-86.9090675],"address":"329 W State St, West Lafayette, IN 47906","city":"West Lafayette","state":"Indiana","country":"United States of America","cuisines":["dive_bar"],"price_rating":1,"journey_rating":1,"website":"https://www.harryschocolateshop.com/","map_url":"https://maps.app.goo.gl/UPpdrT9b1b5BV5Ws6","awards":{"other":[]},"visits":["2021-02-21","2021-08-13","2021-08-16","2021-08-19","2021-09-17","2021-10-09","2021-11-22","2021-12-16","2022-01-22","2022-01-28","2022-01-30","2022-05-03","2022-05-20"],"last_updated":"2026-02-20"}
+      },{
+        slug: "bryant_food_and_drink_co_west_lafayette",
+        lat: 40.4678247,
+        lng: -86.9406727,
+        _item: {"name":"The Bryant Food and Drink Co.","slug":"bryant_food_and_drink_co_west_lafayette","coordinates":[40.4678247,-86.9406727],"address":"1820 Sagamore Pkwy W, West Lafayette, IN 47906","city":"West Lafayette","state":"Indiana","country":"United States of America","cuisines":["american"],"price_rating":2,"website":"https://www.thebryantwl.com/","reservation_url":"https://resy.com/cities/indianapolis-in/venues/the-bryant-food-and-drink-company","map_url":"https://maps.app.goo.gl/6KaUtiuS9PKvZ8xe9","awards":{"other":[]},"visits":["2021-05-08"],"last_updated":"2026-02-20"}
+      },{
+        slug: "yakitori_taisho_san_diego",
+        lat: 32.8333424,
+        lng: -117.1790792,
+        _item: {"name":"Yakitori Taisho","slug":"yakitori_taisho_san_diego","coordinates":[32.8333424,-117.1790792],"address":"5185 Clairemont Mesa Blvd, San Diego, CA 92117","neighborhood":"Clairemont","city":"San Diego","state":"California","country":"United States of America","cuisines":["japanese","yakitori"],"price_rating":2,"website":"https://sandiegoyakyudori.com/page/taisho","reservation_url":"https://www.exploretock.com/yakitori-taisho-san-diego","map_url":"https://maps.app.goo.gl/6ZZXqNj8AacVBEFJ7","awards":{"other":[]},"visits":["2022-12-02"],"last_updated":"2026-02-20"}
+      },{
+        slug: "plumeria_university_heights",
+        lat: 32.7620968,
+        lng: -117.1461717,
+        _item: {"name":"Plumeria Vegetarian Restaurant","slug":"plumeria_university_heights","coordinates":[32.7620968,-117.1461717],"address":"4661 Park Blvd, San Diego, CA 92116","neighborhood":"University Heights","city":"San Diego","state":"California","country":"United States of America","cuisines":["thai","vegetarian","vegan"],"price_rating":2,"website":"https://myplumeria.com/","map_url":"https://maps.app.goo.gl/iCqj4kdFZkPq16rp9","awards":{"other":[]},"visits":["2023-02-03","2023-02-10","2023-08-30"],"last_updated":"2026-02-20"}
+      },{
+        slug: "ciccia_osteria_san_diego",
+        lat: 32.6974545,
+        lng: -117.1388611,
+        _item: {"name":"Ciccia Osteria","slug":"ciccia_osteria_san_diego","coordinates":[32.6974545,-117.1388611],"address":"2233 Logan Ave, San Diego, CA 92113","neighborhood":"Barrio Logan","city":"San Diego","state":"California","country":"United States of America","cuisines":["italian"],"price_rating":2,"website":"https://cicciasandiego.com/","reservation_url":"https://www.opentable.com/r/ciccia-osteria-san-diego","map_url":"https://maps.app.goo.gl/hWUdXSVptFAsLWJ16","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2021,2022,2023,2024,2025,2026],"years_of_green":[]},"other":[]},"visits":["2023-02-14","2023-04-16","2023-07-27","2023-09-01","2023-09-14","2024-01-27","2024-06-09","2024-09-21","2025-08-23"],"last_updated":"2026-02-20"}
+      },{
+        slug: "byblos_downtown_toronto",
+        lat: 43.6474564,
+        lng: -79.3881676,
+        _item: {"name":"Byblos Downtown","slug":"byblos_downtown_toronto","coordinates":[43.6474564,-79.3881676],"address":"11 Duncan St, Toronto, ON M5V 3M2, Canada","neighborhood":"Wellington Place","city":"Toronto","state":"Ontario","country":"Canada","cuisines":["mediterranean"],"price_rating":3,"website":"https://byblosdowntown.com/","reservation_url":"https://www.opentable.com/r/byblos-toronto","map_url":"https://maps.app.goo.gl/swmPAtTkAR95p1Qf8","awards":{"other":[]},"visits":["2023-10-30"],"last_updated":"2026-02-20"}
+      },{
+        slug: "noto_edinburgh",
+        lat: 55.954056,
+        lng: -3.1993458,
+        _item: {"name":"Noto","slug":"noto_edinburgh","coordinates":[55.954056,-3.1993458],"address":"47a Thistle St, Edinburgh EH2 1DY, United Kingdom","neighborhood":"Edinburgh New Town","city":"Edinburgh","state":"Scotland","country":"United Kingdom","cuisines":["asian","fusion"],"price_rating":3,"journey_rating":1,"website":"https://notoedinburgh.co.uk/","reservation_url":"https://www.sevenrooms.com/explore/notouk/reservations/create/search/","map_url":"https://maps.app.goo.gl/xxthu5tyrg4oXb149","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2021,2022,2023,2024,2025,2026],"years_of_green":[]},"other":[]},"visits":["2024-03-05"],"last_updated":"2026-02-20"}
+      },{
+        slug: "palmerston_edinburgh",
+        lat: 55.9472652,
+        lng: -3.2151071,
+        _item: {"name":"The Palmerston","slug":"palmerston_edinburgh","coordinates":[55.9472652,-3.2151071],"address":"1 Palmerston Pl, Edinburgh EH12 5AF, United Kingdom","neighborhood":"West End","city":"Edinburgh","state":"Scotland","country":"United Kingdom","cuisines":["european"],"price_rating":2,"website":"https://www.thepalmerstonedinburgh.co.uk/","map_url":"https://maps.app.goo.gl/pvjQvsPUoU3cKjVq5","awards":{"other":[]},"visits":["2024-03-06"],"last_updated":"2026-02-20"}
+      },{
+        slug: "ee_nami_san_diego",
+        lat: 32.8354783,
+        lng: -117.1892262,
+        _item: {"name":"EE NAMI Tonkatsu Izakaya","slug":"ee_nami_san_diego","coordinates":[32.8354783,-117.1892262],"address":"4706 Clairemont Mesa Blvd, San Diego, CA 92117","neighborhood":"Clairemont","city":"San Diego","state":"California","country":"United States of America","cuisines":["japanese","tonkatsu"],"price_rating":2,"website":"http://eenamisd.com/","reservation_url":"https://www.exploretock.com/ee-nami-tonkatsu-izakaya-san-diego","map_url":"https://maps.app.goo.gl/Nq4x5BDjauyVjFg8A","visits":["2024-08-25"],"last_updated":"2026-02-20"}
+      },{
+        slug: "el_preferido_palermo_buenos_aires",
+        lat: -34.5854427,
+        lng: -58.4253881,
+        _item: {"name":"El Preferido de Palermo","slug":"el_preferido_palermo_buenos_aires","coordinates":[-34.5854427,-58.4253881],"address":"Jorge Luis Borges 2108, C1425FFD Cdad. Autónoma de Buenos Aires, Argentina","neighborhood":"Palermo","city":"Buenos Aires","country":"Argentina","cuisines":["argentine"],"price_rating":3,"journey_rating":1,"reservation_url":"https://elpreferido.meitre.com/","map_url":"https://maps.app.goo.gl/mv6EbQrmyD4LxKvC8","visits":["2024-07-09"],"last_updated":"2026-02-20"}
+      },{
+        slug: "don_julio_palermo_buenos_aires",
+        lat: -34.5862916,
+        lng: -58.4242774,
+        _item: {"name":"Don Julio Parilla","slug":"don_julio_palermo_buenos_aires","coordinates":[-34.5862916,-58.4242774],"address":"Guatemala 4699, C1425 Cdad. Autónoma de Buenos Aires, Argentina","neighborhood":"Palermo","city":"Buenos Aires","country":"Argentina","cuisines":["argentine","steakhouse"],"price_rating":3,"website":"https://www.parrilladonjulio.com/","reservation_url":"https://donjulio.meitre.com/","map_url":"https://maps.app.goo.gl/9M66WbEKmfwZ8t838","awards":{"michelin":{"stars":1,"bib":false,"green":true,"years_of_1_star":[2024,2025,2026],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[],"years_of_green":[2024,2025,2026]},"other":[]},"visits":["2024-07-11"],"last_updated":"2026-02-20"}
+      },{
+        slug: "don_zoilo_buenos_aires",
+        lat: -34.6046599,
+        lng: -58.448086,
+        _item: {"name":"Don Zoilo","slug":"don_zoilo_buenos_aires","coordinates":[-34.6046599,-58.448086],"address":"Av. Dr. Honorio Pueyrredón 1406, C1416 Cdad. Autónoma de Buenos Aires, Argentina","neighborhood":"Palermo","city":"Buenos Aires","country":"Argentina","cuisines":["argentine","steakhouse"],"price_rating":2,"map_url":"https://maps.app.goo.gl/ZpdtDFEFfdrhY6Ku7","visits":[],"last_updated":"2026-02-20"}
+      },{
+        slug: "cocobang_san_francisco",
+        lat: 37.7876288,
+        lng: -122.4115227,
+        _item: {"name":"Cocobang","slug":"cocobang_san_francisco","coordinates":[37.7876288,-122.4115227],"address":"550 Taylor St, San Francisco, CA 94102","neighborhood":"Tenderloin","city":"San Francisco","state":"California","country":"United States of America","cuisines":["korean"],"price_rating":1,"website":"https://cocobang.org/","map_url":"https://maps.app.goo.gl/vyw2vP58WxpmbobYA","visits":["2024-09-19"],"last_updated":"2026-02-20"}
+      },{
+        slug: "cesarina_san_diego",
+        lat: 32.7432752,
+        lng: -117.2345097,
+        _item: {"name":"Cesarina","slug":"cesarina_san_diego","coordinates":[32.7432752,-117.2345097],"address":"4161 Voltaire St, San Diego, CA 92107","neighborhood":"Ocean Beach","city":"San Diego","state":"California","country":"United States of America","cuisines":["italian"],"price_rating":2,"website":"https://cesarinarestaurant.com/","reservation_url":"https://www.opentable.com/r/cesarina-san-diego","map_url":"https://maps.app.goo.gl/HRhQtYB5jAJcwLFr5","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2021,2022,2023,2024,2025,2026],"years_of_green":[]},"other":[]},"visits":["2024-10-21"],"last_updated":"2026-02-20"}
+      },{
+        slug: "mansion_restaurant_dallas",
+        lat: 32.8034141,
+        lng: -96.806794,
+        _item: {"name":"The Mansion Restaurant","slug":"mansion_restaurant_dallas","coordinates":[32.8034141,-96.806794],"address":"2821 Turtle Creek Blvd, Dallas, TX 75219","neighborhood":"Oak Lawn","city":"Dallas","state":"Texas","country":"United States of America","cuisines":["american"],"price_rating":3,"website":"https://www.rosewoodhotels.com/en/mansion-on-turtle-creek-dallas/dining/mansion-restaurant","reservation_url":"https://www.opentable.com/r/the-rosewood-mansion-restaurant-on-turtle-creek-dallas","map_url":"https://maps.app.goo.gl/mQyyNufGUacxp6o67","awards":{"other":[]},"visits":["2024-12-31"],"last_updated":"2026-02-20"}
+      },{
+        slug: "siamo_napoli_north_park",
+        lat: 32.7493733,
+        lng: -117.1299181,
+        _item: {"name":"Siamo Napoli","slug":"siamo_napoli_north_park","coordinates":[32.7493733,-117.1299181],"address":"3959 30th St, San Diego, CA 92104","neighborhood":"North Park","city":"San Diego","state":"California","country":"United States of America","cuisines":["italian","pizza"],"price_rating":2,"website":"https://www.siamonapolisd.com/","reservation_url":"https://www.opentable.com/r/siamo-napoli-san-diego","map_url":"https://maps.app.goo.gl/tW15Gieqkpf6yHfd7","visits":["2025-04-20"],"last_updated":"2026-02-20"}
+      },{
+        slug: "its_raw_poke_shop_san_diego",
+        lat: 32.7420796,
+        lng: -117.2432775,
+        _item: {"name":"It's Raw Poke Shop","slug":"its_raw_poke_shop_san_diego","coordinates":[32.7420796,-117.2432775],"address":"4991 Newport Ave STE A, San Diego, CA 92107","neighborhood":"Ocean Beach","city":"San Diego","state":"California","country":"United States of America","cuisines":["hawaiian","poke"],"price_rating":1,"website":"https://itsrawpokeshop.com/","map_url":"https://maps.app.goo.gl/8MEAcxtYPW16s8jPA","visits":["2025-04-27","2025-05-13"],"last_updated":"2026-02-20"}
+      },{
+        slug: "mabels_gone_fishing_north_park",
+        lat: 32.7467755,
+        lng: -117.1302519,
+        _item: {"name":"Mabel's Gone Fishing","slug":"mabels_gone_fishing_north_park","coordinates":[32.7467755,-117.1302519],"address":"3770 30th St, San Diego, CA 92104","neighborhood":"North Park","city":"San Diego","state":"California","country":"United States of America","cuisines":["seafood"],"price_rating":3,"journey_rating":1,"website":"https://www.mabelsgonefishing.com/","reservation_url":"https://www.exploretock.com/mabels-gone-fishing-san-diego","map_url":"https://maps.app.goo.gl/37ZFhkiywheDwrsj8","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2023,2024,2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-05-12"],"last_updated":"2026-02-20"}
+      },{
+        slug: "gelatoteca_suso_venice_rialto",
+        lat: 45.4389903,
+        lng: 12.3371175,
+        _item: {"name":"Gelatoteca Suso","slug":"gelatoteca_suso_venice_rialto","coordinates":[45.4389903,12.3371175],"address":"Salizada S. Giovanni Grisostomo, 5801, 30121 Venezia VE, Italy","neighborhood":"Cannaregio","city":"Venice","state":"Veneto","country":"Italy","cuisines":["gelato"],"price_rating":1,"website":"https://suso.gelatoteca.it/","reservation_url":null,"map_url":"https://maps.app.goo.gl/tkEChN35gccB7f8EA","awards":{"other":[]},"visits":[],"last_updated":"2026-02-20"}
+      },{
+        slug: "estro_venice",
+        lat: 45.4360424,
+        lng: 12.3250595,
+        _item: {"name":"Estro","slug":"estro_venice","coordinates":[45.4360424,12.3250595],"address":"Sestiere Dorsoduro, 3778, 30123 Venezia VE, Italy","neighborhood":"Dorsoduro","city":"Venice","state":"Veneto","country":"Italy","cuisines":["italian","venetian"],"price_rating":3,"journey_rating":1,"website":"https://www.estrovenezia.com/","reservation_url":"https://www.estrovenezia.com/en/book-a-table/","map_url":"https://maps.app.goo.gl/YAWkf7T7Gbp6bP2J9","awards":{"other":[]},"visits":["2025-06-06"],"last_updated":"2026-02-20"}
+      },{
+        slug: "lido_84_lake_garda",
+        lat: 45.6252976,
+        lng: 10.5759639,
+        _item: {"name":"Lido 84","slug":"lido_84_lake_garda","coordinates":[45.6252976,10.5759639],"address":"Corso Giuseppe Zanardelli, 196, 25083 Gardone Riviera BS, Italy","city":"Gardone Riviera","state":"Lombardia","country":"Italy","cuisines":["italian"],"price_rating":3,"journey_rating":2,"website":"https://www.ristorantelido84.com/","reservation_url":"https://www.ristorantelido84.com/prenotazione/","map_url":"https://maps.app.goo.gl/jgo5XWBuH6K1B95w8","awards":{"michelin":{"stars":1,"bib":false,"green":false,"years_of_1_star":[2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[],"years_of_green":[]},"other":["The World's 50 Best One to Watch Award: 2019","The World's 50 Best Restaurants Highest New Entry Award: 2021","The World's 50 Best Restaurants 2021-2025: currently at #16; peaked in 2023 at #7; debuted in 2021 at #15"]},"visits":["2025-06-12"],"summary":"Lido 84 delivers thoughtful, minimalist fine dining through simple food, great service, and either a picturesque view of Lake Garda during lunch or a cozy atmosphere during dinner. The kitchen, led by executive chef Riccardo Camanini, produces carefully balanced dishes that blend Italian traditions with thoughtful, minimalist execution. A prime example of this is the signature dish, cacio e pepe en vessie, which features the classic Roman pasta dish prepared \"en vessie\" (in a pig's bladder, an ancient Roman technique), resulting in a unique \"super-al-dente\" texture. The occasional theatrical touches, such as the tableside presentations, felt at odds with the understated nature of the food. Still, the overall execution was impeccable, making Lido 84 a must-visit for anyone seeking a memorable meal in the Lake Garda region.\n","last_updated":"2026-02-20"}
+      },{
+        slug: "emozioni_lake_garda",
+        lat: 45.8855585,
+        lng: 10.8477827,
+        _item: {"name":"Emozioni Ristorante","slug":"emozioni_lake_garda","coordinates":[45.8855585,10.8477827],"address":"Viale Giosuè Carducci, 17, 38066 Riva del Garda TN, Italy","neighborhood":null,"city":"Riva del Garda","state":"Veneto","country":"Italy","cuisines":["italian"],"price_rating":3,"journey_rating":0,"website":"https://ristoranteemozioniriva.it/","map_url":"https://maps.app.goo.gl/E4EFYZ6MoeexQiU57","awards":{"other":[]},"visits":["2025-06-09"],"last_updated":"2026-02-20"}
+      },{
+        slug: "le_servite_lake_garda",
+        lat: 45.8999726,
+        lng: 10.8657385,
+        _item: {"name":"Osteria Le Servite","slug":"le_servite_lake_garda","coordinates":[45.8999726,10.8657385],"address":"Via Passirone, 68, 38062 Arco TN, Italy","neighborhood":null,"city":"Arco","state":"Trentino-Alto Adige","country":"Italy","cuisines":["italian"],"price_rating":3,"journey_rating":0,"website":"https://www.leservite.com/","map_url":"https://maps.app.goo.gl/jUjd2uZZChSCzGza6","awards":{"other":[]},"visits":["2025-06-10"],"last_updated":"2026-02-20"}
+      },{
+        slug: "gelateria_la_romana_borgo_trento",
+        lat: 45.4455893,
+        lng: 10.9889618,
+        _item: {"name":"Gelateria La Romana","slug":"gelateria_la_romana_borgo_trento","coordinates":[45.4455893,10.9889618],"address":"Via IV Novembre, 13, 37126 Verona VR, Italy","neighborhood":"Borgo Trento","city":"Verona","state":"Veneto","country":"Italy","cuisines":["gelato"],"price_rating":1,"journey_rating":1,"website":"https://www.gelateriaromana.com/it/gelaterie/gelateria-la-romana-verona","map_url":"https://maps.app.goo.gl/wJiiHuBWNK1ni2Uk7","awards":{"other":[]},"visits":["2025-06-11"],"last_updated":"2026-02-20"}
+      },{
+        slug: "tanners_prime_burgers_oceanside",
+        lat: 33.1722614,
+        lng: -117.3594272,
+        _item: {"name":"Tanner's Prime Burgers","slug":"tanners_prime_burgers_oceanside","coordinates":[33.1722614,-117.3594272],"address":"510 Vista Way, Oceanside, CA 92054","neighborhood":"South Oceanside","city":"Oceanside","state":"California","country":"United States of America","cuisines":["american","burgers"],"price_rating":1,"website":"https://www.tannersprimeburgers.com/","map_url":"https://maps.app.goo.gl/5dV9weWDKqfgQtBB7","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-06-24"],"last_updated":"2026-02-20"}
+      },{
+        slug: "mikes_red_tacos_genesee",
+        lat: 32.8217277,
+        lng: -117.1836609,
+        _item: {"name":"Mike's Red Tacos","slug":"mikes_red_tacos_genesee","coordinates":[32.8217277,-117.1836609],"address":"4310 Genesee Ave #105-106, San Diego, CA 92117","neighborhood":"Clairemont","city":"San Diego","state":"California","country":"United States of America","cuisines":["mexican","birria"],"price_rating":1,"website":"https://www.mikesredtacos.com/","map_url":"https://maps.app.goo.gl/4yWKqegx99SZwy638","awards":{"other":[]},"visits":["2025-05-16","2025-06-02"],"last_updated":"2026-02-20"}
+      },{
+        slug: "rollin_smoke_bbq_anthony",
+        lat: 31.9830837,
+        lng: -106.6050888,
+        _item: {"name":"Rollin' Smoke BBQ","slug":"rollin_smoke_bbq_anthony","coordinates":[31.9830837,-106.6050888],"address":"200 S Main St, Anthony, TX 79821","city":"Anthony","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"website":"https://rollin-smoke-bbq-108141.square.site/","map_url":"https://maps.app.goo.gl/YERtYr4gZKHNtSMn6","awards":{"other":[]},"visits":["2025-09-05"],"last_updated":"2026-02-20"}
+      },{
+        slug: "jays_bbq_shack_abilene",
+        lat: 32.4372426,
+        lng: -99.7300009,
+        _item: {"name":"Jay's BBQ Shack","slug":"jays_bbq_shack_abilene","coordinates":[32.4372426,-99.7300009],"address":"602 S 11th St, Abilene, TX 79602","city":"Abilene","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"website":"https://jaysbbqshack.com/","map_url":"https://maps.app.goo.gl/MywV5b2svnsKH9KN8","awards":{"other":[]},"visits":["2025-09-05"],"last_updated":"2026-02-20"}
+      },{
+        slug: "interstellar_austin",
+        lat: 30.4614582,
+        lng: -97.8151755,
+        _item: {"name":"Interstellar BBQ","slug":"interstellar_austin","coordinates":[30.4614582,-97.8151755],"address":"12233 Ranch Rd 620 N suite 105, Austin, TX 78750","neighborhood":null,"city":"Austin","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"journey_rating":1,"website":"https://www.theinterstellarbbq.com/","map_url":"https://maps.app.goo.gl/qtwqSjL5vmR9FceC6","awards":{"michelin":{"stars":1,"bib":false,"green":false,"years_of_1_star":[2025,2026],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[],"years_of_green":[]},"other":[]},"visits":["2025-09-21"],"last_updated":"2026-02-20"}
+      },{
+        slug: "austin_street_creamery_fredericksburg",
+        lat: 30.2775592,
+        lng: -98.8733191,
+        _item: {"name":"Austin Street Creamery","slug":"austin_street_creamery_fredericksburg","coordinates":[30.2775592,-98.8733191],"address":"211 W Austin St, Fredericksburg, TX 78624","city":"Fredericksburg","state":"Texas","country":"United States of America","cuisines":["ice_cream"],"price_rating":1,"journey_rating":1,"map_url":"https://maps.app.goo.gl/dyfawy4vEZHMAQDf8","awards":{"other":[]},"visits":["2025-10-03"],"last_updated":"2026-02-20"}
+      },{
+        slug: "ottos_german_bistro_fredericksburg",
+        lat: 30.2730298,
+        lng: -98.8664688,
+        _item: {"name":"Otto's German Bistro","slug":"ottos_german_bistro_fredericksburg","coordinates":[30.2730298,-98.8664688],"address":"316 E Austin St, Fredericksburg, TX 78624","city":"Fredericksburg","state":"Texas","country":"United States of America","cuisines":["german"],"price_rating":2,"website":"https://www.ottosfbg.com/","reservation_url":"https://www.exploretock.com/ottosfbg","map_url":"https://maps.app.goo.gl/A2iuJwAcSXkpapah9","awards":{"other":[]},"visits":["2025-10-04"],"last_updated":"2026-02-20"}
+      },{
+        slug: "eakers_fredricksburg",
+        lat: 30.2814052,
+        lng: -98.881674,
+        _item: {"name":"Eaker Barbecue","slug":"eakers_fredricksburg","coordinates":[30.2814052,-98.881674],"address":"607 W Main St, Fredericksburg, TX 78624","city":"Fredericksburg","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"journey_rating":1,"website":"https://www.eakerbarbecue.com/","map_url":"https://maps.app.goo.gl/Jamwwsdn4qhUWnJx5","awards":{"other":[]},"visits":["2025-10-04"],"last_updated":"2026-02-20"}
+      },{
+        slug: "micklethwait_austin",
+        lat: 30.2731465,
+        lng: -97.6901538,
+        _item: {"name":"Micklethwait Barbecue","slug":"micklethwait_austin","coordinates":[30.2731465,-97.6901538],"address":"4602 Tanney St, Austin, TX 78721","neighborhood":"East MLK","city":"Austin","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"website":"https://craftmeatsaustin.com/","map_url":"https://maps.app.goo.gl/DS55nYnYzq1nfixJ7","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-10-09"],"last_updated":"2026-02-20"}
+      },{
+        slug: "franklin_austin",
+        lat: 30.2701463,
+        lng: -97.7312847,
+        _item: {"name":"Franklin Barbecue","slug":"franklin_austin","coordinates":[30.2701463,-97.7312847],"address":"900 E 11th St, Austin, TX 78702","neighborhood":"East Austin","city":"Austin","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"website":"https://franklinbbq.com/","map_url":"https://maps.app.goo.gl/G4cRdopUhG5fo5o47","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-10-11"],"last_updated":"2026-02-20"}
+      },{
+        slug: "barbs_b_q_lockhart",
+        lat: 29.8836843,
+        lng: -97.6719579,
+        _item: {"name":"Barbs B Q","slug":"barbs_b_q_lockhart","coordinates":[29.8836843,-97.6719579],"address":"102 E Market St, Lockhart, TX 78644","city":"Lockhart","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"journey_rating":2,"website":"https://www.barbsbq.com/","map_url":"https://maps.app.goo.gl/3muie4kGSsBfo4pA7","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-10-18"],"last_updated":"2026-02-20"}
+      },{
+        slug: "leroy_and_lewis_austin",
+        lat: 30.2103173,
+        lng: -97.7872144,
+        _item: {"name":"LeRoy and Lewis Barbecue","slug":"leroy_and_lewis_austin","coordinates":[30.2103173,-97.7872144],"address":"5621 Emerald Forest Dr, Austin, TX 78745","neighborhood":"South Austin","city":"Austin","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"journey_rating":1,"website":"https://leroyandlewisbbq.com/","map_url":"https://maps.app.goo.gl/1r2A6jdLMgKuoDCe7","awards":{"michelin":{"stars":1,"bib":false,"green":false,"years_of_1_star":[2025,2026],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[],"years_of_green":[]},"other":[]},"visits":["2025-10-19"],"last_updated":"2026-02-20"}
+      },{
+        slug: "rollin_smoke_austin",
+        lat: 30.2580025,
+        lng: -97.7263252,
+        _item: {"name":"Rollin Smoke BBQ","slug":"rollin_smoke_austin","coordinates":[30.2580025,-97.7263252],"address":"1700 E Cesar Chavez St, Austin, TX 78702","neighborhood":"East Cesar Chavez","city":"Austin","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"website":"https://rollinsmokeatxbbq.com/","map_url":"https://maps.app.goo.gl/5jbNsQhSe81yC5hMA","awards":{"other":[]},"visits":["2025-10-29"],"last_updated":"2026-02-20"}
+      },{
+        slug: "mum_foods_austin",
+        lat: 30.305872,
+        lng: -97.6797482,
+        _item: {"name":"Mum Foods Smokehouse and Delicatessen","slug":"mum_foods_austin","coordinates":[30.305872,-97.6797482],"address":"5811 Manor Rd, Austin, TX 78723","neighborhood":"Pecan Springs-Springdale","city":"Austin","state":"Texas","country":"United States of America","cuisines":["barbecue","deli"],"price_rating":2,"website":"https://www.mumfoodsatx.com/","map_url":"https://maps.app.goo.gl/dnRKJUwFq74pJryj6","awards":{"other":[]},"visits":["2025-10-30"],"last_updated":"2026-02-20"}
+      },{
+        slug: "parish_barbecue_austin",
+        lat: 30.287169,
+        lng: -97.7031306,
+        _item: {"name":"Parish Barbecue","slug":"parish_barbecue_austin","coordinates":[30.287169,-97.7031306],"address":"3220 Manor Rd, Austin, TX 78723","neighborhood":"East MLK","city":"Austin","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"journey_rating":1,"website":"https://parishbarbecue.com/","map_url":"https://maps.app.goo.gl/gNX2UcLcoigwtfz58","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-11-06"],"last_updated":"2026-02-20"}
+      },{
+        slug: "louies_craft_buda",
+        lat: 30.0884651,
+        lng: -97.8180774,
+        _item: {"name":"Louie's Craft BBQ","slug":"louies_craft_buda","coordinates":[30.0884651,-97.8180774],"address":"122 Main St, Buda, TX 78610","city":"Buda","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"website":"https://www.louiescraftbbq.com/","map_url":"https://maps.app.goo.gl/qfmmMYA2hK9FCkPZ7","awards":{"other":[]},"visits":["2025-11-20"],"last_updated":"2026-02-20"}
+      },{
+        slug: "burnt_bean_co_seguin",
+        lat: 29.5685264,
+        lng: -97.9646581,
+        _item: {"name":"Burnt Bean Company","slug":"burnt_bean_co_seguin","coordinates":[29.5685264,-97.9646581],"address":"108 S Austin St, Seguin, TX 78155","city":"Seguin","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"journey_rating":2,"website":"https://www.burntbeanco.com/","map_url":"https://maps.app.goo.gl/stSdGh4FLxkf4ZUX9","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-11-23"],"last_updated":"2026-02-20"}
+      },{
+        slug: "lucia_dallas",
+        lat: 32.7470126,
+        lng: -96.8284019,
+        _item: {"name":"Lucia","slug":"lucia_dallas","coordinates":[32.7470126,-96.8284019],"address":"287 N Bishop Ave, Dallas, TX 75208","neighborhood":"Bishop Arts District","city":"Dallas","state":"Texas","country":"United States of America","cuisines":["italian"],"price_rating":3,"website":"https://www.luciadallas.com/","reservation_url":"https://resy.com/cities/dallas-fort-worth-tx/venues/lucia","map_url":"https://maps.app.goo.gl/4G8iYijPabg4Kusj7","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-11-26"],"last_updated":"2026-02-20"}
+      },{
+        slug: "smokey_joes_dallas",
+        lat: 32.6700945,
+        lng: -96.823293,
+        _item: {"name":"Smokey Joe's BBQ","slug":"smokey_joes_dallas","coordinates":[32.6700945,-96.823293],"address":"6403 S R L Thornton Fwy, Dallas, TX 75232","neighborhood":"Wolf Creek","city":"Dallas","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"website":"https://smokeyjoesbbqdallas.com/","map_url":"https://maps.app.goo.gl/5yC6hW3a6vYy5TMT8","awards":{"other":[]},"visits":["2025-11-29"],"last_updated":"2026-02-20"}
+      },{
+        slug: "barley_swine_austin",
+        lat: 30.3412027,
+        lng: -97.7383293,
+        _item: {"name":"Barley Swine","slug":"barley_swine_austin","coordinates":[30.3412027,-97.7383293],"address":"6555 Burnet Rd #400, Austin, TX 78757","neighborhood":"Brentwood","city":"Austin","state":"Texas","country":"United States of America","cuisines":["american"],"price_rating":3,"website":"https://www.barleyswine.com/","reservation_url":"https://www.exploretock.com/barleyswine","map_url":"https://maps.app.goo.gl/nNFWeAFqxbdw58xw7","awards":{"michelin":{"stars":1,"bib":false,"green":false,"years_of_1_star":[2025,2026],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[],"years_of_green":[]},"other":[]},"visits":["2025-11-30"],"last_updated":"2026-02-20"}
+      },{
+        slug: "nixtaco_roseville",
+        lat: 38.7298369,
+        lng: -121.256589,
+        _item: {"name":"Nixtaco","slug":"nixtaco_roseville","coordinates":[38.7298369,-121.256589],"address":"1805 Cirby Way #12, Roseville, CA 95661","neighborhood":"Meadow Oaks","city":"Roseville","state":"California","country":"United States of America","cuisines":["mexican","tacos"],"price_rating":2,"website":"https://www.nixta.co/","reservation_url":"https://www.exploretock.com/nixtacomexicankitchen","map_url":"https://maps.app.goo.gl/JKbtQZy26MaorKLm8","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2021,2022,2023,2024,2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-12-07"],"last_updated":"2026-02-20"}
+      },{
+        slug: "moreno_barbecue_southpark_meadows",
+        lat: 30.154692190951504,
+        lng: -97.79452585262433,
+        _item: {"name":"Moreno Barbecue","slug":"moreno_barbecue_southpark_meadows","coordinates":[30.154692190951504,-97.79452585262433],"address":"9900 S I-35 Frontage Rd Ste M700, Austin, TX 78748","neighborhood":"Southpark Meadows","city":"Austin","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"website":"https://www.morenobbq.com/","map_url":"https://maps.app.goo.gl/jgNk7TnY4s27zdUXA","awards":{"other":[]},"visits":["2025-12-10"],"last_updated":"2026-02-20"}
+      },{
+        slug: "paprika_atx_austin",
+        lat: 30.3337121,
+        lng: -97.7211323,
+        _item: {"name":"Paprika ATX","slug":"paprika_atx_austin","coordinates":[30.3337121,-97.7211323],"address":"6539 N Lamar Blvd, Austin, TX 78752","neighborhood":"Highland","city":"Austin","state":"Texas","country":"United States of America","cuisines":["mexican","tacos"],"price_rating":1,"website":"https://paprikaatx.com/","map_url":"https://maps.app.goo.gl/4qyiMr2gcCeonAGN8","awards":{"other":[]},"visits":["2025-12-11"],"last_updated":"2026-02-20"}
+      },{
+        slug: "julies_noodles_austin",
+        lat: 30.3614383,
+        lng: -97.7151936,
+        _item: {"name":"Julie's Noodles","slug":"julies_noodles_austin","coordinates":[30.3614383,-97.7151936],"address":"8557 Research Blvd #110, Austin, TX 78758","neighborhood":"North Austin Civic Association","city":"Austin","state":"Texas","country":"United States of America","cuisines":["chinese"],"price_rating":1,"website":"https://juliesnoodlesaustin.com/","map_url":"https://maps.app.goo.gl/ZmPYvxADReboX5Me7","awards":{"other":[]},"visits":["2025-12-11"],"last_updated":"2026-02-20"}
+      },{
+        slug: "meat_and_bread_austin",
+        lat: 30.2671452,
+        lng: -97.7495442,
+        _item: {"name":"Meat & Bread","slug":"meat_and_bread_austin","coordinates":[30.2671452,-97.7495442],"address":"360 Nueces St STE 20, Austin, TX 78701","neighborhood":"Downtown Austin","city":"Austin","state":"Texas","country":"United States of America","cuisines":["sandwiches"],"price_rating":1,"website":"https://www.meatandbread.com/","map_url":"https://maps.app.goo.gl/QLjWy8pnR4keHB626","awards":{"other":[]},"visits":["2025-12-12"],"last_updated":"2026-02-20"}
+      },{
+        slug: "cuantos_tacos_austin",
+        lat: 30.2727299,
+        lng: -97.7283136,
+        _item: {"name":"Cuantos Tacos","slug":"cuantos_tacos_austin","coordinates":[30.2727299,-97.7283136],"address":"1108 E 12th St, Austin, TX 78702","neighborhood":"East Austin","city":"Austin","state":"Texas","country":"United States of America","cuisines":["mexican","tacos"],"price_rating":1,"website":"https://www.cuantostacosaustin.com/","map_url":"https://maps.app.goo.gl/xKwX1rgtn7wGXznW8","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-12-12"],"last_updated":"2026-02-20"}
+      },{
+        slug: "discada_austin",
+        lat: 30.2580025,
+        lng: -97.7263252,
+        _item: {"name":"Discada","slug":"discada_austin","coordinates":[30.2580025,-97.7263252],"address":"1700 E Cesar Chavez St, Austin, TX 78702","neighborhood":"East Cesar Chavez","city":"Austin","state":"Texas","country":"United States of America","cuisines":["mexican","tacos"],"price_rating":1,"website":"https://www.discadatx.com/","map_url":"https://maps.app.goo.gl/skkJEyBqRRYBtuLp8","awards":{"other":[]},"visits":["2025-12-13"],"last_updated":"2026-02-20"}
+      },{
+        slug: "mot_hai_ba_dallas",
+        lat: 32.812212,
+        lng: -96.762574,
+        _item: {"name":"Một Hai Ba","slug":"mot_hai_ba_dallas","coordinates":[32.812212,-96.762574],"address":"6047 Lewis St, Dallas, TX 75206","neighborhood":"Lower Greenville","city":"Dallas","state":"Texas","country":"United States of America","cuisines":["vietnamese","fusion"],"price_rating":3,"website":"https://www.mothaibadallas.com/","reservation_url":"https://www.opentable.com/r/mot-hai-ba-lakewood-dallas","map_url":"https://maps.app.goo.gl/SHPKykLr2UB1iimy9","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-12-17"],"last_updated":"2026-02-20"}
+      },{
+        slug: "cattleack_farmers_branch",
+        lat: 32.9337725,
+        lng: -96.8366235,
+        _item: {"name":"Cattleack Barbecue","slug":"cattleack_farmers_branch","coordinates":[32.9337725,-96.8366235],"address":"13628 Gamma Rd, Farmers Branch, TX 75244","city":"Farmers Branch","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"website":"https://cattleackbbq.com/","map_url":"https://maps.app.goo.gl/dTynLPwPa1vtNnRP6","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-12-18"],"last_updated":"2026-02-20"}
+      },{
+        slug: "goldees_fort_worth",
+        lat: 32.621762,
+        lng: -97.234355,
+        _item: {"name":"Goldee's Barbecue","slug":"goldees_fort_worth","coordinates":[32.621762,-97.234355],"address":"4645 Dick Price Rd, Fort Worth, TX 76140","city":"Fort Worth","state":"Texas","country":"United States of America","cuisines":["barbecue"],"price_rating":2,"journey_rating":2,"website":"https://goldeesbbq.com/","map_url":"https://maps.app.goo.gl/b3xQSPL9Wx6RWBtp7","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2025-12-21"],"last_updated":"2026-02-20"}
+      },{
+        slug: "alma_argentina_kissimmee",
+        lat: 28.330500038334193,
+        lng: -81.5336470140035,
+        _item: {"name":"Alma Argentina","slug":"alma_argentina_kissimmee","coordinates":[28.330500038334193,-81.5336470140035],"address":"6266 W Irlo Bronson Memorial Hwy, Kissimmee, FL 34747","city":"Kissimmee","state":"Florida","country":"United States of America","cuisines":["argentine"],"price_rating":2,"map_url":"https://maps.app.goo.gl/z73qSHymoq9vJEHSA","awards":{"other":[]},"visits":["2026-01-03"],"last_updated":"2026-02-20"}
+      },{
+        slug: "azuki_sushi_lounge_san_diego",
+        lat: 32.72965817577756,
+        lng: -117.1601349815172,
+        _item: {"name":"Azuki Sushi Lounge","slug":"azuki_sushi_lounge_san_diego","coordinates":[32.72965817577756,-117.1601349815172],"address":"2321 Fifth Ave, San Diego, CA 92101","neighborhood":"Bankers Hill","city":"San Diego","state":"California","country":"United States of America","cuisines":["japanese","sushi"],"price_rating":3,"website":"https://azukisushi.com/","reservation_url":"https://www.opentable.com/r/azuki-sushi-lounge","map_url":"https://maps.app.goo.gl/UoDjtPwMAHkmRFCBA","awards":{"other":[]},"visits":["2022-10-21","2026-01-05"],"last_updated":"2026-02-20"}
+      },{
+        slug: "cowboy_star_san_diego",
+        lat: 32.71214091434202,
+        lng: -117.15573101724738,
+        _item: {"name":"Cowboy Star Restaurant and Butcher Shop","slug":"cowboy_star_san_diego","coordinates":[32.71214091434202,-117.15573101724738],"address":"640 Tenth Ave, San Diego, CA 92101","neighborhood":"East Village","city":"San Diego","state":"California","country":"United States of America","cuisines":["american","steakhouse"],"price_rating":3,"website":"https://www.cowboystar.com/","reservation_url":"https://www.opentable.com/r/cowboy-star-san-diego","map_url":"https://maps.app.goo.gl/T1jEgS3fvMPKRUSi7","awards":{"other":[]},"visits":["2026-01-06"],"last_updated":"2026-02-20"}
+      },{
+        slug: "l_effervescence_tokyo",
+        lat: 35.66021533212167,
+        lng: 139.71942399201512,
+        _item: {"name":"L'Effervescence","slug":"l_effervescence_tokyo","coordinates":[35.66021533212167,139.71942399201512],"address":"2 Chome-26-4 Nishiazabu, Minato City, Tokyo 106-0031, Japan","neighborhood":"Azabu","city":"Minato City","state":"Tokyo","country":"Japan","cuisines":["french","japanese","haute"],"price_rating":4,"journey_rating":2,"website":"https://www.leffervescence.jp/","reservation_url":"https://omakase.in/ja/r/tm207964","map_url":"https://maps.app.goo.gl/x5bvrsjEpe8NZeSJ9","awards":{"michelin":{"stars":3,"bib":false,"green":true,"years_of_1_star":[2012,2013,2014],"years_of_2_stars":[2015,2016,2017,2018,2019,2020],"years_of_3_stars":[2021,2022,2023,2024,2025,2026],"years_of_bib":[],"years_of_green":[2021,2022,2023,2024,2025,2026]},"other":[]},"visits":["2026-02-06"],"last_updated":"2026-02-20"}
+      },{
+        slug: "ramen_matsui_tokyo",
+        lat: 35.68902830561954,
+        lng: 139.71546097688335,
+        _item: {"name":"RAMEN MATSUI","slug":"ramen_matsui_tokyo","coordinates":[35.68902830561954,139.71546097688335],"address":"Japan, 〒160-0004 Tokyo, Shinjuku City, Yotsuya, 4 Chome-25-10 ダイアパレス御苑前 B-2","neighborhood":"Yotsuya","city":"Shinjuku City","state":"Tokyo","country":"Japan","cuisines":["japanese","ramen"],"price_rating":1,"reservation_url":"https://www.tablecheck.com/shops/ramen-matsui/reserve","map_url":"https://maps.app.goo.gl/7PCVaqoCfpPXkYXM7","awards":{"michelin":{"stars":0,"bib":true,"green":false,"years_of_1_star":[],"years_of_2_stars":[],"years_of_3_stars":[],"years_of_bib":[2025,2026],"years_of_green":[]},"other":[]},"visits":["2026-02-07"],"last_updated":"2026-02-20"}
+      },{
+        slug: "sushi_azabu_tokyo",
+        lat: 35.66084551038472,
+        lng: 139.7406455060333,
+        _item: {"name":"Sushi Azabu","slug":"sushi_azabu_tokyo","coordinates":[35.66084551038472,139.7406455060333],"address":"Japan, 〒106-0041 Tokyo, Minato City, Azabudai, 1 Chome-3-1 3F","neighborhood":"Azabudai","city":"Minato City","state":"Tokyo","country":"Japan","cuisines":["japanese","sushi","omakase"],"price_rating":3,"website":"https://balconyby6th.com/sushiazabu/","reservation_url":"https://www.tablecheck.com/shops/sushi-azabu/reserve","map_url":"https://maps.app.goo.gl/P6LGHAYvi3nVgaRF6","awards":{"other":[]},"visits":["2026-02-07"],"last_updated":"2026-02-20"}
+      },{
+        slug: "rioja_denver",
+        lat: 39.747938,
+        lng: -104.999459,
+        _item: {"name":"Rioja","slug":"rioja_denver","coordinates":[39.747938,-104.999459],"address":"1431 Larimer St, Denver, CO 80202","neighborhood":"Union Station","city":"Denver","state":"Colorado","country":"United States of America","cuisines":[],"price_rating":3,"website":"https://www.riojadenver.com/","reservation_url":"https://www.opentable.com/r/rioja-denver","map_url":"https://maps.app.goo.gl/mA2vsTgEvnorEbFU6","awards":{"other":[]},"visits":["2026-03-16"],"last_updated":"2026-03-19"}
+      }];
+</script>
+
+<script>
+  window.__MAP_INIT__ = window.__MAP_INIT__ || [];
+  window.__MAP_INIT__.push({
+    mapId: "f-and-b-establishments-map",
+    listId: "f-and-b-establishments-map-list",
+    popupTemplateId: "f-and-b-establishments-map-popup-template",
+    tooltipTemplateId: "f-and-b-establishments-map-tooltip-template",
+    zoom: 2,
+    center: ""
+  });
+</script>
+
+
+    <div class="row">
+        <div class="col-xs-12">
+            <h2>More on my Rating System</h2>
+            <p>
+                I enjoy the simplicity of the Michelin Guide's rating system, but believe some of its definitions have become harder to interpret in practice.
+                For example, Michelin's original framing describes one star as "a very good restaurant in its category" and two stars as "excellent cooking, worth a detour."
+                In my experience, the prestige of the designation often shifts expectations upward, as many one-star restaurants are treated (by marketing and diners alike) as "worth a detour," which blurs the intended distinction.
+            </p>
+            <p>
+                Additionally, I've felt inconsistency in fine dining.
+                I've had one-star meals abroad that were so far beyond certain one-star meals I've had in the United States that it made the shared "one star" label feel almost meaningless as a cross-city comparison.
+                Part of this is taste.
+                Michelin inspectors and I don't always share the same preferences, which is okay.
+                They're trying to be broadly representative, and I'm just one guy with my own biases.
+                The bigger issue for me is that Michelin's ratings can become hard to interpret when you compare restaurants across regions with very different competitive baselines.
+            </p>
+            <p>
+                So rather than trying to score establishments on an absolute "quality" scale, my system focuses on intention and effort: how much planning a place deserves for a traveler.
+                Michelin asked a great question in the early days, "is it worth a stop / detour / special trip?", and I'm bringing that question back as the primary axis.
+            </p>
+            <p>
+                My tiers work like this:
+            </p>
+            <ul class="list-unstyled fnb-tier-list">
+                <li>
+                    <span class="journey-pin journey-pin--inline journey-pin--t0" aria-hidden="true"></span>
+                    <span><strong>Tier 0</strong>: places I genuinely recommend that are great if you're nearby, but not a destination on their own.</span>
+                </li>
+                <li>
+                    <span class="journey-pin journey-pin--inline journey-pin--t1" aria-hidden="true"></span>
+                    <span><strong>Tier 1</strong>: <strong>Worth the visit</strong> - worth going out of your way for if you're already in the area (or in the city).</span>
+                </li>
+                <li>
+                    <span class="journey-pin journey-pin--inline journey-pin--t2" aria-hidden="true"></span>
+                    <span><strong>Tier 2</strong>: <strong>Worth planning around</strong> - worth making a main attraction of a trip you were already going to take.</span>
+                </li>
+                <li>
+                    <span class="journey-pin journey-pin--inline journey-pin--t3" aria-hidden="true"></span>
+                    <span><strong>Tier 3</strong>: <strong>Worth the trip</strong> - worth building travel around, potentially long-distance, primarily for the experience.</span>
+                </li>
+            </ul>
+            <p>
+                From these definitions emerges a natural structure for assignment: Selected establishments are places I genuinely recommend within their local context.
+                Tier 1 establishments represent the strongest experiences within a city, places that are clearly worth seeking out if you're already there.
+                Tier 2 establishments are those that stand out not just locally, but across cities, among the best I've experienced in their particular cuisine.
+                Tier 3 establishments are rare experiences that transcend cuisine or geography and justify travel on their own.
+            </p>
+            <p>
+                In this way, Selected and Tier 1 ratings are primarily local-context distinctions, while Tier 2 and Tier 3 ratings are intentionally normalized across regions and countries.
+                The goal isn't to declare absolute culinary superiority, but to give readers a clearer signal of how much intention an establishment deserves.
+            </p>
+        </div>
+    </div>
+</div>
+
+        </main><footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-xs-12">
+                <p class="text-center">
+                    &copy; Copyright 2026
+                    Christopher
+                    M.
+                    Priebe. Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>. For additional credits, see <a href="/credits/">this</a>.
+
+                    
+                        Last updated: April 07, 2026.
+                    
+                </p>
+            </div>
+        </div>
+    </div>
+</footer><!-- Link all JS -->
+<script src="/assets/js/bundle.js"></script>
+
+    </body>
+
+</html>
