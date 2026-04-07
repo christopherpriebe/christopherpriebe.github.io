@@ -1,6 +1,11 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+// TODO: Refactor this so that there is a generic map engine
+//      right now, some features are specific to the F&B domain
+//      e.g., filtering at the moment is specific to the F&B domain
+//      Also, move the F&B stuff to a separate file
+
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, (m) => ({
     "&": "&amp;",
