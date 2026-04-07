@@ -2,6 +2,10 @@
 {%- assign slug = r.slug | default: r.name -%}
 {%- assign jr = r.journey_rating | default: 0 -%}
 {%- assign pr = r.price_rating | default: 0 -%}
+{%- assign has_city_or_state = false -%}
+{%- if r.city or r.state -%}
+  {%- assign has_city_or_state = true -%}
+{%- endif -%}
 
 <a class="list-group-item map-card"
    data-slug="{{ slug | escape }}"
@@ -32,19 +36,28 @@
   </div>
 
   <div class="muted" style="margin-top:2px;">
-    {%- if r.city -%}{{ r.city | escape }}{%- endif -%}
-    {%- if r.state -%}, {{ r.state | escape }}{%- endif -%}
-    {%- if r.country -%} · {{ r.country | escape }}{%- endif -%}
+    {%- if r.city and r.state -%}
+      {{ r.city | escape }}, {{ r.state | escape }}
+    {%- elsif r.city -%}
+      {{ r.city | escape }}
+    {%- elsif r.state -%}
+      {{ r.state | escape }}
+    {%- endif -%}
+    {%- if r.country -%}
+      {%- if has_city_or_state -%}&nbsp;· {% endif -%}{{ r.country | escape }}
+    {%- endif -%}
   </div>
 
-  <div class="muted" style="margin-top:4px;">
-    {%- if r.cuisines and r.cuisines.size > 0 -%}
-      {{ r.cuisines | join: ", " | escape }}
-    {%- endif -%}
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">
+      {%- if r.cuisines and r.cuisines.size > 0 -%}
+        {{ r.cuisines | join: ", " | escape }}
+      {%- endif -%}
 
-    {%- if pr and pr > 0 -%}
-      &nbsp;·&nbsp; Price: {{ pr }}
-    {%- endif -%}
+      {%- if pr and pr > 0 -%}
+        &nbsp;·&nbsp; Price: {{ pr }}
+      {%- endif -%}
+    </div>
   </div>
 
   {%- if r.summary -%}

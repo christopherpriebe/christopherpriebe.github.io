@@ -4,10 +4,6 @@
     height: 70vh
     min-height: 420px
 
-
-
-
-
 :root
   --tier-ink: 222 47% 18%
   --tier-ink-strong: 222 55% 14%
@@ -293,11 +289,15 @@
     gap: 10px
     margin-top: 10px
 
+.fnb-meta-row
+    margin-top: 4px
+
 .price-meter
-    --price-meter-fill: hsl(var(--tier-accent))
-    --price-meter-fill-strong: hsl(208 78% 39%)
+    --price-meter-fill: #4a525e
+    --price-meter-fill-strong: #23272f
     --price-meter-empty: hsl(213 21% 88%)
     --price-meter-empty-border: hsl(214 24% 80%)
+    --price-meter-label-color: inherit
     display: inline-flex
     align-items: center
     gap: 8px
@@ -305,7 +305,7 @@
 .price-meter__label
     font-size: 12px
     font-weight: 600
-    color: #5b6673
+    color: var(--price-meter-label-color)
 
 .price-meter__track
     display: inline-flex
@@ -336,6 +336,10 @@
 .fnb-filter-chip--price.is-active .price-meter
     --price-meter-fill: hsl(var(--tier-highlight))
     --price-meter-fill-strong: hsl(31 95% 44%)
+
+.fnb-popup,
+.map-card__details
+    --price-meter-label-color: var(--fnb-price-color, #111)
 
 .map-sidebar-list
     margin-bottom: 0
@@ -372,3 +376,13 @@
 
 .fnb-popup .panel
     margin-bottom: 8px
+
+.fnb-panel-toggle
+    display: block
+
+.fnb-panel-toggle__chevron
+    display: inline-block
+    transition: transform .18s ease
+
+.fnb-panel-toggle[aria-expanded="true"] .fnb-panel-toggle__chevron
+    transform: rotate(180deg)

@@ -66,13 +66,18 @@ export function getCuisineDisplay(key) {
   return { label, emoji: "🍽️" };
 }
 
+function getMetaRowHtml(innerHtml, className = "") {
+  if (!innerHtml) return "";
+  return `<div class="fnb-meta-row${className ? ` ${className}` : ""}">${innerHtml}</div>`;
+}
+
 export function getCuisinesHtml(keys) {
   if (!Array.isArray(keys) || !keys.length) return "";
   const parts = keys.map((k) => {
     const d = getCuisineDisplay(k);
     return `${d.emoji} ${escapeHtml(d.label)}`;
   });
-  return `<div class="muted" style="margin-top:4px;">${parts.join(" · ")}</div>`;
+  return getMetaRowHtml(parts.join(" · "), "fnb-meta-row--cuisines muted");
 }
 
 function getJourneyTier(journeyRating) {
@@ -196,6 +201,18 @@ function getPriceMeter(priceRating, { showLabel = true } = {}) {
       <span class="price-meter__track">${squares}</span>
     </span>
   `.trim();
+}
+
+function getPriceBlockHtml(priceRating, options) {
+  const priceHtml = getPriceMeter(priceRating, options);
+  return priceHtml ? getMetaRowHtml(priceHtml, "fnb-meta-row--price") : "";
+}
+
+function buildInlineMetaHtml(item) {
+  return [
+    getCuisinesHtml(item.cuisines),
+    getPriceBlockHtml(item.price_rating),
+  ].filter(Boolean).join("");
 }
 
 function normalizeYears(years) {
@@ -327,14 +344,6 @@ function awardsList(a) {
 
   return out;
 }
-
-/**
- * ============================================================================
- * Filtering (list-driven)
- * - Assumes your list items have data-* attributes (data-name, data-journey, etc.)
- * - Assumes filter controls exist with the IDs below (or they’ll be ignored)
- * ============================================================================
- */
 
 function getListItems(listId) {
   return Array.prototype.slice.call(document.querySelectorAll(`#${listId} .map-card`));
@@ -510,16 +519,32 @@ function wireFilters(config, markerLayer, markerBySlug) {
   }
 }
 
-/**
- * ============================================================================
- * Context builder for templates (generic-ish)
- * ============================================================================
- */
+function hydrateList(config, dataset) {
+  if (!config.listId) return;
+
+  const itemBySlug = new Map();
+  const itemByName = new Map();
+
+  dataset.forEach((entry) => {
+    const item = entry._item || {};
+    itemBySlug.set(String(entry.slug || ""), item);
+    itemByName.set(String(item.name || "").trim().toLowerCase(), item);
+  });
+
+  getListItems(config.listId).forEach((el) => {
+    const slug = String(el.getAttribute("data-slug") || "");
+    const name = String(el.getAttribute("data-name") || "").trim().toLowerCase();
+    const item = itemBySlug.get(slug) || itemByName.get(name);
+    const metaEl = el.querySelector("[data-map-card-meta]");
+
+    if (!item || !metaEl) return;
+    metaEl.innerHTML = buildInlineMetaHtml(item);
+  });
+}
 
 function buildContext(item, slug) {
   const locBits = [item.neighborhood, item.city, item.state, item.country].filter(Boolean);
 
-  const priceHtml = getPriceMeter(item.price_rating);
   const links = buildLinksHtml(item);
   const summary = escapeHtml(item.summary || "");
   const awardsHtml = awardsList(item.awards);
@@ -528,10 +553,7 @@ function buildContext(item, slug) {
 
   const summaryCollapseId = `summary-${safeSlug}`;
   const awardsCollapseId = `awards-${safeSlug}`;
-
-  const priceBlock = priceHtml
-    ? `<div class="muted" style="margin-top:4px;">${priceHtml}</div>`
-    : "";
+  const priceBlock = getPriceBlockHtml(item.price_rating);
 
   const linksBlock = links
     ? `<div style="margin-top:8px;">${links}</div>`
@@ -541,9 +563,9 @@ function buildContext(item, slug) {
     ? `
       <div class="panel panel-default" style="margin-top:8px;">
         <div class="panel-heading" style="padding:6px 10px;">
-          <a data-toggle="collapse" href="#${summaryCollapseId}" style="display:block;">
+          <a class="fnb-panel-toggle" data-toggle="collapse" href="#${summaryCollapseId}" style="display:block;">
             <strong>Summary</strong>
-            <span class="pull-right muted">toggle</span>
+            <span class="fnb-panel-toggle__chevron pull-right muted" aria-hidden="true">▾</span>
           </a>
         </div>
         <div id="${summaryCollapseId}" class="panel-collapse collapse">
@@ -559,9 +581,9 @@ function buildContext(item, slug) {
     ? `
       <div class="panel panel-default" style="margin-top:8px;">
         <div class="panel-heading" style="padding:6px 10px;">
-          <a data-toggle="collapse" href="#${awardsCollapseId}" style="display:block;">
+          <a class="fnb-panel-toggle" data-toggle="collapse" href="#${awardsCollapseId}" style="display:block;">
             <strong>Awards</strong>
-            <span class="pull-right muted">toggle</span>
+            <span class="fnb-panel-toggle__chevron pull-right muted" aria-hidden="true">▾</span>
           </a>
         </div>
         <div id="${awardsCollapseId}" class="panel-collapse collapse">
@@ -588,12 +610,6 @@ function buildContext(item, slug) {
     links_block: linksBlock,
   };
 }
-
-/**
- * ============================================================================
- * Map init (generic engine)
- * ============================================================================
- */
 
 export function initMap(config) {
   const {
@@ -661,6 +677,7 @@ export function initMap(config) {
   // Filters only if list exists
   const listEl = listId ? document.getElementById(listId) : null;
   if (listEl) {
+    hydrateList(config, dataset);
     wireFilters(config, markerLayer, markerBySlug);
     applyFilters(config, markerLayer, markerBySlug);
   }
