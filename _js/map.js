@@ -6,6 +6,11 @@ import "leaflet/dist/leaflet.css";
 //      e.g., filtering at the moment is specific to the F&B domain
 //      Also, move the F&B stuff to a separate file
 
+// TODO: Write a way to more easily manage F&B awards, as right now
+//      the manual effort to add awards is too much;
+//      can do the same things for other parts of F&B such as if it
+//      is closed and such.
+
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, (m) => ({
     "&": "&amp;",
