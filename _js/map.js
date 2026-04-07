@@ -44,23 +44,50 @@ function buildLinksHtml(item) {
 }
 
 export const CUISINES = {
+  american: { label: "American", emoji: "🇺🇸" },
+  argentine: { label: "Argentine", emoji: "🇦🇷" },
+  indian: { label: "Indian", emoji: "🇮🇳" },
+  french: { label: "French", emoji: "🇫🇷" },
   italian: { label: "Italian", emoji: "🇮🇹" },
-  pizza: { label: "Pizza", emoji: "🍕" },
-  barbecue: { label: "BBQ", emoji: "🍖" },
+  german: { label: "German", emoji: "🇩🇪" },
+  spanish: { label: "Spanish", emoji: "🇪🇸" },
   mexican: { label: "Mexican", emoji: "🇲🇽" },
-  tacos: { label: "Tacos", emoji: "🌮" },
   japanese: { label: "Japanese", emoji: "🇯🇵" },
-  sushi: { label: "Sushi", emoji: "🍣" },
   thai: { label: "Thai", emoji: "🇹🇭" },
   chinese: { label: "Chinese", emoji: "🇨🇳" },
   korean: { label: "Korean", emoji: "🇰🇷" },
   vietnamese: { label: "Vietnamese", emoji: "🇻🇳" },
-  indian: { label: "Indian", emoji: "🇮🇳" },
-  french: { label: "French", emoji: "🇫🇷" },
+  asian: { label: "Asian", emoji: "🍽️" },
+  european: { label: "European", emoji: "🍽️" },
+  mediterranean: { label: "Mediterranean", emoji: "🍽️" },
+  pizza: { label: "Pizza", emoji: "🍕" },
+  barbecue: { label: "BBQ", emoji: "🍖" },
+  burgers: { label: "Burgers", emoji: "🍔" },
+  hot_dogs: { label: "Hot Dogs", emoji: "🌭" },
+  sandwiches: { label: "Sandwiches", emoji: "🥪" },
+  steakhouse: { label: "Steakhouse", emoji: "🥩" },
+  tacos: { label: "Tacos", emoji: "🌮" },
+  sushi: { label: "Sushi", emoji: "🍣" },
+  ramen: { label: "Ramen", emoji: "🍜" },
+  tonkatsu: { label: "Tonkatsu", emoji: "🍗" },
+  yakitori: { label: "Yakitori", emoji: "🍢" },
   seafood: { label: "Seafood", emoji: "🦞" },
+  vegetarian: { label: "Vegetarian", emoji: "🥬" },
+  vegan: { label: "Vegan", emoji: "🌱" },
+  breakfast: { label: "Breakfast", emoji: "🥓" },
+  brunch: { label: "Brunch", emoji: "🍳" },
+  fusion: { label: "Fusion", emoji: "🍽️" },
+  haute: { label: "Haute", emoji: "🍽️" },
+  ice_cream: { label: "Ice Cream", emoji: "🍦" },
   gelato: { label: "Gelato", emoji: "🍨" },
   bakery: { label: "Bakery", emoji: "🥖" },
   cafe: { label: "Cafe", emoji: "☕" },
+  dive_bar: { label: "Dive Bar", emoji: "🍹" },
+  sports_bar: { label: "Sports Bar", emoji: "🏟️" },
+  pub: { label: "Pub", emoji: "🍻" },
+  cocktail_bar: { label: "Cocktail Bar", emoji: "🍸" },
+  beer: { label: "Beer", emoji: "🍺" },
+  wine: { label: "Wine", emoji: "🍷" },
 };
 
 export function getCuisineDisplay(key) {
@@ -271,7 +298,7 @@ function getMichelinAwards(m) {
   const stars = Math.max(0, Math.min(3, parseInt(m.stars, 10) || 0));
   if (stars) {
     const starIcons = Array.from({ length: stars })
-      .map(() => '<i class="fa-solid fa-asterisk" style="color:#BD2333;"></i>')
+      .map(() => '<span class="michelin-red">✱</span>')
       .join("");
     bits.push(`<div>${starIcons}</div>`);
   }
@@ -281,40 +308,40 @@ function getMichelinAwards(m) {
   const y1 = formatYearRanges(m.years_of_1_star);
   if (y1.count) {
     lines.push(
-      `<li><span style="color:#BD2333;">✱</span> 1-star: <strong>${y1.count}</strong> year${y1.count === 1 ? "" : "s"} (${escapeHtml(y1.text)})</li>`
+      `<li><span class="michelin-red">✱</span> 1-star: <strong>${y1.count}</strong> year${y1.count === 1 ? "" : "s"} (${escapeHtml(y1.text)})</li>`
     );
   }
 
   const y2 = formatYearRanges(m.years_of_2_stars);
   if (y2.count) {
     lines.push(
-      `<li><span style="color:#BD2333;">✱✱</span> 2-star: <strong>${y2.count}</strong> year${y2.count === 1 ? "" : "s"} (${escapeHtml(y2.text)})</li>`
+      `<li><span class="michelin-red">✱✱</span> 2-star: <strong>${y2.count}</strong> year${y2.count === 1 ? "" : "s"} (${escapeHtml(y2.text)})</li>`
     );
   }
 
   const y3 = formatYearRanges(m.years_of_3_stars);
   if (y3.count) {
     lines.push(
-      `<li><span style="color:#BD2333;">✱✱✱</span> 3-star: <strong>${y3.count}</strong> year${y3.count === 1 ? "" : "s"} (${escapeHtml(y3.text)})</li>`
+      `<li><span class="michelin-red">✱✱✱</span> 3-star: <strong>${y3.count}</strong> year${y3.count === 1 ? "" : "s"} (${escapeHtml(y3.text)})</li>`
     );
   }
 
   const yBib = formatYearRanges(m.years_of_bib);
   if (yBib.count) {
     lines.push(
-      `<li><span class="val-badge" style="color:#BD2333;">Bib</span> <strong>${yBib.count}</strong> year${yBib.count === 1 ? "" : "s"} (${escapeHtml(yBib.text)})</li>`
+      `<li><span class="val-badge michelin-red">Bib</span> <strong>${yBib.count}</strong> year${yBib.count === 1 ? "" : "s"} (${escapeHtml(yBib.text)})</li>`
     );
   }
 
   const yGreen = formatYearRanges(m.years_of_green);
   if (yGreen.count) {
     lines.push(
-      `<li><span class="val-badge" style="color:#84BD00;">Green</span> <strong>${yGreen.count}</strong> year${yGreen.count === 1 ? "" : "s"} (${escapeHtml(yGreen.text)})</li>`
+      `<li><span class="val-badge michelin-green">Green</span> <strong>${yGreen.count}</strong> year${yGreen.count === 1 ? "" : "s"} (${escapeHtml(yGreen.text)})</li>`
     );
   }
 
-  if (m.bib) bits.push('<div style="margin-top:4px;"><span class="val-badge" style="color:#BD2333;">Bib</span></div>');
-  if (m.green) bits.push('<div style="margin-top:4px;"><span class="val-badge" style="color:#84BD00;">Green</span></div>');
+  if (m.bib) bits.push('<div style="margin-top:4px;"><span class="val-badge michelin-red">Bib</span></div>');
+  if (m.green) bits.push('<div style="margin-top:4px;"><span class="val-badge michelin-green">Green</span></div>');
 
   if (lines.length) {
     bits.push(`

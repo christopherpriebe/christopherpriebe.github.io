@@ -86,7 +86,7 @@
   city: West Lafayette
   state: Indiana
   country: United States of America
-  cuisines: ["dive bar"]
+  cuisines: ["dive_bar"]
   price_rating: 1
   journey_rating: 1
   website: https://www.harryschocolateshop.com/
@@ -635,7 +635,7 @@
   city: Fredericksburg
   state: Texas
   country: United States of America
-  cuisines: ["ice cream"]
+  cuisines: ["ice_cream"]
   price_rating: 1
   journey_rating: 1
   map_url: https://maps.app.goo.gl/dyfawy4vEZHMAQDf8
