@@ -1,0 +1,394 @@
+#f_and_b_establishments
+
+#f-and-b-establishments-map
+    height: 70vh
+    min-height: 420px
+
+:root
+  --tier-ink: 222 47% 18%
+  --tier-ink-strong: 222 55% 14%
+  --tier-accent: 202 79% 47%
+  --tier-highlight: 39 94% 57%
+  --tier-surface: 0 0% 100%
+  --tier-surface-soft: 210 33% 98%
+  --pin-bulb-center-y-ratio: .328125
+  --pin-bulb-diameter-ratio: .6041667
+
+.journey-marker-icon
+    background: transparent
+    border: 0
+    display: flex
+    align-items: flex-start
+    justify-content: center
+
+.journey-pin
+    --pin-scale: 1
+    --pin-body-width: 22px
+    --pin-body-height: 30px
+    --pin-aura-size: calc(var(--pin-body-width) * var(--pin-bulb-diameter-ratio))
+    --pin-ring: 0px
+    --pin-ring-width: 0px
+    --pin-border: hsl(var(--tier-ink))
+    --pin-fill: hsl(var(--tier-surface))
+    --pin-core: hsl(var(--tier-ink))
+    --pin-core-ring: hsl(var(--tier-surface) / .96)
+    --pin-aura-opacity: 0
+    --pin-ring-color: transparent
+    --pin-glow: transparent
+    position: relative
+    display: inline-block
+    width: calc(var(--pin-body-width) * var(--pin-scale))
+    height: calc(var(--pin-body-height) * var(--pin-scale))
+    line-height: 0
+    overflow: visible
+    pointer-events: none
+
+.journey-pin__aura,
+.journey-pin__svg
+    transition: transform .18s ease, filter .18s ease, opacity .18s ease
+
+.journey-pin__aura
+    position: absolute
+    left: 50%
+    top: calc((var(--pin-body-height) * var(--pin-bulb-center-y-ratio) * var(--pin-scale)) - (((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale)) / 2))
+    width: calc((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale))
+    height: calc((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale))
+    margin-left: calc(((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale)) / -2)
+    border: calc(var(--pin-ring-width) * var(--pin-scale)) solid var(--pin-ring-color)
+    border-radius: 999px
+    box-sizing: border-box
+    box-shadow: 0 0 0 calc(6px * var(--pin-scale)) var(--pin-glow)
+    opacity: var(--pin-aura-opacity)
+
+.journey-pin__svg
+    display: block
+    width: 100%
+    height: 100%
+    overflow: visible
+    filter: drop-shadow(0 calc(2px * var(--pin-scale)) calc(4px * var(--pin-scale)) rgba(15, 23, 42, .18))
+    transform-origin: 50% 100%
+
+.journey-pin__shape
+    fill: var(--pin-fill)
+    stroke: var(--pin-border)
+    stroke-width: 4
+    stroke-linecap: round
+    stroke-linejoin: round
+    paint-order: stroke fill
+
+.journey-pin__core
+    fill: var(--pin-core)
+    stroke: var(--pin-core-ring)
+    stroke-width: 3
+
+.journey-pin--map
+    display: block
+
+.journey-pin--inline
+    --pin-scale: .72
+    vertical-align: middle
+    margin: 0 .18em 0 .05em
+
+.journey-pin--list
+    --pin-scale: .56
+    margin: 0
+
+.journey-pin--t0
+    --pin-body-width: 18px
+    --pin-body-height: 25px
+    --pin-border: hsl(var(--tier-ink) / .78)
+    --pin-fill: hsl(var(--tier-surface-soft))
+    --pin-core: hsl(var(--tier-ink) / .76)
+
+.journey-pin--t1
+    --pin-body-width: 22px
+    --pin-body-height: 30px
+
+.journey-pin--t2
+    --pin-body-width: 28px
+    --pin-body-height: 38px
+    --pin-border: hsl(var(--tier-ink-strong))
+    --pin-fill: hsl(210 50% 97%)
+    --pin-core: hsl(var(--tier-accent))
+    --pin-ring: 10px
+    --pin-ring-width: 2px
+    --pin-ring-color: hsl(var(--tier-accent) / .45)
+    --pin-glow: hsl(var(--tier-accent) / .12)
+    --pin-aura-opacity: 1
+
+.journey-pin--t3
+    --pin-body-width: 34px
+    --pin-body-height: 45px
+    --pin-border: hsl(219 33% 14%)
+    --pin-fill: hsl(218 40% 24%)
+    --pin-core: hsl(var(--tier-highlight))
+    --pin-core-ring: hsl(var(--tier-surface) / .92)
+    --pin-ring: 16px
+    --pin-ring-width: 2px
+    --pin-ring-color: hsl(var(--tier-highlight) / .68)
+    --pin-glow: hsl(var(--tier-highlight) / .20)
+    --pin-aura-opacity: 1
+
+.journey-pin--t3 .journey-pin__svg
+    filter: drop-shadow(0 calc(2px * var(--pin-scale)) calc(6px * var(--pin-scale)) rgba(15, 23, 42, .24))
+
+.leaflet-marker-icon:hover .journey-pin__aura,
+.leaflet-marker-icon:focus .journey-pin__aura
+    box-shadow: 0 0 0 calc(8px * var(--pin-scale)) var(--pin-glow)
+
+.leaflet-marker-icon:hover .journey-pin__svg,
+.leaflet-marker-icon:focus .journey-pin__svg
+    transform: translateY(calc(-1px * var(--pin-scale)))
+
+.fnb-tier-list
+    margin: 12px 0 0
+    padding: 0
+
+    > li
+        display: flex
+        align-items: flex-start
+        gap: 10px
+        margin-bottom: 12px
+
+    .journey-pin--inline
+        --pin-scale: .82
+        flex: 0 0 auto
+        margin: 0
+
+.map-card__meta
+    display: inline-flex
+    align-items: center
+    gap: 6px
+
+.map-sidebar-column
+    display: flex
+    flex-direction: column
+    gap: 12px
+
+.map-sidebar-filters .panel
+    margin-bottom: 0
+
+.fnb-filter-group
+    display: flex
+    flex-direction: column
+    gap: 6px
+
+.fnb-filter-group__label
+    font-size: 12px
+    font-weight: 700
+    letter-spacing: .02em
+    text-transform: uppercase
+    color: #5b6673
+
+.fnb-toggle-row
+    display: flex
+    flex-wrap: wrap
+    gap: 8px
+
+.fnb-toggle-row--compact
+    gap: 6px
+
+.fnb-filter-chip
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    min-height: 38px
+    padding: 8px 12px
+    border: 1px solid #d8e0e8
+    border-radius: 999px
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)
+    color: #25313d
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .06)
+    transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease
+
+    &:hover
+        border-color: #b7c7d8
+        background: #fff
+
+    &:focus
+        outline: 0
+        border-color: hsl(var(--tier-accent))
+        box-shadow: 0 0 0 3px hsl(var(--tier-accent) / .16)
+
+    &:active
+        transform: translateY(1px)
+
+    &.is-active
+        border-color: hsl(var(--tier-accent) / .54)
+        background: hsl(206 100% 97%)
+        box-shadow: 0 0 0 3px hsl(var(--tier-accent) / .10)
+
+.fnb-filter-chip--icon
+    width: 56px
+    min-height: 46px
+    padding: 10px 8px
+
+    .journey-pin
+        --pin-scale: .84
+        margin: 0
+
+.fnb-filter-chip--price
+    min-width: 72px
+
+.fnb-price-filter
+    display: inline-flex
+    align-items: center
+    gap: 6px
+    padding: 6px
+    border: 1px solid #d8e0e8
+    border-radius: 999px
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .06)
+
+.fnb-price-filter-row
+    display: flex
+    flex-wrap: wrap
+    align-items: center
+    gap: 8px
+
+.fnb-price-filter__square
+    width: 18px
+    height: 18px
+    border-radius: 4px
+    border: 1px solid hsl(214 24% 80%)
+    background: hsl(213 21% 88%)
+    transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease
+
+    &:hover
+        border-color: hsl(var(--tier-accent) / .52)
+        background: hsl(206 100% 96%)
+
+    &:focus
+        outline: 0
+        border-color: hsl(var(--tier-accent))
+        box-shadow: 0 0 0 3px hsl(var(--tier-accent) / .16)
+
+    &:active
+        transform: translateY(1px)
+
+    &.is-active
+        border-color: #23272f
+        background: linear-gradient(180deg, #4a525e 0%, #23272f 100%)
+
+.fnb-filter-chip--mode
+    min-height: 32px
+    padding: 6px 10px
+    font-size: 12px
+    font-weight: 600
+
+    &.is-active
+        border-color: #2e6da4
+        background: #337ab7
+        color: #fff
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .15)
+
+.fnb-filter-actions
+    display: flex
+    align-items: center
+    justify-content: space-between
+    gap: 10px
+    margin-top: 10px
+
+.fnb-meta-row
+    margin-top: 4px
+
+.price-meter
+    --price-meter-fill: #4a525e
+    --price-meter-fill-strong: #23272f
+    --price-meter-empty: hsl(213 21% 88%)
+    --price-meter-empty-border: hsl(214 24% 80%)
+    --price-meter-label-color: inherit
+    display: inline-flex
+    align-items: center
+    gap: 8px
+
+.price-meter__label
+    font-size: 12px
+    font-weight: 600
+    color: var(--price-meter-label-color)
+
+.price-meter__track
+    display: inline-flex
+    align-items: center
+    gap: 4px
+
+.price-meter__square
+    width: 10px
+    height: 10px
+    border-radius: 2px
+    border: 1px solid var(--price-meter-empty-border)
+    background: var(--price-meter-empty)
+
+    &.is-filled
+        border-color: var(--price-meter-fill-strong)
+        background: linear-gradient(180deg, var(--price-meter-fill) 0%, var(--price-meter-fill-strong) 100%)
+
+.price-meter--compact
+    gap: 0
+
+    .price-meter__track
+        gap: 3px
+
+    .price-meter__square
+        width: 9px
+        height: 9px
+
+.fnb-filter-chip--price.is-active .price-meter
+    --price-meter-fill: hsl(var(--tier-highlight))
+    --price-meter-fill-strong: hsl(31 95% 44%)
+
+.fnb-popup,
+.map-card__details
+    --price-meter-label-color: var(--fnb-price-color, #111)
+
+.map-sidebar-list
+    margin-bottom: 0
+    background: #fff
+    border: 1px solid #ddd
+    border-radius: 10px
+    overflow: hidden
+    max-height: 50vh
+    overflow-y: auto
+
+@media (min-width: 768px)
+    .map-sidebar-column
+        height: 70vh
+        min-height: 420px
+
+    .map-sidebar-list
+        flex: 1 1 auto
+        max-height: none
+        min-height: 0
+        overflow-y: auto
+
+.leaflet-popup-content
+    margin: 16px
+    max-height: 360px
+    max-width: 360px
+    overflow-y: auto
+
+.fnb-popup .fnb-header
+    position: sticky
+    top: 0
+    background: #fff
+    padding-bottom: 6px
+    z-index: 2
+
+.fnb-popup .panel
+    margin-bottom: 8px
+
+.fnb-panel-toggle
+    display: block
+
+.fnb-panel-toggle__chevron
+    display: inline-block
+    transition: transform .18s ease
+
+.fnb-panel-toggle[aria-expanded="true"] .fnb-panel-toggle__chevron
+    transform: rotate(180deg)
+
+.michelin-red
+    color: #BD2333
+
+.michelin-green
+    color: #84BD00

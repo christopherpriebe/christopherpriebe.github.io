@@ -1,0 +1,67 @@
+{%- assign r = include.item -%}
+{%- assign slug = r.slug | default: r.name -%}
+{%- assign jr = r.journey_rating | default: 0 -%}
+{%- assign pr = r.price_rating | default: 0 -%}
+{%- assign has_city_or_state = false -%}
+{%- if r.city or r.state -%}
+  {%- assign has_city_or_state = true -%}
+{%- endif -%}
+
+<a class="list-group-item map-card"
+   data-slug="{{ slug | escape }}"
+   data-name="{{ r.name | escape }}"
+   data-city="{{ r.city | escape }}"
+   data-neighborhood="{{ r.neighborhood | escape }}"
+   data-country="{{ r.country | escape }}"
+   data-journey="{{ jr }}"
+   data-price="{{ pr }}"
+   data-value="{% if r.value_recognition %}1{% else %}0{% endif %}"
+   data-cuisines="{% if r.cuisines %}{{ r.cuisines | join: ' ' | downcase | escape }}{% endif %}">
+
+  <div class="clearfix">
+    <div class="pull-left">
+      <strong>{{ r.name | escape }}</strong>
+      <span class="muted">
+        {% if r.neighborhood %} · {{ r.neighborhood | escape }}{% endif %}
+      </span>
+    </div>
+
+    <div class="pull-right map-card__meta" style="white-space:nowrap;">
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t{{ jr }}" aria-hidden="true"></span>
+
+      {%- if r.value_recognition -%}
+        <span class="val-badge">◈</span>
+      {%- endif -%}
+    </div>
+  </div>
+
+  <div class="muted" style="margin-top:2px;">
+    {%- if r.city and r.state -%}
+      {{ r.city | escape }}, {{ r.state | escape }}
+    {%- elsif r.city -%}
+      {{ r.city | escape }}
+    {%- elsif r.state -%}
+      {{ r.state | escape }}
+    {%- endif -%}
+    {%- if r.country -%}
+      {%- if has_city_or_state -%}&nbsp;· {% endif -%}{{ r.country | escape }}
+    {%- endif -%}
+  </div>
+
+  <div class="map-card__details" data-map-card-meta>
+    <div class="muted" style="margin-top:4px;">
+      {%- if r.cuisines and r.cuisines.size > 0 -%}
+        {{ r.cuisines | join: ", " | escape }}
+      {%- endif -%}
+
+      {%- if pr and pr > 0 -%}
+        &nbsp;·&nbsp; Price: {{ pr }}
+      {%- endif -%}
+    </div>
+  </div>
+
+  {%- if r.summary -%}
+    <div style="margin-top:6px;">{{ r.summary | escape }}</div>
+  {%- endif -%}
+
+</a>

@@ -5,13 +5,13 @@ layout: base
 <div class="container">
     <div class="row">
         <div class="col-xs-12">
-            {{content}}
+            {{ content }}
             <hr>
         </div>
     </div>
     <div class="row icon-card-grid">
-        {% for social in site.data.socials %}
-            {% include social.liquid %}
+        {% for card in page.cards %}
+            {% include icon_card.liquid card=card %}
         {% endfor %}
     </div>
 </div>

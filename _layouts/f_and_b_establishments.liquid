@@ -1,0 +1,75 @@
+---
+layout: base
+---
+
+<div class="container">
+    <div class="row">
+        <div class="col-xs-12">
+            <h1>{{ page.title }}</h1>
+        </div>
+    </div>
+
+    {% include map/marker_map.liquid
+        id="f-and-b-establishments-map"
+        data=site.data.f_and_b_establishments
+        list_include="f_and_b/list_item.liquid"
+        filters_include="f_and_b/filters.liquid"
+        popup_template="f_and_b/popup.liquid"
+        tooltip_template="f_and_b/tooltip.liquid"
+        zoom=2
+    %}
+
+    <div class="row">
+        <div class="col-xs-12">
+            <h2>More on my Rating System</h2>
+            <p>
+                I enjoy the simplicity of the Michelin Guide's rating system, but believe some of its definitions have become harder to interpret in practice.
+                For example, Michelin's original framing describes one star as "a very good restaurant in its category" and two stars as "excellent cooking, worth a detour."
+                In my experience, the prestige of the designation often shifts expectations upward, as many one-star restaurants are treated (by marketing and diners alike) as "worth a detour," which blurs the intended distinction.
+            </p>
+            <p>
+                Additionally, I've felt inconsistency in fine dining.
+                I've had one-star meals abroad that were so far beyond certain one-star meals I've had in the United States that it made the shared "one star" label feel almost meaningless as a cross-city comparison.
+                Part of this is taste.
+                Michelin inspectors and I don't always share the same preferences, which is okay.
+                They're trying to be broadly representative, and I'm just one guy with my own biases.
+                The bigger issue for me is that Michelin's ratings can become hard to interpret when you compare restaurants across regions with very different competitive baselines.
+            </p>
+            <p>
+                So rather than trying to score establishments on an absolute "quality" scale, my system focuses on intention and effort: how much planning a place deserves for a traveler.
+                Michelin asked a great question in the early days, "is it worth a stop / detour / special trip?", and I'm bringing that question back as the primary axis.
+            </p>
+            <p>
+                My tiers work like this:
+            </p>
+            <ul class="list-unstyled fnb-tier-list">
+                <li>
+                    <span class="journey-pin journey-pin--inline journey-pin--t0" aria-hidden="true"></span>
+                    <span><strong>Tier 0</strong>: places I genuinely recommend that are great if you're nearby, but not a destination on their own.</span>
+                </li>
+                <li>
+                    <span class="journey-pin journey-pin--inline journey-pin--t1" aria-hidden="true"></span>
+                    <span><strong>Tier 1</strong>: <strong>Worth the visit</strong> - worth going out of your way for if you're already in the area (or in the city).</span>
+                </li>
+                <li>
+                    <span class="journey-pin journey-pin--inline journey-pin--t2" aria-hidden="true"></span>
+                    <span><strong>Tier 2</strong>: <strong>Worth planning around</strong> - worth making a main attraction of a trip you were already going to take.</span>
+                </li>
+                <li>
+                    <span class="journey-pin journey-pin--inline journey-pin--t3" aria-hidden="true"></span>
+                    <span><strong>Tier 3</strong>: <strong>Worth the trip</strong> - worth building travel around, potentially long-distance, primarily for the experience.</span>
+                </li>
+            </ul>
+            <p>
+                From these definitions emerges a natural structure for assignment: Selected establishments are places I genuinely recommend within their local context.
+                Tier 1 establishments represent the strongest experiences within a city, places that are clearly worth seeking out if you're already there.
+                Tier 2 establishments are those that stand out not just locally, but across cities, among the best I've experienced in their particular cuisine.
+                Tier 3 establishments are rare experiences that transcend cuisine or geography and justify travel on their own.
+            </p>
+            <p>
+                In this way, Selected and Tier 1 ratings are primarily local-context distinctions, while Tier 2 and Tier 3 ratings are intentionally normalized across regions and countries.
+                The goal isn't to declare absolute culinary superiority, but to give readers a clearer signal of how much intention an establishment deserves.
+            </p>
+        </div>
+    </div>
+</div>
