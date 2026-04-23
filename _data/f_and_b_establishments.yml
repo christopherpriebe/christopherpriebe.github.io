@@ -1273,8 +1273,9 @@
   city: San Diego
   state: California
   country: United States of America
-  cuisines: ["japanese", "sushi", "omakase"]
-  price_rating: 3
+  cuisines: ["japanese", "sushi"]
+  price_rating: 4
+  journey_rating: 1
   website: https://www.soichisushi.com/
   reservation_url: https://www.exploretock.com/soichisushi
   map_url: https://maps.app.goo.gl/UYCDusmXVp65DzJy7
@@ -1290,4 +1291,11 @@
       years_of_green: []
     other: []
   visits: [2026-04-22]
+  summary: >
+    Chef Soichi Kadoya offers one of the best sushi experiences in San Diego, combining excellent fish, thoughtful preparation, and a warm, intimate atmosphere.
+    The chef's counter is easily the best seat in the house, giving you the chance to chat with Chef Soichi as he prepares each course.
+    The menu is technically pre-fixed rather than traditional omakase, though it still has an element of surprise: it changes seasonally and is not revealed ahead of time.
+    The dishes are fresh, diverse, and well-executed, with the uni nigiri and the oyster starter standing out as the highlights of the meal.
+    Reservations are difficult to secure, often requiring booking more than a month in advance, and the meal is undeniably expensive.
+    Even so, Soichi delivers a charming dining experience that is worth seeking out.
   last_updated: 2026-04-23
