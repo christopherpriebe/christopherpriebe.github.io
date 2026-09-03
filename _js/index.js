@@ -11,8 +11,19 @@ library.add(fas, far, fab);
 dom.watch();
 
 import { enhanceJourneyPins, initMap } from "./map";
+import { initRouteMap } from "./routes";
+import { initPublicationsChart } from "./publications";
+import { initFilters } from "./filters";
+import { initUnits } from "./units";
 document.addEventListener("DOMContentLoaded", () => {
+    initUnits();
     enhanceJourneyPins();
     const queue = window.__MAP_INIT__ || [];
     queue.forEach((cfg) => initMap(cfg));
+
+    const routeQueue = window.__ROUTE_MAP_INIT__ || [];
+    routeQueue.forEach((cfg) => initRouteMap(cfg));
+
+    initPublicationsChart();
+    initFilters();
 });

@@ -1,0 +1,9 @@
+{%- comment -%}
+The title row every content layout opens with. Sits inside an already-open
+.container; the layout keeps that wrapper because what follows it differs.
+{%- endcomment -%}
+<div class="row">
+    <div class="col-xs-12">
+        {% include page_title.liquid %}
+    </div>
+</div>

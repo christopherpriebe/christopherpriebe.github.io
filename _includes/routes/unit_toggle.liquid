@@ -1,0 +1,8 @@
+{%- comment -%}
+Metric/imperial switch. Wired by _js/units.js, which also remembers the choice.
+Server-rendered values are metric, so this starts on km.
+{%- endcomment -%}
+<div class="unit-toggle" data-unit-toggle role="group" aria-label="Measurement units">
+  <button type="button" class="is-active" data-units="metric" aria-pressed="true">km</button>
+  <button type="button" data-units="imperial" aria-pressed="false">mi</button>
+</div>

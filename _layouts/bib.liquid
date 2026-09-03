@@ -1,7 +1,16 @@
 {% comment %} Inspired (i.e., copied and slightly modified) by https://github.com/alshedivat/al-folio {% endcomment %}
 
-<div class="row">
-    {% comment %} TODO: Add back commented out stuff when time prevails {% endcomment %}
+{% comment %}
+Machine-readable publication metadata for the timeline chart in
+_js/publications.js. `shorttitle` is optional; the chart falls back to the
+part of the title before the colon, then to the full title.
+{% endcomment %}
+<div class="row bib-entry"
+     data-pub-year="{{ entry.year }}"
+     data-pub-month="{{ entry.month }}"
+     data-pub-venue="{{ entry.abbr }}"
+     data-pub-title="{{ entry.title | escape }}"
+     data-pub-short="{{ entry.shorttitle | escape }}">
 
     <div class="col-xs-12 col-sm-1 abbr">
         {%- if entry.abbr -%}
@@ -22,23 +31,6 @@
             {%- endif -%}
         {%- endif -%}
 
-        {% comment %} {% if entry.preview %}
-            {% if entry.preview contains '://' %}
-                <img class="preview z-depth-1 rounded" src="{{ entry.preview }}">
-            {% else %}
-                {% assign entry_path = entry.preview | prepend: '/assets/img/publication_preview/' %}
-                {%
-                include figure.liquid
-                loading="eager"
-                path=entry_path
-                sizes = "200px"
-                class="preview z-depth-1 rounded"
-                zoomable=true
-                avoid_scaling=true
-                alt=entry.preview
-                %}
-            {% endif %}
-        {% endif %} {% endcomment %}
     </div>
 
     <div class="col-xs-12 col-sm-10">
@@ -84,43 +76,6 @@
                 {%- endif -%}
             {%- endfor -%}
             
-            {% comment %} {%- assign more_authors = author_array_size | minus: author_array_limit -%}
-            {%- assign more_authors_hide = more_authors | append: ' more author' -%}
-            {% if more_authors > 0 %}
-                {%- if more_authors > 1 -%}
-                    {% assign more_authors_hide = more_authors_hide | append: 's' %}
-                {%- endif -%}
-                {% assign more_authors_show = '' %}
-                {%- for author in entry.author_array offset: author_array_limit -%}
-                    {% assign more_authors_show = more_authors_show | append: author.first | append: ' ' | append: author.last %}
-                    {% unless forloop.last %}
-                        {% assign more_authors_show = more_authors_show | append: ', ' %}
-                    {% endunless %}
-                {%- endfor -%}
-                {%- assign more_authors_show = more_authors_show | regex_replace: '([*∗†‡§¶‖&^]+)', '<sup>\1</sup>' -%}
-                , and
-                <span
-                    class="more-authors"
-                    title="click to view {{ more_authors_hide }}"
-                    onclick="
-                        var element = $(this);
-                        element.attr('title', '');
-                        var more_authors_text = element.text() == '{{ more_authors_hide }}' ? '{{ more_authors_show }}' : '{{ more_authors_hide }}';
-                        var cursorPosition = 0;
-                        var textAdder = setInterval(function(){
-                        element.html(more_authors_text.substring(0, cursorPosition + 1));
-                        if (++cursorPosition == more_authors_text.length){
-                            clearInterval(textAdder);
-                        }
-                    }, '{{ site.more_authors_animation_delay }}');
-                    "
-                >
-                    {{- more_authors_hide -}}
-                </span>
-                {% endif %}
-                {% if entry.annotation %}
-                <i class="fa-solid fa-circle-info ml-1" data-toggle="popover" data-placement="top" data-html="true" data-content="{{ entry.annotation | escape }}"></i>
-            {% endif %} {% endcomment %}
         </div>
 
         <div class="periodical">

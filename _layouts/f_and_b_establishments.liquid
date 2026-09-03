@@ -2,26 +2,75 @@
 layout: base
 ---
 
+{%- assign places = site.data.f_and_b_establishments -%}
+
+{%- comment -%}
+Headline figures, all derived from the data file so they never go stale.
+{%- endcomment -%}
+{%- assign visit_total = 0 -%}
+{%- assign starred = 0 -%}
+{%- assign bib_gourmand = 0 -%}
+{%- for place in places -%}
+    {%- assign visit_total = visit_total | plus: place.visits.size -%}
+    {%- if place.awards.michelin.stars > 0 -%}
+        {%- assign starred = starred | plus: 1 -%}
+    {%- endif -%}
+    {%- if place.awards.michelin.bib -%}
+        {%- assign bib_gourmand = bib_gourmand | plus: 1 -%}
+    {%- endif -%}
+{%- endfor -%}
+{%- assign city_count = places | map: "city" | compact | uniq | size -%}
+{%- assign country_count = places | map: "country" | compact | uniq | size -%}
+
 <div class="container">
+    {% include page_header.liquid %}
+
     <div class="row">
         <div class="col-xs-12">
-            <h1>{{ page.title }}</h1>
+            <div class="stats-strip">
+                <div class="stat">
+                    <span class="stat__num">{{ places | size }}</span>
+                    <span class="stat__label">Places</span>
+                </div>
+                <div class="stat">
+                    <span class="stat__num">{{ visit_total }}</span>
+                    <span class="stat__label">Visits</span>
+                </div>
+                <div class="stat">
+                    <span class="stat__num">{{ city_count }}</span>
+                    <span class="stat__label">Cities</span>
+                </div>
+                <div class="stat">
+                    <span class="stat__num">{{ country_count }}</span>
+                    <span class="stat__label">Countries</span>
+                </div>
+                <div class="stat">
+                    <span class="stat__num">{{ starred }}<small class="michelin-red">&#9733;</small></span>
+                    <span class="stat__label">Michelin starred</span>
+                </div>
+                <div class="stat">
+                    <span class="stat__num">{{ bib_gourmand }}<small class="michelin-red">&#8251;</small></span>
+                    <span class="stat__label">Bib Gourmand</span>
+                </div>
+            </div>
         </div>
     </div>
 
     {% include map/marker_map.liquid
         id="f-and-b-establishments-map"
-        data=site.data.f_and_b_establishments
+        data=places
         list_include="f_and_b/list_item.liquid"
         filters_include="f_and_b/filters.liquid"
         popup_template="f_and_b/popup.liquid"
         tooltip_template="f_and_b/tooltip.liquid"
+        list_label="Places"
         zoom=2
     %}
 
     <div class="row">
         <div class="col-xs-12">
-            <h2>More on my Rating System</h2>
+            <hr>
+            <h2 class="section-head">More on my Rating System</h2>
             <p>
                 I enjoy the simplicity of the Michelin Guide's rating system, but believe some of its definitions have become harder to interpret in practice.
                 For example, Michelin's original framing describes one star as "a very good restaurant in its category" and two stars as "excellent cooking, worth a detour."

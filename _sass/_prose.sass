@@ -1,0 +1,191 @@
+/*
+ * Prose
+ *
+ * The single-column body used by blog posts and project write-ups. Wrap
+ * rendered Markdown in .prose and everything inside it picks these up, so
+ * authors never style anything by hand.
+ */
+
+.prose
+    max-width: 42em
+    font-size: 17px
+    line-height: 1.75
+    color: $text-color
+
+    > * + *
+        margin-top: 16px
+
+    h2
+        margin-top: 44px
+        padding-bottom: 8px
+        border-bottom: 1px solid $page-border-color
+        font-size: 24px
+        font-weight: 700
+
+    h3
+        margin-top: 32px
+        font-size: 19px
+        font-weight: 700
+
+    /* Closer to a caption than a heading. */
+    h4
+        margin-top: 26px
+        font-size: 13px
+        font-weight: 700
+        letter-spacing: .08em
+        text-transform: uppercase
+        color: $page-muted-color
+
+    h2 + *,
+    h3 + *,
+    h4 + *
+        margin-top: 12px
+
+    ul, ol
+        padding-left: 24px
+
+    li + li
+        margin-top: 6px
+
+    ul li::marker
+        color: $navbar-link-hover-color
+
+    ol li::marker
+        color: $page-muted-color
+
+    blockquote
+        margin-left: 0
+        padding: 12px 20px
+        border-left: 3px solid $navbar-title-color
+        border-radius: 0 3px 3px 0
+        background-color: $route-active-background-color
+        font-size: 17px
+        line-height: 1.7
+
+        p + p
+            margin-top: 12px
+
+        cite
+            display: block
+            margin-top: 8px
+            font-size: 12px
+            font-style: normal
+            letter-spacing: .08em
+            text-transform: uppercase
+            color: $navbar-title-color
+
+    code
+        padding: 1px 5px
+        border: 1px solid $page-border-color
+        border-radius: 3px
+        background-color: $projects-panel-head-color
+        color: $navbar-title-color
+        font-size: .86em
+
+    pre
+        padding: 14px 16px
+        border: 1px solid $page-border-color
+        border-left: 3px solid $navbar-title-color
+        border-radius: 0 3px 3px 0
+        background-color: $projects-panel-head-color
+        font-size: 13px
+        line-height: 1.6
+        overflow-x: auto
+
+        code
+            padding: 0
+            border: 0
+            background: none
+            color: $text-color
+            font-size: inherit
+
+    hr
+        height: 1px
+        margin: 44px 0
+        border: 0
+        background-color: $page-border-color
+
+    figure
+        margin: 32px 0
+
+    figure img
+        border: 1px solid $page-border-color
+        border-radius: 4px
+
+    figcaption
+        margin-top: 8px
+        font-size: 12px
+        line-height: 1.6
+        color: $page-muted-color
+
+    table
+        width: 100%
+        border-collapse: collapse
+        font-size: 14px
+
+    th
+        padding: 8px 12px
+        border-bottom: 1px solid $page-border-strong-color
+        text-align: left
+        font-size: 12px
+        font-weight: 700
+        letter-spacing: .08em
+        text-transform: uppercase
+        color: $page-muted-color
+
+    td
+        padding: 12px
+        border-bottom: 1px solid $page-border-color
+        vertical-align: top
+
+    tbody tr:hover td
+        background-color: $projects-panel-head-color
+
+    .lede
+        font-size: 19px
+        line-height: 1.65
+
+/*
+ * Article furniture: the post title, its byline metrics, and prev/next links
+ */
+.article-head
+    margin-bottom: 28px
+
+.article-head h1
+    margin: 0
+
+.page-meta
+    display: flex
+    flex-wrap: wrap
+    gap: 16px
+    margin-top: 10px
+    font-size: 12px
+    letter-spacing: .04em
+    color: $page-muted-color
+
+.page-meta span
+    display: inline-flex
+    align-items: center
+
+.page-meta span + span::before
+    content: ""
+    width: 1px
+    height: 11px
+    margin-right: 16px
+    background-color: $page-border-strong-color
+
+.page-foot-nav
+    display: flex
+    justify-content: space-between
+    gap: 16px
+    margin-top: 56px
+    padding-top: 16px
+    border-top: 1px solid $page-border-color
+    font-size: 14px
+    font-weight: 600
+
+.page-foot-nav a
+    color: $text-color
+
+    &:hover
+        color: $navbar-title-color

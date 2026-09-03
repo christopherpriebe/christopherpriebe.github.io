@@ -1,0 +1,246 @@
+/*
+ * Shared page furniture introduced with the routes page.
+ *
+ * Everything here is additive: the home page does not use these classes, so
+ * its rendering is unchanged. Typography deliberately inherits the site
+ * default (the Bootstrap 3 Helvetica stack the home page uses) rather than
+ * introducing a second family, and the accents are the existing navy/blue.
+ */
+
+/*
+ * Page title
+ *
+ * The design's page head at its plainest: the title, then a rule separating it
+ * from the page. Sized from the design's 2.4rem headline, set in the site face
+ * rather than a display serif.
+ */
+.page-title
+    padding-bottom: 16px
+    margin-bottom: 28px
+    border-bottom: 1px solid $page-border-color
+
+    h1
+        margin: 0
+        font-size: 34px
+        font-weight: 700
+        line-height: 1.15
+        letter-spacing: -.02em
+        color: $text-color
+
+@media (max-width: $screen-sm-min)
+    .page-title
+        padding-bottom: 12px
+        margin-bottom: 20px
+
+        h1
+            font-size: 27px
+
+/*
+ * Stats strip: a row of headline numbers above the fold
+ */
+.stats-strip
+    display: flex
+    flex-wrap: wrap
+    border: 1px solid $page-border-color
+    border-radius: 6px
+    overflow: hidden
+    margin-bottom: 25px
+    background-color: $background-color
+
+.stat
+    flex: 1 1 150px
+    padding: 14px 18px
+    border-right: 1px solid $page-border-color
+    border-bottom: 1px solid $page-border-color
+
+    &:last-child
+        border-right: 0
+
+.stat__num
+    display: block
+    font-size: 28px
+    font-weight: 700
+    line-height: 1.1
+    color: $text-color
+
+    small
+        font-size: 13px
+        font-weight: 400
+        color: $page-muted-color
+        margin-left: 3px
+
+.stat__label
+    display: block
+    margin-top: 4px
+    font-size: 11px
+    font-weight: 700
+    letter-spacing: .08em
+    text-transform: uppercase
+    color: $page-muted-color
+
+/*
+ * Chip toggles, shared by the routes filters
+ */
+.chip-row
+    display: flex
+    flex-wrap: wrap
+    gap: 6px
+
+.chip-btn
+    padding: 5px 12px
+    border: 1px solid $page-border-strong-color
+    border-radius: 999px
+    background-color: $background-color
+    color: $text-color
+    font-size: 12px
+    font-weight: 600
+    line-height: 1.4
+    cursor: pointer
+    transition: background-color .16s ease, border-color .16s ease, color .16s ease
+
+    &:hover
+        border-color: $navbar-link-hover-color
+        color: $navbar-link-hover-color
+
+    &.is-active
+        background-color: $navbar-title-color
+        border-color: $navbar-title-color
+        color: $background-color
+
+/*
+ * Range slider used by the distance / elevation filters
+ */
+.range-row
+    margin-top: 2px
+
+    input[type="range"]
+        width: 100%
+        -webkit-appearance: none
+        appearance: none
+        height: 3px
+        border-radius: 2px
+        background-color: $page-border-strong-color
+        cursor: pointer
+
+        &::-webkit-slider-thumb
+            -webkit-appearance: none
+            appearance: none
+            width: 15px
+            height: 15px
+            border-radius: 50%
+            border: 2px solid $background-color
+            background-color: $navbar-title-color
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .25)
+            cursor: pointer
+
+        &::-moz-range-thumb
+            width: 15px
+            height: 15px
+            border-radius: 50%
+            border: 2px solid $background-color
+            background-color: $navbar-title-color
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .25)
+            cursor: pointer
+
+/*
+ * Map frame: positioning context for the basemap toggle and legend overlays
+ */
+.map-frame
+    position: relative
+
+.map-list-head
+    position: sticky
+    top: 0
+    z-index: 2
+    display: flex
+    align-items: baseline
+    justify-content: space-between
+    padding: 9px 14px
+    border-bottom: 1px solid $page-border-color
+    background-color: $projects-panel-head-color
+    font-size: 11px
+    font-weight: 700
+    letter-spacing: .08em
+    text-transform: uppercase
+    color: $page-muted-color
+
+
+/*
+ * Filter row: a chip group with a label and a live count, shared by the
+ * projects grid and the blog archive.
+ */
+.filters
+    display: flex
+    align-items: center
+    flex-wrap: wrap
+    gap: 12px
+    margin-bottom: 28px
+
+.filters__label
+    font-size: 11px
+    font-weight: 700
+    letter-spacing: .12em
+    text-transform: uppercase
+    color: $page-muted-color
+
+.filters__count
+    margin-left: auto
+    font-size: 12px
+    letter-spacing: .04em
+    color: $page-muted-color
+
+/*
+ * Small descriptive tag, for project stacks and post topics. Unlike .chip-btn
+ * this is a label, not a control.
+ */
+.tag-pill
+    display: inline-block
+    padding: 2px 9px
+    border-radius: 3px
+    background-color: $route-run-tint-color
+    color: $navbar-title-color
+    font-size: 11px
+    font-weight: 600
+    line-height: 1.6
+
+
+/*
+ * Holds the unit toggle above a stats strip
+ */
+.stats-head
+    display: flex
+    justify-content: flex-end
+    margin-bottom: 10px
+
+/*
+ * Segmented unit switch. Same family as the basemap toggle so the two controls
+ * on the routes page read as one set.
+ */
+.unit-toggle
+    display: inline-flex
+    border: 1px solid $page-border-color
+    border-radius: 4px
+    overflow: hidden
+
+    button
+        padding: 4px 12px
+        border: 0
+        border-right: 1px solid $page-border-color
+        background-color: $background-color
+        color: $page-muted-color
+        font-size: 11px
+        font-weight: 700
+        letter-spacing: .06em
+        text-transform: uppercase
+        cursor: pointer
+        transition: background-color .16s ease, color .16s ease
+
+        &:last-child
+            border-right: 0
+
+        &:hover
+            color: $navbar-link-hover-color
+
+        &.is-active
+            background-color: $navbar-title-color
+            color: $background-color

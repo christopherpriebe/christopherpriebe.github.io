@@ -1,0 +1,70 @@
+{%- assign project = include.project -%}
+{%- assign index = include.index -%}
+{%- assign status = project.status | default: "" | downcase -%}
+{%- assign target = project.redirect | default: project.url | relative_url -%}
+
+{%- comment -%}
+Links are assembled from the dedicated fields first, then from any extra
+`links:` entries, so the common cases need no list in the front matter.
+{%- endcomment -%}
+
+<div class="proj-cell{% if project.featured %} proj-cell--featured{% endif %}"
+     data-project
+     data-categories="{{ project.categories | join: '|' | downcase | escape }}">
+    <article class="proj{% if project.featured %} proj--featured{% endif %}">
+        <div class="proj__body">
+            <div class="proj__top">
+                <span class="proj__idx">{{ index }}</span>
+                {%- if project.featured -%}
+                    <span class="proj__badge">&#9733; Featured</span>
+                {%- elsif status != "" -%}
+                    <span class="proj__status proj__status--{{ status }}">{{ project.status | escape }}</span>
+                {%- endif -%}
+            </div>
+
+            <h2 class="proj__title"><a href="{{ target }}">{{ project.title | escape }}</a></h2>
+
+            {%- if project.role or project.venue -%}
+                <p class="proj__role">
+                    {{- project.role | escape -}}
+                    {%- if project.role and project.venue %} &middot; {% endif -%}
+                    {{- project.venue | escape -}}
+                </p>
+            {%- endif -%}
+
+            <p class="proj__desc">{{ project.description | default: project.sub_title | strip_html | strip | escape }}</p>
+
+            {%- if project.tags -%}
+                <div class="proj__tags">
+                    {%- for tag in project.tags -%}
+                        <span class="tag-pill">{{ tag | escape }}</span>
+                    {%- endfor -%}
+                </div>
+            {%- endif -%}
+
+            <div class="proj__foot">
+                <span class="proj__year">{{ project.years | escape }}</span>
+                <span class="proj__links">
+                    {%- if project.github -%}<a href="{{ project.github }}">Repository</a>{%- endif -%}
+                    {%- if project.website -%}<a href="{{ project.website }}">Website</a>{%- endif -%}
+                    {%- if project.paper -%}<a href="{{ project.paper }}">Paper</a>{%- endif -%}
+                    {%- for link in project.links -%}
+                        <a href="{{ link.url }}">{{ link.label | escape }}</a>
+                    {%- endfor -%}
+                    <a href="{{ target }}">Details</a>
+                </span>
+            </div>
+        </div>
+
+        {%- if project.featured and project.facts -%}
+            <dl class="proj__facts">
+                {%- for fact in project.facts -%}
+                    <div class="proj__fact">
+                        <dt>{{ fact.label | escape }}</dt>
+                        <dd>{{ fact.value | escape }}</dd>
+                    </div>
+                {%- endfor -%}
+            </dl>
+        {%- endif -%}
+    </article>
+</div>

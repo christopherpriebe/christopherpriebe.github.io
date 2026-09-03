@@ -1,0 +1,70 @@
+{%- assign route = include.item -%}
+{%- assign slug = route.slug | default: route.name -%}
+{%- include routes/canonical.liquid route=route -%}
+
+<a class="list-group-item route-item"
+   href="#{{ slug | escape }}"
+   data-slug="{{ slug | escape }}"
+   data-name="{{ route.name | escape }}"
+   data-type="{{ route.type | escape }}"
+   data-surface="{{ route.surface | escape }}"
+   data-region="{{ route.region | escape }}"
+   data-distance="{{ route_km }}"
+   data-elevation="{{ route_m }}">
+
+  <div class="route-item__row">
+    <span class="route-item__name">{{ route.name | escape }}</span>
+    <span class="route-item__type{% if route.type == 'run' %} route-item__type--run{% endif %}">{{ route.type | escape }}</span>
+  </div>
+
+  <div class="route-item__where">
+    {{ route.region | escape }}{% if route.surface %} · {{ route.surface | escape }}{% endif %}
+    {%- if route_effort_count > 0 %} · {{ route_effort_count }} log{% if route_effort_count > 1 %}s{% endif %}{% endif -%}
+    {%- unless route_primary_gpx %} · not mapped{% endunless -%}
+  </div>
+
+  <div class="route-item__meta">
+    <span><b data-unit-value="{{ route_km }}" data-unit-kind="distance">{{ route_km | round: 1 }}</b> <span data-unit-label="distance">km</span></span>
+    <span><b data-unit-value="{{ route_m }}" data-unit-kind="elevation">{{ route_m }}</b> <span data-unit-label="elevation">m</span> &uarr;</span>
+    {%- if route_sec > 0 -%}
+      <span><b>{% include routes/duration.liquid seconds=route_sec precise=route_has_seconds %}</b>{% if route_effort_count > 1 %} <small>best</small>{% endif %}</span>
+      {%- if route.type == 'run' and route_sec_per_km > 0 -%}
+        <span><span data-unit-value="{{ route_sec_per_km }}" data-unit-kind="pace">{{ route_pace }}</span> <span data-unit-label="pace">/km</span></span>
+      {%- endif -%}
+    {%- endif -%}
+  </div>
+
+  <div class="route-item__notes">
+    {%- if route.notes -%}
+      <p class="route-item__note-text">{{ route.notes | strip_html | strip }}</p>
+    {%- endif -%}
+
+    {%- comment -%}
+    Every outing, newest first. A single effort is already shown in the meta row
+    above, so the table only earns its space once there are two.
+    {%- endcomment -%}
+    {%- if route_effort_count > 1 and route.efforts -%}
+      {%- assign shown_efforts = route.efforts | sort: "date" | reverse -%}
+      <table class="route-efforts">
+        {%- for effort in shown_efforts -%}
+          {%- include routes/parse_time.liquid time=effort.time duration_min=effort.duration_min -%}
+          <tr{% if parsed_sec == route_sec and parsed_sec > 0 %} class="is-best"{% endif %}>
+            <td class="route-efforts__date">{{ effort.date | date: "%b %-d, %Y" }}</td>
+            <td class="route-efforts__time">
+              {%- if parsed_sec > 0 -%}
+                {%- include routes/duration.liquid seconds=parsed_sec precise=parsed_precise -%}
+              {%- else -%}&mdash;{%- endif -%}
+            </td>
+            <td class="route-efforts__pace">
+              {%- if parsed_sec > 0 and route_km > 0 -%}
+                {%- assign effort_pace = parsed_sec | divided_by: route_km | round -%}
+                <span data-unit-value="{{ effort_pace }}" data-unit-kind="pace">{{ effort_pace | divided_by: 60 }}:{{ effort_pace | modulo: 60 | prepend: "0" | slice: -2, 2 }}</span>
+                <span data-unit-label="pace">/km</span>
+              {%- endif -%}
+            </td>
+          </tr>
+        {%- endfor -%}
+      </table>
+    {%- endif -%}
+  </div>
+</a>

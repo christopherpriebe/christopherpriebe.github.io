@@ -1,12 +1,30 @@
 ---
-layout: base 
+layout: base
 ---
 
+{%- assign projects = site.projects | sort: "importance" -%}
+{%- assign categories = projects | map: "categories" | compact | join: "," | split: "," | uniq | sort -%}
+
 <div class="container">
-    <div class="projects">
-        {% assign sorted_projects = site.projects | sort: "importance" %}
-        {% for project in sorted_projects %}
-            {% include project.liquid %}
-        {% endfor %} 
+    {% include page_header.liquid %}
+
+    <div class="row">
+        <div class="col-xs-12">
+            {%- comment -%}
+            A single category is not worth a filter row, so it only appears
+            once there is something to narrow down.
+            {%- endcomment -%}
+            {%- if categories.size > 1 -%}
+                {% include filter_bar.liquid scope="projects" label="Filter" values=categories count=projects.size noun="projects" %}
+            {%- endif -%}
+
+            <div class="proj-grid">
+                {%- for project in projects -%}
+                    {%- assign index = forloop.index | prepend: "0" | slice: -2, 2 -%}
+                    {%- include project_card.liquid project=project index=index -%}
+                {%- endfor -%}
+                <p class="filters__empty" data-filter-empty>No project matches that filter.</p>
+            </div>
+        </div>
     </div>
 </div>

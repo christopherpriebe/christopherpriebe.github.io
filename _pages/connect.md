@@ -3,7 +3,7 @@ layout: connect
 title: Connect
 permalink: /connect/
 nav: true
-nav_order: 5
+nav_order: 6
 ---
 
 The best way to reach me is via email at christophermpriebe (at) gmail (dot) com.

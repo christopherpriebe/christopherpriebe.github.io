@@ -7,6 +7,22 @@ description: >
 website: https://actlab-genesys.github.io/ 
 github: https://github.com/actlab-genesys/GeneSys
 importance: 1
+featured: true
+status: Active
+role: Compiler contributor
+venue: ACT Lab, UCSD
+years: 2022 — present
+categories: [Computer Architecture, Compilers, ML Systems]
+tags: [Python, Verilog, ONNX, OpenCL]
+facts:
+  - label: Role
+    value: Compiler contributor
+  - label: Stack
+    value: Python, Verilog
+  - label: Input
+    value: ONNX
+  - label: Source
+    value: Open source
 ---
 
 <figure>

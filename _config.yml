@@ -36,16 +36,23 @@ resume_title: Graduate Student Researcher
 resume_social_links: true
 resume_executive_summary: >
     I am a Ph.D. student in the Department of Computer Science and Engineering at the University of California San Diego. My research is an interplay of compilers, machine learning, and systems.
-resume_looking_for_work: true
 resume_section_experience: true
 resume_section_education: true
-resume_section_publications: false 
 resume_section_projects: true
 
 # ==================================================
 # Front Matter Defaults
 # ==================================================
+# Blog posts live in _posts/ and ship at /blog/<title>/.
+permalink: /blog/:title/
+
 defaults:
+  -
+    scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
   -
     scope:
       path: ""

@@ -1,0 +1,67 @@
+{%- comment -%}
+Polyline map, the counterpart to map/marker_map.liquid. Each route is drawn
+from either a GPX file (parsed in the browser) or an inline `polyline` array.
+Metadata is emitted as JSON and picked up by _js/routes.js through the same
+__MAP_INIT__-style queue the marker map uses.
+{%- endcomment -%}
+
+{%- assign routes = include.data -%}
+{%- assign map_id = include.id | default: "route-map" -%}
+{%- assign list_id = map_id | append: "-list" -%}
+
+<div class="row">
+  <div class="col-sm-8">
+    <div class="map-frame">
+      <div id="{{ map_id }}" class="img-rounded route-map" style="height:70vh;min-height:420px;"></div>
+
+      {% include map/basemap_toggle.liquid %}
+
+      <div class="map-overlay route-legend">
+        <div class="route-legend__row"><span class="route-legend__line"></span> Run</div>
+        <div class="route-legend__row"><span class="route-legend__line route-legend__line--hike"></span> Hike</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-4">
+    <div class="map-sidebar-column">
+      <div class="map-sidebar-filters">
+        {% include routes/filters.liquid data=routes %}
+      </div>
+
+      <div class="map-sidebar list-group map-sidebar-list" id="{{ list_id }}">
+        {%- for route in routes -%}
+          {%- include routes/list_item.liquid item=route -%}
+        {%- endfor -%}
+        <div class="route-list-empty" data-routes-empty>No route matches these filters.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.__ROUTE_MAP_DATA__ = window.__ROUTE_MAP_DATA__ || {};
+  window.__ROUTE_MAP_DATA__[{{ map_id | jsonify }}] = [
+    {%- for route in routes -%}
+      {%- assign slug = route.slug | default: route.name -%}
+      {%- include routes/canonical.liquid route=route -%}
+      {
+        slug: {{ slug | jsonify }},
+        name: {{ route.name | jsonify }},
+        type: {{ route.type | default: "run" | jsonify }},
+        gpx: {{ route_primary_gpx | jsonify }},
+        polyline: {{ route.polyline | jsonify }}
+      }{%- unless forloop.last -%},{%- endunless -%}
+    {%- endfor -%}
+  ];
+</script>
+
+<script>
+  window.__ROUTE_MAP_INIT__ = window.__ROUTE_MAP_INIT__ || [];
+  window.__ROUTE_MAP_INIT__.push({
+    mapId: {{ map_id | jsonify }},
+    listId: {{ list_id | jsonify }},
+    zoom: {{ include.zoom | default: 11 }},
+    center: {{ include.center | default: "" | jsonify }}
+  });
+</script>

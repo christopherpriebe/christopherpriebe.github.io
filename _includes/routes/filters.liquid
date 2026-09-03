@@ -1,0 +1,73 @@
+{%- comment -%}
+Filter panel for the route map. Mirrors _includes/f_and_b/filters.liquid so the
+two map pages share a control vocabulary.
+
+The sliders always work in metric, whatever units the reader has chosen — only
+their labels convert. Their bounds come from the data, so a longer route added
+later widens the range on its own.
+{%- endcomment -%}
+
+{%- assign max_distance = 0 -%}
+{%- assign max_elevation = 0 -%}
+{%- for route in include.data -%}
+  {%- include routes/canonical.liquid route=route -%}
+  {%- if route_km > max_distance -%}{%- assign max_distance = route_km -%}{%- endif -%}
+  {%- if route_m > max_elevation -%}{%- assign max_elevation = route_m -%}{%- endif -%}
+{%- endfor -%}
+{%- assign max_distance = max_distance | ceil -%}
+{%- assign max_elevation = max_elevation | divided_by: 50 | plus: 1 | times: 50 -%}
+
+{%- assign surfaces = include.data | map: "surface" | compact | uniq | sort -%}
+
+<div class="panel panel-default">
+  <div class="panel-heading"><strong>Filter</strong></div>
+  <div class="panel-body">
+    <div class="form-group">
+      <input id="routes-filter-q" type="text" class="form-control" placeholder="Search route, region…">
+    </div>
+
+    <div class="fnb-filter-group" style="margin-bottom:12px;">
+      <div class="fnb-filter-group__label">Activity</div>
+      <div class="chip-row" data-routes-filter="type" role="group" aria-label="Filter by activity">
+        <button type="button" class="chip-btn" data-filter-value="run" aria-pressed="false">Run</button>
+        <button type="button" class="chip-btn" data-filter-value="hike" aria-pressed="false">Hike</button>
+      </div>
+    </div>
+
+    <div class="fnb-filter-group" style="margin-bottom:12px;">
+      <div class="fnb-filter-group__label">Surface</div>
+      <div class="chip-row" data-routes-filter="surface" role="group" aria-label="Filter by surface">
+        {%- for surface in surfaces -%}
+          <button type="button" class="chip-btn" data-filter-value="{{ surface }}" aria-pressed="false">{{ surface | capitalize }}</button>
+        {%- endfor -%}
+      </div>
+    </div>
+
+    <div class="fnb-filter-group" style="margin-bottom:12px;">
+      <div class="fnb-filter-group__label">
+        Distance · up to
+        <span data-routes-distance-label><span data-unit-value="{{ max_distance }}" data-unit-kind="distance">{{ max_distance }}</span> <span data-unit-label="distance">km</span></span>
+      </div>
+      <div class="range-row">
+        <input type="range" min="1" max="{{ max_distance }}" step="1" value="{{ max_distance }}"
+               data-routes-range="distance" aria-label="Maximum distance">
+      </div>
+    </div>
+
+    <div class="fnb-filter-group">
+      <div class="fnb-filter-group__label">
+        Elevation · up to
+        <span data-routes-elevation-label><span data-unit-value="{{ max_elevation }}" data-unit-kind="elevation">{{ max_elevation }}</span> <span data-unit-label="elevation">m</span></span>
+      </div>
+      <div class="range-row">
+        <input type="range" min="0" max="{{ max_elevation }}" step="25" value="{{ max_elevation }}"
+               data-routes-range="elevation" aria-label="Maximum elevation gain">
+      </div>
+    </div>
+
+    <div class="fnb-filter-actions">
+      <span class="text-muted" style="font-size:12px;"><span data-routes-count>{{ include.data | size }}</span> shown</span>
+      <button id="routes-filter-clear" type="button" class="btn btn-default btn-xs">Clear</button>
+    </div>
+  </div>
+</div>

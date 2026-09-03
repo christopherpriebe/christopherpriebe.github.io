@@ -1,5 +1,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { attachBasemaps } from "./basemaps";
+import { buildPinSvg, getJourneyTier, getMarkerMetrics } from "./pins";
 
 // TODO: Refactor this so that there is a generic map engine
 //      right now, some features are specific to the F&B domain
@@ -117,11 +119,6 @@ export function getCuisinesHtml(keys) {
   return getMetaRowHtml(parts.join(" · "), "fnb-meta-row--cuisines muted");
 }
 
-function getJourneyTier(journeyRating) {
-  const n = parseInt(journeyRating, 10) || 0;
-  return Math.max(0, Math.min(3, n));
-}
-
 function getJourneyLabel(journeyRating) {
   const tier = getJourneyTier(journeyRating);
   if (tier === 3) return "Worth the trip";
@@ -130,71 +127,8 @@ function getJourneyLabel(journeyRating) {
   return "Selected";
 }
 
-const JOURNEY_MARKER_METRICS = {
-  0: { iconSize: [30, 36], iconAnchor: [15, 25], popupAnchor: [0, -22], zIndexOffset: 0 },
-  1: { iconSize: [34, 42], iconAnchor: [17, 30], popupAnchor: [0, -26], zIndexOffset: 100 },
-  2: { iconSize: [50, 60], iconAnchor: [25, 38], popupAnchor: [0, -34], zIndexOffset: 200 },
-  3: { iconSize: [62, 74], iconAnchor: [31, 45], popupAnchor: [0, -42], zIndexOffset: 300 },
-};
-
-// All pin geometry is expressed in a normalized SVG viewBox so one set of values
-// scales cleanly across every tier size.
-const JOURNEY_PIN_GEOMETRY = {
-  viewBoxWidth: 48,
-  viewBoxHeight: 64,
-  centerX: 24,
-  bulbCenterY: 21,
-  bulbRadius: 14.5,
-  shoulderY: 25,
-  waistControlX: 8,
-  waistControlY: 39,
-  tipControlX: 7,
-  tipControlY: 9,
-  tipY: 46.5,
-  coreY: 22,
-  coreR: 5.5,
-};
-
-function getJourneyPinPath({
-  centerX,
-  bulbCenterY,
-  bulbRadius,
-  shoulderY,
-  waistControlX,
-  waistControlY,
-  tipControlX,
-  tipControlY,
-  tipY,
-}) {
-  const shoulderOffset = Math.sqrt(
-    Math.max(0, (bulbRadius * bulbRadius) - ((shoulderY - bulbCenterY) ** 2))
-  );
-  const leftShoulderX = centerX - shoulderOffset;
-  const rightShoulderX = centerX + shoulderOffset;
-  const topY = bulbCenterY - bulbRadius;
-
-  return [
-    `M ${centerX} ${tipY}`,
-    `C ${centerX - tipControlX} ${tipY - tipControlY}, ${centerX - waistControlX} ${waistControlY}, ${leftShoulderX} ${shoulderY}`,
-    `A ${bulbRadius} ${bulbRadius} 0 0 1 ${centerX} ${topY}`,
-    `A ${bulbRadius} ${bulbRadius} 0 0 1 ${rightShoulderX} ${shoulderY}`,
-    `C ${centerX + waistControlX} ${waistControlY}, ${centerX + tipControlX} ${tipY - tipControlY}, ${centerX} ${tipY}`,
-    "Z",
-  ].join(" ");
-}
-
-const JOURNEY_PIN_PATH = getJourneyPinPath(JOURNEY_PIN_GEOMETRY);
-
-function getJourneyPinInnerMarkup() {
-  return `
-    <span class="journey-pin__aura" aria-hidden="true"></span>
-    <svg class="journey-pin__svg" viewBox="0 0 ${JOURNEY_PIN_GEOMETRY.viewBoxWidth} ${JOURNEY_PIN_GEOMETRY.viewBoxHeight}" aria-hidden="true" focusable="false">
-      <path class="journey-pin__shape" d="${JOURNEY_PIN_PATH}"></path>
-      <circle class="journey-pin__core" cx="${JOURNEY_PIN_GEOMETRY.centerX}" cy="${JOURNEY_PIN_GEOMETRY.coreY}" r="${JOURNEY_PIN_GEOMETRY.coreR}"></circle>
-    </svg>
-  `.trim();
-}
-
+// Fills in pins already rendered by Liquid — the filter chips, the sidebar
+// list, and the tier legend. Each carries its tier as a class.
 export function enhanceJourneyPins(root = document) {
   const nodes = (root.matches && root.matches(".journey-pin"))
     ? [root]
@@ -202,7 +136,9 @@ export function enhanceJourneyPins(root = document) {
 
   nodes.forEach((el) => {
     if (el.getAttribute("data-journey-ready") === "1") return;
-    el.innerHTML = getJourneyPinInnerMarkup();
+
+    const matched = /journey-pin--t(\d)/.exec(el.className);
+    el.innerHTML = buildPinSvg(matched ? matched[1] : 0);
     el.setAttribute("data-journey-ready", "1");
   });
 }
@@ -215,7 +151,7 @@ function getJourneyPinMarkup(journeyRating, variant = "map") {
 
   return `
     <span class="journey-pin journey-pin--${variant} journey-pin--t${tier}" data-journey-ready="1" ${attrs}>
-      ${getJourneyPinInnerMarkup()}
+      ${buildPinSvg(tier)}
     </span>
   `.trim();
 }
@@ -224,7 +160,7 @@ function getJourneySymbol(journeyRating) {
   return getJourneyPinMarkup(journeyRating, "inline");
 }
 
-function getPriceMeter(priceRating, { showLabel = true } = {}) {
+function getPriceMeter(priceRating) {
   const n = Math.max(0, Math.min(5, parseInt(priceRating, 10) || 0));
   if (!n) return "";
 
@@ -234,14 +170,14 @@ function getPriceMeter(priceRating, { showLabel = true } = {}) {
 
   return `
     <span class="price-meter" aria-label="Price ${n} out of 5">
-      ${showLabel ? '<span class="price-meter__label">Price</span>' : ""}
+      <span class="price-meter__label">Price</span>
       <span class="price-meter__track">${squares}</span>
     </span>
   `.trim();
 }
 
-function getPriceBlockHtml(priceRating, options) {
-  const priceHtml = getPriceMeter(priceRating, options);
+function getPriceBlockHtml(priceRating) {
+  const priceHtml = getPriceMeter(priceRating);
   return priceHtml ? getMetaRowHtml(priceHtml, "fnb-meta-row--price") : "";
 }
 
@@ -383,7 +319,7 @@ function awardsList(a) {
 }
 
 function getListItems(listId) {
-  return Array.prototype.slice.call(document.querySelectorAll(`#${listId} .map-card`));
+  return Array.from(document.querySelectorAll(`#${listId} .map-card`));
 }
 
 function parseMultiFilterValue(value) {
@@ -515,6 +451,10 @@ function applyFilters(config, markerLayer, markerBySlug) {
     const m = markerBySlug[slug];
     if (m) m.addTo(markerLayer);
   });
+
+  // Keep the sidebar's "N places" header in step with the filters.
+  const countEl = document.querySelector("[data-map-count]");
+  if (countEl) countEl.textContent = allowed.length;
 }
 
 function wireFilters(config, markerLayer, markerBySlug) {
@@ -666,10 +606,7 @@ export function initMap(config) {
 
   const map = L.map(mapId, { scrollWheelZoom: true });
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
-  }).addTo(map);
+  attachBasemaps(map, mapEl.parentNode);
 
   const markerLayer = L.layerGroup().addTo(map);
   const markerBySlug = {};
@@ -681,7 +618,7 @@ export function initMap(config) {
     const item = d._item || {};
     const ctx = buildContext(item, d.slug);
     const tier = getJourneyTier(item.journey_rating);
-    const markerMetrics = JOURNEY_MARKER_METRICS[tier];
+    const markerMetrics = getMarkerMetrics(tier);
 
     const popupHtml = popupTpl
       ? renderTemplate(popupTpl, ctx)
@@ -711,7 +648,6 @@ export function initMap(config) {
     markerBySlug[d.slug] = m;
   });
 
-  // Filters only if list exists
   const listEl = listId ? document.getElementById(listId) : null;
   if (listEl) {
     hydrateList(config, dataset);
@@ -719,7 +655,6 @@ export function initMap(config) {
     applyFilters(config, markerLayer, markerBySlug);
   }
 
-  // View logic
   if (center) {
     try {
       const parsed = JSON.parse(center);
@@ -735,7 +670,6 @@ export function initMap(config) {
     map.setView([20, 0], zoom);
   }
 
-  // List click -> open marker
   if (listEl) {
     listEl.addEventListener("click", (e) => {
       let el = e.target;

@@ -27,8 +27,11 @@
 
 <div class="row">
   <div class="{% if has_sidebar %}col-sm-8{% else %}col-xs-12{% endif %}">
-    <!-- IMPORTANT: give the map a height -->
-    <div id="{{ map_id }}" class="img-rounded" style="height:70vh;min-height:420px;"></div>
+    <div class="map-frame">
+      <!-- IMPORTANT: give the map a height -->
+      <div id="{{ map_id }}" class="img-rounded" style="height:70vh;min-height:420px;"></div>
+      {% include map/basemap_toggle.liquid %}
+    </div>
 
     {% if include.legend %}
       <hr>
@@ -48,6 +51,10 @@
         {% if include.list_include %}
           <div class="map-sidebar list-group map-sidebar-list"
                id="{{ list_id }}">
+            <div class="map-list-head">
+              <span>{{ include.list_label | default: "Places" }}</span>
+              <span data-map-count>{{ items | size }}</span>
+            </div>
             {%- for item in items -%}
               {%- include {{ include.list_include }} item=item -%}
             {%- endfor -%}

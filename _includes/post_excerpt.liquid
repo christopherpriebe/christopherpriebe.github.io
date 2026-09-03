@@ -1,0 +1,5 @@
+{%- if include.post.summary -%}
+  {{- include.post.summary | strip_html | strip -}}
+{%- else -%}
+  {{- include.post.excerpt | strip_html | strip | truncate: 260 -}}
+{%- endif -%}

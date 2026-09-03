@@ -3,15 +3,15 @@ layout: base
 ---
 
 <div class="container">
+    {% include page_header.liquid %}
+
     <div class="row">
         <div class="col-xs-12">
-            {{ content }}
-            <hr>
+            <div class="icon-card-grid">
+                {% for card in page.cards %}
+                    {% include icon_card.liquid card=card %}
+                {% endfor %}
+            </div>
         </div>
-    </div>
-    <div class="row icon-card-grid">
-        {% for card in page.cards %}
-            {% include icon_card.liquid card=card %}
-        {% endfor %}
     </div>
 </div>

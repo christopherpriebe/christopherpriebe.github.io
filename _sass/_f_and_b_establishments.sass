@@ -4,141 +4,144 @@
     height: 70vh
     min-height: 420px
 
-:root
-  --tier-ink: 222 47% 18%
-  --tier-ink-strong: 222 55% 14%
-  --tier-accent: 202 79% 47%
-  --tier-highlight: 39 94% 57%
-  --tier-surface: 0 0% 100%
-  --tier-surface-soft: 210 33% 98%
-  --pin-bulb-center-y-ratio: .328125
-  --pin-bulb-diameter-ratio: .6041667
-
 .journey-marker-icon
     background: transparent
     border: 0
-    display: flex
-    align-items: flex-start
-    justify-content: center
 
+/*
+ * Four-tier journey pins. Shapes come from _js/pins.js; every colour is set
+ * here so the skin remains the one place the palette is defined. Size grows
+ * with the tier, which is the same axis the ratings describe.
+ */
 .journey-pin
     --pin-scale: 1
-    --pin-body-width: 22px
-    --pin-body-height: 30px
-    --pin-aura-size: calc(var(--pin-body-width) * var(--pin-bulb-diameter-ratio))
-    --pin-ring: 0px
-    --pin-ring-width: 0px
-    --pin-border: hsl(var(--tier-ink))
-    --pin-fill: hsl(var(--tier-surface))
-    --pin-core: hsl(var(--tier-ink))
-    --pin-core-ring: hsl(var(--tier-surface) / .96)
-    --pin-aura-opacity: 0
-    --pin-ring-color: transparent
-    --pin-glow: transparent
+    --pin-width: 22px
+    --pin-height: 30px
     position: relative
     display: inline-block
-    width: calc(var(--pin-body-width) * var(--pin-scale))
-    height: calc(var(--pin-body-height) * var(--pin-scale))
+    width: calc(var(--pin-width) * var(--pin-scale))
+    height: calc(var(--pin-height) * var(--pin-scale))
     line-height: 0
     overflow: visible
     pointer-events: none
-
-.journey-pin__aura,
-.journey-pin__svg
-    transition: transform .18s ease, filter .18s ease, opacity .18s ease
-
-.journey-pin__aura
-    position: absolute
-    left: 50%
-    top: calc((var(--pin-body-height) * var(--pin-bulb-center-y-ratio) * var(--pin-scale)) - (((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale)) / 2))
-    width: calc((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale))
-    height: calc((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale))
-    margin-left: calc(((var(--pin-aura-size) + var(--pin-ring)) * var(--pin-scale)) / -2)
-    border: calc(var(--pin-ring-width) * var(--pin-scale)) solid var(--pin-ring-color)
-    border-radius: 999px
-    box-sizing: border-box
-    box-shadow: 0 0 0 calc(6px * var(--pin-scale)) var(--pin-glow)
-    opacity: var(--pin-aura-opacity)
 
 .journey-pin__svg
     display: block
     width: 100%
     height: 100%
     overflow: visible
-    filter: drop-shadow(0 calc(2px * var(--pin-scale)) calc(4px * var(--pin-scale)) rgba(15, 23, 42, .18))
     transform-origin: 50% 100%
+    filter: drop-shadow(0 calc(1.5px * var(--pin-scale)) calc(2.5px * var(--pin-scale)) rgba(15, 23, 42, .25))
+    transition: transform .18s ease
 
-.journey-pin__shape
-    fill: var(--pin-fill)
-    stroke: var(--pin-border)
-    stroke-width: 4
-    stroke-linecap: round
-    stroke-linejoin: round
-    paint-order: stroke fill
+.journey-pin__body
+    fill: $fnb-pin-body-color
+    stroke: $fnb-pin-body-stroke-color
+    stroke-width: .8
 
-.journey-pin__core
-    fill: var(--pin-core)
-    stroke: var(--pin-core-ring)
-    stroke-width: 3
+.journey-pin__eye
+    fill: $fnb-pin-surface-color
 
+.journey-pin__pupil
+    fill: $fnb-pin-body-color
+
+.journey-pin__aura
+    fill: $fnb-pin-aura-color
+    opacity: .32
+
+.journey-pin__aura-ring
+    fill: none
+    stroke: $fnb-pin-aura-stroke-color
+    stroke-width: .8
+    opacity: .6
+
+.journey-pin__halo
+    fill: none
+    stroke: $fnb-pin-gold-color
+    stroke-width: 1.4
+    stroke-dasharray: 2.2 2.2
+    opacity: .9
+
+.journey-pin__star
+    fill: $fnb-pin-gold-color
+
+/*
+ * Tier 0 - Selected. A dot rather than a pin: present, but not a destination.
+ */
+.journey-pin--t0
+    --pin-width: 16px
+    --pin-height: 16px
+
+    .journey-pin__eye
+        fill: $fnb-pin-surface-color
+        stroke: $fnb-pin-muted-color
+        stroke-width: 1.5
+
+    .journey-pin__pupil
+        fill: $fnb-pin-muted-color
+        opacity: .75
+
+    .journey-pin__svg
+        filter: drop-shadow(0 1px 1.5px rgba(15, 23, 42, .12))
+
+/*
+ * Tier 1 - Worth the visit.
+ */
+.journey-pin--t1
+    --pin-width: 22px
+    --pin-height: 30px
+
+/*
+ * Tier 2 - Worth planning around. The aura reads at map scale.
+ */
+.journey-pin--t2
+    --pin-width: 32px
+    --pin-height: 40px
+
+    .journey-pin__body
+        fill: $fnb-pin-accent-color
+        stroke: $fnb-pin-body-color
+        stroke-width: .9
+
+/*
+ * Tier 3 - Worth the trip. Gold halo and star; the only place gold appears.
+ */
+.journey-pin--t3
+    --pin-width: 42px
+    --pin-height: 52px
+
+    .journey-pin__aura
+        fill: $fnb-pin-gold-tint-color
+        opacity: .75
+
+    .journey-pin__aura-ring
+        stroke: $fnb-pin-gold-color
+
+    .journey-pin__svg
+        filter: drop-shadow(0 calc(2px * var(--pin-scale)) calc(5px * var(--pin-scale)) rgba(15, 23, 42, .28))
+
+/*
+ * Variants. Scales keep the tier hierarchy visible while bounding the largest
+ * pin to something that fits a filter chip or a list row.
+ */
 .journey-pin--map
     display: block
 
 .journey-pin--inline
-    --pin-scale: .72
+    --pin-scale: .62
     vertical-align: middle
-    margin: 0 .18em 0 .05em
+    margin: 0 .2em 0 .05em
 
 .journey-pin--list
-    --pin-scale: .56
+    --pin-scale: .42
     margin: 0
 
-.journey-pin--t0
-    --pin-body-width: 18px
-    --pin-body-height: 25px
-    --pin-border: hsl(var(--tier-ink) / .78)
-    --pin-fill: hsl(var(--tier-surface-soft))
-    --pin-core: hsl(var(--tier-ink) / .76)
-
-.journey-pin--t1
-    --pin-body-width: 22px
-    --pin-body-height: 30px
-
-.journey-pin--t2
-    --pin-body-width: 28px
-    --pin-body-height: 38px
-    --pin-border: hsl(var(--tier-ink-strong))
-    --pin-fill: hsl(210 50% 97%)
-    --pin-core: hsl(var(--tier-accent))
-    --pin-ring: 10px
-    --pin-ring-width: 2px
-    --pin-ring-color: hsl(var(--tier-accent) / .45)
-    --pin-glow: hsl(var(--tier-accent) / .12)
-    --pin-aura-opacity: 1
-
-.journey-pin--t3
-    --pin-body-width: 34px
-    --pin-body-height: 45px
-    --pin-border: hsl(219 33% 14%)
-    --pin-fill: hsl(218 40% 24%)
-    --pin-core: hsl(var(--tier-highlight))
-    --pin-core-ring: hsl(var(--tier-surface) / .92)
-    --pin-ring: 16px
-    --pin-ring-width: 2px
-    --pin-ring-color: hsl(var(--tier-highlight) / .68)
-    --pin-glow: hsl(var(--tier-highlight) / .20)
-    --pin-aura-opacity: 1
-
-.journey-pin--t3 .journey-pin__svg
-    filter: drop-shadow(0 calc(2px * var(--pin-scale)) calc(6px * var(--pin-scale)) rgba(15, 23, 42, .24))
-
-.leaflet-marker-icon:hover .journey-pin__aura,
-.leaflet-marker-icon:focus .journey-pin__aura
-    box-shadow: 0 0 0 calc(8px * var(--pin-scale)) var(--pin-glow)
+.fnb-tier-list .journey-pin--inline
+    --pin-scale: .74
 
 .leaflet-marker-icon:hover .journey-pin__svg,
 .leaflet-marker-icon:focus .journey-pin__svg
-    transform: translateY(calc(-1px * var(--pin-scale)))
+    transform: translateY(calc(-2px * var(--pin-scale))) scale(1.06)
 
 .fnb-tier-list
     margin: 12px 0 0
@@ -151,7 +154,6 @@
         margin-bottom: 12px
 
     .journey-pin--inline
-        --pin-scale: .82
         flex: 0 0 auto
         margin: 0
 
@@ -196,27 +198,27 @@
     padding: 8px 12px
     border: 1px solid #d8e0e8
     border-radius: 999px
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)
+    background: linear-gradient(180deg, $WHITE 0%, #f8fafc 100%)
     color: #25313d
     box-shadow: 0 1px 2px rgba(15, 23, 42, .06)
     transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease
 
     &:hover
         border-color: #b7c7d8
-        background: #fff
+        background: $WHITE
 
     &:focus
         outline: 0
-        border-color: hsl(var(--tier-accent))
-        box-shadow: 0 0 0 3px hsl(var(--tier-accent) / .16)
+        border-color: $navbar-link-hover-color
+        box-shadow: 0 0 0 3px rgba($BLUE, .16)
 
     &:active
         transform: translateY(1px)
 
     &.is-active
-        border-color: hsl(var(--tier-accent) / .54)
-        background: hsl(206 100% 97%)
-        box-shadow: 0 0 0 3px hsl(var(--tier-accent) / .10)
+        border-color: rgba($BLUE, .54)
+        background: $route-run-tint-color
+        box-shadow: 0 0 0 3px rgba($BLUE, .10)
 
 .fnb-filter-chip--icon
     width: 56px
@@ -227,9 +229,6 @@
         --pin-scale: .84
         margin: 0
 
-.fnb-filter-chip--price
-    min-width: 72px
-
 .fnb-price-filter
     display: inline-flex
     align-items: center
@@ -237,7 +236,7 @@
     padding: 6px
     border: 1px solid #d8e0e8
     border-radius: 999px
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)
+    background: linear-gradient(180deg, $WHITE 0%, #f8fafc 100%)
     box-shadow: 0 1px 2px rgba(15, 23, 42, .06)
 
 .fnb-price-filter-row
@@ -255,13 +254,13 @@
     transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease
 
     &:hover
-        border-color: hsl(var(--tier-accent) / .52)
-        background: hsl(206 100% 96%)
+        border-color: rgba($BLUE, .52)
+        background: $route-run-tint-color
 
     &:focus
         outline: 0
-        border-color: hsl(var(--tier-accent))
-        box-shadow: 0 0 0 3px hsl(var(--tier-accent) / .16)
+        border-color: $navbar-link-hover-color
+        box-shadow: 0 0 0 3px rgba($BLUE, .16)
 
     &:active
         transform: translateY(1px)
@@ -279,7 +278,7 @@
     &.is-active
         border-color: #2e6da4
         background: #337ab7
-        color: #fff
+        color: $WHITE
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, .15)
 
 .fnb-filter-actions
@@ -323,27 +322,13 @@
         border-color: var(--price-meter-fill-strong)
         background: linear-gradient(180deg, var(--price-meter-fill) 0%, var(--price-meter-fill-strong) 100%)
 
-.price-meter--compact
-    gap: 0
-
-    .price-meter__track
-        gap: 3px
-
-    .price-meter__square
-        width: 9px
-        height: 9px
-
-.fnb-filter-chip--price.is-active .price-meter
-    --price-meter-fill: hsl(var(--tier-highlight))
-    --price-meter-fill-strong: hsl(31 95% 44%)
-
 .fnb-popup,
 .map-card__details
     --price-meter-label-color: var(--fnb-price-color, #111)
 
 .map-sidebar-list
     margin-bottom: 0
-    background: #fff
+    background: $WHITE
     border: 1px solid #ddd
     border-radius: 10px
     overflow: hidden
@@ -370,7 +355,7 @@
 .fnb-popup .fnb-header
     position: sticky
     top: 0
-    background: #fff
+    background: $WHITE
     padding-bottom: 6px
     z-index: 2
 
@@ -388,7 +373,11 @@
     transform: rotate(180deg)
 
 .michelin-red
-    color: #BD2333
+    color: $michelin-red-color
+
+/* The stats strip dims its <small> units; the Michelin marks keep their red. */
+.stat__num small.michelin-red
+    color: $michelin-red-color
 
 .michelin-green
-    color: #84BD00
+    color: $michelin-green-color

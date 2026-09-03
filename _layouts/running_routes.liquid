@@ -1,0 +1,65 @@
+---
+layout: base
+---
+
+{%- assign routes = site.data.running_routes -%}
+
+<div class="container">
+    {% include page_header.liquid %}
+
+    <div class="row">
+        <div class="col-xs-12">
+            <div class="stats-head">
+                {% include routes/unit_toggle.liquid %}
+            </div>
+        </div>
+    </div>
+
+    {%- assign featured = routes | where: "featured", true | first -%}
+    {%- if featured -%}
+        {%- include routes/canonical.liquid route=featured -%}
+        <div class="row">
+            <div class="col-xs-12">
+                <div class="panel panel-default route-feature">
+                    <div class="panel-body">
+                        <span class="route-feature__badge">Personal record</span>
+                        <h2 class="route-feature__title">{{ featured.name | escape }}</h2>
+                        <p class="route-feature__where">
+                            {{ featured.region | escape }} · {{ featured.surface | escape }}
+                            {%- if route_latest_date -%} · {{ route_latest_date | date: "%B %-d, %Y" }}{%- endif -%}
+                        </p>
+
+                        <div class="stats-strip" style="margin:16px 0 0;">
+                            <div class="stat">
+                                <span class="stat__num"><span data-unit-value="{{ route_km }}" data-unit-kind="distance">{{ route_km | round: 1 }}</span><small data-unit-label="distance">km</small></span>
+                                <span class="stat__label">Distance</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat__num"><span data-unit-value="{{ route_m }}" data-unit-kind="elevation">{{ route_m }}</span><small><span data-unit-label="elevation">m</span> &uarr;</small></span>
+                                <span class="stat__label">Elevation</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat__num">{% if route_sec > 0 %}{% include routes/duration.liquid seconds=route_sec precise=route_has_seconds %}{% else %}&mdash;{% endif %}</span>
+                                <span class="stat__label">Moving time</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat__num"><span data-unit-value="{{ route_sec_per_km }}" data-unit-kind="pace">{{ route_pace }}</span><small data-unit-label="pace">/km</small></span>
+                                <span class="stat__label">Pace</span>
+                            </div>
+                        </div>
+
+                        {%- if featured.notes -%}
+                            <p class="route-feature__notes">{{ featured.notes | strip_html | strip }}</p>
+                        {%- endif -%}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {%- endif -%}
+
+    {% include map/route_map.liquid
+        id="running-routes-map"
+        data=routes
+        zoom=10
+    %}
+</div>

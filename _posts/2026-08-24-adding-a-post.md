@@ -1,0 +1,57 @@
+---
+title: How this blog works
+summary: The front matter each post takes, where the topic filter gets its options, and what happens if you leave a field out. Delete this once you have written something real.
+tags: [Tooling]
+---
+
+This post exists to document the setup and to give the archive something to
+render. Delete the file once you have a real post — nothing depends on it.
+
+## Adding a post
+
+Create a file in `_posts/` named `YYYY-MM-DD-some-slug.md`. Jekyll takes the
+date and the slug from the filename, so the front matter only needs a title:
+
+```yaml
+---
+title: What a typed IR buys you
+summary: One or two sentences for the archive listing.
+tags: [Compilers, Type systems]
+---
+```
+
+It ships at `/blog/some-slug/`.
+
+## The fields
+
+| Field | Required | What it does |
+| --- | --- | --- |
+| `title` | yes | Heading, archive entry, and feed item |
+| `summary` | no | The blurb in the archive; falls back to your first paragraph |
+| `tags` | no | Topic filter options and the pills under each entry |
+
+Reading time is counted from the body at 200 words a minute, so there is no
+field for it. The topic chips are collected from every `tags` value on the
+site, which means a new topic appears in the filter the moment you use it —
+and the filter row hides itself entirely while only one topic exists.
+
+## Writing the body
+
+Everything inside a post is wrapped in `.prose`, so plain Markdown comes out
+styled: headings pick up their rules, `inline code` gets a tinted chip, block
+quotes take a navy rule, and tables are ruled horizontally. There is nothing to
+add by hand.
+
+> Section headings carry a hairline rule beneath them. Subsections do not — the
+> size change is enough.
+
+Images work the same way. Put the file in `assets/images/` and reference it
+normally; figures pick up a border and captions set in the small face.
+
+## Where things live
+
+- `_layouts/blog.liquid` — the archive, the latest-post card, the topic filter
+- `_layouts/post.liquid` — a single post
+- `_sass/_blog.sass` — archive styles
+- `_sass/_prose.sass` — everything inside a post body
+- `feed.xml` — the RSS feed, which picks up new posts automatically

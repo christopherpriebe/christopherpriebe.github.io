@@ -1,0 +1,116 @@
+# ==================================================
+# Running & Hiking Routes
+# ==================================================
+#
+# Adding a route takes two steps:
+#
+#   1. Export the activity as GPX (Strava: Activity -> ... -> Export GPX)
+#      and drop it in `assets/gpx/<slug>.gpx`.
+#   2. Add an entry below. Only `name`, `slug`, `type`, `distance_km`,
+#      and `elevation_m` are required.
+#
+# Fields
+# ------
+#   name          Display name.
+#   slug          Unique id; also the GPX filename.
+#   type          `run` (drawn solid) or `hike` (drawn dashed).
+#   surface       `trail`, `road`, or `track`. Drives the surface filter.
+#   distance_km   Float. Feeds the totals and the distance filter.
+#                 Write `distance_mi` instead if you would rather log miles —
+#                 either key works, and you can mix them between routes.
+#   elevation_m   Integer, total gain. Feeds the totals and elevation filter.
+#                 `elevation_ft` works the same way.
+#   time          Moving time as a race clock, quoted: "1:53:23" is h:mm:ss and
+#                 "22:15" is mm:ss. Use this whenever seconds matter — the
+#                 display keeps them.
+#   duration_min  Alternative to `time` for routes timed only to the minute;
+#                 shown as "1h 53m". Pace is derived from the time and the
+#                 distance either way, so there is nothing to keep in sync.
+#   region        Free text, shown on the card and matched by the search box.
+#   dates         List of dates the route was run, for a single-time entry.
+#                 The count becomes "N logs". Prefer `efforts` (below) once a
+#                 route has more than one time worth keeping.
+#   notes         Free text. Rendered under the route in the sidebar.
+#   featured      Optional. Pulls the route out into the highlight card.
+#   gpx           Path to the track. Parsed in the browser.
+#   polyline      Optional alternative to `gpx`: an inline [[lat, lng], ...]
+#                 array, for a route with no GPX export.
+#
+# Running a route more than once
+# ------------------------------
+# An entry is a *course*; `efforts` are the dated times run on it. Use it and
+# drop the flat `time`/`dates` keys:
+#
+#   - name: Mission Bay loop
+#     gpx: /assets/gpx/mission-bay.gpx
+#     efforts:
+#       - { date: 2025-03-12, time: "1:47:00" }
+#       - { date: 2025-06-01, time: "1:42:30" }
+#
+# The sidebar shows the fastest time, and selecting the route lists every
+# outing with its own pace, best marked.
+#
+# A race whose course moves between years puts the track on the effort, so one
+# entry covers the whole event instead of one entry per running of it:
+#
+#   - name: OneAmerica Mini Marathon
+#     distance_mi: 13.1
+#     efforts:
+#       - { date: 2022-05-07, time: "1:53:23", gpx: /assets/gpx/oneamerica-2022.gpx }
+#       - { date: 2024-05-04, time: "1:47:10", gpx: /assets/gpx/oneamerica-2024.gpx }
+#
+# Only ONE track is ever drawn per entry, so repeat runs never stack up on the
+# map: the newest effort that has a `gpx`, or whichever one you mark
+# `primary: true`.
+#
+# Somewhere the track carries no information — a time trial round the same
+# oval — just leave the GPX off entirely. The entry stays in the sidebar,
+# labelled "not mapped", with its distance and its times.
+#
+#   - name: 5k time trial
+#     surface: track
+#     distance_km: 5
+#     efforts:
+#       - { date: 2025-04-02, time: "19:12" }
+#       - { date: 2025-05-14, time: "18:44" }
+#
+# Units
+# -----
+# Store whichever unit you actually measured in; the site converts. Readers get
+# a km/mi toggle on the page and their choice is remembered. Totals, filters,
+# and sort order always compare in metric, so switching units never changes
+# which routes match.
+#
+# ==================================================
+
+- name: California International Marathon 2025
+  slug: cim-2025
+  type: run
+  surface: road
+  distance_mi: 26.2
+  elevation_ft: 616
+  time: "2:52:23"
+  region: Sacramento
+  dates: [2025-12-07]
+  notes: >
+    My first marathon and technically a BQ.
+    The training block was the most mentally and physically exhausting athletic endeavor I have ever undertaken.
+    I struggled or failed to complete many of my prescribed workouts, including a massive effort to complete 16 miles at marathon pace, proceeded immediately by an utter failure to complete even close to the scheduled 18 miles at marathon pace the following week.
+    Despite this, the taper worked wonders, and the race itself was fantastic.
+    I ran a negative split, starting at ~6:50 min/mi and finishing at ~6:30 min/mi, causing me to feel great through 22 miles and easily hold on for the last few to finish strong.
+  featured: true
+  gpx: /assets/gpx/cim-2025.gpx
+
+- name: OneAmerica Mini Marathon 2022
+  slug: oneamerica-mini-marathon-2022
+  type: run
+  surface: road
+  distance_mi: 13.1
+  elevation_ft: 118
+  time: "1:53:23"
+  region: Indianapolis
+  dates: [2022-05-07]
+  notes: >
+    First running race!
+    The GPX data is exported from Strava and collected via my iPhone; please excuse the poor quality.
+  gpx: /assets/gpx/oneamerica-mini-marathon-2022.gpx
