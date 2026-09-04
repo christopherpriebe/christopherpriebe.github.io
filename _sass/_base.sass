@@ -21,10 +21,10 @@ $screen-md-min: 992px
 $screen-lg-min: 1200px
 
 /*
- * Card surface, shared by the projects grid, the /other/ cards and the blog's
- * latest-post panel. These three were written separately and drifted apart
- * once already; keeping the surface, the accent bar and the hover lift in one
- * place stops that recurring.
+ * Card treatment shared by the projects grid, the /other/ cards and the blog's
+ * latest-post panel. All three take the accent bar and the hover lift; the
+ * projects grid and the /other/ cards also share the surface, while .latest
+ * sets its own (tinted background, stronger border).
  */
 @mixin card-surface($padding: 22px)
     position: relative

@@ -3,9 +3,11 @@
 // ---------------------------------------------------------------------------
 // REPLACING THE PINS
 // ---------------------------------------------------------------------------
-// Every pin lives in the PINS table below — one entry per tier, and nothing
-// about pin appearance exists anywhere else. To swap in a new set, replace the
-// entries; no other file needs to change.
+// Every pin's geometry lives in the PINS table below — one entry per tier. To
+// swap in a new set, replace the entries. Colours live in
+// _sass/_f_and_b_establishments.sass, which also repeats each tier's pixel size
+// as --pin-width / --pin-height for the CSS-sized wrapper; resizing a pin means
+// editing the table and that stylesheet together.
 //
 // Each entry needs:
 //

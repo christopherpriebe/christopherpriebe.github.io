@@ -20,6 +20,10 @@
     &:hover
         @include card-hover-lift
 
+    /* Filterable like .post — filters.js marks it, so it needs the rule too. */
+    &.is-hidden
+        display: none
+
 .latest__top
     display: flex
     align-items: center

@@ -57,7 +57,7 @@
             </td>
             <td class="route-efforts__pace">
               {%- if parsed_sec > 0 and route_km > 0 -%}
-                {%- assign effort_pace = parsed_sec | divided_by: route_km | round -%}
+                {%- assign effort_pace = parsed_sec | times: 1.0 | divided_by: route_km | round -%}
                 <span data-unit-value="{{ effort_pace }}" data-unit-kind="pace">{{ effort_pace | divided_by: 60 }}:{{ effort_pace | modulo: 60 | prepend: "0" | slice: -2, 2 }}</span>
                 <span data-unit-label="pace">/km</span>
               {%- endif -%}

@@ -92,7 +92,12 @@ clock_s.
 {%- assign route_sec_per_km = 0 -%}
 {%- assign route_pace = "—" -%}
 {%- if route_sec > 0 and route_km > 0 -%}
-  {%- assign route_sec_per_km = route_sec | divided_by: route_km | round -%}
+  {%- comment -%}
+  Liquid picks integer or float division from the operand types, so a distance
+  written as a whole number would floor the pace by up to a second per km.
+  {%- endcomment -%}
+  {%- assign route_km_exact = route_km | times: 1.0 -%}
+  {%- assign route_sec_per_km = route_sec | divided_by: route_km_exact | round -%}
   {%- assign pace_minutes = route_sec_per_km | divided_by: 60 -%}
   {%- assign pace_seconds = route_sec_per_km | modulo: 60 | prepend: "0" | slice: -2, 2 -%}
   {%- assign route_pace = pace_minutes | append: ":" | append: pace_seconds -%}
