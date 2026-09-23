@@ -13,9 +13,6 @@ import { setPressed } from "./dom";
 //       -> element text becomes the converted, rounded number
 //   data-unit-label="distance|elevation|pace|pace-words"
 //       -> element text becomes the unit string ("km", "/mi", "per mile", …)
-//   data-unit-show="metric|imperial"
-//       -> element is shown only in that system, for text a number cannot
-//          carry, such as a total spelled out in words
 
 const STORAGE_KEY = "priebe:units";
 const KM_PER_MILE = 1.609344;
@@ -106,10 +103,6 @@ export function applyUnits(root = document) {
   root.querySelectorAll("[data-unit-label]").forEach((el) => {
     const label = LABELS[el.getAttribute("data-unit-label")];
     if (label) el.textContent = label();
-  });
-
-  root.querySelectorAll("[data-unit-show]").forEach((el) => {
-    el.hidden = el.getAttribute("data-unit-show") !== current;
   });
 }
 

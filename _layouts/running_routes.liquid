@@ -4,30 +4,11 @@ layout: base
 
 {%- assign routes = site.data.running_routes -%}
 
-{%- comment -%}
-The lede totals every run, in words. Both unit forms are rendered and
-_js/units.js shows the one the reader has chosen.
-{%- endcomment -%}
-{%- assign run_km = 0 -%}
-{%- for route in routes -%}
-    {%- if route.type == "run" -%}
-        {%- include routes/canonical.liquid route=route -%}
-        {%- assign run_km = run_km | plus: route_km -%}
-    {%- endif -%}
-{%- endfor -%}
-{%- assign run_km_whole = run_km | round -%}
-{%- assign run_mi_whole = run_km | divided_by: 1.609344 | round -%}
-
-{%- capture lede -%}
-    <span data-unit-show="metric">{% include number_word.liquid n=run_km_whole %} kilometre{% if run_km_whole != 1 %}s{% endif %}</span>
-    <span data-unit-show="imperial" hidden>{% include number_word.liquid n=run_mi_whole %} mile{% if run_mi_whole != 1 %}s{% endif %}</span>
-    of recorded running, traced from GPX.
-{%- endcapture -%}
 {%- capture meta %}{% include routes/unit_toggle.liquid %}{% endcapture -%}
-{% include page_title.liquid lede=lede meta=meta %}
+{% include page_title.liquid lede=page.lede meta=meta %}
 
 {% include map/route_map.liquid
-    id="running-routes-map"
+    id="efforts-map"
     data=routes
     zoom=10
 %}

@@ -23,7 +23,7 @@ index:
   - title: Food & drink
     url: /f_and_b_establishments/
     count: places
-  - title: Routes
-    url: /running-routes/
+  - title: Efforts
+    url: /efforts/
     count: routes
 ---

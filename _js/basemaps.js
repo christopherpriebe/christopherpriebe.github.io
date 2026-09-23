@@ -1,7 +1,7 @@
 import L from "leaflet";
 import { setPressed } from "./dom";
 
-// Tile layers shared by the F&B marker map and the running-routes map, plus
+// Tile layers shared by the F&B marker map and the Efforts map, plus
 // the wiring for the Street/Terrain switcher both pages render.
 
 export const BASEMAPS = {

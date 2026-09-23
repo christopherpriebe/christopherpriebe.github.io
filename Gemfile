@@ -4,6 +4,7 @@ source "https://rubygems.org"
 jekyll_version = "~> 4.4.1"
 jekyll_scholar_version = "~> 7.2.0"
 jekyll_feed_version = "~> 0.17"
+jekyll_redirect_from_version = "~> 0.16"
 
 tzinfo_version = ">= 1", "< 3"
 wdm_version = "~> 0.1.1"
@@ -28,4 +29,5 @@ gem "http_parser.rb", http_parser_version, :platforms => [:jruby]
 group :jekyll_plugins do
   gem "jekyll-scholar", jekyll_scholar_version
   gem "jekyll-feed", jekyll_feed_version
+  gem "jekyll-redirect-from", jekyll_redirect_from_version
 end
