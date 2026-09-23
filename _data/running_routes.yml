@@ -117,5 +117,5 @@
   dates: [2022-05-07]
   notes: >
     First running race!
-    The GPX data is exported from Strava and collected via my iPhone; please excuse the poor quality.
+    The GPX data is collected via my iPhone and exported from Strava; please excuse the poor quality.
   gpx: /assets/gpx/oneamerica-mini-marathon-2022.gpx
