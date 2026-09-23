@@ -2,7 +2,9 @@
 layout: instruments
 title: Instruments
 permalink: /instruments/
-nav: true
+# Out of the nav and the home index until there is more to show; set nav back
+# to true (and restore its row in _pages/index.md) to list it again.
+nav: false
 nav_order: 4
 lede: Things you can take apart. Each one is a working model of something undergraduates are usually asked to picture in their heads, with every parameter exposed.
 

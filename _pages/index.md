@@ -14,12 +14,13 @@ index:
   - title: Projects
     url: /projects/
     count: projects
-  - title: Instruments
-    url: /instruments/
-    note: Things you can take apart
-  - title: Writing
-    url: /blog/
-    note: Notes on tooling
+  # Instruments and Writing are left off until they have more in them.
+  # - title: Instruments
+  #   url: /instruments/
+  #   note: Things you can take apart
+  # - title: Writing
+  #   url: /blog/
+  #   note: Notes on tooling
   - title: Food & drink
     url: /f_and_b_establishments/
     count: places
