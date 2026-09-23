@@ -2,7 +2,11 @@
 # Site Settings
 # ==================================================
 title: Christopher Priebe
-email: christophermpriebe@gmail.com
+# The email address, split in two so it never appears whole in this repo or in
+# the built pages; _includes/email_link.liquid and _js/email.js put it back
+# together in the browser. Link it with {% include email_link.liquid %}.
+email_user: christophermpriebe
+email_domain: gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
   Christopher Priebe is a PhD student at UC San Diego working at the
   interplay of compilers, machine learning, and systems.

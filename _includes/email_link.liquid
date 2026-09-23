@@ -1,0 +1,10 @@
+{%- comment -%}
+The email address as a link, without ever writing it whole into the page.
+The two halves go out reversed and with no "@", so a scraper reading the
+source finds nothing shaped like an address; _js/email.js reassembles them
+into a mailto link in the browser. Without JavaScript the link reads
+"name (at) domain (dot) com" and goes nowhere.
+{%- endcomment -%}
+{%- assign email_user_reversed = site.email_user | split: "" | reverse | join: "" -%}
+{%- assign email_domain_reversed = site.email_domain | split: "" | reverse | join: "" -%}
+<a data-email-user="{{ email_user_reversed }}" data-email-domain="{{ email_domain_reversed }}">{{ site.email_user }} (at) {{ site.email_domain | replace: ".", " (dot) " }}</a>

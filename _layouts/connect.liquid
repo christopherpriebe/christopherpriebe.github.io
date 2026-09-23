@@ -2,7 +2,7 @@
 layout: base
 ---
 
-{%- capture lede %}Email is best &mdash; <a href="mailto:{{ site.email }}">{{ site.email }}</a>{% endcapture -%}
+{%- capture lede %}Email is best &mdash; {% include email_link.liquid %}{% endcapture -%}
 {% include page_title.liquid lede=lede lede_ink=true %}
 
 <div class="rows rows--links measure connect-rows">

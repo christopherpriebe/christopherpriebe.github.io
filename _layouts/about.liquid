@@ -23,7 +23,7 @@ between the title and the text.
         </div>
 
         <p class="meta measure about-contact">
-            <a href="mailto:{{ site.email }}">{{ site.email }}</a> &middot; <a href="{{ '/cv/' | relative_url }}">CV</a>
+            {% include email_link.liquid %} &middot; <a href="{{ '/cv/' | relative_url }}">CV</a>
         </p>
     </div>
 </div>

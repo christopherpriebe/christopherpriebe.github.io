@@ -59,6 +59,6 @@ of the row as plain text rather than in a badge.
 </section>
 
 <section class="hello">
-    <p class="lede">Say hello &mdash; <a href="mailto:{{ site.email }}">{{ site.email }}</a></p>
+    <p class="lede">Say hello &mdash; {% include email_link.liquid %}</p>
     <p class="meta"><a href="{{ '/connect/' | relative_url }}">Elsewhere &rarr;</a></p>
 </section>

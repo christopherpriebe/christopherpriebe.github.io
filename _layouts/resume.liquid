@@ -5,7 +5,7 @@ layout: base
 {% comment %} Structure adapted from https://github.com/jglovier/resume-template/ {% endcomment %}
 
 {%- capture resume_name %}{{ site.profile.first_name }}{% if site.profile.middle_name %} {{ site.profile.middle_name }}{% endif %} {{ site.profile.last_name }}{% endcapture -%}
-{%- capture resume_meta %}{{ site.resume_title }} &middot; <a href="mailto:{{ site.email }}">{{ site.email }}</a>{% endcapture -%}
+{%- capture resume_meta %}{{ site.resume_title }} &middot; {% include email_link.liquid %}{% endcapture -%}
 {% include page_title.liquid title=resume_name lede=site.resume_executive_summary lede_ink=true meta=resume_meta %}
 
 {%- assign educations = site.resume | where: "type", "education" | sort: "order" -%}

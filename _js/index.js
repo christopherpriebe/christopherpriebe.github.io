@@ -6,7 +6,9 @@ import { initFilters } from "./filters";
 import { initUnits } from "./units";
 import { initInstruments } from "./instruments";
 import { initAbstracts } from "./abstracts";
+import { initEmailLinks } from "./email";
 document.addEventListener("DOMContentLoaded", () => {
+    initEmailLinks();
     initUnits();
     enhanceJourneyPins();
     const queue = window.__MAP_INIT__ || [];
