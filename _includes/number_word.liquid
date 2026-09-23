@@ -1,0 +1,20 @@
+{%- comment -%}
+Spells a count as a capitalised word, as in "Three papers". Numbers from 100
+up fall back to digits, where a word stops being easier to read.
+
+  n    the number
+{%- endcomment -%}
+{%- assign nw_n = include.n | plus: 0 -%}
+{%- assign nw_ones = "zero,one,two,three,four,five,six,seven,eight,nine,ten,eleven,twelve,thirteen,fourteen,fifteen,sixteen,seventeen,eighteen,nineteen" | split: "," -%}
+{%- assign nw_tens = ",,twenty,thirty,forty,fifty,sixty,seventy,eighty,ninety" | split: "," -%}
+{%- if nw_n < 20 -%}
+    {%- assign nw_word = nw_ones[nw_n] -%}
+{%- elsif nw_n < 100 -%}
+    {%- assign nw_ten = nw_n | divided_by: 10 -%}
+    {%- assign nw_one = nw_n | modulo: 10 -%}
+    {%- assign nw_word = nw_tens[nw_ten] -%}
+    {%- if nw_one > 0 -%}{%- assign nw_word = nw_word | append: "-" | append: nw_ones[nw_one] -%}{%- endif -%}
+{%- else -%}
+    {%- assign nw_word = nw_n | append: "" -%}
+{%- endif -%}
+{{- nw_word | capitalize -}}

@@ -2,16 +2,14 @@
 layout: base
 ---
 
-<div class="container">
-    <div class="row">
-        <div class="col-xs-12">
-            {{content}}
-            <hr>
-        </div>
-    </div>
-    <div class="row icon-card-grid">
-        {% for social in site.data.socials %}
-            {% include social.liquid %}
-        {% endfor %}
-    </div>
+{%- capture lede %}Email is best &mdash; {% include email_link.liquid text="write to me" %}{% endcapture -%}
+{% include page_title.liquid lede=lede lede_ink=true %}
+
+<div class="rows rows--links measure connect-rows">
+    {%- for social in site.data.socials %}
+    <a class="rows__row" href="{{ social[1].url }}">
+        <span>{{ social[1].name | escape }}</span>
+        <span class="rows__note">{{ social[1].handle | escape }}</span>
+    </a>
+    {%- endfor %}
 </div>

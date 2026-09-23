@@ -1,30 +1,115 @@
-.site-header
-    background-color: $background-color
+/*
+ * The page is anchored to the left margin rather than centred: every line of
+ * type starts at $page-pad-left, at every width.
+ */
+.page
+    position: relative
+    width: 100%
+    max-width: 1180px
+    padding: 0 $page-pad-right 0 $page-pad-left
+
+    // The one mark: a plumb line dropped from the top edge, two modules clear
+    // of where the type begins, stopping dead at 34 modules. It is measured
+    // from the left padding, so it holds its clearance at every width.
+    &::before
+        content: ""
+        position: absolute
+        top: 0
+        left: calc(#{$page-pad-left} - 18px)
+        width: 2px
+        height: 306px
+        background-color: $heading-color
+        pointer-events: none
 
 /*
- * Overwrite Bootstrap 3 CSS for navbar
+ * Subpages carry one quiet row. The home page carries none: its index is the
+ * navigation.
  */
-.navbar-default
-    background-color: $background-color
-    border-color: $background-color
+.site-nav
+    display: flex
+    flex-wrap: wrap
+    gap: 9px 27px
+    align-items: baseline
+    padding-top: 45px
+    font-size: 15px
+    line-height: 29px
 
-    .navbar-brand
-        color: $navbar-title-color
-        font-size: $navbar-title-size
-        line-height: $navbar-title-size
-        font-weight: bold
-        height: 100%
+    a[aria-current="page"]
+        color: $heading-color
 
-        &:hover, &:focus
-            color: $navbar-title-hover-color
-    
-    .navbar-nav
-        > li > a
-            color: $navbar-link-color
-            font-size: $navbar-link-size
+.site-nav__home
+    font-family: $mono-font
 
-            &:hover, &:focus
-                color: $navbar-link-hover-color
+.measure
+    max-width: $measure
 
-footer
-    padding-top: 20px
+.page-head
+    padding-top: 144px
+
+    .lede
+        margin: 34px 0 0
+
+    .meta
+        margin: 18px 0 0
+
+// The block that follows a page head sits 10 modules down.
+.page-body
+    padding-top: 90px
+
+.site-footer
+    display: flex
+    flex-wrap: wrap
+    gap: 9px 27px
+    padding: 162px 0 90px
+    font-size: 15px
+
+.not-found
+    padding-top: 144px
+
+    .lede
+        margin: 34px 0 0
+
+    .meta
+        margin: 29px 0 0
+
+.about-body
+    margin-top: 54px
+
+/*
+ * About: text in the left column, the portrait to its right with its top
+ * level with the title. The frame itself is .photo (_sass/_photos.sass).
+ * Below 900px it drops in between the title and the text.
+ */
+.about--portrait
+    display: grid
+    grid-template-columns: minmax(0, $measure) minmax(198px, 270px)
+    grid-template-areas: "head portrait" "body portrait"
+    grid-template-rows: auto 1fr
+    column-gap: 54px
+
+.about__head
+    grid-area: head
+
+.about__body
+    grid-area: body
+
+.about__portrait
+    grid-area: portrait
+    align-self: start
+    margin-top: 144px
+
+@media (max-width: 900px)
+    .about--portrait
+        grid-template-columns: minmax(0, $measure)
+        grid-template-areas: "head" "portrait" "body"
+        grid-template-rows: auto
+
+    .about__portrait
+        max-width: 360px
+        margin-top: 54px
+
+.about-contact
+    margin: 54px 0 0
+
+.connect-rows
+    margin-top: 72px

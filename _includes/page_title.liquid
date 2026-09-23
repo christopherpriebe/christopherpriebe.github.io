@@ -1,0 +1,18 @@
+{%- comment -%}
+The head every subpage opens with: the title, then an optional lede and meta
+line. Pass `lede_ink=true` for a lede set in the heading colour.
+
+  title     defaults to page.title
+  lede      optional; HTML allowed
+  meta      optional small line under the lede; HTML allowed
+{%- endcomment -%}
+{%- assign heading = include.title | default: page.title -%}
+<div class="page-head measure">
+    <h1 class="page-title">{{ heading }}</h1>
+    {%- if include.lede %}
+    <p class="lede{% if include.lede_ink %} lede--ink{% endif %}">{{ include.lede }}</p>
+    {%- endif -%}
+    {%- if include.meta %}
+    <p class="meta">{{ include.meta }}</p>
+    {%- endif %}
+</div>

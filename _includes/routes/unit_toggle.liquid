@@ -1,0 +1,9 @@
+{%- comment -%}
+Metric/imperial switch. Wired by _js/units.js, which also remembers the choice.
+Server-rendered values are metric; units.js switches to miles on load unless
+the reader has chosen otherwise.
+{%- endcomment -%}
+<span class="seg seg--inline" data-unit-toggle role="group" aria-label="Measurement units">
+  <button type="button" data-units="imperial" aria-pressed="false">mi</button>
+  <button type="button" class="is-active" data-units="metric" aria-pressed="true">km</button>
+</span>

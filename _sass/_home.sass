@@ -1,65 +1,96 @@
-#bio
-    
-.bio-pic
-    height: $home-profile-photo-height
-    width: $home-profile-photo-width 
-    object-fit: cover
+.hero
+    max-width: 720px
+    padding-top: 180px
 
-.bio-social-icon
-    font-size: 50px
+    .lede
+        max-width: 540px
+        margin: 45px 0 0
 
-.bio-social-icon-link
-    color: $bio-social-icon-color
+    .meta
+        margin: 29px 0 0
 
-    &:visited
-        color: $bio-social-icon-visited-color
-    
-    &:hover
-        color: $bio-social-icon-hover-color
-    
-    &:active
-        color: $bio-social-icon-hover-color
+.home-index
+    max-width: $measure-wide
+    padding-top: 180px
 
-#history
+/*
+ * Stratification: a 153px mark column holding the dates, one continuous
+ * hairline down it, and a 9px square where each entry meets the line.
+ */
+.timeline-wrap
+    padding-top: 180px
 
-.history-item
+.timeline
+    position: relative
+    max-width: 792px
 
-.history-item-span
-    vertical-align: top
-    color: $history-line-color
-    font-size: 12px
+    &::before
+        content: ""
+        position: absolute
+        top: 0
+        bottom: 0
+        left: 153px
+        width: 1px
+        background-color: $rule-color
 
-.history-item-span span
-    padding-right: 10px
+.timeline__item
+    display: grid
+    grid-template-columns: 153px minmax(0, $measure)
+    column-gap: 27px
 
-.history-item-dot
-    position: absolute
-    background-color: $history-line-color
-    height: 15px
-    width: 15px
-    border-radius: 50%
-    border: 2px solid $background-color
-    top: 0px
-    left: -8.5px
+    & + &
+        padding-top: 90px
 
-.history-item-logo
-    border-left: 2px solid $history-line-color
-    height: 100%
+    .title
+        line-height: 36px
 
-    @include media_larger_than_mobile
-        padding-bottom: 0px 
+    p
+        margin: 18px 0 0
 
-.history-item-logo img
-    padding-left: 10px
-    padding-bottom: 10px
+.timeline__when
+    position: relative
+    padding-right: 27px
+    font-size: 15px
+    text-align: right
+    white-space: nowrap
 
-.history-item-content
-    vertical-align: top
-    padding-bottom: 20px
-    border-left: 2px solid $history-line-color
+    &::after
+        content: ""
+        position: absolute
+        top: 10px
+        right: -5px
+        width: 9px
+        height: 9px
+        background-color: $heading-color
 
-    @include media_larger_than_mobile
-        border-left: 0px
+// Too narrow for a margin column: the line moves to the edge and the date
+// sits above its entry.
+@include media_mobile
+    .timeline
+        padding-left: 27px
 
-.history-item-content p
-    padding-left: 10px
+        &::before
+            left: 4px
+
+    .timeline__item
+        grid-template-columns: minmax(0, 1fr)
+
+    .timeline__when
+        padding: 0 0 9px
+        text-align: left
+
+        &::after
+            top: 10px
+            right: auto
+            left: -27px
+
+.hello
+    max-width: $measure
+    padding-top: 144px
+
+    .lede
+        margin: 0
+        color: $heading-color
+
+    .meta
+        margin: 18px 0 0

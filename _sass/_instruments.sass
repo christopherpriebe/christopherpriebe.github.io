@@ -1,0 +1,200 @@
+/*
+ * Instruments
+ *
+ * The signal palette lives only inside the plane below. Two rules keep it
+ * there: signal colours are fills and strokes, never type, and events are
+ * encoded by shape rather than hue, which leaves the five hues free for state
+ * and keeps the whole thing legible without colour.
+ */
+.instrument
+    margin-top: 90px
+    padding: 45px clamp(27px, 4vw, 54px)
+    background-color: $plane-color
+
+    .seg button
+        background-color: $background-color
+
+        &:hover
+            background-color: $plane-color
+
+        &.is-active,
+        &[aria-pressed="true"]
+            background-color: $heading-color
+
+.instrument__head
+    display: flex
+    flex-wrap: wrap
+    gap: 9px 27px
+    align-items: baseline
+    justify-content: space-between
+
+.instrument__controls
+    display: grid
+    grid-template-columns: repeat(auto-fit, minmax(198px, 1fr))
+    gap: 27px
+    margin-top: 36px
+
+.instrument__section
+    margin-top: 45px
+
+.instrument__section--ruled
+    margin-top: 36px
+    padding-top: 27px
+    border-top: 1px solid $rule-color
+
+// The address, drawn to scale: each field's width is its bit count.
+.address-bar
+    display: flex
+    gap: 1px
+    height: 45px
+    margin-top: 9px
+
+    span
+        flex: 0 0 0
+        min-width: 1px
+
+.address-legend
+    display: flex
+    flex-wrap: wrap
+    gap: 9px 27px
+    padding-top: 12px
+
+.address-legend__item
+    display: flex
+    gap: 9px
+    align-items: center
+
+    b
+        font-weight: 400
+        color: $INK
+
+.swatch
+    display: inline-block
+    flex: 0 0 auto
+    width: 11px
+    height: 11px
+
+.swatch--state
+    width: 15px
+    height: 15px
+    margin-top: 6px
+
+.swatch--invalid
+    width: 15px
+    height: 15px
+    border: 1px solid $rule-color
+    background-color: $CONCRETE-DEEP
+
+.swatch--open
+    border: 1px solid $heading-color
+
+.swatch--filled
+    background-color: $heading-color
+
+.fill-tag
+    background-color: $ramp-3
+
+.fill-index
+    background-color: $ramp-2
+
+.fill-offset
+    background-color: $ramp-1
+
+.fill-modified
+    background-color: $signal-red
+
+// Owned carries a hatch as well as a hue: it and Modified are both dirty,
+// the pair most often confused, so the distinction does not rest on colour.
+.fill-owned
+    background: repeating-linear-gradient(45deg, $signal-amber 0 3px, $plane-color 3px 5px)
+
+.fill-exclusive
+    background-color: $signal-blue
+
+.fill-shared
+    background-color: $signal-teal
+
+.fill-presence
+    background-color: $signal-green
+
+.instrument__readout
+    display: grid
+    grid-template-columns: repeat(auto-fit, minmax(153px, 1fr))
+    gap: 27px
+    margin-top: 45px
+    padding-top: 27px
+    border-top: 1px solid $rule-color
+
+    output
+        display: block
+        font-family: $mono-font
+        font-size: 21px
+        line-height: 29px
+        color: $INK
+        font-variant-numeric: tabular-nums
+
+.state-legend
+    display: grid
+    grid-template-columns: repeat(auto-fit, minmax(189px, 1fr))
+    gap: 18px 27px
+    margin-top: 18px
+
+.state-legend__item
+    display: flex
+    gap: 9px
+    align-items: flex-start
+    font-size: 15px
+    line-height: 26px
+
+    b
+        display: block
+        font-weight: 400
+        color: $INK
+
+.event-legend
+    display: flex
+    flex-wrap: wrap
+    gap: 9px 27px
+    align-items: center
+    margin-top: 27px
+    padding-top: 27px
+    border-top: 1px solid $rule-color
+    font-size: 15px
+
+    span
+        display: inline-flex
+        gap: 9px
+        align-items: center
+
+/*
+ * Planned work: rows on hairlines, the same furniture as the home index
+ */
+.planned
+    max-width: 792px
+    margin-top: 108px
+
+    .label
+        display: block
+        padding-bottom: 18px
+
+.planned__item
+    display: grid
+    grid-template-columns: minmax(0, 1fr) auto
+    gap: 9px 27px
+    align-items: baseline
+    padding: 27px 0
+    border-top: 1px solid $rule-color
+
+    &:last-of-type
+        border-bottom: 1px solid $rule-color
+
+    .title
+        line-height: 36px
+
+    p
+        grid-column: 1
+        max-width: 540px
+        margin: 0
+
+.planned__foot
+    margin: 36px 0 0

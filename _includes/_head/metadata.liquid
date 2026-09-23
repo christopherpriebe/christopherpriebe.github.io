@@ -1,3 +1,5 @@
 <!-- Required meta tags -->
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{%- assign meta_description = page.description | default: page.summary | default: site.description | strip_html | strip_newlines | strip %}
+<meta name="description" content="{{ meta_description | escape }}">

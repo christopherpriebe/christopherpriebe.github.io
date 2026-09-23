@@ -1,0 +1,44 @@
+# Controls for Instrument 01, cache address decomposition
+# (_includes/instruments/cache.liquid). `param` is the name _js/instruments.js
+# reads; `default` is the option selected on load.
+- param: sizeKB
+  label: Cache per core
+  default: 32
+  options:
+    - { value: 4, label: 4K }
+    - { value: 8, label: 8K }
+    - { value: 16, label: 16K }
+    - { value: 32, label: 32K }
+    - { value: 64, label: 64K }
+- param: assoc
+  label: Associativity
+  default: 4
+  options:
+    - { value: 1, label: Direct }
+    - { value: 2, label: 2-way }
+    - { value: 4, label: 4-way }
+    - { value: 8, label: 8-way }
+    - { value: 16, label: 16-way }
+- param: blockB
+  label: Block size
+  default: 64
+  options:
+    - { value: 16, label: 16B }
+    - { value: 32, label: 32B }
+    - { value: 64, label: 64B }
+    - { value: 128, label: 128B }
+- param: cores
+  label: Cores
+  default: 4
+  options:
+    - { value: 1, label: "1" }
+    - { value: 2, label: "2" }
+    - { value: 4, label: "4" }
+    - { value: 8, label: "8" }
+- param: proto
+  label: Coherence
+  default: MOESI
+  options:
+    - { value: MSI, label: MSI }
+    - { value: MOESI, label: MOESI }
+    - { value: Directory, label: Directory }
