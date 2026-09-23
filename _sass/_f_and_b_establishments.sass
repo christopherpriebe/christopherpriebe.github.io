@@ -256,3 +256,23 @@
 .fnb-toggle-row button[aria-pressed="true"]
     background-color: $plane-color
     box-shadow: inset 0 0 0 2px $heading-color
+
+/*
+ * Permanently closed places: a grey pin, a lighter row, and a line in the
+ * details saying when.
+ */
+.journey-pin--closed .journey-pin__svg
+    filter: grayscale(1)
+    opacity: .45
+
+.map-card--closed .map-card__name
+    color: $text-color
+
+.fnb-closed
+    color: $heading-color
+    font-weight: 500
+
+.filters__checks
+    display: inline-flex
+    flex-wrap: wrap
+    gap: 9px 27px

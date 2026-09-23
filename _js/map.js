@@ -9,9 +9,7 @@ import { buildPinSvg, getJourneyTier, getMarkerMetrics } from "./pins";
 //      Also, move the F&B stuff to a separate file
 
 // TODO: Write a way to more easily manage F&B awards, as right now
-//      the manual effort to add awards is too much;
-//      can do the same things for other parts of F&B such as if it
-//      is closed and such.
+//      the manual effort to add awards is too much.
 
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, (m) => ({
@@ -37,9 +35,12 @@ function renderTemplate(html, ctx) {
   });
 }
 
+// A closed place keeps only its map link; its website and reservations would
+// lead nowhere.
 function buildLinksHtml(item) {
   const links = [];
   if (item.map_url) links.push(`<a href="${escapeHtml(item.map_url)}" target="_blank" rel="noopener">Map</a>`);
+  if (item.closed) return links.join(" · ");
   if (item.website) links.push(`<a href="${escapeHtml(item.website)}" target="_blank" rel="noopener">Website</a>`);
   if (item.reservation_url) links.push(`<a href="${escapeHtml(item.reservation_url)}" target="_blank" rel="noopener">Reservations</a>`);
   return links.length ? links.join(" · ") : "";
@@ -119,6 +120,24 @@ export function getCuisinesHtml(keys) {
   return getMetaRowHtml(parts.join(" · "), "fnb-meta-row--cuisines muted");
 }
 
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
+  "August", "September", "October", "November", "December"];
+
+// `closed` is `true`, a year, a year and month ("2025-06"), or a full date.
+// Returns the part worth printing: "June 2025", "2025", or "" when unknown.
+export function formatClosed(closed) {
+  if (!closed || closed === true) return "";
+  const match = /^(\d{4})(?:-(\d{1,2}))?/.exec(String(closed));
+  if (!match) return "";
+  const month = match[2] ? MONTHS[parseInt(match[2], 10) - 1] : "";
+  return month ? `${month} ${match[1]}` : match[1];
+}
+
+function getClosedLine(closed) {
+  const when = formatClosed(closed);
+  return `Permanently closed${when ? `, ${escapeHtml(when)}` : ""}`;
+}
+
 function getJourneyLabel(journeyRating) {
   const tier = getJourneyTier(journeyRating);
   if (tier === 3) return "Worth the trip";
@@ -143,14 +162,14 @@ export function enhanceJourneyPins(root = document) {
   });
 }
 
-function getJourneyPinMarkup(journeyRating, variant = "map") {
+function getJourneyPinMarkup(journeyRating, variant = "map", closed = false) {
   const tier = getJourneyTier(journeyRating);
   const attrs = (variant === "map")
     ? 'aria-hidden="true"'
     : `role="img" aria-label="${escapeHtml(getJourneyLabel(tier))}"`;
 
   return `
-    <span class="journey-pin journey-pin--${variant} journey-pin--t${tier}" data-journey-ready="1" ${attrs}>
+    <span class="journey-pin journey-pin--${variant} journey-pin--t${tier}${closed ? " journey-pin--closed" : ""}" data-journey-ready="1" ${attrs}>
       ${buildPinSvg(tier)}
     </span>
   `.trim();
@@ -225,12 +244,14 @@ function formatYearRanges(years) {
   return { count: ys.length, text: parts.join(", ") };
 }
 
-function getMichelinAwards(m) {
+// A closed place shows its Michelin history but none of the current marks,
+// which it no longer holds.
+function getMichelinAwards(m, closed = false) {
   if (!m) return "";
 
   const bits = [];
 
-  const stars = Math.max(0, Math.min(3, parseInt(m.stars, 10) || 0));
+  const stars = closed ? 0 : Math.max(0, Math.min(3, parseInt(m.stars, 10) || 0));
   if (stars) {
     const starIcons = Array.from({ length: stars })
       .map(() => '<span class="michelin-red">✱</span>')
@@ -275,8 +296,8 @@ function getMichelinAwards(m) {
     );
   }
 
-  if (m.bib) bits.push('<div><span class="michelin-red">Bib Gourmand</span></div>');
-  if (m.green) bits.push('<div><span class="michelin-green">Green Star</span></div>');
+  if (m.bib && !closed) bits.push('<div><span class="michelin-red">Bib Gourmand</span></div>');
+  if (m.green && !closed) bits.push('<div><span class="michelin-green">Green Star</span></div>');
 
   if (lines.length) {
     bits.push(`
@@ -292,10 +313,10 @@ function getMichelinAwards(m) {
   return bits.join("");
 }
 
-function awardsList(a) {
+function awardsList(a, closed = false) {
   let out = "";
 
-  if (a && a.michelin) out += getMichelinAwards(a.michelin);
+  if (a && a.michelin) out += getMichelinAwards(a.michelin, closed);
 
   if (a && Array.isArray(a.other) && a.other.length) {
     const items = a.other
@@ -395,6 +416,7 @@ function applyFilters(config, markerLayer, markerBySlug) {
   const priceModeEl = document.getElementById("filter-price-mode");
   const cuisineEl = document.getElementById("filter-cuisine");
   const valueEl = document.getElementById("filter-value");
+  const hideClosedEl = document.getElementById("filter-hide-closed");
 
   const q = (qEl ? qEl.value : "").trim().toLowerCase();
   const journey = journeyEl ? journeyEl.value : "";
@@ -404,6 +426,7 @@ function applyFilters(config, markerLayer, markerBySlug) {
   const priceMode = priceModeEl ? priceModeEl.value : "";
   const cuisine = cuisineEl ? cuisineEl.value : "";
   const valueOnly = !!(valueEl && valueEl.checked);
+  const hideClosed = !!(hideClosedEl && hideClosedEl.checked);
 
   const items = getListItems(config.listId);
   const allowed = [];
@@ -430,6 +453,7 @@ function applyFilters(config, markerLayer, markerBySlug) {
       else if (!priceMode && elPriceValue > priceValue) ok = false;
     }
     if (valueOnly && !elValue) ok = false;
+    if (hideClosed && el.getAttribute("data-closed") === "1") ok = false;
 
     if (cuisine) {
       const keys = cuisines.split(/\s+/).filter(Boolean);
@@ -470,7 +494,7 @@ function applyFilters(config, markerLayer, markerBySlug) {
 }
 
 function wireFilters(config, markerLayer, markerBySlug) {
-  const ids = ["filter-q", "filter-cuisine", "filter-value"];
+  const ids = ["filter-q", "filter-cuisine", "filter-value", "filter-hide-closed"];
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -492,6 +516,7 @@ function wireFilters(config, markerLayer, markerBySlug) {
       const pm = document.getElementById("filter-price-mode");
       const c = document.getElementById("filter-cuisine");
       const v = document.getElementById("filter-value");
+      const hc = document.getElementById("filter-hide-closed");
 
       if (q) q.value = "";
       if (j) j.value = "";
@@ -499,6 +524,7 @@ function wireFilters(config, markerLayer, markerBySlug) {
       if (pm) pm.value = getToggleFilterDefaultValue("filter-price-mode");
       if (c) c.value = "";
       if (v) v.checked = false;
+      if (hc) hc.checked = false;
       syncToggleFilterGroup("filter-journey");
       syncToggleFilterGroup("filter-price");
       syncToggleFilterGroup("filter-price-mode");
@@ -526,7 +552,7 @@ function hydrateList(config, dataset) {
     const item = itemBySlug.get(slug) || itemByName.get(name);
     const metaEl = el.querySelector("[data-map-card-meta]");
 
-    if (!item || !metaEl) return;
+    if (!item || !metaEl || item.closed) return;
     metaEl.textContent = getCuisineLabels(item.cuisines);
   });
 
@@ -546,6 +572,7 @@ function buildContext(item) {
     address: escapeHtml(item.address || ""),
     location: escapeHtml(locBits.join(", ")),
     journey_symbol: getJourneySymbol(item.journey_rating),
+    closed_line: item.closed ? `<div class="fnb-popup__line fnb-closed">${getClosedLine(item.closed)}</div>` : "",
   };
 }
 
@@ -554,10 +581,11 @@ function buildContext(item) {
 function buildDetailsHtml(item) {
   const locBits = [item.neighborhood, item.city, item.state, item.country].filter(Boolean);
   const summary = escapeHtml(item.summary || "");
-  const awardsHtml = awardsList(item.awards);
+  const awardsHtml = awardsList(item.awards, !!item.closed);
   const links = buildLinksHtml(item);
 
   return [
+    item.closed ? `<div class="row-details__line fnb-closed">${getClosedLine(item.closed)}</div>` : "",
     `<div class="row-details__line">${escapeHtml(getJourneyLabel(item.journey_rating))} &middot; ${escapeHtml(locBits.join(", "))}</div>`,
     item.address ? `<div class="row-details__line">${escapeHtml(item.address)}</div>` : "",
     getCuisinesHtml(item.cuisines),
@@ -614,15 +642,16 @@ export function initMap(config) {
     const m = L.marker([d.lat, d.lng], {
       icon: L.divIcon({
         className: "journey-marker-icon",
-        html: getJourneyPinMarkup(tier, "map"),
+        html: getJourneyPinMarkup(tier, "map", !!item.closed),
         iconSize: markerMetrics.iconSize,
         iconAnchor: markerMetrics.iconAnchor,
         popupAnchor: markerMetrics.popupAnchor,
       }),
-      alt: `${item.name || "Establishment"} (${getJourneyLabel(tier)})`,
+      alt: `${item.name || "Establishment"} (${item.closed ? "permanently closed" : getJourneyLabel(tier)})`,
       riseOnHover: true,
       title: item.name || "",
-      zIndexOffset: markerMetrics.zIndexOffset,
+      // Closed places sit beneath every open one where pins overlap.
+      zIndexOffset: item.closed ? markerMetrics.zIndexOffset - 1000 : markerMetrics.zIndexOffset,
     });
     m.bindTooltip(tooltipHtml, { sticky: true });
     m.bindPopup(popupHtml, { maxWidth: 340 });

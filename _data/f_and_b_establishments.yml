@@ -1,3 +1,11 @@
+# Food and drink places for /f_and_b_establishments/.
+#
+# Mark a place that has shut for good with `closed:`, giving the year, the
+# year and month, or the date it closed (`closed: 2025-06`), or `closed: true`
+# if you don't know when. It stays on the map and in the list, set lighter
+# and marked closed; its website and reservation links are dropped, and it no
+# longer counts towards the Michelin star total.
+
 - name: Another Broken Egg Cafe
   slug: another_broken_egg_cafe_west_lafayette
   coordinates: [40.4307049,-86.913023]

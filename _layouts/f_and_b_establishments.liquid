@@ -5,34 +5,28 @@ layout: base
 {%- assign places = site.data.f_and_b_establishments -%}
 
 {%- comment -%}
-Headline figures, all derived from the data file so they never go stale.
+Headline figures, all derived from the data file so they never go stale. The
+star count is the sum of each place's current Michelin stars, so a two-star
+restaurant counts twice, and leaves out closed places, whose stars no longer
+exist. Closed places still count towards cities and countries.
 {%- endcomment -%}
-{%- assign visit_total = 0 -%}
-{%- assign starred = 0 -%}
-{%- assign bib_gourmand = 0 -%}
+{%- assign star_total = 0 -%}
 {%- for place in places -%}
-    {%- assign visit_total = visit_total | plus: place.visits.size -%}
-    {%- if place.awards.michelin.stars > 0 -%}
-        {%- assign starred = starred | plus: 1 -%}
-    {%- endif -%}
-    {%- if place.awards.michelin.bib -%}
-        {%- assign bib_gourmand = bib_gourmand | plus: 1 -%}
-    {%- endif -%}
+    {%- if place.closed -%}{%- continue -%}{%- endif -%}
+    {%- assign place_stars = place.awards.michelin.stars | default: 0 -%}
+    {%- assign star_total = star_total | plus: place_stars -%}
 {%- endfor -%}
 {%- assign city_count = places | map: "city" | compact | uniq | size -%}
 {%- assign country_count = places | map: "country" | compact | uniq | size -%}
 
-{%- capture lede %}{% include number_word.liquid n=places.size %} places I've eaten and would send you to, mapped.{% endcapture -%}
 {%- capture meta -%}
     <span class="fnb-stats">
-        <span>{{ visit_total }} visits</span>
         <span>{{ city_count }} cities</span>
         <span>{{ country_count }} countries</span>
-        <span>{{ starred }} <span class="michelin-red" aria-hidden="true">&#10033;</span> Michelin starred</span>
-        <span>{{ bib_gourmand }} Bib Gourmand</span>
+        <span>{{ star_total }} <span class="michelin-red" aria-hidden="true">&#10033;</span> Michelin star{% if star_total != 1 %}s{% endif %}</span>
     </span>
 {%- endcapture -%}
-{% include page_title.liquid lede=lede meta=meta %}
+{% include page_title.liquid lede=page.lede meta=meta %}
 
 {% include map/marker_map.liquid
     id="f-and-b-establishments-map"
