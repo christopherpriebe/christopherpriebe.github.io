@@ -1,18 +1,19 @@
-<!-- Create navigation bar with Bootstrap 3 -->
-<nav id="navbar" class="navbar navbar-default">
-    <div class="container-fluid">
-        {% unless page.url == "/" or page.url == "/cv/" %} {% comment %} TODO: Resolve this using a YAML header option rather than target removal here. {% endcomment %}
-            <div class="navbar-header">
-                <a class="navbar-brand" href="/">{{ site.title }}</a>
-            </div>
-        {% endunless %}
-        <ul class="nav navbar-nav navbar-right">
-            {% assign sorted_site_pages = site.pages | sort: "nav_order" %} 
-            {% for site_page in sorted_site_pages %}
-                {% if site_page.nav %}
-                    <li><a href={{ site_page.url | relative_url }}>{{ site_page.title }}</a></li>
-                {% endif %}
-            {% endfor %}
-        </ul>
-    </div>
+{%- comment -%}
+Pages opt in with `nav: true` and are ordered by `nav_order`. `nav_title`
+gives a shorter label than the page title where one is wanted.
+{%- endcomment -%}
+<nav class="site-nav" aria-label="Site">
+    <a class="site-nav__home" href="{{ '/' | relative_url }}" aria-label="Home">./</a>
+    {%- assign nav_pages = site.pages | where: "nav", true | sort: "nav_order" -%}
+    {%- for nav_page in nav_pages %}
+        {%- assign is_current = false -%}
+        {%- if page.url == nav_page.url -%}
+            {%- assign is_current = true -%}
+        {%- elsif page.collection == "posts" and nav_page.url == "/blog/" -%}
+            {%- assign is_current = true -%}
+        {%- elsif page.collection == "projects" and nav_page.url == "/projects/" -%}
+            {%- assign is_current = true -%}
+        {%- endif %}
+    <a href="{{ nav_page.url | relative_url }}"{% if is_current %} aria-current="page"{% endif %}>{{ nav_page.nav_title | default: nav_page.title }}</a>
+    {%- endfor %}
 </nav>

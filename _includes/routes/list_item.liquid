@@ -1,0 +1,79 @@
+{%- assign route = include.item -%}
+{%- assign slug = route.slug | default: route.name -%}
+{%- include routes/canonical.liquid route=route -%}
+
+{%- comment -%}
+One ruled row: the route's name, with its distance and best time at the end.
+Selecting it opens the details beneath the row and highlights the track on the
+map; selecting the track does the same (_js/routes.js). Distances, elevations
+and paces are rendered in metric and converted by _js/units.js.
+{%- endcomment %}
+<div class="route-item"
+   data-slug="{{ slug | escape }}"
+   data-name="{{ route.name | escape }}"
+   data-type="{{ route.type | escape }}"
+   data-surface="{{ route.surface | escape }}"
+   data-region="{{ route.region | escape }}"
+   data-distance="{{ route_km }}"
+   data-elevation="{{ route_m }}">
+
+  <button type="button" class="rows__row route-item__toggle" id="{{ slug | escape }}" aria-expanded="false" aria-controls="route-{{ slug | slugify }}">
+    <span>{{ route.name | escape }}</span>
+    <span class="rows__note">
+      <span data-unit-value="{{ route_km }}" data-unit-kind="distance">{{ route_km | round: 1 }}</span> <span data-unit-label="distance">km</span>
+      {%- if route_sec > 0 %} &middot; {% include routes/duration.liquid seconds=route_sec precise=route_has_seconds %}{% endif %}
+    </span>
+  </button>
+
+  <div class="row-details" id="route-{{ slug | slugify }}" hidden>
+  <p class="meta">
+    {%- if route_latest_date -%}{{ route_latest_date | date: "%-d %B %Y" }} &middot; {% endif -%}
+    {{- route.region | escape -}}
+    {%- if route.surface %} &middot; {{ route.surface | capitalize | escape }}{% endif -%}
+    {%- if route.type != "run" %} &middot; {{ route.type | capitalize | escape }}{% endif -%}
+    {%- if route_effort_count > 1 %} &middot; {{ route_effort_count }} outings{% endif -%}
+    {%- unless route_primary_gpx %} &middot; not mapped{% endunless -%}
+    {%- if route_time_unquoted %} &middot; time unreadable (quote it in _data/running_routes.yml){% endif -%}
+  </p>
+
+  <p class="route-item__stats">
+    <span data-unit-value="{{ route_km }}" data-unit-kind="distance">{{ route_km | round: 1 }}</span> <span data-unit-label="distance">km</span>
+    {%- if route_sec > 0 %} &middot; {% include routes/duration.liquid seconds=route_sec precise=route_has_seconds %}{% if route_effort_count > 1 %} best{% endif %}
+      {%- if route.type == "run" and route_sec_per_km > 0 %} &middot; <span data-unit-value="{{ route_sec_per_km }}" data-unit-kind="pace">{{ route_pace }}</span> <span data-unit-label="pace-words">per km</span>{% endif -%}
+    {%- endif %} &middot; <span data-unit-value="{{ route_m }}" data-unit-kind="elevation">{{ route_m | round }}</span> <span data-unit-label="elevation">m</span> gain
+  </p>
+
+  {%- if route.notes %}
+  <p>{{ route.notes | strip_html | strip }}</p>
+  {%- endif -%}
+
+  {%- comment -%}
+  Every outing, newest first. A single effort is already shown in the stats
+  line above, so the table only earns its space once there are two.
+  {%- endcomment -%}
+  {%- if route_effort_count > 1 and route.efforts -%}
+    {%- assign shown_efforts = route.efforts | sort: "date" | reverse %}
+  <table class="route-efforts">
+    {%- for effort in shown_efforts -%}
+      {%- include routes/parse_time.liquid time=effort.time duration_min=effort.duration_min %}
+    <tr{% if parsed_sec == route_sec and parsed_sec > 0 %} class="is-best"{% endif %}>
+      <td>{{ effort.date | date: "%-d %b %Y" }}</td>
+      <td class="route-efforts__time">
+        {%- if parsed_sec > 0 -%}
+          {%- include routes/duration.liquid seconds=parsed_sec precise=parsed_precise -%}
+        {%- else -%}&mdash;{%- endif -%}
+      </td>
+      <td class="route-efforts__pace">
+        {%- if parsed_sec > 0 and route_km > 0 -%}
+          {%- assign effort_pace = parsed_sec | times: 1.0 | divided_by: route_km | round: 2 -%}
+          {%- assign effort_pace_whole = effort_pace | round -%}
+          <span data-unit-value="{{ effort_pace }}" data-unit-kind="pace">{{ effort_pace_whole | divided_by: 60 }}:{{ effort_pace_whole | modulo: 60 | prepend: "0" | slice: -2, 2 }}</span>
+          <span data-unit-label="pace-words">per km</span>
+        {%- endif -%}
+      </td>
+    </tr>
+    {%- endfor %}
+  </table>
+  {%- endif %}
+  </div>
+</div>

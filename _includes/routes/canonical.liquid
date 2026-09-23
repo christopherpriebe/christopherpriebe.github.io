@@ -1,0 +1,115 @@
+{%- comment -%}
+Normalises one route, whichever units and shape it was written in.
+
+A route is a *course*; an `efforts:` list holds the dated times run on it. A
+one-off race can skip `efforts:` and carry a flat `time:` (the one time shown)
+and `dates:` (each outing, which sets the count), so both shapes work side by
+side.
+
+Where a recurring race moved its course between years, the effort carries its
+own `gpx:` and overrides the route's. Only one track is ever drawn per route
+(see route_primary_gpx) so re-runs of the same course do not stack up.
+
+Everything below is metric and seconds; miles, feet, and minutes are input and
+display forms only. Elevation keeps one decimal place and pace two, rather
+than being rounded to whole numbers here, so that _js/units.js converting them
+to feet or minutes per mile lands on the figure the author wrote down, not one
+a rounding step away.
+
+Sets, for the caller:
+  route_km route_m               distance and elevation gain
+  route_sec route_has_seconds    the best recorded time, and its precision
+  route_sec_per_km route_pace    pace derived from that time: exact seconds
+                                 per km, and the rounded m:ss string
+  route_effort_count             how many times it has been run
+  route_latest_date              most recent outing
+  route_primary_gpx              the single track to draw, if any
+  route_time_unquoted            a time was written bare in the YAML and
+                                 could not be read (routes/parse_time.liquid)
+
+Jekyll leaks every `assign` in an include back to the caller, so these working
+names are also left behind and should be treated as clobbered: route_efforts,
+newest_effort, newest_gpx, primary_gpx, route_km_exact, pace_whole,
+pace_minutes, pace_seconds, and — via routes/parse_time.liquid — parsed_sec,
+parsed_precise, parsed_unquoted, clock, clock_h, clock_m, clock_s.
+{%- endcomment -%}
+
+{%- if include.route.distance_mi -%}
+  {%- assign route_km = include.route.distance_mi | times: 1.609344 | round: 2 -%}
+{%- else -%}
+  {%- assign route_km = include.route.distance_km | default: 0 | round: 2 -%}
+{%- endif -%}
+
+{%- if include.route.elevation_ft -%}
+  {%- assign route_m = include.route.elevation_ft | times: 0.3048 | round: 1 -%}
+{%- else -%}
+  {%- assign route_m = include.route.elevation_m | default: 0 | round: 1 -%}
+{%- endif -%}
+
+{%- assign route_sec = 0 -%}
+{%- assign route_has_seconds = false -%}
+{%- assign route_time_unquoted = false -%}
+{%- assign route_effort_count = 0 -%}
+{%- assign route_latest_date = nil -%}
+{%- assign route_primary_gpx = include.route.gpx -%}
+
+{%- if include.route.efforts -%}
+  {%- assign route_efforts = include.route.efforts | sort: "date" -%}
+  {%- assign route_effort_count = route_efforts | size -%}
+  {%- assign newest_effort = route_efforts | last -%}
+  {%- assign route_latest_date = newest_effort.date -%}
+
+  {%- comment -%}
+  One pass: the headline time is the fastest effort, and the drawn track is the
+  newest effort that has one — unless an effort is marked `primary: true`, which
+  wins outright. The two track candidates are kept apart and resolved after the
+  loop so a primary effort is not overwritten by a later one.
+  {%- endcomment -%}
+  {%- assign newest_gpx = nil -%}
+  {%- assign primary_gpx = nil -%}
+  {%- for effort in route_efforts -%}
+    {%- include routes/parse_time.liquid time=effort.time duration_min=effort.duration_min -%}
+    {%- if parsed_unquoted -%}{%- assign route_time_unquoted = true -%}{%- endif -%}
+    {%- if parsed_sec > 0 -%}
+      {%- if route_sec == 0 or parsed_sec < route_sec -%}
+        {%- assign route_sec = parsed_sec -%}
+        {%- assign route_has_seconds = parsed_precise -%}
+      {%- endif -%}
+    {%- endif -%}
+    {%- if effort.gpx -%}
+      {%- assign newest_gpx = effort.gpx -%}
+      {%- if effort.primary -%}{%- assign primary_gpx = effort.gpx -%}{%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+
+  {%- if primary_gpx -%}
+    {%- assign route_primary_gpx = primary_gpx -%}
+  {%- elsif newest_gpx -%}
+    {%- assign route_primary_gpx = newest_gpx -%}
+  {%- endif -%}
+
+{%- else -%}
+  {%- include routes/parse_time.liquid time=include.route.time duration_min=include.route.duration_min -%}
+  {%- assign route_sec = parsed_sec -%}
+  {%- assign route_has_seconds = parsed_precise -%}
+  {%- assign route_time_unquoted = parsed_unquoted -%}
+  {%- if include.route.dates -%}
+    {%- assign route_effort_count = include.route.dates | size -%}
+    {%- assign route_latest_date = include.route.dates | sort | last -%}
+  {%- endif -%}
+{%- endif -%}
+
+{%- assign route_sec_per_km = 0 -%}
+{%- assign route_pace = "—" -%}
+{%- if route_sec > 0 and route_km > 0 -%}
+  {%- comment -%}
+  Liquid picks integer or float division from the operand types, so a distance
+  written as a whole number would floor the pace by up to a second per km.
+  {%- endcomment -%}
+  {%- assign route_km_exact = route_km | times: 1.0 -%}
+  {%- assign route_sec_per_km = route_sec | divided_by: route_km_exact | round: 2 -%}
+  {%- assign pace_whole = route_sec_per_km | round -%}
+  {%- assign pace_minutes = pace_whole | divided_by: 60 -%}
+  {%- assign pace_seconds = pace_whole | modulo: 60 | prepend: "0" | slice: -2, 2 -%}
+  {%- assign route_pace = pace_minutes | append: ":" | append: pace_seconds -%}
+{%- endif -%}

@@ -1,20 +1,20 @@
+# Rows on the Elsewhere page (/connect/), in this order.
+#   name     what the row says
+#   handle   the small note at the end of the row
+#   url      where it goes
 github:
-  logo: fa-brands fa-github
+  name: GitHub
+  handle: christopherpriebe
   url: https://github.com/christopherpriebe
-  description: All of my academic and personal software projects are available on GitHub.
-  is_home_link: true
 google_scholar:
-  logo: fa-brands fa-google-scholar
+  name: Google Scholar
+  handle: Publications
   url: https://scholar.google.com/citations?user=E9z3HwIAAAAJ
-  description: All of my academic publications are available on Google Scholar.
-  is_home_link: true
 linkedin:
-  logo: fa-brands fa-linkedin
+  name: LinkedIn
+  handle: priebechristopher
   url: https://www.linkedin.com/in/priebechristopher/
-  description: My professional profile is available on LinkedIn.
-  is_home_link: true
 instagram:
-  logo: fa-brands fa-instagram
+  name: Instagram
+  handle: thechrispriebe
   url: https://www.instagram.com/thechrispriebe/
-  description: My personal photos are shared on Instagram; I only accept follow requests from people I know.
-  is_home_link: false

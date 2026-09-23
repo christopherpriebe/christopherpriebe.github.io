@@ -1,0 +1,82 @@
+/*
+ * Efforts (runs and hikes)
+ *
+ * Line colours live here rather than in JS so the skin stays the single source
+ * of truth: Leaflet writes `stroke` as a presentation attribute, which the
+ * stylesheet below overrides.
+ */
+
+.route-line
+    fill: none
+    stroke: $route-run-color
+    stroke-width: 3
+    stroke-opacity: .9
+    stroke-linecap: square
+    stroke-linejoin: miter
+    transition: stroke-opacity .16s ease
+
+.route-line--hike
+    stroke: $route-hike-color
+    stroke-dasharray: 6 5
+
+.route-line--active
+    stroke-width: 5
+    stroke-opacity: 1
+
+.route-line--muted
+    stroke-opacity: .25
+
+// Square, like the site's other marks (the F&B pins aside). Open at the
+// start, filled at the finish.
+.route-endpoint
+    display: block
+    width: 11px
+    height: 11px
+    border: 2px solid $route-run-color
+    background-color: $background-color
+
+.route-endpoint--finish
+    background-color: $route-run-color
+
+.route-legend__line
+    display: inline-block
+    width: 27px
+    margin-right: 9px
+    border-top: 3px solid $route-run-color
+    vertical-align: middle
+
+.route-legend__line--hike
+    border-top-style: dashed
+    border-top-color: $route-hike-color
+
+.route-item__stats
+    font-size: 15px
+
+.route-efforts
+    width: 100%
+    max-width: $measure
+    margin-top: 18px
+    border-collapse: collapse
+    font-size: 15px
+    line-height: 26px
+
+    td
+        padding: 9px 18px 9px 0
+        border-top: 1px solid $rule-color
+        vertical-align: baseline
+        white-space: nowrap
+
+    tr:last-child td
+        border-bottom: 1px solid $rule-color
+
+.route-efforts__time
+    color: $heading-color
+    font-variant-numeric: tabular-nums
+
+.route-efforts__pace
+    font-variant-numeric: tabular-nums
+
+// The fastest outing on the route.
+.route-efforts tr.is-best .route-efforts__time::after
+    content: " \2014 best"
+    color: $text-color

@@ -1,12 +1,31 @@
 ---
-layout: base 
+layout: base
 ---
 
-<div class="container">
-    <div class="projects">
-        {% assign sorted_projects = site.projects | sort: "importance" %}
-        {% for project in sorted_projects %}
-            {% include project.liquid %}
-        {% endfor %} 
+{%- comment -%}
+Featured projects lead, then the rest; each run is ordered by `importance`.
+{%- endcomment -%}
+{%- assign by_importance = site.projects | sort: "importance" -%}
+{%- assign featured = by_importance | where: "featured", true -%}
+{%- assign others = by_importance | where_exp: "project", "project.featured != true" -%}
+{%- assign projects = featured | concat: others -%}
+{%- assign categories = projects | map: "categories" | compact | join: "," | split: "," | uniq | sort -%}
+
+<div data-filter-root>
+    {% include page_title.liquid %}
+
+    {%- comment -%}
+    A filter only earns its row once there is more than one project and more
+    than one category to narrow them by.
+    {%- endcomment -%}
+    {%- if projects.size > 1 and categories.size > 1 -%}
+        {% include filter_bar.liquid scope="projects" label="Filter" values=categories count=projects.size noun="projects" %}
+    {%- endif %}
+
+    <div class="page-body">
+        {%- for project in projects %}
+            {%- include project_card.liquid project=project -%}
+        {%- endfor %}
+        <p class="filters__empty" data-filter-empty>No project matches that filter.</p>
     </div>
 </div>

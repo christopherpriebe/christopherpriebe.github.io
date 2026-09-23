@@ -1,30 +1,27 @@
 <head>
     {% include _head/metadata.liquid %}
 
-    <!-- Link main CSS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100,400..700&family=IBM+Plex+Mono:wght@400&family=Public+Sans:wght@400;500&display=swap">
+
     <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}">
 
-    <!-- Link custom CSS -->
     <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
 
-    <!-- Configure title element of the page -->
+    {% feed_meta %}
+
     <title>
-        {% comment %} If both site.title and page.title are defined, display both as "<SITE TITLE> - <PAGE TITLE>" {% endcomment %}
-        {% if site.title && page.title %}
-            {{ site.title }} - {{ page.title }}
-        
-        {% comment %} If only page.title is defined, display it as "<PAGE TITLE>" {% endcomment %}
-        {% elsif page.title %}
-            {{ page.title }}
-        
-        {% comment %} If only site.title is defined, display it as "<SITE TITLE>" {% endcomment %}
-        {% elsif site.title %}
+        {%- if page.url == "/" -%}
             {{ site.title }}
-        
-        {% comment %} If neither site.title nor page.title are defined, display an error message as the title {% endcomment %}
-        {% else %}
+        {%- elsif site.title and page.title -%}
+            {{ site.title }} - {{ page.title }}
+        {%- elsif page.title -%}
+            {{ page.title }}
+        {%- elsif site.title -%}
+            {{ site.title }}
+        {%- else -%}
             ERROR: cannot resolve page title
-        
-        {% endif %}
+        {%- endif -%}
     </title>
 </head>

@@ -1,0 +1,175 @@
+/*
+ * Prose
+ *
+ * Rendered Markdown: blog posts, project write-ups, About, Credits. Wrap the
+ * content in .prose and everything inside picks these up, so authors never
+ * style anything by hand.
+ */
+
+.prose
+    max-width: $measure
+
+    > :first-child
+        margin-top: 0
+
+    p,
+    ul,
+    ol,
+    blockquote,
+    pre,
+    table,
+    figure
+        margin: 29px 0 0
+
+    // The opening paragraph of a page sits at lede size.
+    &.prose--lede > p:first-child
+        font-size: 21px
+        line-height: 34px
+        letter-spacing: -.01em
+        color: $heading-color
+
+    &.prose--lede > p:first-child + *
+        margin-top: 34px
+
+    h2
+        @include display-face(500)
+        margin: 72px 0 0
+        font-size: 30px
+        line-height: 38px
+        letter-spacing: -.025em
+
+    h3
+        @include display-face(500)
+        margin: 54px 0 0
+        font-size: 21px
+        line-height: 29px
+        letter-spacing: -.015em
+
+    h4
+        margin: 45px 0 0
+        font-family: $mono-font
+        font-size: 13px
+        font-weight: 400
+        line-height: 21px
+        color: $text-color
+
+    h2 + *,
+    h3 + *,
+    h4 + *
+        margin-top: 18px
+
+    ul,
+    ol
+        padding-left: 27px
+
+    li + li
+        margin-top: 9px
+
+    ul li::marker
+        color: $rule-color
+
+    blockquote
+        margin-left: 0
+        padding-left: 27px
+        border-left: 2px solid $heading-color
+        color: $heading-color
+
+        p
+            margin: 0
+
+        p + p
+            margin-top: 18px
+
+    code
+        font-family: $mono-font
+        font-size: .82em
+        color: $heading-color
+
+    pre
+        padding: 27px
+        background-color: $plane-color
+        font-size: 14px
+        line-height: 23px
+        overflow-x: auto
+
+        code
+            font-size: inherit
+
+    hr
+        height: 1px
+        margin: 72px 0
+        border: 0
+        background-color: $rule-color
+
+    figure
+        margin-left: 0
+        margin-right: 0
+
+    figcaption
+        margin-top: 9px
+        font-size: 15px
+
+    table
+        width: 100%
+        border-collapse: collapse
+        font-size: 15px
+        line-height: 26px
+
+    th
+        padding: 9px 18px 9px 0
+        border-bottom: 1px solid $heading-color
+        text-align: left
+        font-family: $mono-font
+        font-size: 13px
+        font-weight: 400
+
+    td
+        padding: 13px 18px 13px 0
+        border-bottom: 1px solid $rule-color
+        vertical-align: top
+
+/*
+ * Article furniture
+ */
+.article-meta
+    margin: 18px 0 0
+
+.page-foot-nav
+    display: flex
+    flex-wrap: wrap
+    justify-content: space-between
+    gap: 18px 27px
+    max-width: $measure
+    margin-top: 90px
+    padding-top: 27px
+    border-top: 1px solid $rule-color
+    font-size: 15px
+
+/*
+ * Cited references under a project write-up
+ */
+.references
+    max-width: $measure
+    margin-top: 90px
+    font-size: 15px
+    line-height: 26px
+    // DOIs and URLs print unbroken and would otherwise push past a phone.
+    overflow-wrap: anywhere
+
+    .label
+        display: block
+        padding-bottom: 18px
+
+    h2
+        display: none
+
+    ol
+        margin: 0
+        padding-left: 27px
+
+    li + li
+        margin-top: 9px
+
+    li::marker
+        font-family: $mono-font
+        font-size: 13px

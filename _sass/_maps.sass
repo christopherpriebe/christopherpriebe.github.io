@@ -1,0 +1,177 @@
+/*
+ * Maps. A flat concrete plane, no border, and the one thing allowed to run
+ * the full width of the page. Tiles are drawn nearly desaturated so the
+ * site's navy marks carry the colour.
+ */
+.map-frame
+    position: relative
+    margin-top: 72px
+
+.map-canvas
+    height: min(63vh, 540px)
+    min-height: 360px
+    background-color: $plane-color
+    font-family: $body-font
+
+.map-canvas--short
+    height: min(54vh, 450px)
+
+.map-canvas .leaflet-tile
+    filter: grayscale(.85) contrast(.95)
+
+.leaflet-container
+    background-color: $plane-color
+    font: inherit
+
+    a
+        color: $link-color
+
+.leaflet-bar,
+.leaflet-touch .leaflet-bar
+    border: 1px solid $rule-color
+    border-radius: 0
+    box-shadow: none
+
+    a,
+    a:first-child,
+    a:last-child
+        border-radius: 0
+        border-bottom-color: $rule-color
+        background-color: $background-color
+        color: $heading-color
+
+        &:hover
+            background-color: $plane-color
+
+.leaflet-control-attribution
+    font-size: 11px
+
+    &.leaflet-control
+        background-color: rgba($background-color, .85)
+
+.leaflet-tooltip
+    padding: 4px 9px
+    border: 1px solid $rule-color
+    border-radius: 0
+    box-shadow: none
+    color: $heading-color
+    font-size: 13px
+
+.leaflet-popup-content-wrapper
+    border-radius: 0
+    box-shadow: 0 0 0 1px $rule-color
+    color: $text-color
+
+.leaflet-popup-tip
+    box-shadow: 0 0 0 1px $rule-color
+
+.leaflet-popup-content
+    max-width: 360px
+    max-height: 360px
+    margin: 18px
+    font-size: 15px
+    line-height: 26px
+    overflow-y: auto
+
+.map-overlay
+    position: absolute
+    z-index: 500
+
+.map-basemap-toggle
+    top: 18px
+    right: 18px
+
+.map-legend
+    left: 18px
+    bottom: 18px
+    display: flex
+    gap: 18px
+    padding: 4px 9px
+    background-color: rgba($background-color, .9)
+    font-size: 13px
+
+/*
+ * The list under a map: a box of capped height that scrolls on its own, so the
+ * page stays the length of the map however many places or routes there are.
+ * Selecting a row opens its details beneath it.
+ */
+.map-list
+    position: relative
+    max-width: $measure-wide
+    max-height: min(60vh, 540px)
+    margin-top: 45px
+    overflow-y: auto
+    overscroll-behavior: contain
+    border-top: 1px solid $rule-color
+    border-bottom: 1px solid $rule-color
+
+    // The box draws the outer rules, so the rows inside drop theirs at the
+    // edges.
+    .rows
+        border-bottom: 0
+
+    > .rows > :first-child > .rows__row
+        border-top: 0
+
+    .rows__group + .rows__group
+        padding-top: 27px
+
+    // City headings stay in view while their places scroll beneath them.
+    .rows__group-name
+        position: sticky
+        top: 0
+        z-index: 1
+        margin: 0
+        padding: 18px 0 9px
+        background-color: $background-color
+
+    .filters__empty
+        margin: 27px 0
+
+button.rows__row
+    width: 100%
+    margin: 0
+    border: 0
+    border-top: 1px solid $rule-color
+    background: none
+    font: inherit
+    text-align: left
+    cursor: pointer
+    @include row-slide
+
+    &:hover,
+    &:focus-visible
+        color: $link-hover-color
+
+// An open row holds the slide and sits on concrete with its details.
+.is-open > .rows__row,
+.is-active > .rows__row
+    padding-right: 18px
+    padding-left: 18px
+    background-color: $plane-color
+    color: $link-hover-color
+
+.row-details
+    padding: 0 18px 27px
+    background-color: $plane-color
+    font-size: 15px
+    line-height: 26px
+
+    > *
+        margin: 0
+
+    > * + *
+        margin-top: 9px
+
+.row-details__summary
+    color: $heading-color
+
+.row-details__awards
+    ul
+        margin: 0
+        padding: 0
+        list-style: none
+
+.row-details__links
+    padding-top: 9px
+    border-top: 1px solid $rule-color

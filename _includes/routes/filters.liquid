@@ -1,0 +1,72 @@
+{%- comment -%}
+Filter panel for the route map, rendered inside the map's <details>. Mirrors
+_includes/f_and_b/filters.liquid so the two map pages share a control
+vocabulary.
+
+The sliders always work in metric, whatever units the reader has chosen — only
+their labels convert. Their bounds come from the data, so a longer route added
+later widens the range on its own.
+{%- endcomment -%}
+
+{%- assign max_distance = 0 -%}
+{%- assign max_elevation = 0 -%}
+{%- for route in include.data -%}
+  {%- include routes/canonical.liquid route=route -%}
+  {%- if route_km > max_distance -%}{%- assign max_distance = route_km -%}{%- endif -%}
+  {%- if route_m > max_elevation -%}{%- assign max_elevation = route_m -%}{%- endif -%}
+{%- endfor -%}
+{%- assign max_distance = max_distance | ceil -%}
+{%- assign max_elevation = max_elevation | divided_by: 50 | floor | plus: 1 | times: 50 -%}
+
+{%- assign surfaces = include.data | map: "surface" | compact | uniq | sort -%}
+
+<summary>
+  <span class="filters__title">Filter</span>
+  <span><span data-routes-count>{{ include.data | size }}</span> of {{ include.data | size }} routes</span>
+</summary>
+
+<div class="filters__body">
+  <div class="filters__wide">
+    <label class="visually-hidden" for="routes-filter-q">Search</label>
+    <input id="routes-filter-q" type="search" class="field" placeholder="Search route, region">
+  </div>
+
+  <div>
+    <span class="label seg__label">Activity</span>
+    <div class="seg" data-routes-filter="type" role="group" aria-label="Filter by activity">
+      <button type="button" class="chip-btn" data-filter-value="run" aria-pressed="false">Run</button>
+      <button type="button" class="chip-btn" data-filter-value="hike" aria-pressed="false">Hike</button>
+    </div>
+  </div>
+
+  <div>
+    <span class="label seg__label">Surface</span>
+    <div class="seg" data-routes-filter="surface" role="group" aria-label="Filter by surface">
+      {%- for surface in surfaces %}
+      <button type="button" class="chip-btn" data-filter-value="{{ surface }}" aria-pressed="false">{{ surface | capitalize }}</button>
+      {%- endfor %}
+    </div>
+  </div>
+
+  <div>
+    <label class="label seg__label" for="routes-range-distance">
+      Distance, up to
+      <span data-routes-distance-label><span data-unit-value="{{ max_distance }}" data-unit-kind="distance">{{ max_distance }}</span> <span data-unit-label="distance">km</span></span>
+    </label>
+    <input id="routes-range-distance" type="range" min="1" max="{{ max_distance }}" step="1" value="{{ max_distance }}"
+           data-routes-range="distance">
+  </div>
+
+  <div>
+    <label class="label seg__label" for="routes-range-elevation">
+      Elevation, up to
+      <span data-routes-elevation-label><span data-unit-value="{{ max_elevation }}" data-unit-kind="elevation">{{ max_elevation }}</span> <span data-unit-label="elevation">m</span></span>
+    </label>
+    <input id="routes-range-elevation" type="range" min="0" max="{{ max_elevation }}" step="25" value="{{ max_elevation }}"
+           data-routes-range="elevation">
+  </div>
+
+  <div class="filters__wide filters__actions filters__actions--end">
+    <button id="routes-filter-clear" type="button">Clear</button>
+  </div>
+</div>

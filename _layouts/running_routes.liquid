@@ -1,0 +1,14 @@
+---
+layout: base
+---
+
+{%- assign routes = site.data.running_routes -%}
+
+{%- capture meta %}{% include routes/unit_toggle.liquid %}{% endcapture -%}
+{% include page_title.liquid lede=page.lede meta=meta %}
+
+{% include map/route_map.liquid
+    id="efforts-map"
+    data=routes
+    zoom=10
+%}

@@ -1,18 +1,35 @@
 import "normalize.css";
-import "bootstrap/dist/css/bootstrap.min.css";
-import "jquery";
-import "bootstrap/dist/js/bootstrap.min.js";
-
-import { library, dom } from "@fortawesome/fontawesome-svg-core";
-import { fas } from "@fortawesome/free-solid-svg-icons";
-import { far } from "@fortawesome/free-regular-svg-icons";
-import { fab } from "@fortawesome/free-brands-svg-icons";
-library.add(fas, far, fab);
-dom.watch();
 
 import { enhanceJourneyPins, initMap } from "./map";
+import { initRouteMap } from "./routes";
+import { initFilters } from "./filters";
+import { initUnits } from "./units";
+import { initInstruments } from "./instruments";
+import { initAbstracts } from "./abstracts";
+import { initEmailLinks } from "./email";
+
+// Each step runs on its own so that one that throws (bad data, a missing
+// element) is logged and costs only its own feature, not every one after it.
+function run(name, step) {
+    try {
+        step();
+    } catch (error) {
+        console.error(`${name} failed:`, error);
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-    enhanceJourneyPins();
+    run("initEmailLinks", initEmailLinks);
+    run("initUnits", initUnits);
+    run("enhanceJourneyPins", enhanceJourneyPins);
+
     const queue = window.__MAP_INIT__ || [];
-    queue.forEach((cfg) => initMap(cfg));
+    queue.forEach((cfg) => run(`initMap(${cfg.mapId})`, () => initMap(cfg)));
+
+    const routeQueue = window.__ROUTE_MAP_INIT__ || [];
+    routeQueue.forEach((cfg) => run(`initRouteMap(${cfg.mapId})`, () => initRouteMap(cfg)));
+
+    run("initFilters", initFilters);
+    run("initInstruments", initInstruments);
+    run("initAbstracts", initAbstracts);
 });

@@ -1,18 +1,13 @@
+{%- comment -%}
+The popup is a label; the full details open beneath the place's row in the
+list (see _js/map.js).
+{%- endcomment -%}
 {% raw %}
 <div class="fnb-popup">
-  <div class="fnb-header">
+  <div class="fnb-popup__head">
     <strong>{{name}}</strong> {{journey_symbol}}
-    <div class="muted">{{location}}</div>
-    <div class="muted">{{address}}</div>
-    {{cuisines_html}}
-    {{price_block}}
-    {{value_html}}
   </div>
-
-  <div class="fnb-body">
-    {{awards_panel}}
-    {{summary_panel}}
-    {{links_block}}
-  </div>
+  {{closed_line}}
+  <div class="fnb-popup__line">{{location}}</div>
 </div>
 {% endraw %}

@@ -1,0 +1,39 @@
+{%- comment -%}
+Parses one recorded time into seconds.
+
+`time` is a race clock: three parts are h:mm:ss, two are mm:ss — the usual
+convention, so "1:53:23" is a half and "22:15" is a 5k. `duration_min` is the
+fallback for something timed only to the minute.
+
+A time must be quoted in the YAML. Left bare, Ruby's parser reads 1:53:23 as
+the integer 6803 and 22:15 as 80100 (22 h 15 m), so a value with no colon is
+refused rather than guessed at: parsed_sec stays 0 and parsed_unquoted is set
+for the caller to show.
+
+Sets, for the caller: parsed_sec, parsed_precise, parsed_unquoted. The working names clock,
+clock_h, clock_m and clock_s leak too, since Jekyll includes share the caller's
+scope.
+{%- endcomment -%}
+{%- assign parsed_sec = 0 -%}
+{%- assign parsed_precise = false -%}
+{%- assign parsed_unquoted = false -%}
+
+{%- if include.time -%}
+  {%- assign clock = include.time | split: ":" -%}
+  {%- if clock.size >= 3 -%}
+    {%- assign clock_h = clock[0] | times: 3600 -%}
+    {%- assign clock_m = clock[1] | times: 60 -%}
+    {%- assign clock_s = clock[2] | times: 1 -%}
+    {%- assign parsed_sec = clock_h | plus: clock_m | plus: clock_s -%}
+    {%- assign parsed_precise = true -%}
+  {%- elsif clock.size == 2 -%}
+    {%- assign clock_m = clock[0] | times: 60 -%}
+    {%- assign clock_s = clock[1] | times: 1 -%}
+    {%- assign parsed_sec = clock_m | plus: clock_s -%}
+    {%- assign parsed_precise = true -%}
+  {%- else -%}
+    {%- assign parsed_unquoted = true -%}
+  {%- endif -%}
+{%- elsif include.duration_min -%}
+  {%- assign parsed_sec = include.duration_min | times: 60 | round -%}
+{%- endif -%}

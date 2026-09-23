@@ -1,0 +1,35 @@
+---
+layout: base
+---
+
+{%- assign posts = site.posts -%}
+{%- assign topics = posts | map: "tags" | compact | join: "," | split: "," | uniq | sort -%}
+
+<div data-filter-root>
+    {% include page_title.liquid %}
+
+    {%- if topics.size > 1 -%}
+        {% include filter_bar.liquid scope="posts" label="Topic" values=topics count=posts.size noun="posts" %}
+    {%- endif %}
+
+    <div class="page-body">
+        {%- for post in posts %}
+        <article class="entry" data-post data-categories="{{ post.tags | join: '|' | downcase | escape }}">
+            <p class="meta">
+                {{- post.date | date: "%-d %B %Y" -}}
+                {%- if post.tags.size > 0 %} &middot; {{ post.tags | join: ", " | escape }}{% endif %} &middot; {% include reading_time.liquid content=post.content -%}
+            </p>
+            <h2 class="title"><a href="{{ post.url | relative_url }}">{{ post.title | escape }}</a></h2>
+            <p>{% include post_excerpt.liquid post=post %}</p>
+        </article>
+        {%- endfor %}
+
+        <p class="filters__empty" data-filter-empty>No post matches that topic.</p>
+
+        {%- if posts.size == 0 %}
+        <p class="meta">Nothing here yet.</p>
+        {%- endif %}
+
+        <p class="meta blog-feed">Also as an <a href="{{ '/feed.xml' | relative_url }}">Atom feed &rarr;</a></p>
+    </div>
+</div>

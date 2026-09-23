@@ -1,0 +1,13 @@
+{%- comment -%}
+The email address as a link, without ever writing it into the page. The two
+halves go out reversed and with no "@", and _js/email.js only puts them
+together when the link is clicked, so the address is in neither the source nor
+the live page for a scraper to find. The link reads `text` (default "email
+me"), never the address; without JavaScript it goes nowhere.
+
+Never print the halves as readable text here, not even as "name (at) domain
+(dot) com": scrapers decode that routinely.
+{%- endcomment -%}
+{%- assign email_user_reversed = site.email_user | split: "" | reverse | join: "" -%}
+{%- assign email_domain_reversed = site.email_domain | split: "" | reverse | join: "" -%}
+<a href="#" data-email-user="{{ email_user_reversed }}" data-email-domain="{{ email_domain_reversed }}">{{ include.text | default: "email me" }}</a>

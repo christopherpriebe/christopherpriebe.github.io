@@ -1,0 +1,25 @@
+{%- comment -%}
+Renders a duration, preserving the precision the author recorded.
+
+With `precise` set — a route timed to the second — it reads as a race clock:
+"1:53:23", or "22:15" under an hour. Otherwise it reads as "1h 53m" or "22m",
+so a hike logged to the nearest minute does not claim a ":00" it never had.
+
+Jekyll includes share the caller's scope, so the working names total_seconds,
+clock_hours, remainder, clock_minutes and clock_seconds leak to the caller.
+{%- endcomment -%}
+{%- assign total_seconds = include.seconds | round -%}
+{%- assign clock_hours = total_seconds | divided_by: 3600 -%}
+{%- assign remainder = total_seconds | modulo: 3600 -%}
+{%- assign clock_minutes = remainder | divided_by: 60 -%}
+{%- assign clock_seconds = remainder | modulo: 60 -%}
+
+{%- if include.precise -%}
+  {%- if clock_hours > 0 -%}
+    {{- clock_hours }}:{{ clock_minutes | prepend: "0" | slice: -2, 2 }}:{{ clock_seconds | prepend: "0" | slice: -2, 2 -}}
+  {%- else -%}
+    {{- clock_minutes }}:{{ clock_seconds | prepend: "0" | slice: -2, 2 -}}
+  {%- endif -%}
+{%- else -%}
+  {%- if clock_hours > 0 -%}{{ clock_hours }}h {% endif -%}{{ clock_minutes }}m
+{%- endif -%}

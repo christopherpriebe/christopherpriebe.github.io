@@ -1,15 +1,14 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { attachBasemaps, parseCenter } from "./basemaps";
+import { buildPinSvg, getJourneyTier, getMarkerMetrics } from "./pins";
 
-// TODO: Refactor this so that there is a generic map engine
-//      right now, some features are specific to the F&B domain
-//      e.g., filtering at the moment is specific to the F&B domain
-//      Also, move the F&B stuff to a separate file
+// TODO: Split the F&B-specific parts (filtering, details, awards) out of this
+//      file so it is a generic marker map. Basemaps and pins already live in
+//      basemaps.js and pins.js, and the route map in routes.js.
 
 // TODO: Write a way to more easily manage F&B awards, as right now
-//      the manual effort to add awards is too much;
-//      can do the same things for other parts of F&B such as if it
-//      is closed and such.
+//      the manual effort to add awards is too much.
 
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, (m) => ({
@@ -35,9 +34,12 @@ function renderTemplate(html, ctx) {
   });
 }
 
+// A closed place keeps only its map link; its website and reservations would
+// lead nowhere.
 function buildLinksHtml(item) {
   const links = [];
   if (item.map_url) links.push(`<a href="${escapeHtml(item.map_url)}" target="_blank" rel="noopener">Map</a>`);
+  if (item.closed) return links.join(" · ");
   if (item.website) links.push(`<a href="${escapeHtml(item.website)}" target="_blank" rel="noopener">Website</a>`);
   if (item.reservation_url) links.push(`<a href="${escapeHtml(item.reservation_url)}" target="_blank" rel="noopener">Reservations</a>`);
   return links.length ? links.join(" · ") : "";
@@ -117,9 +119,22 @@ export function getCuisinesHtml(keys) {
   return getMetaRowHtml(parts.join(" · "), "fnb-meta-row--cuisines muted");
 }
 
-function getJourneyTier(journeyRating) {
-  const n = parseInt(journeyRating, 10) || 0;
-  return Math.max(0, Math.min(3, n));
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
+  "August", "September", "October", "November", "December"];
+
+// `closed` is `true`, a year, a year and month ("2025-06"), or a full date.
+// Returns the part worth printing: "June 2025", "2025", or "" when unknown.
+export function formatClosed(closed) {
+  if (!closed || closed === true) return "";
+  const match = /^(\d{4})(?:-(\d{1,2}))?/.exec(String(closed));
+  if (!match) return "";
+  const month = match[2] ? MONTHS[parseInt(match[2], 10) - 1] : "";
+  return month ? `${month} ${match[1]}` : match[1];
+}
+
+function getClosedLine(closed) {
+  const when = formatClosed(closed);
+  return `Permanently closed${when ? `, ${escapeHtml(when)}` : ""}`;
 }
 
 function getJourneyLabel(journeyRating) {
@@ -130,71 +145,8 @@ function getJourneyLabel(journeyRating) {
   return "Selected";
 }
 
-const JOURNEY_MARKER_METRICS = {
-  0: { iconSize: [30, 36], iconAnchor: [15, 25], popupAnchor: [0, -22], zIndexOffset: 0 },
-  1: { iconSize: [34, 42], iconAnchor: [17, 30], popupAnchor: [0, -26], zIndexOffset: 100 },
-  2: { iconSize: [50, 60], iconAnchor: [25, 38], popupAnchor: [0, -34], zIndexOffset: 200 },
-  3: { iconSize: [62, 74], iconAnchor: [31, 45], popupAnchor: [0, -42], zIndexOffset: 300 },
-};
-
-// All pin geometry is expressed in a normalized SVG viewBox so one set of values
-// scales cleanly across every tier size.
-const JOURNEY_PIN_GEOMETRY = {
-  viewBoxWidth: 48,
-  viewBoxHeight: 64,
-  centerX: 24,
-  bulbCenterY: 21,
-  bulbRadius: 14.5,
-  shoulderY: 25,
-  waistControlX: 8,
-  waistControlY: 39,
-  tipControlX: 7,
-  tipControlY: 9,
-  tipY: 46.5,
-  coreY: 22,
-  coreR: 5.5,
-};
-
-function getJourneyPinPath({
-  centerX,
-  bulbCenterY,
-  bulbRadius,
-  shoulderY,
-  waistControlX,
-  waistControlY,
-  tipControlX,
-  tipControlY,
-  tipY,
-}) {
-  const shoulderOffset = Math.sqrt(
-    Math.max(0, (bulbRadius * bulbRadius) - ((shoulderY - bulbCenterY) ** 2))
-  );
-  const leftShoulderX = centerX - shoulderOffset;
-  const rightShoulderX = centerX + shoulderOffset;
-  const topY = bulbCenterY - bulbRadius;
-
-  return [
-    `M ${centerX} ${tipY}`,
-    `C ${centerX - tipControlX} ${tipY - tipControlY}, ${centerX - waistControlX} ${waistControlY}, ${leftShoulderX} ${shoulderY}`,
-    `A ${bulbRadius} ${bulbRadius} 0 0 1 ${centerX} ${topY}`,
-    `A ${bulbRadius} ${bulbRadius} 0 0 1 ${rightShoulderX} ${shoulderY}`,
-    `C ${centerX + waistControlX} ${waistControlY}, ${centerX + tipControlX} ${tipY - tipControlY}, ${centerX} ${tipY}`,
-    "Z",
-  ].join(" ");
-}
-
-const JOURNEY_PIN_PATH = getJourneyPinPath(JOURNEY_PIN_GEOMETRY);
-
-function getJourneyPinInnerMarkup() {
-  return `
-    <span class="journey-pin__aura" aria-hidden="true"></span>
-    <svg class="journey-pin__svg" viewBox="0 0 ${JOURNEY_PIN_GEOMETRY.viewBoxWidth} ${JOURNEY_PIN_GEOMETRY.viewBoxHeight}" aria-hidden="true" focusable="false">
-      <path class="journey-pin__shape" d="${JOURNEY_PIN_PATH}"></path>
-      <circle class="journey-pin__core" cx="${JOURNEY_PIN_GEOMETRY.centerX}" cy="${JOURNEY_PIN_GEOMETRY.coreY}" r="${JOURNEY_PIN_GEOMETRY.coreR}"></circle>
-    </svg>
-  `.trim();
-}
-
+// Fills in pins already rendered by Liquid — the filter chips, the list under
+// the map, and the tier legend. Each carries its tier as a class.
 export function enhanceJourneyPins(root = document) {
   const nodes = (root.matches && root.matches(".journey-pin"))
     ? [root]
@@ -202,20 +154,22 @@ export function enhanceJourneyPins(root = document) {
 
   nodes.forEach((el) => {
     if (el.getAttribute("data-journey-ready") === "1") return;
-    el.innerHTML = getJourneyPinInnerMarkup();
+
+    const matched = /journey-pin--t(\d)/.exec(el.className);
+    el.innerHTML = buildPinSvg(matched ? matched[1] : 0);
     el.setAttribute("data-journey-ready", "1");
   });
 }
 
-function getJourneyPinMarkup(journeyRating, variant = "map") {
+function getJourneyPinMarkup(journeyRating, variant = "map", closed = false) {
   const tier = getJourneyTier(journeyRating);
   const attrs = (variant === "map")
     ? 'aria-hidden="true"'
     : `role="img" aria-label="${escapeHtml(getJourneyLabel(tier))}"`;
 
   return `
-    <span class="journey-pin journey-pin--${variant} journey-pin--t${tier}" data-journey-ready="1" ${attrs}>
-      ${getJourneyPinInnerMarkup()}
+    <span class="journey-pin journey-pin--${variant} journey-pin--t${tier}${closed ? " journey-pin--closed" : ""}" data-journey-ready="1" ${attrs}>
+      ${buildPinSvg(tier)}
     </span>
   `.trim();
 }
@@ -224,7 +178,7 @@ function getJourneySymbol(journeyRating) {
   return getJourneyPinMarkup(journeyRating, "inline");
 }
 
-function getPriceMeter(priceRating, { showLabel = true } = {}) {
+function getPriceMeter(priceRating) {
   const n = Math.max(0, Math.min(5, parseInt(priceRating, 10) || 0));
   if (!n) return "";
 
@@ -234,22 +188,22 @@ function getPriceMeter(priceRating, { showLabel = true } = {}) {
 
   return `
     <span class="price-meter" aria-label="Price ${n} out of 5">
-      ${showLabel ? '<span class="price-meter__label">Price</span>' : ""}
+      <span class="price-meter__label">Price</span>
       <span class="price-meter__track">${squares}</span>
     </span>
   `.trim();
 }
 
-function getPriceBlockHtml(priceRating, options) {
-  const priceHtml = getPriceMeter(priceRating, options);
+function getPriceBlockHtml(priceRating) {
+  const priceHtml = getPriceMeter(priceRating);
   return priceHtml ? getMetaRowHtml(priceHtml, "fnb-meta-row--price") : "";
 }
 
-function buildInlineMetaHtml(item) {
-  return [
-    getCuisinesHtml(item.cuisines),
-    getPriceBlockHtml(item.price_rating),
-  ].filter(Boolean).join("");
+// The list rows carry cuisines as plain labels; the emoji stay in the details
+// panel.
+function getCuisineLabels(keys) {
+  if (!Array.isArray(keys)) return "";
+  return keys.map((k) => getCuisineDisplay(k).label).join(", ");
 }
 
 function normalizeYears(years) {
@@ -290,12 +244,14 @@ function formatYearRanges(years) {
   return { count: ys.length, text: parts.join(", ") };
 }
 
-function getMichelinAwards(m) {
+// A closed place shows its Michelin history but none of the current marks,
+// which it no longer holds.
+function getMichelinAwards(m, closed = false) {
   if (!m) return "";
 
   const bits = [];
 
-  const stars = Math.max(0, Math.min(3, parseInt(m.stars, 10) || 0));
+  const stars = closed ? 0 : Math.max(0, Math.min(3, parseInt(m.stars, 10) || 0));
   if (stars) {
     const starIcons = Array.from({ length: stars })
       .map(() => '<span class="michelin-red">✱</span>')
@@ -329,38 +285,38 @@ function getMichelinAwards(m) {
   const yBib = formatYearRanges(m.years_of_bib);
   if (yBib.count) {
     lines.push(
-      `<li><span class="val-badge michelin-red">Bib</span> <strong>${yBib.count}</strong> year${yBib.count === 1 ? "" : "s"} (${escapeHtml(yBib.text)})</li>`
+      `<li><span class="michelin-red">Bib</span> <strong>${yBib.count}</strong> year${yBib.count === 1 ? "" : "s"} (${escapeHtml(yBib.text)})</li>`
     );
   }
 
   const yGreen = formatYearRanges(m.years_of_green);
   if (yGreen.count) {
     lines.push(
-      `<li><span class="val-badge michelin-green">Green</span> <strong>${yGreen.count}</strong> year${yGreen.count === 1 ? "" : "s"} (${escapeHtml(yGreen.text)})</li>`
+      `<li><span class="michelin-green">Green</span> <strong>${yGreen.count}</strong> year${yGreen.count === 1 ? "" : "s"} (${escapeHtml(yGreen.text)})</li>`
     );
   }
 
-  if (m.bib) bits.push('<div style="margin-top:4px;"><span class="val-badge michelin-red">Bib</span></div>');
-  if (m.green) bits.push('<div style="margin-top:4px;"><span class="val-badge michelin-green">Green</span></div>');
+  if (m.bib && !closed) bits.push('<div><span class="michelin-red">Bib Gourmand</span></div>');
+  if (m.green && !closed) bits.push('<div><span class="michelin-green">Green Star</span></div>');
 
   if (lines.length) {
     bits.push(`
-      <div style="margin-top:6px;">
-        <div class="muted"><strong>Michelin history</strong></div>
-        <ul class="list-unstyled" style="margin:4px 0 0 0;">
+      <div>
+        <div class="muted">Michelin history</div>
+        <ul>
           ${lines.join("")}
         </ul>
       </div>
     `);
   }
 
-  return bits.length ? `<div style="margin-top:6px;">${bits.join("")}</div>` : "";
+  return bits.join("");
 }
 
-function awardsList(a) {
+function awardsList(a, closed = false) {
   let out = "";
 
-  if (a && a.michelin) out += getMichelinAwards(a.michelin);
+  if (a && a.michelin) out += getMichelinAwards(a.michelin, closed);
 
   if (a && Array.isArray(a.other) && a.other.length) {
     const items = a.other
@@ -370,9 +326,9 @@ function awardsList(a) {
       .join("");
 
     out += `
-      <div style="margin-top:6px;">
-        <div class="muted"><strong>Awards</strong></div>
-        <ul class="list-unstyled" style="margin:4px 0 0 0;">
+      <div>
+        <div class="muted">Other awards</div>
+        <ul>
           ${items}
         </ul>
       </div>
@@ -383,7 +339,7 @@ function awardsList(a) {
 }
 
 function getListItems(listId) {
-  return Array.prototype.slice.call(document.querySelectorAll(`#${listId} .map-card`));
+  return Array.from(document.querySelectorAll(`#${listId} .map-card`));
 }
 
 function parseMultiFilterValue(value) {
@@ -460,6 +416,7 @@ function applyFilters(config, markerLayer, markerBySlug) {
   const priceModeEl = document.getElementById("filter-price-mode");
   const cuisineEl = document.getElementById("filter-cuisine");
   const valueEl = document.getElementById("filter-value");
+  const hideClosedEl = document.getElementById("filter-hide-closed");
 
   const q = (qEl ? qEl.value : "").trim().toLowerCase();
   const journey = journeyEl ? journeyEl.value : "";
@@ -469,6 +426,7 @@ function applyFilters(config, markerLayer, markerBySlug) {
   const priceMode = priceModeEl ? priceModeEl.value : "";
   const cuisine = cuisineEl ? cuisineEl.value : "";
   const valueOnly = !!(valueEl && valueEl.checked);
+  const hideClosed = !!(hideClosedEl && hideClosedEl.checked);
 
   const items = getListItems(config.listId);
   const allowed = [];
@@ -489,12 +447,14 @@ function applyFilters(config, markerLayer, markerBySlug) {
     if (journeySelections.size && !journeySelections.has(elJourney)) ok = false;
     if (price && Number.isFinite(priceValue)) {
       const elPriceValue = parseInt(elPrice, 10);
-      if (!Number.isFinite(elPriceValue)) ok = false;
+      // Liquid writes 0 for a place with no price rating; it matches no price.
+      if (!(elPriceValue > 0)) ok = false;
       else if (priceMode === "eq" && elPriceValue !== priceValue) ok = false;
       else if (priceMode === "gte" && elPriceValue < priceValue) ok = false;
       else if (!priceMode && elPriceValue > priceValue) ok = false;
     }
     if (valueOnly && !elValue) ok = false;
+    if (hideClosed && el.getAttribute("data-closed") === "1") ok = false;
 
     if (cuisine) {
       const keys = cuisines.split(/\s+/).filter(Boolean);
@@ -510,15 +470,32 @@ function applyFilters(config, markerLayer, markerBySlug) {
     if (ok && slug) allowed.push(slug);
   });
 
+  // A group heading only stays while something under it survives the filters.
+  const listEl = document.getElementById(config.listId);
+  if (listEl) {
+    listEl.querySelectorAll("[data-map-group]").forEach((group) => {
+      const visible = Array.from(group.querySelectorAll(".map-card"))
+        .some((card) => card.style.display !== "none");
+      group.style.display = visible ? "" : "none";
+    });
+
+    const empty = listEl.querySelector("[data-map-empty]");
+    if (empty) empty.style.display = allowed.length ? "none" : "block";
+  }
+
   markerLayer.clearLayers();
   allowed.forEach((slug) => {
     const m = markerBySlug[slug];
     if (m) m.addTo(markerLayer);
   });
+
+  // Keep the filter panel's "N of M places" in step with the filters.
+  const countEl = document.querySelector("[data-map-count]");
+  if (countEl) countEl.textContent = allowed.length;
 }
 
 function wireFilters(config, markerLayer, markerBySlug) {
-  const ids = ["filter-q", "filter-cuisine", "filter-value"];
+  const ids = ["filter-q", "filter-cuisine", "filter-value", "filter-hide-closed"];
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -540,6 +517,7 @@ function wireFilters(config, markerLayer, markerBySlug) {
       const pm = document.getElementById("filter-price-mode");
       const c = document.getElementById("filter-cuisine");
       const v = document.getElementById("filter-value");
+      const hc = document.getElementById("filter-hide-closed");
 
       if (q) q.value = "";
       if (j) j.value = "";
@@ -547,6 +525,7 @@ function wireFilters(config, markerLayer, markerBySlug) {
       if (pm) pm.value = getToggleFilterDefaultValue("filter-price-mode");
       if (c) c.value = "";
       if (v) v.checked = false;
+      if (hc) hc.checked = false;
       syncToggleFilterGroup("filter-journey");
       syncToggleFilterGroup("filter-price");
       syncToggleFilterGroup("filter-price-mode");
@@ -574,78 +553,70 @@ function hydrateList(config, dataset) {
     const item = itemBySlug.get(slug) || itemByName.get(name);
     const metaEl = el.querySelector("[data-map-card-meta]");
 
-    if (!item || !metaEl) return;
-    metaEl.innerHTML = buildInlineMetaHtml(item);
+    if (!item || !metaEl || item.closed) return;
+    metaEl.textContent = getCuisineLabels(item.cuisines);
+  });
+
+  // Liquid can only capitalise the first letter of a cuisine key; the table
+  // knows "BBQ" and "Hot Dogs".
+  document.querySelectorAll("#filter-cuisine option[value]").forEach((option) => {
+    if (option.value) option.textContent = getCuisineDisplay(option.value).label;
   });
 }
 
-function buildContext(item, slug) {
+// Fields for the popup and tooltip templates. The popup is only a label; the
+// full record opens beneath the place's row in the list.
+function buildContext(item) {
   const locBits = [item.neighborhood, item.city, item.state, item.country].filter(Boolean);
-
-  const links = buildLinksHtml(item);
-  const summary = escapeHtml(item.summary || "");
-  const awardsHtml = awardsList(item.awards);
-
-  const safeSlug = escapeHtml(String(slug || ""));
-
-  const summaryCollapseId = `summary-${safeSlug}`;
-  const awardsCollapseId = `awards-${safeSlug}`;
-  const priceBlock = getPriceBlockHtml(item.price_rating);
-
-  const linksBlock = links
-    ? `<div style="margin-top:8px;">${links}</div>`
-    : "";
-
-  const summaryPanel = summary
-    ? `
-      <div class="panel panel-default" style="margin-top:8px;">
-        <div class="panel-heading" style="padding:6px 10px;">
-          <a class="fnb-panel-toggle" data-toggle="collapse" href="#${summaryCollapseId}" style="display:block;">
-            <strong>Summary</strong>
-            <span class="fnb-panel-toggle__chevron pull-right muted" aria-hidden="true">▾</span>
-          </a>
-        </div>
-        <div id="${summaryCollapseId}" class="panel-collapse collapse">
-          <div class="panel-body" style="padding:8px 10px;">
-            ${summary}
-          </div>
-        </div>
-      </div>
-    `
-    : "";
-
-  const awardsPanel = awardsHtml
-    ? `
-      <div class="panel panel-default" style="margin-top:8px;">
-        <div class="panel-heading" style="padding:6px 10px;">
-          <a class="fnb-panel-toggle" data-toggle="collapse" href="#${awardsCollapseId}" style="display:block;">
-            <strong>Awards</strong>
-            <span class="fnb-panel-toggle__chevron pull-right muted" aria-hidden="true">▾</span>
-          </a>
-        </div>
-        <div id="${awardsCollapseId}" class="panel-collapse collapse">
-          <div class="panel-body" style="padding:8px 10px;">
-            ${awardsHtml}
-          </div>
-        </div>
-      </div>
-    `
-    : "";
 
   return {
     name: escapeHtml(item.name || ""),
     address: escapeHtml(item.address || ""),
     location: escapeHtml(locBits.join(", ")),
     journey_symbol: getJourneySymbol(item.journey_rating),
-    cuisines_html: getCuisinesHtml(item.cuisines),
-    price_block: priceBlock,
-    value_html: item.value_recognition
-      ? `<div style="margin-top:6px;"><span class="val-badge">◈ Exceptional value</span></div>`
-      : "",
-    awards_panel: awardsPanel,
-    summary_panel: summaryPanel,
-    links_block: linksBlock,
+    closed_line: item.closed ? `<div class="fnb-popup__line fnb-closed">${getClosedLine(item.closed)}</div>` : "",
   };
+}
+
+// The details panel under a selected row: where it is, what it serves, what
+// it costs, what I thought, what it has won, and where to go next.
+function buildDetailsHtml(item) {
+  const locBits = [item.neighborhood, item.city, item.state, item.country].filter(Boolean);
+  const summary = escapeHtml(item.summary || "");
+  const awardsHtml = awardsList(item.awards, !!item.closed);
+  const links = buildLinksHtml(item);
+
+  return [
+    item.closed ? `<div class="row-details__line fnb-closed">${getClosedLine(item.closed)}</div>` : "",
+    `<div class="row-details__line">${escapeHtml(getJourneyLabel(item.journey_rating))} &middot; ${escapeHtml(locBits.join(", "))}</div>`,
+    item.address ? `<div class="row-details__line">${escapeHtml(item.address)}</div>` : "",
+    getCuisinesHtml(item.cuisines),
+    getPriceBlockHtml(item.price_rating),
+    item.value_recognition
+      ? '<div class="fnb-meta-row"><span class="val-badge">◈</span> Exceptional value</div>'
+      : "",
+    summary ? `<p class="row-details__summary">${summary}</p>` : "",
+    awardsHtml ? `<div class="row-details__awards">${awardsHtml}</div>` : "",
+    links ? `<div class="row-details__links">${links}</div>` : "",
+  ].filter(Boolean).join("");
+}
+
+// Reads a place's `coordinates` from the data file: a [lat, lng] pair, or the
+// "lat, lng" text a map app copies. A place that has neither is left off the
+// map (it stays in the list) and logged, rather than breaking every marker.
+function withLatLng(d, mapId) {
+  let pair = d.coordinates;
+  if (typeof pair === "string") pair = pair.split(",").map((part) => part.trim());
+
+  const [lat, lng] = Array.isArray(pair) && pair.length === 2
+    ? pair.map((value) => (value === null || value === "" ? NaN : Number(value)))
+    : [NaN, NaN];
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    console.warn(`Map "${mapId}": no marker for "${d.slug}"; coordinates ${JSON.stringify(d.coordinates)} are not [lat, lng].`);
+    return null;
+  }
+  return { ...d, lat, lng };
 }
 
 export function initMap(config) {
@@ -661,15 +632,13 @@ export function initMap(config) {
   const mapEl = document.getElementById(mapId);
   if (!mapEl) return;
 
-  const dataset =
+  const rawDataset =
     (window.__MAP_DATA__ && window.__MAP_DATA__[mapId]) ? window.__MAP_DATA__[mapId] : [];
+  const dataset = rawDataset.map((d) => withLatLng(d, mapId)).filter(Boolean);
 
   const map = L.map(mapId, { scrollWheelZoom: true });
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
-  }).addTo(map);
+  attachBasemaps(map, mapEl.parentNode);
 
   const markerLayer = L.layerGroup().addTo(map);
   const markerBySlug = {};
@@ -679,9 +648,9 @@ export function initMap(config) {
 
   dataset.forEach((d) => {
     const item = d._item || {};
-    const ctx = buildContext(item, d.slug);
+    const ctx = buildContext(item);
     const tier = getJourneyTier(item.journey_rating);
-    const markerMetrics = JOURNEY_MARKER_METRICS[tier];
+    const markerMetrics = getMarkerMetrics(tier);
 
     const popupHtml = popupTpl
       ? renderTemplate(popupTpl, ctx)
@@ -694,15 +663,16 @@ export function initMap(config) {
     const m = L.marker([d.lat, d.lng], {
       icon: L.divIcon({
         className: "journey-marker-icon",
-        html: getJourneyPinMarkup(tier, "map"),
+        html: getJourneyPinMarkup(tier, "map", !!item.closed),
         iconSize: markerMetrics.iconSize,
         iconAnchor: markerMetrics.iconAnchor,
         popupAnchor: markerMetrics.popupAnchor,
       }),
-      alt: `${item.name || "Establishment"} (${getJourneyLabel(tier)})`,
+      alt: `${item.name || "Establishment"} (${item.closed ? "permanently closed" : getJourneyLabel(tier)})`,
       riseOnHover: true,
       title: item.name || "",
-      zIndexOffset: markerMetrics.zIndexOffset,
+      // Closed places sit beneath every open one where pins overlap.
+      zIndexOffset: item.closed ? markerMetrics.zIndexOffset - 1000 : markerMetrics.zIndexOffset,
     });
     m.bindTooltip(tooltipHtml, { sticky: true });
     m.bindPopup(popupHtml, { maxWidth: 340 });
@@ -711,7 +681,6 @@ export function initMap(config) {
     markerBySlug[d.slug] = m;
   });
 
-  // Filters only if list exists
   const listEl = listId ? document.getElementById(listId) : null;
   if (listEl) {
     hydrateList(config, dataset);
@@ -719,15 +688,9 @@ export function initMap(config) {
     applyFilters(config, markerLayer, markerBySlug);
   }
 
-  // View logic
-  if (center) {
-    try {
-      const parsed = JSON.parse(center);
-      if (Array.isArray(parsed) && parsed.length === 2) map.setView(parsed, zoom);
-      else map.setView([20, 0], zoom);
-    } catch {
-      map.setView([20, 0], zoom);
-    }
+  const parsedCenter = parseCenter(center, mapId);
+  if (parsedCenter) {
+    map.setView(parsedCenter, zoom);
   } else if (dataset.length) {
     const latlngs = dataset.map((x) => [x.lat, x.lng]);
     map.fitBounds(latlngs, { padding: [30, 30] });
@@ -735,20 +698,69 @@ export function initMap(config) {
     map.setView([20, 0], zoom);
   }
 
-  // List click -> open marker
-  if (listEl) {
-    listEl.addEventListener("click", (e) => {
-      let el = e.target;
-      while (el && el !== document && !el.getAttribute("data-slug")) el = el.parentNode;
-      if (!el || !el.getAttribute) return;
+  if (!listEl) return;
 
-      const slug = el.getAttribute("data-slug");
-      const m = markerBySlug[slug];
-      if (m) {
-        const ll = m.getLatLng();
-        map.setView(ll, Math.max(map.getZoom(), 14));
-        m.openPopup();
-      }
-    });
+  const itemBySlug = new Map(dataset.map((d) => [String(d.slug), d._item || {}]));
+  const cards = new Map(getListItems(listId).map((card) => [card.getAttribute("data-slug"), card]));
+  let openSlug = null;
+
+  function setOpen(card, open) {
+    const toggle = card.querySelector(".map-card__toggle");
+    const details = card.querySelector("[data-map-card-details]");
+    card.classList.toggle("is-open", open);
+    if (toggle) toggle.setAttribute("aria-expanded", String(open));
+    if (!details) return;
+    if (open && !details.hasAttribute("data-ready")) {
+      details.innerHTML = buildDetailsHtml(itemBySlug.get(card.getAttribute("data-slug")) || {});
+      details.setAttribute("data-ready", "");
+    }
+    details.hidden = !open;
   }
+
+  // Scrolls the list, not the page, so the row sits just under its sticky
+  // city heading.
+  function revealInList(card) {
+    const group = card.closest("[data-map-group]");
+    const heading = group ? group.querySelector(".rows__group-name") : null;
+    const top = card.getBoundingClientRect().top - listEl.getBoundingClientRect().top
+      + listEl.scrollTop - (heading ? heading.offsetHeight : 0);
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    listEl.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
+  }
+
+  // One place is open at a time. From the list, selecting the open row closes
+  // it; from the map, a marker always opens its row.
+  function selectPlace(slug, fromMap) {
+    const card = cards.get(slug);
+    const marker = markerBySlug[slug];
+    if (!card) return;
+
+    if (!fromMap && openSlug === slug) {
+      setOpen(card, false);
+      openSlug = null;
+      if (marker) marker.closePopup();
+      return;
+    }
+
+    if (openSlug && openSlug !== slug && cards.has(openSlug)) setOpen(cards.get(openSlug), false);
+    setOpen(card, true);
+    openSlug = slug;
+
+    if (fromMap) {
+      revealInList(card);
+    } else if (marker) {
+      map.setView(marker.getLatLng(), Math.max(map.getZoom(), 14));
+      marker.openPopup();
+    }
+  }
+
+  Object.entries(markerBySlug).forEach(([slug, marker]) => {
+    marker.on("click", () => selectPlace(slug, true));
+  });
+
+  listEl.addEventListener("click", (e) => {
+    const toggle = e.target.closest(".map-card__toggle");
+    if (!toggle || !listEl.contains(toggle)) return;
+    selectPlace(toggle.closest(".map-card").getAttribute("data-slug"), false);
+  });
 }
