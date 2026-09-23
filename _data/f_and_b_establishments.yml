@@ -342,7 +342,7 @@
       years_of_bib: [2021, 2022, 2023, 2024, 2025, 2026]
       years_of_green: []
     other: []
-  visits: [2024-10-21]
+  visits: [2024-10-21, 2026-07-29]
   last_updated: 2026-02-20
 - name: The Mansion Restaurant
   slug: mansion_restaurant_dallas
@@ -1274,7 +1274,7 @@
     other: []
   visits: [2026-03-16]
   last_updated: 2026-03-19
-- name Soichi
+- name: Soichi
   slug: soichi_university_heights
   coordinates: [32.762674,-117.141801]
   address: 2121 Adams Ave, San Diego, CA 92116
@@ -1308,3 +1308,84 @@
     Reservations are difficult to secure, often requiring booking more than a month in advance, and the meal is undeniably expensive.
     Even so, Soichi delivers a charming dining experience that is worth seeking out.
   last_updated: 2026-04-23
+- name: TJ Tacos
+  slug: tj_tacos_escondido
+  coordinates: [33.1283246, -117.0725055]
+  address: 802 E Valley Pkwy, Escondido, CA 92025
+  neighborhood: Central Escondido
+  city: Escondido
+  state: California
+  country: United States of America
+  cuisines: ["mexican", "tacos"]
+  price_rating: 1
+  website: https://tj-tacos.com/
+  map_url: https://maps.app.goo.gl/q9JZZb6kVGHex4Xc6
+  awards:
+    other: []
+  visits: [2026-05-23]
+  last_updated: 2026-09-22
+- name: Hawaiian Fresh Seafood At Centerpark Labs
+  slug: hawaiian_fresh_seafood_at_centerpark_labs
+  coordinates: [32.902816624942126, -117.17558719131266]
+  address: 6835 Flanders Dr, San Diego, CA 92121
+  neighborhood: Sorrento Valley
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["hawaiian", "poke"]
+  price_rating: 1
+  website: https://www.hawaiianfreshseafood.com/
+  map_url: https://maps.app.goo.gl/FiK8DZsHRSfvwKeG7
+  awards:
+    other: []
+  visits: [2026-08-03]
+  last_updated: 2026-09-22
+- name: Heritage Barbecue
+  slug: heritage_barbecue_san_juan_capistrano
+  coordinates: [33.50199367627428, -117.66317923906313]
+  address: 31721 Camino Capistrano, San Juan Capistrano, CA 92675
+  neighborhood: San Juan Capistrano
+  city: San Juan Capistrano
+  state: California
+  country: United States of America
+  cuisines: ["barbecue"]
+  price_rating: 2
+  journey_rating: 1
+  website: https://www.heritagecraftbbq.com/
+  map_url: https://maps.app.goo.gl/3RvGjMtQyNFygbRQ9
+  awards:
+    michelin:
+      stars: 0
+      bib: true
+      green: false
+      years_of_1_star: []
+      years_of_2_stars: []
+      years_of_3_stars: []
+      years_of_bib: [2021, 2022, 2023, 2024, 2025, 2026]
+      years_of_green: []
+    other: []
+  visits: [2026-08-07]
+  summary: >
+    All things considered, Hertigate Barbecue provides a solid Central Texas barbecue experience in California, including a solid menu, outdoor seating, and a long line stretching down the street on weekends.
+    The menu includes all of the staples of a good central Texas joint, from brisket to sausage to mac & cheese to banana pudding.
+    Personally, I found their meats to be solid, but not exceptional.
+    In particular, the brisket was a bit dry, which is unfortunate considering it's the most important item on the menu.
+    However, they saved the best for last, as the banana pudding was fantastic, on par with the best I've had in Texas. 
+    Overall, while not remotely comparable to the best barbecue in Texas, Daniel Castillo makes pretty good barbecue in a place where there is not much of it, making it worth a visit if you are craving barbecue.
+  last_updated: 2026-09-22
+- name: Bosforo
+  slug: bosforo_san_diego
+  coordinates: [32.7631754,-117.12482]
+  address: 3201 Adams Ave, San Diego, CA 92116
+  neighborhood: Normal Heights
+  city: San Diego
+  state: California
+  country: United States of America
+  cuisines: ["turkish"]
+  price_rating: 3
+  website: https://bosforosd.com/
+  map_url: https://maps.app.goo.gl/scCxoRADrZ3yb8H89
+  awards:
+    other: []
+  visits: [2026-09-11]
+  last_updated: 2026-09-22
