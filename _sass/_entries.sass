@@ -266,6 +266,20 @@ input[type="range"]
 .entry .lede
     margin-top: 34px
 
+// A featured project takes the site's 9px square in the margin, level with
+// its meta line.
+.entry--featured
+    position: relative
+
+    &::before
+        content: ""
+        position: absolute
+        top: 10px
+        left: -18px
+        width: 9px
+        height: 9px
+        background-color: $heading-color
+
 .entry__talks
     padding-top: 72px
 

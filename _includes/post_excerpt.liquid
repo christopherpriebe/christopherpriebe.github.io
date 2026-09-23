@@ -1,5 +1,9 @@
-{%- if include.post.summary -%}
-  {{- include.post.summary | strip_html | strip -}}
+{%- comment -%}
+A post's blurb: its `description` (which is also the feed summary and the
+page's meta description), or else the start of its first paragraph.
+{%- endcomment -%}
+{%- if include.post.description -%}
+  {{- include.post.description | strip_html | strip -}}
 {%- else -%}
   {{- include.post.excerpt | strip_html | strip | truncate: 260 -}}
 {%- endif -%}

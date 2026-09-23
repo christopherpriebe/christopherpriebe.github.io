@@ -1,6 +1,12 @@
+# Venues for the publications list, keyed by a paper's `abbr` in the
+# bibliography. The venue and year above a paper link to the page for that
+# year's edition when one is listed under `years`, and to `url` otherwise.
+# Quote the years so they are read as text, as the bibliography gives them.
 "ISCA":
-  color: "#53B6F4"
   url: https://iscaconf.org/
+  years:
+    "2025": https://iscaconf.org/isca2025/
 "NeurIPS":
-  color: "#624487"
   url: https://neurips.cc/
+  years:
+    "2025": https://neurips.cc/Conferences/2025

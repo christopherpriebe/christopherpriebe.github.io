@@ -2,22 +2,31 @@
 {%- assign target = project.redirect | default: project.url | relative_url -%}
 
 {%- comment -%}
-One entry on the projects page: a meta line, the title, the description as a
-lede, an optional `summary` in Markdown, a line of links, and any `talks`.
+One entry on the projects page: a meta line, the title, the description, and
+a line of links. A `featured: true` project leads the list, carries the site's
+square mark and a "Featured" note, sets its description as a lede, and adds its
+`summary` (Markdown) and any `talks`; the rest stay to the short form, with the
+detail left to their write-ups.
 Links are assembled from the dedicated fields first, then from any extra
 `links:` entries, so the common cases need no list in the front matter.
 {%- endcomment -%}
-<article class="entry" data-project data-categories="{{ project.categories | join: '|' | downcase | escape }}">
+<article class="entry{% if project.featured %} entry--featured{% endif %}" data-project data-categories="{{ project.categories | join: '|' | downcase | escape }}">
     <p class="meta">
+        {%- if project.featured %}Featured &middot; {% endif -%}
         {{- project.years | escape -}}
         {%- if project.years and project.venue %} &middot; {% endif -%}
         {{- project.venue | escape -}}
         {%- if project.status and project.status != "" %} &middot; {{ project.status | escape }}{% endif -%}
     </p>
     <h2 class="title"><a href="{{ target }}">{{ project.title | escape }}</a></h2>
-    <p class="lede lede--ink">{{ project.description | default: project.sub_title | strip_html | strip }}</p>
+    {%- assign project_description = project.description | default: project.sub_title | strip_html | strip -%}
+    {%- if project.featured %}
+    <p class="lede lede--ink">{{ project_description }}</p>
     {%- if project.summary %}
     {{ project.summary | markdownify }}
+    {%- endif %}
+    {%- else %}
+    <p>{{ project_description }}</p>
     {%- endif %}
     <p class="meta">
         {%- if project.website %}<a href="{{ project.website }}">Project site &rarr;</a> &middot; {% endif -%}
@@ -26,7 +35,7 @@ Links are assembled from the dedicated fields first, then from any extra
         {%- for link in project.links %}<a href="{{ link.url }}">{{ link.label | escape }} &rarr;</a> &middot; {% endfor -%}
         <a href="{{ target }}">Write-up &rarr;</a>
     </p>
-    {%- if project.talks %}
+    {%- if project.featured and project.talks %}
     <div class="entry__talks">
         <p class="meta">Talks</p>
         <ul>

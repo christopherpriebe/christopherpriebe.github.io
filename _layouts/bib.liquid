@@ -17,8 +17,21 @@ their `abbr` where one is set; @misc entries read as preprints.
     {%- assign venue = entry.year -%}
 {%- endif -%}
 
+{%- comment -%}
+The venue links to its page in _data/venues.yaml: that year's edition if
+listed, else the venue's own site.
+{%- endcomment -%}
+{%- assign venue_url = nil -%}
+{%- if entry.abbr and site.data.venues[entry.abbr] -%}
+    {%- assign venue_data = site.data.venues[entry.abbr] -%}
+    {%- assign venue_year = entry.year | append: "" -%}
+    {%- assign venue_url = venue_data.years[venue_year] | default: venue_data.url -%}
+{%- endif -%}
+
 <article class="entry" id="{{ entry.key }}">
-    <p class="meta">{{ venue }}</p>
+    <p class="meta entry__venue">
+        {%- if venue_url -%}<a href="{{ venue_url }}">{{ venue }}</a>{%- else -%}{{ venue }}{%- endif -%}
+    </p>
 
     <h2 class="title">{{ entry.title }}</h2>
 

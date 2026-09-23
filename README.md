@@ -41,7 +41,8 @@ The `about` layout sets the page's Markdown as prose, with the first paragraph a
 ### Projects
 
 The `projects` layout lists everything in the `projects` collection, ordered by `importance`.
-Each project takes `description` (the lede), `summary` (Markdown), `years`, `venue`, `status`, `website`, `github`, `paper`, `links`, `talks`, and `categories`.
+Each project takes `description`, `years`, `venue`, `status`, `website`, `github`, `paper`, `links`, and `categories`.
+Set `featured: true` to lead the list with a project: it takes a square mark and a "Featured" note, its description is set as a lede, and it shows its `summary` (Markdown) and `talks`.
 A category filter appears once there is more than one project and more than one category.
 
 ### Instruments
@@ -68,6 +69,8 @@ The `resume` layout is specifically for a resume/CV page, built from the `resume
 - Spacing is set on a 9px module (18, 27, 36 … 180), and the page is anchored to the left margin rather than centred. The plumb line in `_sass/_layout.sass` is measured from that margin.
 - Type is Archivo for display, Public Sans for text, and IBM Plex Mono for labels, loaded from Google Fonts in `_includes/head.liquid`.
 - There are three components: an entry (meta line, title, paragraph), a ruled row, and a segmented control. See `_sass/_entries.sass`.
+- Publication venues link through `_data/venues.yaml`, keyed by the bibliography's `abbr`: to that year's edition under `years` if listed, else to the venue's `url`.
+- Blog posts are published as an Atom feed at `/feed.xml` by jekyll-feed; a post's `description` is its summary there and in the archive.
 - Photos stay sharp rectangles set on a flat concrete plane offset 18px down and to the right, with no border, radius or shadow (`_sass/_photos.sass`). From any page or post:
   `{% include photo.liquid src="/assets/images/x.jpg" alt="…" caption="…" shape="landscape" %}`.
   `shape` is `portrait` (3:4), `landscape` (3:2), or `square`, or leave it out to keep the image's own ratio; `focus` sets what a crop keeps (e.g. `"50% 20%"`).
