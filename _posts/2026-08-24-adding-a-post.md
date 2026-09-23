@@ -28,7 +28,7 @@ It ships at `/blog/some-slug/`.
 | --- | --- | --- |
 | `title` | yes | Heading, archive entry, and feed item |
 | `summary` | no | The blurb in the archive; falls back to your first paragraph |
-| `tags` | no | Topic filter options and the pills under each entry |
+| `tags` | no | Topic filter options and the topics in each entry's meta line |
 
 Reading time is counted from the body at 200 words a minute, so there is no
 field for it. The topic chips are collected from every `tags` value on the
@@ -38,20 +38,19 @@ and the filter row hides itself entirely while only one topic exists.
 ## Writing the body
 
 Everything inside a post is wrapped in `.prose`, so plain Markdown comes out
-styled: headings pick up their rules, `inline code` gets a tinted chip, block
-quotes take a navy rule, and tables are ruled horizontally. There is nothing to
-add by hand.
+styled: headings are set in the display face, `inline code` in the mono, block
+quotes take a navy rule, code blocks sit on a concrete plane, and tables are
+ruled horizontally. There is nothing to add by hand.
 
-> Section headings carry a hairline rule beneath them. Subsections do not — the
-> size change is enough.
+> Headings carry no rule. The size change and the air above them are enough.
 
 Images work the same way. Put the file in `assets/images/` and reference it
-normally; figures pick up a border and captions set in the small face.
+normally; captions are set in the small size.
 
 ## Where things live
 
-- `_layouts/blog.liquid` — the archive, the latest-post card, the topic filter
+- `_layouts/blog.liquid` — the archive and the topic filter
 - `_layouts/post.liquid` — a single post
-- `_sass/_blog.sass` — archive styles
+- `_sass/_entries.sass` — archive entries and the filter bar
 - `_sass/_prose.sass` — everything inside a post body
 - `feed.xml` — the RSS feed, which picks up new posts automatically

@@ -2,36 +2,27 @@
 layout: base
 ---
 
-<div class="container">
-    <div class="row">
-        <div class="col-xs-12">
-            <article class="article">
-                <header class="article-head">
-                    <h1>{{ page.title }}</h1>
-                    <div class="page-meta">
-                        <span>{{ page.date | date: "%B %-d, %Y" }}</span>
-                        <span>{% include reading_time.liquid content=content %} read</span>
-                        {%- if page.tags.size > 0 -%}
-                            <span>{{ page.tags | join: " · " }}</span>
-                        {%- endif -%}
-                    </div>
-                </header>
+<article>
+    <header class="page-head measure">
+        <h1 class="page-title">{{ page.title }}</h1>
+        <p class="meta article-meta">
+            {{- page.date | date: "%-d %B %Y" -}}
+            {%- if page.tags.size > 0 %} &middot; {{ page.tags | join: ", " | escape }}{% endif %} &middot; {% include reading_time.liquid content=content %} read
+        </p>
+    </header>
 
-                <div class="prose">
-                    {{ content }}
-                </div>
-
-                <nav class="page-foot-nav">
-                    {%- if page.previous -%}
-                        <a href="{{ page.previous.url | relative_url }}">&larr; {{ page.previous.title | escape }}</a>
-                    {%- else -%}
-                        <a href="{{ '/blog/' | relative_url }}">&larr; All writing</a>
-                    {%- endif -%}
-                    {%- if page.next -%}
-                        <a href="{{ page.next.url | relative_url }}">{{ page.next.title | escape }} &rarr;</a>
-                    {%- endif -%}
-                </nav>
-            </article>
-        </div>
+    <div class="prose page-body">
+        {{ content }}
     </div>
-</div>
+
+    <nav class="page-foot-nav" aria-label="More writing">
+        {%- if page.previous -%}
+            <a href="{{ page.previous.url | relative_url }}">&larr; {{ page.previous.title | escape }}</a>
+        {%- else -%}
+            <a href="{{ '/blog/' | relative_url }}">&larr; All writing</a>
+        {%- endif -%}
+        {%- if page.next -%}
+            <a href="{{ page.next.url | relative_url }}">{{ page.next.title | escape }} &rarr;</a>
+        {%- endif -%}
+    </nav>
+</article>

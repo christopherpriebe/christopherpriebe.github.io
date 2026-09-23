@@ -4,62 +4,30 @@ layout: base
 
 {%- assign routes = site.data.running_routes -%}
 
-<div class="container">
-    {% include page_header.liquid %}
-
-    <div class="row">
-        <div class="col-xs-12">
-            <div class="stats-head">
-                {% include routes/unit_toggle.liquid %}
-            </div>
-        </div>
-    </div>
-
-    {%- assign featured = routes | where: "featured", true | first -%}
-    {%- if featured -%}
-        {%- include routes/canonical.liquid route=featured -%}
-        <div class="row">
-            <div class="col-xs-12">
-                <div class="panel panel-default route-feature">
-                    <div class="panel-body">
-                        <span class="route-feature__badge">Personal record</span>
-                        <h2 class="route-feature__title">{{ featured.name | escape }}</h2>
-                        <p class="route-feature__where">
-                            {{ featured.region | escape }} · {{ featured.surface | escape }}
-                            {%- if route_latest_date -%} · {{ route_latest_date | date: "%B %-d, %Y" }}{%- endif -%}
-                        </p>
-
-                        <div class="stats-strip" style="margin:16px 0 0;">
-                            <div class="stat">
-                                <span class="stat__num"><span data-unit-value="{{ route_km }}" data-unit-kind="distance">{{ route_km | round: 1 }}</span><small data-unit-label="distance">km</small></span>
-                                <span class="stat__label">Distance</span>
-                            </div>
-                            <div class="stat">
-                                <span class="stat__num"><span data-unit-value="{{ route_m }}" data-unit-kind="elevation">{{ route_m }}</span><small><span data-unit-label="elevation">m</span> &uarr;</small></span>
-                                <span class="stat__label">Elevation</span>
-                            </div>
-                            <div class="stat">
-                                <span class="stat__num">{% if route_sec > 0 %}{% include routes/duration.liquid seconds=route_sec precise=route_has_seconds %}{% else %}&mdash;{% endif %}</span>
-                                <span class="stat__label">Moving time</span>
-                            </div>
-                            <div class="stat">
-                                <span class="stat__num"><span data-unit-value="{{ route_sec_per_km }}" data-unit-kind="pace">{{ route_pace }}</span><small data-unit-label="pace">/km</small></span>
-                                <span class="stat__label">Pace</span>
-                            </div>
-                        </div>
-
-                        {%- if featured.notes -%}
-                            <p class="route-feature__notes">{{ featured.notes | strip_html | strip }}</p>
-                        {%- endif -%}
-                    </div>
-                </div>
-            </div>
-        </div>
+{%- comment -%}
+The lede totals every run, in words. Both unit forms are rendered and
+_js/units.js shows the one the reader has chosen.
+{%- endcomment -%}
+{%- assign run_km = 0 -%}
+{%- for route in routes -%}
+    {%- if route.type == "run" -%}
+        {%- include routes/canonical.liquid route=route -%}
+        {%- assign run_km = run_km | plus: route_km -%}
     {%- endif -%}
+{%- endfor -%}
+{%- assign run_km_whole = run_km | round -%}
+{%- assign run_mi_whole = run_km | divided_by: 1.609344 | round -%}
 
-    {% include map/route_map.liquid
-        id="running-routes-map"
-        data=routes
-        zoom=10
-    %}
-</div>
+{%- capture lede -%}
+    <span data-unit-show="metric">{% include number_word.liquid n=run_km_whole %} kilometre{% if run_km_whole != 1 %}s{% endif %}</span>
+    <span data-unit-show="imperial" hidden>{% include number_word.liquid n=run_mi_whole %} mile{% if run_mi_whole != 1 %}s{% endif %}</span>
+    of recorded running, traced from GPX.
+{%- endcapture -%}
+{%- capture meta %}{% include routes/unit_toggle.liquid %}{% endcapture -%}
+{% include page_title.liquid lede=lede meta=meta %}
+
+{% include map/route_map.liquid
+    id="running-routes-map"
+    data=routes
+    zoom=10
+%}

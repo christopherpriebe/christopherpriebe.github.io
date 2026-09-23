@@ -181,11 +181,10 @@ function getPriceBlockHtml(priceRating) {
   return priceHtml ? getMetaRowHtml(priceHtml, "fnb-meta-row--price") : "";
 }
 
-function buildInlineMetaHtml(item) {
-  return [
-    getCuisinesHtml(item.cuisines),
-    getPriceBlockHtml(item.price_rating),
-  ].filter(Boolean).join("");
+// The list rows carry cuisines as plain labels; the emoji stay in the popup.
+function getCuisineLabels(keys) {
+  if (!Array.isArray(keys)) return "";
+  return keys.map((k) => getCuisineDisplay(k).label).join(", ");
 }
 
 function normalizeYears(years) {
@@ -265,32 +264,32 @@ function getMichelinAwards(m) {
   const yBib = formatYearRanges(m.years_of_bib);
   if (yBib.count) {
     lines.push(
-      `<li><span class="val-badge michelin-red">Bib</span> <strong>${yBib.count}</strong> year${yBib.count === 1 ? "" : "s"} (${escapeHtml(yBib.text)})</li>`
+      `<li><span class="michelin-red">Bib</span> <strong>${yBib.count}</strong> year${yBib.count === 1 ? "" : "s"} (${escapeHtml(yBib.text)})</li>`
     );
   }
 
   const yGreen = formatYearRanges(m.years_of_green);
   if (yGreen.count) {
     lines.push(
-      `<li><span class="val-badge michelin-green">Green</span> <strong>${yGreen.count}</strong> year${yGreen.count === 1 ? "" : "s"} (${escapeHtml(yGreen.text)})</li>`
+      `<li><span class="michelin-green">Green</span> <strong>${yGreen.count}</strong> year${yGreen.count === 1 ? "" : "s"} (${escapeHtml(yGreen.text)})</li>`
     );
   }
 
-  if (m.bib) bits.push('<div style="margin-top:4px;"><span class="val-badge michelin-red">Bib</span></div>');
-  if (m.green) bits.push('<div style="margin-top:4px;"><span class="val-badge michelin-green">Green</span></div>');
+  if (m.bib) bits.push('<div><span class="michelin-red">Bib Gourmand</span></div>');
+  if (m.green) bits.push('<div><span class="michelin-green">Green Star</span></div>');
 
   if (lines.length) {
     bits.push(`
-      <div style="margin-top:6px;">
-        <div class="muted"><strong>Michelin history</strong></div>
-        <ul class="list-unstyled" style="margin:4px 0 0 0;">
+      <div>
+        <div class="muted">Michelin history</div>
+        <ul>
           ${lines.join("")}
         </ul>
       </div>
     `);
   }
 
-  return bits.length ? `<div style="margin-top:6px;">${bits.join("")}</div>` : "";
+  return bits.join("");
 }
 
 function awardsList(a) {
@@ -306,9 +305,9 @@ function awardsList(a) {
       .join("");
 
     out += `
-      <div style="margin-top:6px;">
-        <div class="muted"><strong>Awards</strong></div>
-        <ul class="list-unstyled" style="margin:4px 0 0 0;">
+      <div>
+        <div class="muted">Other awards</div>
+        <ul>
           ${items}
         </ul>
       </div>
@@ -446,13 +445,26 @@ function applyFilters(config, markerLayer, markerBySlug) {
     if (ok && slug) allowed.push(slug);
   });
 
+  // A group heading only stays while something under it survives the filters.
+  const listEl = document.getElementById(config.listId);
+  if (listEl) {
+    listEl.querySelectorAll("[data-map-group]").forEach((group) => {
+      const visible = Array.from(group.querySelectorAll(".map-card"))
+        .some((card) => card.style.display !== "none");
+      group.style.display = visible ? "" : "none";
+    });
+
+    const empty = listEl.querySelector("[data-map-empty]");
+    if (empty) empty.style.display = allowed.length ? "none" : "block";
+  }
+
   markerLayer.clearLayers();
   allowed.forEach((slug) => {
     const m = markerBySlug[slug];
     if (m) m.addTo(markerLayer);
   });
 
-  // Keep the sidebar's "N places" header in step with the filters.
+  // Keep the filter panel's "N of M places" in step with the filters.
   const countEl = document.querySelector("[data-map-count]");
   if (countEl) countEl.textContent = allowed.length;
 }
@@ -515,77 +527,48 @@ function hydrateList(config, dataset) {
     const metaEl = el.querySelector("[data-map-card-meta]");
 
     if (!item || !metaEl) return;
-    metaEl.innerHTML = buildInlineMetaHtml(item);
+    metaEl.textContent = getCuisineLabels(item.cuisines);
+  });
+
+  // Liquid can only title-case the cuisine keys; the table knows "BBQ".
+  document.querySelectorAll("#filter-cuisine option[value]").forEach((option) => {
+    if (option.value) option.textContent = getCuisineDisplay(option.value).label;
   });
 }
 
-function buildContext(item, slug) {
+// Fields for the popup and tooltip templates. The popup is only a label; the
+// full record opens beneath the place's row in the list.
+function buildContext(item) {
   const locBits = [item.neighborhood, item.city, item.state, item.country].filter(Boolean);
-
-  const links = buildLinksHtml(item);
-  const summary = escapeHtml(item.summary || "");
-  const awardsHtml = awardsList(item.awards);
-
-  const safeSlug = escapeHtml(String(slug || ""));
-
-  const summaryCollapseId = `summary-${safeSlug}`;
-  const awardsCollapseId = `awards-${safeSlug}`;
-  const priceBlock = getPriceBlockHtml(item.price_rating);
-
-  const linksBlock = links
-    ? `<div style="margin-top:8px;">${links}</div>`
-    : "";
-
-  const summaryPanel = summary
-    ? `
-      <div class="panel panel-default" style="margin-top:8px;">
-        <div class="panel-heading" style="padding:6px 10px;">
-          <a class="fnb-panel-toggle" data-toggle="collapse" href="#${summaryCollapseId}" style="display:block;">
-            <strong>Summary</strong>
-            <span class="fnb-panel-toggle__chevron pull-right muted" aria-hidden="true">▾</span>
-          </a>
-        </div>
-        <div id="${summaryCollapseId}" class="panel-collapse collapse">
-          <div class="panel-body" style="padding:8px 10px;">
-            ${summary}
-          </div>
-        </div>
-      </div>
-    `
-    : "";
-
-  const awardsPanel = awardsHtml
-    ? `
-      <div class="panel panel-default" style="margin-top:8px;">
-        <div class="panel-heading" style="padding:6px 10px;">
-          <a class="fnb-panel-toggle" data-toggle="collapse" href="#${awardsCollapseId}" style="display:block;">
-            <strong>Awards</strong>
-            <span class="fnb-panel-toggle__chevron pull-right muted" aria-hidden="true">▾</span>
-          </a>
-        </div>
-        <div id="${awardsCollapseId}" class="panel-collapse collapse">
-          <div class="panel-body" style="padding:8px 10px;">
-            ${awardsHtml}
-          </div>
-        </div>
-      </div>
-    `
-    : "";
 
   return {
     name: escapeHtml(item.name || ""),
     address: escapeHtml(item.address || ""),
     location: escapeHtml(locBits.join(", ")),
     journey_symbol: getJourneySymbol(item.journey_rating),
-    cuisines_html: getCuisinesHtml(item.cuisines),
-    price_block: priceBlock,
-    value_html: item.value_recognition
-      ? `<div style="margin-top:6px;"><span class="val-badge">◈ Exceptional value</span></div>`
-      : "",
-    awards_panel: awardsPanel,
-    summary_panel: summaryPanel,
-    links_block: linksBlock,
   };
+}
+
+// The details panel under a selected row: where it is, what it serves, what
+// it costs, what it has won, what I thought, and where to go next.
+function buildDetailsHtml(item) {
+  const locBits = [item.neighborhood, item.city, item.state, item.country].filter(Boolean);
+  const summary = escapeHtml(item.summary || "");
+  const awardsHtml = awardsList(item.awards);
+  const links = buildLinksHtml(item);
+
+  return [
+    `<div class="row-details__line">${escapeHtml(getJourneyLabel(item.journey_rating))} &middot; ${escapeHtml(locBits.join(", "))}</div>`,
+    item.address ? `<div class="row-details__line">${escapeHtml(item.address)}</div>` : "",
+    getCuisinesHtml(item.cuisines),
+    getPriceBlockHtml(item.price_rating),
+    item.value_recognition
+      ? '<div class="fnb-meta-row"><span class="val-badge">◈</span> Exceptional value</div>'
+      : "",
+    summary ? `<p class="row-details__summary">${summary}</p>` : "",
+    awardsHtml ? `<div class="row-details__awards">${awardsHtml}</div>` : "",
+    links ? `<div class="row-details__links">${links}</div>` : "",
+  ].filter(Boolean).join("");
 }
 
 export function initMap(config) {
@@ -616,7 +599,7 @@ export function initMap(config) {
 
   dataset.forEach((d) => {
     const item = d._item || {};
-    const ctx = buildContext(item, d.slug);
+    const ctx = buildContext(item);
     const tier = getJourneyTier(item.journey_rating);
     const markerMetrics = getMarkerMetrics(tier);
 
@@ -670,19 +653,69 @@ export function initMap(config) {
     map.setView([20, 0], zoom);
   }
 
-  if (listEl) {
-    listEl.addEventListener("click", (e) => {
-      let el = e.target;
-      while (el && el !== document && !el.getAttribute("data-slug")) el = el.parentNode;
-      if (!el || !el.getAttribute) return;
+  if (!listEl) return;
 
-      const slug = el.getAttribute("data-slug");
-      const m = markerBySlug[slug];
-      if (m) {
-        const ll = m.getLatLng();
-        map.setView(ll, Math.max(map.getZoom(), 14));
-        m.openPopup();
-      }
-    });
+  const itemBySlug = new Map(dataset.map((d) => [String(d.slug), d._item || {}]));
+  const cards = new Map(getListItems(listId).map((card) => [card.getAttribute("data-slug"), card]));
+  let openSlug = null;
+
+  function setOpen(card, open) {
+    const toggle = card.querySelector(".map-card__toggle");
+    const details = card.querySelector("[data-map-card-details]");
+    card.classList.toggle("is-open", open);
+    if (toggle) toggle.setAttribute("aria-expanded", String(open));
+    if (!details) return;
+    if (open && !details.hasAttribute("data-ready")) {
+      details.innerHTML = buildDetailsHtml(itemBySlug.get(card.getAttribute("data-slug")) || {});
+      details.setAttribute("data-ready", "");
+    }
+    details.hidden = !open;
   }
+
+  // Scrolls the list, not the page, so the row sits just under its sticky
+  // city heading.
+  function revealInList(card) {
+    const group = card.closest("[data-map-group]");
+    const heading = group ? group.querySelector(".rows__group-name") : null;
+    const top = card.getBoundingClientRect().top - listEl.getBoundingClientRect().top
+      + listEl.scrollTop - (heading ? heading.offsetHeight : 0);
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    listEl.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
+  }
+
+  // One place is open at a time. From the list, selecting the open row closes
+  // it; from the map, a marker always opens its row.
+  function selectPlace(slug, fromMap) {
+    const card = cards.get(slug);
+    const marker = markerBySlug[slug];
+    if (!card) return;
+
+    if (!fromMap && openSlug === slug) {
+      setOpen(card, false);
+      openSlug = null;
+      if (marker) marker.closePopup();
+      return;
+    }
+
+    if (openSlug && openSlug !== slug && cards.has(openSlug)) setOpen(cards.get(openSlug), false);
+    setOpen(card, true);
+    openSlug = slug;
+
+    if (fromMap) {
+      revealInList(card);
+    } else if (marker) {
+      map.setView(marker.getLatLng(), Math.max(map.getZoom(), 14));
+      marker.openPopup();
+    }
+  }
+
+  Object.entries(markerBySlug).forEach(([slug, marker]) => {
+    marker.on("click", () => selectPlace(slug, true));
+  });
+
+  listEl.addEventListener("click", (e) => {
+    const toggle = e.target.closest(".map-card__toggle");
+    if (!toggle || !listEl.contains(toggle)) return;
+    selectPlace(toggle.closest(".map-card").getAttribute("data-slug"), false);
+  });
 }

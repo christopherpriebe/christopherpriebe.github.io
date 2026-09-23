@@ -5,13 +5,17 @@ import { setPressed } from "./dom";
 // Values are stored and compared in metric everywhere — the data file, the
 // filter sliders, the sort order. This module only changes how they are
 // *displayed*, so switching units can never change which routes match a
-// filter. Liquid renders the metric text server-side; this rewrites it.
+// filter. Liquid renders the metric text server-side; this rewrites it, and
+// switches to miles on load unless the reader has chosen otherwise.
 //
 // Markup contract:
 //   data-unit-value="<metric number>" data-unit-kind="distance|elevation|pace"
 //       -> element text becomes the converted, rounded number
-//   data-unit-label="distance|elevation|pace"
-//       -> element text becomes the unit string ("km" / "mi", …)
+//   data-unit-label="distance|elevation|pace|pace-words"
+//       -> element text becomes the unit string ("km", "/mi", "per mile", …)
+//   data-unit-show="metric|imperial"
+//       -> element is shown only in that system, for text a number cannot
+//          carry, such as a total spelled out in words
 
 const STORAGE_KEY = "priebe:units";
 const KM_PER_MILE = 1.609344;
@@ -19,6 +23,8 @@ const M_PER_FOOT = 0.3048;
 
 export const METRIC = "metric";
 export const IMPERIAL = "imperial";
+
+const DEFAULT_UNITS = IMPERIAL;
 
 const listeners = [];
 let current = METRIC;
@@ -54,6 +60,10 @@ export function paceUnit() {
   return current === IMPERIAL ? "/mi" : "/km";
 }
 
+export function paceWords() {
+  return current === IMPERIAL ? "per mile" : "per km";
+}
+
 export function formatDistance(km) {
   const value = current === IMPERIAL ? km / KM_PER_MILE : km;
   // One decimal, but no trailing ".0" on whole numbers.
@@ -84,6 +94,7 @@ const LABELS = {
   distance: distanceUnit,
   elevation: elevationUnit,
   pace: paceUnit,
+  "pace-words": paceWords,
 };
 
 export function applyUnits(root = document) {
@@ -95,6 +106,10 @@ export function applyUnits(root = document) {
   root.querySelectorAll("[data-unit-label]").forEach((el) => {
     const label = LABELS[el.getAttribute("data-unit-label")];
     if (label) el.textContent = label();
+  });
+
+  root.querySelectorAll("[data-unit-show]").forEach((el) => {
+    el.hidden = el.getAttribute("data-unit-show") !== current;
   });
 }
 
@@ -124,6 +139,6 @@ export function initUnits() {
     });
   });
 
-  // A stored preference wins; otherwise keep what the server rendered.
-  setUnits(readStored() || current, { persist: false });
+  // A stored preference wins; otherwise the site default.
+  setUnits(readStored() || DEFAULT_UNITS, { persist: false });
 }

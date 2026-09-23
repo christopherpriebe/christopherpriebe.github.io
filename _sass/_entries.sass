@@ -1,0 +1,283 @@
+/*
+ * The component vocabulary every page draws from. There are only three: an
+ * entry (a meta line, a title, a paragraph), a ruled row, and a segmented
+ * control. Nothing on the site carries a radius or a shadow.
+ */
+
+/*
+ * Entries: publications, posts, projects, routes
+ */
+.entry
+    max-width: $measure-wide
+
+    & + &
+        padding-top: 81px
+
+    .title
+        margin-top: 18px
+        max-width: $measure
+
+    p
+        margin: 18px 0 0
+        max-width: $measure
+
+.entry__authors
+    font-size: 15px
+
+    a
+        text-decoration: none
+
+// jekyll-scholar wraps the publication entries in a list of its own.
+.page-body > .bibliography
+    margin: 0
+    padding: 0
+    list-style: none
+
+    > li + li
+        padding-top: 81px
+
+// The row of link buttons under a publication, drawn as a segmented control.
+.entry__links
+    margin-top: 18px
+
+.entry__abstract
+    font-size: 15px
+    line-height: 26px
+
+    .entry &
+        margin-top: 27px
+
+// Empty-state line shown by the filters when nothing matches.
+.filters__empty
+    display: none
+    margin: 36px 0 0
+    font-size: 15px
+
+/*
+ * Ruled rows: the home index, the Elsewhere links, lists of places
+ */
+.rows
+    border-bottom: 1px solid $rule-color
+
+.rows__row
+    display: flex
+    align-items: baseline
+    justify-content: space-between
+    gap: 27px
+    padding: 16px 0
+    border-top: 1px solid $rule-color
+    color: $heading-color
+
+    a
+        color: inherit
+
+// Shrinks and wraps before it will push past the page edge on a phone.
+.rows__note
+    flex: 0 1 auto
+    min-width: 0
+    font-size: 15px
+    color: $text-color
+    text-align: right
+
+a.rows__row
+    @include row-slide
+
+    &:hover,
+    &:focus
+        color: $link-hover-color
+
+.rows--index .rows__row
+    padding: 36px 0
+
+.rows__title
+    @include display-face(500)
+    font-size: 30px
+    line-height: 36px
+    letter-spacing: -.025em
+
+.rows--links .rows__row
+    padding: 22px 0
+
+.rows__group + .rows__group
+    padding-top: 54px
+
+.rows__group-name
+    padding-bottom: 18px
+    font-size: 15px
+
+/*
+ * Segmented control: instrument parameters, filters, map and unit switches
+ */
+.seg
+    display: flex
+    flex-wrap: wrap
+    gap: 1px
+    border: 1px solid $rule-color
+    background-color: $rule-color
+
+    // flex: 1 0 auto so every wrapped line fills its row; otherwise the
+    // separator colour shows through as a bare block after the last button.
+    button,
+    a
+        flex: 1 0 auto
+        margin: 0
+        padding: 9px 15px
+        border: 0
+        border-radius: 0
+        background-color: $background-color
+        color: $text-color
+        font-family: $mono-font
+        font-size: 13px
+        line-height: 18px
+        text-align: center
+        cursor: pointer
+        -webkit-appearance: none
+        appearance: none
+
+        &:hover
+            background-color: $plane-color
+
+        &.is-active,
+        &[aria-pressed="true"],
+        &[aria-expanded="true"]
+            background-color: $heading-color
+            color: $background-color
+
+.seg--inline
+    display: inline-flex
+
+    button,
+    a
+        flex: 0 0 auto
+
+.seg__label
+    display: block
+    padding-bottom: 9px
+
+/*
+ * Filters, folded away under a single line so the page stays quiet until
+ * someone asks for them.
+ */
+.filters
+    margin-top: 45px
+
+    > summary
+        display: flex
+        flex-wrap: wrap
+        gap: 9px 27px
+        align-items: baseline
+        list-style: none
+        font-size: 15px
+        cursor: pointer
+
+        &::-webkit-details-marker
+            display: none
+
+        &::before
+            content: "+"
+            width: 9px
+            font-family: $mono-font
+            color: $heading-color
+
+    &[open] > summary::before
+        content: "\2212"
+
+.filters__title
+    color: $heading-color
+
+.filters__body
+    display: grid
+    grid-template-columns: repeat(auto-fit, minmax(198px, 1fr))
+    gap: 27px
+    margin-top: 18px
+    padding: 27px 0
+    border-top: 1px solid $rule-color
+    border-bottom: 1px solid $rule-color
+
+.filters__wide
+    grid-column: 1 / -1
+
+.filters__actions
+    display: flex
+    flex-wrap: wrap
+    gap: 9px 27px
+    align-items: center
+    justify-content: space-between
+    font-size: 15px
+
+    button
+        padding: 0
+        border: 0
+        background: none
+        color: $link-color
+        cursor: pointer
+
+        &:hover,
+        &:focus
+            color: $link-hover-color
+
+    label
+        display: inline-flex
+        gap: 9px
+        align-items: center
+        cursor: pointer
+
+.field
+    display: block
+    width: 100%
+    padding: 9px 0
+    border: 0
+    border-bottom: 1px solid $rule-color
+    border-radius: 0
+    background-color: transparent
+    font-size: 15px
+    line-height: 26px
+
+    &:focus
+        outline: 0
+        border-bottom-color: $heading-color
+
+    &::placeholder
+        color: $text-color
+        opacity: .7
+
+select.field
+    cursor: pointer
+
+input[type="checkbox"],
+input[type="range"]
+    accent-color: $heading-color
+
+input[type="range"]
+    width: 100%
+    margin: 9px 0 0
+
+/*
+ * The chip bar for topic and category filters on the list pages
+ */
+.filter-bar
+    display: flex
+    flex-wrap: wrap
+    gap: 18px 27px
+    align-items: center
+    margin-top: 45px
+    font-size: 15px
+
+.entry .lede
+    margin-top: 34px
+
+.entry__talks
+    padding-top: 72px
+
+    ul
+        margin: 18px 0 0
+        padding: 0
+        list-style: none
+        color: $heading-color
+        line-height: 32px
+
+.blog-feed
+    margin: 90px 0 0
+
+.filters__actions--end
+    justify-content: flex-end

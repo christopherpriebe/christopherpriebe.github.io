@@ -2,49 +2,13 @@
 layout: base
 ---
 
-<div class="container">
-    {% include page_header.liquid %}
+{% include page_title.liquid %}
 
-    <div class="row">
-        <div class="col-xs-12">
-            <div id="pubs-chart-container">
-                <div id="pubs-dots" class="dots">
-                    <div id="pubs-axis" class="dots__axis"></div>
-                </div>
-                <div id="pubs-legend"></div>
-            </div>
-            <div id="pubs-tooltip"></div>
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-xs-12">
-            <div class="publications">
-                {% capture conference_count %}{% bibliography_count --query @inproceedings %}{% endcapture %}
-                {% capture journal_count %}{% bibliography_count --query @article %}{% endcapture %}
-                {% capture preprint_count %}{% bibliography_count --query @misc %}{% endcapture %}
-
-                {% if conference_count != "0" %}
-                    <h2 class="section-head">Conference Papers</h2>
-                    <div id="conference-papers">
-                        {% bibliography --query @inproceedings %}
-                    </div>
-                {% endif %}
-
-                {% if journal_count != "0" %}
-                    <h2 class="section-head">Journal Papers</h2>
-                    <div id="journal-papers">
-                        {% bibliography --query @article %}
-                    </div>
-                {% endif %}
-
-                {% if preprint_count != "0" %}
-                    <h2 class="section-head">Preprints</h2>
-                    <div id="preprints">
-                        {% bibliography --query @misc %}
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
+{%- comment -%}
+Every paper in one run, newest first, whatever its type. The meta line above
+each title says whether it is a conference paper, a journal article, or a
+preprint; see _layouts/bib.liquid.
+{%- endcomment -%}
+<div class="page-body">
+    {% bibliography %}
 </div>

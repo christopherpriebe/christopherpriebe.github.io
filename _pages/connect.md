@@ -1,10 +1,5 @@
 ---
-layout: connect 
-title: Connect
+layout: connect
+title: Elsewhere
 permalink: /connect/
-nav: true
-nav_order: 6
 ---
-
-The best way to reach me is via email at christophermpriebe (at) gmail (dot) com.
-You can also find me on various social media platforms.

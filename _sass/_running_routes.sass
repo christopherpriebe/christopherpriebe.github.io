@@ -1,23 +1,18 @@
 /*
  * Running & hiking routes
  *
- * Reuses the F&B map vocabulary (.map-sidebar-column, .map-sidebar-filters,
- * .fnb-filter-group) so the two map pages read as the same page type. Line
- * colours live here rather than in JS so the skin stays the single source of
- * truth: Leaflet writes `stroke` as a presentation attribute, which the
+ * Line colours live here rather than in JS so the skin stays the single source
+ * of truth: Leaflet writes `stroke` as a presentation attribute, which the
  * stylesheet below overrides.
  */
-
-.route-map
-    border: 1px solid $page-border-color
 
 .route-line
     fill: none
     stroke: $route-run-color
     stroke-width: 3
-    stroke-opacity: .85
-    stroke-linecap: round
-    stroke-linejoin: round
+    stroke-opacity: .9
+    stroke-linecap: square
+    stroke-linejoin: miter
     transition: stroke-opacity .16s ease
 
 .route-line--hike
@@ -29,228 +24,59 @@
     stroke-opacity: 1
 
 .route-line--muted
-    stroke-opacity: .3
+    stroke-opacity: .25
 
+// Square, like every other mark on the site. Open at the start, filled at
+// the finish.
 .route-endpoint
     display: block
     width: 11px
     height: 11px
-    border-radius: 50%
     border: 2px solid $route-run-color
     background-color: $background-color
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .3)
 
 .route-endpoint--finish
     background-color: $route-run-color
 
-/*
- * Map overlays: basemap switcher and legend
- */
-.map-overlay
-    position: absolute
-    z-index: 500
-    background-color: $background-color
-    border: 1px solid $page-border-color
-    border-radius: 4px
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .15)
-
-.map-basemap-toggle
-    top: 10px
-    right: 10px
-    display: flex
-    overflow: hidden
-
-    button
-        padding: 5px 11px
-        border: 0
-        border-right: 1px solid $page-border-color
-        background-color: $background-color
-        color: $page-muted-color
-        font-size: 11px
-        font-weight: 700
-        letter-spacing: .06em
-        text-transform: uppercase
-        cursor: pointer
-
-        &:last-child
-            border-right: 0
-
-        &:hover
-            color: $navbar-link-hover-color
-
-        &.is-active
-            background-color: $navbar-title-color
-            color: $background-color
-
-.route-legend
-    bottom: 22px
-    left: 10px
-    padding: 8px 11px
-    font-size: 12px
-    color: $page-muted-color
-
-.route-legend__row
-    display: flex
-    align-items: center
-    gap: 8px
-
-    + .route-legend__row
-        margin-top: 4px
-
 .route-legend__line
     display: inline-block
-    width: 26px
+    width: 27px
+    margin-right: 9px
     border-top: 3px solid $route-run-color
+    vertical-align: middle
 
 .route-legend__line--hike
     border-top-style: dashed
     border-top-color: $route-hike-color
 
-.route-list-empty
-    display: none
-    padding: 18px
-    text-align: center
-    color: $page-muted-color
-    font-size: 13px
-
-.route-item
-    position: relative
-    padding: 12px 14px
-
-    &.is-active
-        background-color: $route-active-background-color
-        box-shadow: inset 3px 0 0 $navbar-title-color
-
-.route-item__row
-    display: flex
-    align-items: baseline
-    justify-content: space-between
-    gap: 10px
-
-.route-item__name
+.route-item__stats
     font-size: 15px
-    font-weight: 700
-    line-height: 1.3
 
-.route-item__type
-    flex: 0 0 auto
-    padding: 2px 7px
-    border-radius: 3px
-    background-color: $projects-panel-head-color
-    color: $page-muted-color
-    font-size: 10px
-    font-weight: 700
-    letter-spacing: .08em
-    text-transform: uppercase
-
-.route-item__type--run
-    background-color: $route-run-tint-color
-    color: $route-run-color
-
-.route-item__meta
-    display: flex
-    flex-wrap: wrap
-    gap: 12px
-    margin-top: 5px
-    font-size: 12px
-    color: $page-muted-color
-
-    b
-        color: $text-color
-        font-weight: 700
-
-.route-item__where
-    margin-top: 3px
-    font-size: 12px
-    color: $page-muted-color
-
-.route-item__notes
-    display: none
-    margin-top: 8px
-    padding-top: 8px
-    border-top: 1px dashed $page-border-color
-    font-size: 13px
-    line-height: 1.5
-    color: $page-muted-color
-
-.route-item__note-text
-    margin: 0
-
-/*
- * Every outing on a route, newest first. Only rendered once there are two,
- * since a single time already shows in the row above.
- */
 .route-efforts
     width: 100%
-    margin-top: 10px
+    max-width: $measure
+    margin-top: 18px
     border-collapse: collapse
-    font-size: 12px
+    font-size: 15px
+    line-height: 26px
 
     td
-        padding: 4px 0
-        border-top: 1px solid $page-border-color
+        padding: 9px 18px 9px 0
+        border-top: 1px solid $rule-color
         vertical-align: baseline
+        white-space: nowrap
 
-    tr:first-child td
-        border-top: 0
-
-.route-efforts__date
-    color: $page-muted-color
-    white-space: nowrap
+    tr:last-child td
+        border-bottom: 1px solid $rule-color
 
 .route-efforts__time
-    text-align: right
-    font-weight: 700
-    color: $text-color
-    white-space: nowrap
+    color: $heading-color
+    font-variant-numeric: tabular-nums
 
 .route-efforts__pace
-    text-align: right
-    color: $page-muted-color
-    white-space: nowrap
-    padding-left: 12px
+    font-variant-numeric: tabular-nums
 
-/* The fastest outing on the route. */
-.route-efforts tr.is-best .route-efforts__time
-    color: $navbar-title-color
-
-    &::after
-        content: " ★"
-        font-size: 9px
-        vertical-align: 1px
-
-.route-item.is-active .route-item__notes
-    display: block
-
-.route-feature
-    border-left: 3px solid $navbar-title-color
-
-    .panel-body
-        padding: 18px 20px
-
-.route-feature__badge
-    display: inline-block
-    margin-bottom: 8px
-    padding: 3px 9px
-    border-radius: 3px
-    background-color: $route-run-tint-color
-    color: $navbar-title-color
-    font-size: 11px
-    font-weight: 700
-    letter-spacing: .08em
-    text-transform: uppercase
-
-.route-feature__title
-    margin: 0
-    font-size: 24px
-    font-weight: 700
-    line-height: 1.2
-
-.route-feature__where
-    margin: 4px 0 0
-    color: $page-muted-color
-    font-size: 13px
-
-.route-feature__notes
-    margin: 14px 0 0
-    color: $page-muted-color
+// The fastest outing on the route.
+.route-efforts tr.is-best .route-efforts__time::after
+    content: " \2014 best"
+    color: $text-color

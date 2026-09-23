@@ -1,0 +1,63 @@
+/*
+ * Photos
+ *
+ * A photograph stays a sharp rectangle and is set on a flat plane of the
+ * deeper concrete, offset two modules down and to the right: still no
+ * border, radius or shadow. The paler concrete the maps use all but vanishes
+ * against the page at this size, so the plane takes the next step down. An optional caption
+ * is set as a label beneath.
+ *
+ * Markup, usually via _includes/photo.liquid:
+ *
+ *   <figure class="photo photo--portrait">
+ *     <span class="photo__plate"><img src="…" alt="…"></span>
+ *     <figcaption class="photo__caption">…</figcaption>
+ *   </figure>
+ *
+ * Shape modifiers crop to a fixed ratio; without one the photo keeps its own.
+ * Set --photo-focus (an object-position, e.g. "50% 20%") to choose what a
+ * crop keeps.
+ */
+.photo
+    margin: 0
+
+// Room is reserved for the offset inside the plate, so the plane never
+// reaches past the column the photo was given.
+.photo__plate
+    position: relative
+    display: block
+    padding: 0 18px 18px 0
+
+    &::before
+        content: ""
+        position: absolute
+        inset: 18px 0 0 18px
+        background-color: $CONCRETE-DEEP
+
+    img
+        position: relative
+        display: block
+        width: 100%
+        height: auto
+        object-fit: cover
+        object-position: var(--photo-focus, 50% 50%)
+        // Holds the photo's place while it loads.
+        background-color: $plane-color
+
+.photo--portrait img
+    aspect-ratio: 3 / 4
+
+.photo--landscape img
+    aspect-ratio: 3 / 2
+
+.photo--square img
+    aspect-ratio: 1
+
+// Doubled class so it outranks .prose figcaption when a photo sits in prose.
+.photo .photo__caption
+    margin: 0
+    padding-top: 9px
+    font-family: $mono-font
+    font-size: 13px
+    line-height: 21px
+    color: $text-color

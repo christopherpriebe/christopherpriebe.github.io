@@ -2,41 +2,37 @@
 Polyline map, the counterpart to map/marker_map.liquid. Each route is drawn
 from either a GPX file (parsed in the browser) or an inline `polyline` array.
 Metadata is emitted as JSON and picked up by _js/routes.js through the same
-__MAP_INIT__-style queue the marker map uses.
+__MAP_INIT__-style queue the marker map uses. The routes themselves are listed
+beneath the map as rows; selecting one opens its details and highlights its
+track.
 {%- endcomment -%}
 
 {%- assign routes = include.data -%}
 {%- assign map_id = include.id | default: "route-map" -%}
 {%- assign list_id = map_id | append: "-list" -%}
 
-<div class="row">
-  <div class="col-sm-8">
-    <div class="map-frame">
-      <div id="{{ map_id }}" class="img-rounded route-map" style="height:70vh;min-height:420px;"></div>
+<div class="map-frame">
+  <div id="{{ map_id }}" class="map-canvas map-canvas--short"></div>
 
-      {% include map/basemap_toggle.liquid %}
+  {% include map/basemap_toggle.liquid %}
 
-      <div class="map-overlay route-legend">
-        <div class="route-legend__row"><span class="route-legend__line"></span> Run</div>
-        <div class="route-legend__row"><span class="route-legend__line route-legend__line--hike"></span> Hike</div>
-      </div>
-    </div>
+  <div class="map-overlay map-legend">
+    <span><span class="route-legend__line"></span>Run</span>
+    <span><span class="route-legend__line route-legend__line--hike"></span>Hike</span>
   </div>
+</div>
 
-  <div class="col-sm-4">
-    <div class="map-sidebar-column">
-      <div class="map-sidebar-filters">
-        {% include routes/filters.liquid data=routes %}
-      </div>
+<details class="filters">
+  {% include routes/filters.liquid data=routes %}
+</details>
 
-      <div class="map-sidebar list-group map-sidebar-list" id="{{ list_id }}">
-        {%- for route in routes -%}
-          {%- include routes/list_item.liquid item=route -%}
-        {%- endfor -%}
-        <div class="route-list-empty" data-routes-empty>No route matches these filters.</div>
-      </div>
-    </div>
+<div class="map-list" id="{{ list_id }}">
+  <div class="rows">
+    {%- for route in routes -%}
+      {%- include routes/list_item.liquid item=route -%}
+    {%- endfor %}
   </div>
+  <p class="filters__empty" data-routes-empty>No route matches these filters.</p>
 </div>
 
 <script>

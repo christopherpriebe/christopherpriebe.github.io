@@ -4,12 +4,12 @@
   "version": "0.0.1",
   "private": true,
   "main": "index.js",
-"scripts": {
+  "scripts": {
     "start": "./script/server.sh",
     "build": "webpack --mode production",
     "install": "./script/install.sh",
     "dev": "webpack --mode development --watch"
-},
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/christopherpriebe/christopherpriebe.github.io.git"
@@ -22,12 +22,6 @@
   "homepage": "https://christopherpriebe.com/",
   "dependencies": {
     "leaflet": "1.9.4",
-    "@fortawesome/fontawesome-svg-core": "6.7.2",
-    "@fortawesome/free-brands-svg-icons": "6.7.2",
-    "@fortawesome/free-regular-svg-icons": "6.7.2",
-    "@fortawesome/free-solid-svg-icons": "6.7.2",
-    "bootstrap": "3.3.7",
-    "jquery": "3.7.1",
     "normalize.css": "8.0.1"
   },
   "devDependencies": {

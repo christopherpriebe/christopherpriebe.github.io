@@ -1,9 +1,3 @@
-#f_and_b_establishments
-
-#f-and-b-establishments-map
-    height: 70vh
-    min-height: 420px
-
 .journey-marker-icon
     background: transparent
     border: 0
@@ -136,248 +130,129 @@
     --pin-scale: .42
     margin: 0
 
-.fnb-tier-list .journey-pin--inline
-    --pin-scale: .74
-
 .leaflet-marker-icon:hover .journey-pin__svg,
 .leaflet-marker-icon:focus .journey-pin__svg
     transform: translateY(calc(-2px * var(--pin-scale))) scale(1.06)
 
-.fnb-tier-list
-    margin: 12px 0 0
-    padding: 0
-
-    > li
-        display: flex
-        align-items: flex-start
-        gap: 10px
-        margin-bottom: 12px
-
-    .journey-pin--inline
-        flex: 0 0 auto
-        margin: 0
-
-.map-card__meta
+/*
+ * The place list under the map, grouped by city
+ */
+.map-card__name
     display: inline-flex
+    flex-wrap: wrap
+    gap: 0 9px
     align-items: center
-    gap: 6px
 
-.map-sidebar-column
+.val-badge
+    color: $heading-color
+    font-size: 13px
+
+.fnb-stats
     display: flex
-    flex-direction: column
-    gap: 12px
+    flex-wrap: wrap
+    gap: 0 27px
 
-.map-sidebar-filters .panel
-    margin-bottom: 0
-
-.fnb-filter-group
-    display: flex
-    flex-direction: column
-    gap: 6px
-
-.fnb-filter-group__label
-    font-size: 12px
-    font-weight: 700
-    letter-spacing: .02em
-    text-transform: uppercase
-    color: #5b6673
-
+/*
+ * Filters
+ */
 .fnb-toggle-row
-    display: flex
-    flex-wrap: wrap
-    gap: 8px
-
-.fnb-toggle-row--compact
-    gap: 6px
-
-.fnb-filter-chip
-    display: inline-flex
-    align-items: center
-    justify-content: center
-    min-height: 38px
-    padding: 8px 12px
-    border: 1px solid #d8e0e8
-    border-radius: 999px
-    background: linear-gradient(180deg, $WHITE 0%, #f8fafc 100%)
-    color: #25313d
-    box-shadow: 0 1px 2px rgba(15, 23, 42, .06)
-    transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease
-
-    &:hover
-        border-color: #b7c7d8
-        background: $WHITE
-
-    &:focus
-        outline: 0
-        border-color: $navbar-link-hover-color
-        box-shadow: 0 0 0 3px rgba($BLUE, .16)
-
-    &:active
-        transform: translateY(1px)
-
-    &.is-active
-        border-color: rgba($BLUE, .54)
-        background: $route-run-tint-color
-        box-shadow: 0 0 0 3px rgba($BLUE, .10)
-
-.fnb-filter-chip--icon
-    width: 56px
-    min-height: 46px
-    padding: 10px 8px
-
     .journey-pin
-        --pin-scale: .84
+        --pin-scale: .62
         margin: 0
-
-.fnb-price-filter
-    display: inline-flex
-    align-items: center
-    gap: 6px
-    padding: 6px
-    border: 1px solid #d8e0e8
-    border-radius: 999px
-    background: linear-gradient(180deg, $WHITE 0%, #f8fafc 100%)
-    box-shadow: 0 1px 2px rgba(15, 23, 42, .06)
-
-.fnb-price-filter-row
-    display: flex
-    flex-wrap: wrap
-    align-items: center
-    gap: 8px
 
 .fnb-price-filter__square
-    width: 18px
-    height: 18px
-    border-radius: 4px
-    border: 1px solid hsl(214 24% 80%)
-    background: hsl(213 21% 88%)
-    transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease
+    min-width: 36px
 
-    &:hover
-        border-color: rgba($BLUE, .52)
-        background: $route-run-tint-color
+    &::before
+        content: ""
+        display: inline-block
+        width: 9px
+        height: 9px
+        border: 1px solid $rule-color
+        background-color: $CONCRETE-DEEP
+        vertical-align: -1px
 
-    &:focus
-        outline: 0
-        border-color: $navbar-link-hover-color
-        box-shadow: 0 0 0 3px rgba($BLUE, .16)
+    &.is-active::before
+        border-color: $background-color
+        background-color: $background-color
 
-    &:active
-        transform: translateY(1px)
+/*
+ * Popups
+ */
+.fnb-popup__head
+    color: $heading-color
 
-    &.is-active
-        border-color: #23272f
-        background: linear-gradient(180deg, #4a525e 0%, #23272f 100%)
+    strong
+        font-weight: 500
 
-.fnb-filter-chip--mode
-    min-height: 32px
-    padding: 6px 10px
-    font-size: 12px
-    font-weight: 600
-
-    &.is-active
-        border-color: #2e6da4
-        background: #337ab7
-        color: $WHITE
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .15)
-
-.fnb-filter-actions
-    display: flex
-    align-items: center
-    justify-content: space-between
-    gap: 10px
-    margin-top: 10px
+.fnb-popup .muted,
+.fnb-popup__line
+    font-size: 13px
+    line-height: 21px
 
 .fnb-meta-row
     margin-top: 4px
 
 .price-meter
-    --price-meter-fill: #4a525e
-    --price-meter-fill-strong: #23272f
-    --price-meter-empty: hsl(213 21% 88%)
-    --price-meter-empty-border: hsl(214 24% 80%)
-    --price-meter-label-color: inherit
     display: inline-flex
     align-items: center
-    gap: 8px
+    gap: 9px
 
 .price-meter__label
-    font-size: 12px
-    font-weight: 600
-    color: var(--price-meter-label-color)
+    font-size: 13px
 
 .price-meter__track
     display: inline-flex
-    align-items: center
-    gap: 4px
+    gap: 3px
 
 .price-meter__square
-    width: 10px
-    height: 10px
-    border-radius: 2px
-    border: 1px solid var(--price-meter-empty-border)
-    background: var(--price-meter-empty)
+    width: 9px
+    height: 9px
+    border: 1px solid $rule-color
+    background-color: $CONCRETE-DEEP
 
     &.is-filled
-        border-color: var(--price-meter-fill-strong)
-        background: linear-gradient(180deg, var(--price-meter-fill) 0%, var(--price-meter-fill-strong) 100%)
-
-.fnb-popup,
-.map-card__details
-    --price-meter-label-color: var(--fnb-price-color, #111)
-
-.map-sidebar-list
-    margin-bottom: 0
-    background: $WHITE
-    border: 1px solid #ddd
-    border-radius: 10px
-    overflow: hidden
-    max-height: 50vh
-    overflow-y: auto
-
-@media (min-width: 768px)
-    .map-sidebar-column
-        height: 70vh
-        min-height: 420px
-
-    .map-sidebar-list
-        flex: 1 1 auto
-        max-height: none
-        min-height: 0
-        overflow-y: auto
-
-.leaflet-popup-content
-    margin: 16px
-    max-height: 360px
-    max-width: 360px
-    overflow-y: auto
-
-.fnb-popup .fnb-header
-    position: sticky
-    top: 0
-    background: $WHITE
-    padding-bottom: 6px
-    z-index: 2
-
-.fnb-popup .panel
-    margin-bottom: 8px
-
-.fnb-panel-toggle
-    display: block
-
-.fnb-panel-toggle__chevron
-    display: inline-block
-    transition: transform .18s ease
-
-.fnb-panel-toggle[aria-expanded="true"] .fnb-panel-toggle__chevron
-    transform: rotate(180deg)
+        border-color: $heading-color
+        background-color: $heading-color
 
 .michelin-red
     color: $michelin-red-color
 
-/* The stats strip dims its <small> units; the Michelin marks keep their red. */
-.stat__num small.michelin-red
-    color: $michelin-red-color
-
 .michelin-green
     color: $michelin-green-color
+
+/*
+ * The rating-system essay
+ */
+.fnb-tier-list
+    margin: 29px 0 0
+    padding: 0
+    list-style: none
+
+    > li
+        display: flex
+        align-items: flex-start
+        gap: 18px
+
+    > li + li
+        margin-top: 18px
+
+    .journey-pin--inline
+        --pin-scale: .74
+        margin: 0
+
+// Pins differ in width by tier, so each sits centred in a fixed slot and the
+// text beside them keeps one left edge.
+.fnb-tier-list__pin
+    flex: 0 0 36px
+    text-align: center
+
+.fnb-price-mode
+    margin-top: 9px
+
+// A navy pin would vanish into the navy of a pressed button, so the
+// designation chips mark their pressed state with a frame instead.
+.fnb-toggle-row button.is-active,
+.fnb-toggle-row button[aria-pressed="true"]
+    background-color: $plane-color
+    box-shadow: inset 0 0 0 2px $heading-color

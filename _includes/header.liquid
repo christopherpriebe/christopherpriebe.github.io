@@ -1,3 +1,9 @@
-<header class="site-header">
-    {% include _header/navbar.liquid %}
-</header>
+{%- comment -%}
+Subpages carry one quiet row of links. The home page carries none: its index
+is the navigation, so there is nothing to duplicate at the top.
+{%- endcomment -%}
+{%- unless page.url == "/" -%}
+    <header>
+        {% include _header/navbar.liquid %}
+    </header>
+{%- endunless -%}

@@ -2,15 +2,28 @@
 layout: base
 ---
 
-<div class="container">
-    {% include page_header.liquid %}
+{%- comment -%}
+The text runs down the usual left column and the portrait stands to its
+right, its top level with the title. On narrow screens the portrait drops in
+between the title and the text.
+{%- endcomment -%}
+<div class="about{% if page.headshot %} about--portrait{% endif %}">
+    <div class="page-head measure about__head">
+        <h1 class="page-title">{{ page.title }}</h1>
+    </div>
 
-    <div class="row">
-        <div class="col-xs-12 col-md-8">
+    {%- if page.headshot -%}
+        {%- assign headshot_alt = page.headshot_alt | default: "Portrait of Christopher Priebe" %}
+    {% include photo.liquid src=page.headshot alt=headshot_alt caption=page.headshot_caption shape="portrait" class="about__portrait" loading="eager" %}
+    {%- endif %}
+
+    <div class="about__body">
+        <div class="prose prose--lede about-body">
             {{ content }}
         </div>
-        <div class="col-xs-12 col-md-4">
-            <img src="/assets/{{ page.headshot }}" alt="Headshot of Christopher Priebe" class="img-responsive img-rounded">
-        </div>
+
+        <p class="meta measure about-contact">
+            <a href="mailto:{{ site.email }}">{{ site.email }}</a> &middot; <a href="{{ '/cv/' | relative_url }}">CV</a>
+        </p>
     </div>
 </div>

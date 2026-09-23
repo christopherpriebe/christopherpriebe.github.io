@@ -1,192 +1,175 @@
 /*
  * Prose
  *
- * The single-column body used by blog posts. Wrap rendered Markdown in .prose
- * and everything inside it picks these up, so authors never style anything by
- * hand. Project write-ups render through single_column_page, which does not
- * wrap its content in .prose.
+ * Rendered Markdown: blog posts, project write-ups, About, Credits. Wrap the
+ * content in .prose and everything inside picks these up, so authors never
+ * style anything by hand.
  */
 
 .prose
-    max-width: 42em
-    font-size: 17px
-    line-height: 1.75
-    color: $text-color
+    max-width: $measure
 
-    > * + *
-        margin-top: 16px
+    > :first-child
+        margin-top: 0
+
+    p,
+    ul,
+    ol,
+    blockquote,
+    pre,
+    table,
+    figure
+        margin: 29px 0 0
+
+    // The opening paragraph of a page sits at lede size.
+    &.prose--lede > p:first-child
+        font-size: 21px
+        line-height: 34px
+        letter-spacing: -.01em
+        color: $heading-color
+
+    &.prose--lede > p:first-child + *
+        margin-top: 34px
 
     h2
-        margin-top: 44px
-        padding-bottom: 8px
-        border-bottom: 1px solid $page-border-color
-        font-size: 24px
-        font-weight: 700
+        @include display-face(500)
+        margin: 72px 0 0
+        font-size: 30px
+        line-height: 38px
+        letter-spacing: -.025em
 
     h3
-        margin-top: 32px
-        font-size: 19px
-        font-weight: 700
+        @include display-face(500)
+        margin: 54px 0 0
+        font-size: 21px
+        line-height: 29px
+        letter-spacing: -.015em
 
-    /* Closer to a caption than a heading. */
     h4
-        margin-top: 26px
+        margin: 45px 0 0
+        font-family: $mono-font
         font-size: 13px
-        font-weight: 700
-        letter-spacing: .08em
-        text-transform: uppercase
-        color: $page-muted-color
+        font-weight: 400
+        line-height: 21px
+        color: $text-color
 
     h2 + *,
     h3 + *,
     h4 + *
-        margin-top: 12px
+        margin-top: 18px
 
-    ul, ol
-        padding-left: 24px
+    ul,
+    ol
+        padding-left: 27px
 
     li + li
-        margin-top: 6px
+        margin-top: 9px
 
     ul li::marker
-        color: $navbar-link-hover-color
-
-    ol li::marker
-        color: $page-muted-color
+        color: $rule-color
 
     blockquote
         margin-left: 0
-        padding: 12px 20px
-        border-left: 3px solid $navbar-title-color
-        border-radius: 0 3px 3px 0
-        background-color: $route-active-background-color
-        font-size: 17px
-        line-height: 1.7
+        padding-left: 27px
+        border-left: 2px solid $heading-color
+        color: $heading-color
+
+        p
+            margin: 0
 
         p + p
-            margin-top: 12px
-
-        cite
-            display: block
-            margin-top: 8px
-            font-size: 12px
-            font-style: normal
-            letter-spacing: .08em
-            text-transform: uppercase
-            color: $navbar-title-color
+            margin-top: 18px
 
     code
-        padding: 1px 5px
-        border: 1px solid $page-border-color
-        border-radius: 3px
-        background-color: $projects-panel-head-color
-        color: $navbar-title-color
-        font-size: .86em
+        font-family: $mono-font
+        font-size: .82em
+        color: $heading-color
 
     pre
-        padding: 14px 16px
-        border: 1px solid $page-border-color
-        border-left: 3px solid $navbar-title-color
-        border-radius: 0 3px 3px 0
-        background-color: $projects-panel-head-color
-        font-size: 13px
-        line-height: 1.6
+        padding: 27px
+        background-color: $plane-color
+        font-size: 14px
+        line-height: 23px
         overflow-x: auto
 
         code
-            padding: 0
-            border: 0
-            background: none
-            color: $text-color
             font-size: inherit
 
     hr
         height: 1px
-        margin: 44px 0
+        margin: 72px 0
         border: 0
-        background-color: $page-border-color
+        background-color: $rule-color
 
     figure
-        margin: 32px 0
-
-    figure img
-        border: 1px solid $page-border-color
-        border-radius: 4px
+        margin-left: 0
+        margin-right: 0
 
     figcaption
-        margin-top: 8px
-        font-size: 12px
-        line-height: 1.6
-        color: $page-muted-color
+        margin-top: 9px
+        font-size: 15px
 
     table
         width: 100%
         border-collapse: collapse
-        font-size: 14px
+        font-size: 15px
+        line-height: 26px
 
     th
-        padding: 8px 12px
-        border-bottom: 1px solid $page-border-strong-color
+        padding: 9px 18px 9px 0
+        border-bottom: 1px solid $heading-color
         text-align: left
-        font-size: 12px
-        font-weight: 700
-        letter-spacing: .08em
-        text-transform: uppercase
-        color: $page-muted-color
+        font-family: $mono-font
+        font-size: 13px
+        font-weight: 400
 
     td
-        padding: 12px
-        border-bottom: 1px solid $page-border-color
+        padding: 13px 18px 13px 0
+        border-bottom: 1px solid $rule-color
         vertical-align: top
 
-    tbody tr:hover td
-        background-color: $projects-panel-head-color
-
-    .lede
-        font-size: 19px
-        line-height: 1.65
-
 /*
- * Article furniture: the post title, its byline metrics, and prev/next links
+ * Article furniture
  */
-.article-head
-    margin-bottom: 28px
-
-.article-head h1
-    margin: 0
-
-.page-meta
-    display: flex
-    flex-wrap: wrap
-    gap: 16px
-    margin-top: 10px
-    font-size: 12px
-    letter-spacing: .04em
-    color: $page-muted-color
-
-.page-meta span
-    display: inline-flex
-    align-items: center
-
-.page-meta span + span::before
-    content: ""
-    width: 1px
-    height: 11px
-    margin-right: 16px
-    background-color: $page-border-strong-color
+.article-meta
+    margin: 18px 0 0
 
 .page-foot-nav
     display: flex
+    flex-wrap: wrap
     justify-content: space-between
-    gap: 16px
-    margin-top: 56px
-    padding-top: 16px
-    border-top: 1px solid $page-border-color
-    font-size: 14px
-    font-weight: 600
+    gap: 18px 27px
+    max-width: $measure
+    margin-top: 90px
+    padding-top: 27px
+    border-top: 1px solid $rule-color
+    font-size: 15px
 
-.page-foot-nav a
-    color: $text-color
+/*
+ * Cited references under a project write-up
+ */
+.references
+    max-width: $measure
+    margin-top: 90px
+    font-size: 15px
+    line-height: 26px
+    // DOIs and URLs print unbroken and would otherwise push past a phone.
+    overflow-wrap: anywhere
 
-    &:hover
-        color: $navbar-title-color
+    .label
+        display: block
+        padding-bottom: 18px
+
+    h2
+        display: none
+
+    ol
+        margin: 0
+        padding-left: 27px
+
+    li + li
+        margin-top: 9px
+
+    li::marker
+        font-family: $mono-font
+        font-size: 13px

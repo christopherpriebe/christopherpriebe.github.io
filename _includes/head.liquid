@@ -1,6 +1,10 @@
 <head>
     {% include _head/metadata.liquid %}
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100,400..700&family=IBM+Plex+Mono:wght@400&family=Public+Sans:wght@400;500&display=swap">
+
     <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}">
 
     <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
@@ -8,18 +12,16 @@
     <link rel="alternate" type="application/rss+xml" title="{{ site.title }} · Writing" href="{{ '/feed.xml' | relative_url }}">
 
     <title>
-        {% if site.title and page.title %}
-            {{ site.title }} - {{ page.title }}
-        
-        {% elsif page.title %}
-            {{ page.title }}
-        
-        {% elsif site.title %}
+        {%- if page.url == "/" -%}
             {{ site.title }}
-        
-        {% else %}
+        {%- elsif site.title and page.title -%}
+            {{ site.title }} - {{ page.title }}
+        {%- elsif page.title -%}
+            {{ page.title }}
+        {%- elsif site.title -%}
+            {{ site.title }}
+        {%- else -%}
             ERROR: cannot resolve page title
-        
-        {% endif %}
+        {%- endif -%}
     </title>
 </head>

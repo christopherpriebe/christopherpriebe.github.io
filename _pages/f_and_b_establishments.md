@@ -1,6 +1,8 @@
 ---
 layout: f_and_b_establishments
-title: Food & Beverage Establishments
+title: Food & drink
+nav: true
+nav_order: 6
+nav_title: Food
 permalink: /f_and_b_establishments/
-nav: false
 ---

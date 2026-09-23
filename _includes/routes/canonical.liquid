@@ -10,21 +10,24 @@ own `gpx:` and overrides the route's. Only one track is ever drawn per route
 (see route_primary_gpx) so re-runs of the same course do not stack up.
 
 Everything below is metric and seconds; miles, feet, and minutes are input and
-display forms only.
+display forms only. Elevation and pace keep a decimal place rather than being
+rounded here, so that _js/units.js converting them to feet or minutes per mile
+lands on the figure the author wrote down, not one a rounding step away.
 
 Sets, for the caller:
   route_km route_m               distance and elevation gain
   route_sec route_has_seconds    the best recorded time, and its precision
-  route_sec_per_km route_pace    pace derived from that time
+  route_sec_per_km route_pace    pace derived from that time: exact seconds
+                                 per km, and the rounded m:ss string
   route_effort_count             how many times it has been run
   route_latest_date              most recent outing
   route_primary_gpx              the single track to draw, if any
 
 Jekyll leaks every `assign` in an include back to the caller, so these working
 names are also left behind and should be treated as clobbered: route_efforts,
-newest_effort, newest_gpx, primary_gpx, pace_minutes, pace_seconds, and — via
-routes/parse_time.liquid — parsed_sec, parsed_precise, clock, clock_h, clock_m,
-clock_s.
+newest_effort, newest_gpx, primary_gpx, pace_whole, pace_minutes, pace_seconds,
+and — via routes/parse_time.liquid — parsed_sec, parsed_precise, clock,
+clock_h, clock_m, clock_s.
 {%- endcomment -%}
 
 {%- if include.route.distance_mi -%}
@@ -34,9 +37,9 @@ clock_s.
 {%- endif -%}
 
 {%- if include.route.elevation_ft -%}
-  {%- assign route_m = include.route.elevation_ft | times: 0.3048 | round -%}
+  {%- assign route_m = include.route.elevation_ft | times: 0.3048 | round: 1 -%}
 {%- else -%}
-  {%- assign route_m = include.route.elevation_m | default: 0 | round -%}
+  {%- assign route_m = include.route.elevation_m | default: 0 | round: 1 -%}
 {%- endif -%}
 
 {%- assign route_sec = 0 -%}
@@ -97,8 +100,9 @@ clock_s.
   written as a whole number would floor the pace by up to a second per km.
   {%- endcomment -%}
   {%- assign route_km_exact = route_km | times: 1.0 -%}
-  {%- assign route_sec_per_km = route_sec | divided_by: route_km_exact | round -%}
-  {%- assign pace_minutes = route_sec_per_km | divided_by: 60 -%}
-  {%- assign pace_seconds = route_sec_per_km | modulo: 60 | prepend: "0" | slice: -2, 2 -%}
+  {%- assign route_sec_per_km = route_sec | divided_by: route_km_exact | round: 2 -%}
+  {%- assign pace_whole = route_sec_per_km | round -%}
+  {%- assign pace_minutes = pace_whole | divided_by: 60 -%}
+  {%- assign pace_seconds = pace_whole | modulo: 60 | prepend: "0" | slice: -2, 2 -%}
   {%- assign route_pace = pace_minutes | append: ":" | append: pace_seconds -%}
 {%- endif -%}

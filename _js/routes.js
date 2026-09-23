@@ -70,13 +70,33 @@ export function initRouteMap(config) {
     });
   }
 
-  function selectRoute(slug) {
+  function setOpen(row, open) {
+    row.classList.toggle("is-active", open);
+    const toggle = row.querySelector(".route-item__toggle");
+    const details = row.querySelector(".row-details");
+    if (toggle) toggle.setAttribute("aria-expanded", String(open));
+    if (details) details.hidden = !open;
+  }
+
+  // Scrolls the list, not the page, to bring a row into view.
+  function revealInList(row) {
+    if (!listElement) return;
+    const top = row.getBoundingClientRect().top - listElement.getBoundingClientRect().top
+      + listElement.scrollTop;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    listElement.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
+  }
+
+  function selectRoute(slug, fromMap = false) {
     activeSlug = activeSlug === slug ? null : slug;
 
     rows.forEach((row, rowSlug) => {
-      row.classList.toggle("is-active", rowSlug === activeSlug);
+      setOpen(row, rowSlug === activeSlug);
     });
     applyLineState();
+
+    const activeRow = rows.get(activeSlug);
+    if (fromMap && activeRow) revealInList(activeRow);
 
     const track = tracks.get(activeSlug);
     if (track) {
@@ -103,7 +123,7 @@ export function initRouteMap(config) {
       interactive: true,
     });
     line.bindTooltip(entry.name, { sticky: true, direction: "top" });
-    line.on("click", () => selectRoute(entry.slug));
+    line.on("click", () => selectRoute(entry.slug, true));
     line.addTo(map);
 
     const markers = [
@@ -143,10 +163,8 @@ export function initRouteMap(config) {
   });
 
   rows.forEach((row, slug) => {
-    row.addEventListener("click", (event) => {
-      event.preventDefault();
-      selectRoute(slug);
-    });
+    const toggle = row.querySelector(".route-item__toggle");
+    if (toggle) toggle.addEventListener("click", () => selectRoute(slug));
   });
 
   const searchInput = document.getElementById("routes-filter-q");
@@ -216,7 +234,7 @@ export function initRouteMap(config) {
     if (activeSlug) {
       const activeRow = rows.get(activeSlug);
       if (activeRow && activeRow.style.display === "none") {
-        activeRow.classList.remove("is-active");
+        setOpen(activeRow, false);
         activeSlug = null;
         applyLineState();
       }

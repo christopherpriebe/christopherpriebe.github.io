@@ -4,14 +4,11 @@
 title: Christopher Priebe
 email: christophermpriebe@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
-  Write an awesome description for your new site here. You can edit this
-  line in _config.yml. It will appear in your document head meta (for
-  Google search results) and in your feed.xml site description.
+  Christopher Priebe is a PhD student at UC San Diego working at the
+  interplay of compilers, machine learning, and systems.
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "https://christopherpriebe.com" # the base hostname & protocol for your site
 
-footer_text: >
-  Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>. For additional credits, see <a href="/credits/">this</a>.
 display_last_updated_date: true
 
 # ==================================================
@@ -30,15 +27,11 @@ profile:
 # Resume
 # ==================================================
 
-resume_home_icon: true
-resume_avatar: true
 resume_title: Graduate Student Researcher
-resume_social_links: true
 resume_executive_summary: >
     I am a Ph.D. student in the Department of Computer Science and Engineering at the University of California San Diego. My research is an interplay of compilers, machine learning, and systems.
 resume_section_experience: true
 resume_section_education: true
-resume_section_projects: true
 
 # ==================================================
 # Front Matter Defaults
@@ -83,8 +76,9 @@ scholar:
   bibtex_filters: [latex, smallcaps, superscript]
 
   query: "@*"
-  group_by: year
-  group_order: descending
+  group_by: none
+  sort_by: year, month
+  order: descending
 
   bibliography_template: bib
 

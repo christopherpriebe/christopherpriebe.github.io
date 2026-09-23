@@ -2,5 +2,6 @@
 layout: running_routes
 title: Routes
 permalink: /running-routes/
-nav: false
+nav: true
+nav_order: 7
 ---

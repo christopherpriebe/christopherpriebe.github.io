@@ -30,8 +30,7 @@
 #   dates         List of dates the route was run, for a single-time entry.
 #                 The count becomes "N logs". Prefer `efforts` (below) once a
 #                 route has more than one time worth keeping.
-#   notes         Free text. Rendered under the route in the sidebar.
-#   featured      Optional. Pulls the route out into the highlight card.
+#   notes         Free text. Rendered under the route's stats.
 #   gpx           Path to the track. Parsed in the browser.
 #   polyline      Optional alternative to `gpx`: an inline [[lat, lng], ...]
 #                 array, for a route with no GPX export.
@@ -47,8 +46,8 @@
 #       - { date: 2025-03-12, time: "1:47:00" }
 #       - { date: 2025-06-01, time: "1:42:30" }
 #
-# The sidebar shows the fastest time, and selecting the route lists every
-# outing with its own pace, best marked.
+# The entry shows the fastest time, followed by a table of every outing with
+# its own pace, best marked.
 #
 # A race whose course moves between years puts the track on the effort, so one
 # entry covers the whole event instead of one entry per running of it:
@@ -64,7 +63,7 @@
 # `primary: true`.
 #
 # Somewhere the track carries no information — a time trial round the same
-# oval — just leave the GPX off entirely. The entry stays in the sidebar,
+# oval — just leave the GPX off entirely. The entry stays in the list,
 # labelled "not mapped", with its distance and its times.
 #
 #   - name: 5k time trial
@@ -98,7 +97,6 @@
     I struggled or failed to complete many of my prescribed workouts, including a massive effort to complete 16 miles at marathon pace, proceeded immediately by an utter failure to complete even close to the scheduled 18 miles at marathon pace the following week.
     Despite this, the taper worked wonders, and the race itself was fantastic.
     I ran a negative split, starting at ~6:50 min/mi and finishing at ~6:30 min/mi, causing me to feel great through 22 miles and easily hold on for the last few to finish strong.
-  featured: true
   gpx: /assets/gpx/cim-2025.gpx
 
 - name: OneAmerica Mini Marathon 2022

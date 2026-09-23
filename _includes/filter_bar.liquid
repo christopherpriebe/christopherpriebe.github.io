@@ -1,5 +1,5 @@
 {%- comment -%}
-Chip filter bar, shared by the projects grid and the blog archive.
+Chip filter bar, shared by the projects list and the blog archive.
 
   scope   value for data-filter-scope; _js/filters.js keys off it
   label   the small heading to the left of the chips
@@ -7,15 +7,15 @@ Chip filter bar, shared by the projects grid and the blog archive.
   count   how many items are in scope, shown as "N of M <noun>"
   noun    plural noun for the count
 {%- endcomment -%}
-<div class="filters" data-filter-scope="{{ include.scope }}">
-    <span class="filters__label">{{ include.label }}</span>
-    <div class="chip-row" data-filter-chips>
+<div class="filter-bar" data-filter-scope="{{ include.scope }}">
+    <span class="label">{{ include.label }}</span>
+    <div class="seg seg--inline" data-filter-chips>
         <button type="button" class="chip-btn is-active" data-filter-value="" aria-pressed="true">All</button>
         {%- for value in include.values -%}
             <button type="button" class="chip-btn" data-filter-value="{{ value | downcase | escape }}" aria-pressed="false">{{ value | escape }}</button>
         {%- endfor -%}
     </div>
-    <span class="filters__count">
+    <span>
         <span data-filter-count>{{ include.count }}</span> of {{ include.count }} {{ include.noun }}
     </span>
 </div>

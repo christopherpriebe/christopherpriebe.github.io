@@ -1,165 +1,153 @@
-html
-    font-size: $base-font-size
-
-body
-    background-color: $background-color
-    color: $text-color
-    margin-top: $base-top-padding
-    margin-left: $base-side-padding
-    margin-right: $base-side-padding
-
-.row-no-gutters
-    margin-left: 0
-    margin-right: 0
-
-    > [class*="col-"]
-        padding-left: 0
-        padding-right: 0
-
-$screen-sm-min: 768px
-$screen-md-min: 992px
-$screen-lg-min: 1200px
-
-/*
- * Card treatment shared by the projects grid, the /other/ cards and the blog's
- * latest-post panel. All three take the accent bar and the hover lift; the
- * projects grid and the /other/ cards also share the surface, while .latest
- * sets its own (tinted background, stronger border).
- */
-@mixin card-surface($padding: 22px)
-    position: relative
-    display: flex
-    flex-direction: column
-    flex: 1 1 auto
-    padding: $padding
-    border: 1px solid $page-border-color
-    border-radius: 6px
-    background-color: $background-color
-    overflow: hidden
-    transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease
-
-@mixin card-accent-bar
-    content: ""
-    position: absolute
-    top: 0
-    right: 0
-    left: 0
-    height: 2px
-    background: linear-gradient(90deg, $navbar-title-color, $navbar-link-hover-color)
-
-/* Cards and projects wipe the bar in on hover; the blog panel shows it always. */
-@mixin card-accent-wipe
-    transform: scaleX(0)
-    transform-origin: left
-    transition: transform .24s ease
-
-@mixin card-hover-lift
-    box-shadow: 0 2px 6px rgba(0, 0, 0, .08), 0 8px 24px rgba(0, 0, 0, .06)
-    transform: translateY(-2px)
-
-@mixin media_max($screen_width)
-    @media (max-width: $screen_width)
-        @content
-
-@mixin media_min($screen_width)
-    @media (min-width: $screen_width)
+@mixin media_mobile
+    @media (max-width: $screen-sm)
         @content
 
 @mixin media_larger_than_mobile
-    @media (min-width: $screen-sm-min)
+    @media (min-width: $screen-sm + 1)
         @content
 
-@mixin media_mobile
-    @media (max-width: $screen-sm-min)
-        @content
+// The one motion on the site: a ruled row slides 18px on hover.
+@mixin row-slide
+    transition: padding-left .3s cubic-bezier(.2, .7, .2, 1)
+
+    &:hover,
+    &:focus-visible
+        padding-left: 18px
+
+    @media (prefers-reduced-motion: reduce)
+        transition: none
+
+@mixin display-face($weight: 500)
+    font-family: $display-font
+    font-variation-settings: "wdth" 100
+    font-weight: $weight
+
+*,
+*::before,
+*::after
+    box-sizing: border-box
+
+html,
+body
+    margin: 0
+    padding: 0
+    background-color: $background-color
+
+body
+    color: $text-color
+    font-family: $body-font
+    font-size: 17px
+    line-height: 29px
+    font-weight: 400
+    -webkit-font-smoothing: antialiased
+    text-rendering: optimizeLegibility
+
+p
+    text-wrap: pretty
+
+a
+    color: $link-color
+    text-decoration: none
+
+    &:hover,
+    &:focus
+        color: $link-hover-color
+
+// The design sets links in the text colour. Inside running copy that leaves a
+// link with nothing to mark it, so a hairline sits under it there; lines
+// that are already read as links (.meta, rows, the nav) carry none.
+p a,
+li a
+    text-decoration: underline
+    text-decoration-color: $rule-color
+    text-decoration-thickness: 1px
+    text-underline-offset: .22em
+
+    &:hover,
+    &:focus
+        text-decoration-color: currentColor
+
+::selection
+    background-color: $heading-color
+    color: $background-color
+
+:focus-visible
+    outline: 2px solid $heading-color
+    outline-offset: 2px
+
+img
+    max-width: 100%
+    height: auto
+
+button,
+input,
+select
+    font: inherit
+    color: inherit
+
+h1, h2, h3, h4
+    margin: 0
+    color: $heading-color
 
 /*
- * Bootstrap 3 responsive text alignment utility
- * http://ohryan.ca/2014/08/14/set-responsive-text-alignment-bootstrap-3/
+ * Type
  */
-.text-center-xs
-    text-align: center
-.text-left-xs
-    text-align: left
-.text-right-xs
-    text-align: right
-.text-justify-xs
-    text-align: justify
+.display
+    @include display-face(600)
+    font-size: clamp(46px, 7.5vw, 85px)
+    line-height: .94
+    letter-spacing: -.035em
 
-@media screen and (min-width: $screen-sm-min)
-    .text-center-sm
-        text-align: center
-    .text-left-sm
-        text-align: left
-    .text-right-sm
-        text-align: right
-    .text-justify-sm
-        text-align: justify
+.page-title
+    @include display-face(600)
+    font-size: clamp(38px, 5.5vw, 60px)
+    line-height: 1
+    letter-spacing: -.03em
 
-@media screen and (min-width: $screen-md-min)
-    .text-center-md
-        text-align: center
-    .text-left-md
-        text-align: left
-    .text-right-md
-        text-align: right
-    .text-justify-md
-        text-align: justify
+.title
+    @include display-face(500)
+    font-size: 30px
+    line-height: 38px
+    letter-spacing: -.025em
 
-@media screen and (min-width: $screen-lg-min)
-    .text-center-lg
-        text-align: center
-    .text-left-lg
-        text-align: left
-    .text-right-lg
-        text-align: right
-    .text-justify-lg
-        text-align: justify
+    a
+        color: inherit
 
+        &:hover,
+        &:focus
+            color: $link-hover-color
 
-/*
- * Bootstrap 3 full column height utility w/ flexbox
- * https://medium.com/wdstack/bootstrap-equal-height-columns-d07bc934eb27
- */
-.row-xs-height-columns
-    display: flex
-    flex-wrap: wrap
-    
-    > [class*='col-']
-        display: flex
-        flex-direction: column
+.lede
+    font-size: 21px
+    line-height: 34px
+    letter-spacing: -.01em
 
-@media screen and (min-width: $screen-sm-min)
-    .row-sm-height-columns
-        display: flex
-        flex-wrap: wrap
-        
-        > [class*='col-']
-            display: flex
-            flex-direction: column
+.lede--ink
+    color: $heading-color
 
-@media screen and (min-width: $screen-md-min)
-    .row-md-height-columns
-        display: flex
-        flex-wrap: wrap
-        
-        > [class*='col-']
-            display: flex
-            flex-direction: column
+.meta
+    font-size: 15px
 
-@media screen and (min-width: $screen-lg-min)
-    .row-lg-height-columns
-        display: flex
-        flex-wrap: wrap
-        
-        > [class*='col-']
-            display: flex
-            flex-direction: column
+    a
+        text-decoration: none
 
-.hover-shadow-panel
-    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2)
-    transition: 0.3s
+.label
+    font-family: $mono-font
+    font-size: 13px
+    line-height: 21px
+    color: $text-color
 
-    &:hover
-        box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2)
-        transform: translateY(-10px)
+.self
+    color: $heading-color
+    font-weight: 500
+
+.visually-hidden
+    position: absolute
+    width: 1px
+    height: 1px
+    overflow: hidden
+    clip: rect(0 0 0 0)
+    white-space: nowrap
+
+.is-hidden
+    display: none !important

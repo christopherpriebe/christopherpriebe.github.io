@@ -1,3 +1,14 @@
+{%- comment -%}
+A marker map, with an optional filter panel and list beneath it.
+
+  id                the map element's id
+  data              the items; each needs `coordinates: [lat, lng]`
+  list_include      renders one list item; enables the list
+  group_by          optional field to group the list by, largest group first
+  filters_include   renders the filter panel's <summary> and body
+  popup_template    / tooltip_template: templates filled in by _js/map.js
+  zoom, center      initial view; without a center the map fits its markers
+{%- endcomment -%}
 {%- assign items = include.data -%}
 {%- assign map_id = include.id | default: "map" -%}
 
@@ -6,11 +17,6 @@
   {%- assign list_id = include.list_id -%}
 {%- elsif include.list_include -%}
   {%- assign list_id = map_id | append: "-list" -%}
-{%- endif -%}
-
-{%- assign has_sidebar = false -%}
-{%- if include.filters_include or include.list_include -%}
-  {%- assign has_sidebar = true -%}
 {%- endif -%}
 
 {% if include.popup_template %}
@@ -25,45 +31,50 @@
   </template>
 {% endif %}
 
-<div class="row">
-  <div class="{% if has_sidebar %}col-sm-8{% else %}col-xs-12{% endif %}">
-    <div class="map-frame">
-      <!-- IMPORTANT: give the map a height -->
-      <div id="{{ map_id }}" class="img-rounded" style="height:70vh;min-height:420px;"></div>
-      {% include map/basemap_toggle.liquid %}
-    </div>
-
-    {% if include.legend %}
-      <hr>
-      {{ include.legend }}
-    {% endif %}
-  </div>
-
-  {% if has_sidebar %}
-    <div class="col-sm-4">
-      <div class="map-sidebar-column">
-        {% if include.filters_include %}
-          <div class="map-sidebar-filters">
-            {% include {{ include.filters_include }} %}
-          </div>
-        {% endif %}
-
-        {% if include.list_include %}
-          <div class="map-sidebar list-group map-sidebar-list"
-               id="{{ list_id }}">
-            <div class="map-list-head">
-              <span>{{ include.list_label | default: "Places" }}</span>
-              <span data-map-count>{{ items | size }}</span>
-            </div>
-            {%- for item in items -%}
-              {%- include {{ include.list_include }} item=item -%}
-            {%- endfor -%}
-          </div>
-        {% endif %}
-      </div>
-    </div>
-  {% endif %}
+<div class="map-frame">
+  <div id="{{ map_id }}" class="map-canvas"></div>
+  {% include map/basemap_toggle.liquid %}
 </div>
+
+{% if include.filters_include %}
+  <details class="filters">
+    {% include {{ include.filters_include }} %}
+  </details>
+{% endif %}
+
+{% if include.list_include %}
+  <div class="map-list" id="{{ list_id }}">
+    {%- if include.group_by -%}
+      {%- comment -%}
+      Largest group first; groups of the same size stay in alphabetical order,
+      which a plain sort on size would not keep.
+      {%- endcomment -%}
+      {%- assign groups = items | sort: include.group_by | group_by: include.group_by -%}
+      {%- assign largest = groups | map: "size" | sort | last -%}
+      {%- for group_size in (1..largest) reversed -%}
+      {%- for group in groups -%}
+      {%- if group.size != group_size -%}{%- continue -%}{%- endif %}
+      <div class="rows__group" data-map-group>
+        <p class="rows__group-name">{{ group.name | default: "Elsewhere" | escape }}</p>
+        <div class="rows">
+          {%- assign group_items = group.items | sort: "name" -%}
+          {%- for item in group_items -%}
+            {%- include {{ include.list_include }} item=item -%}
+          {%- endfor %}
+        </div>
+      </div>
+      {%- endfor -%}
+      {%- endfor %}
+    {%- else %}
+      <div class="rows">
+        {%- for item in items -%}
+          {%- include {{ include.list_include }} item=item -%}
+        {%- endfor %}
+      </div>
+    {%- endif %}
+    <p class="filters__empty" data-map-empty>Nothing matches these filters.</p>
+  </div>
+{% endif %}
 
 <script>
   window.__MAP_DATA__ = window.__MAP_DATA__ || {};
