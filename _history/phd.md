@@ -1,6 +1,5 @@
 ---
 title: PhD, Computer Engineering
-img: /assets/images/ucsd_logo.png
 start_year: 2022
 ---
 

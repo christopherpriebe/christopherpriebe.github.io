@@ -1,6 +1,5 @@
 ---
 title: BS, Electrical Engineering
-img: /assets/images/purdue_logo.png
 start_year: 2018
 end_year: 2022
 ---
