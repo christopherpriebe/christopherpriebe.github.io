@@ -12,7 +12,6 @@ The publication list is generated with [jekyll-scholar](https://github.com/inuks
 
 Additional credits (in no particular order):
 - [Maruan Al-Shedivat](https://maruan.alshedivat.com/) and the others who contribute to [al-folio](https://github.com/alshedivat/al-folio), as a lot of HTML and CSS code for this website has been inspired (i.e., taken) from this repository.
-- [Andrej Karpathy](https://karpathy.ai/), as the home page of his website inspired the home page of an earlier version of this website.
-- [Joel Glovier](https://joelglovier.com/), as the CV page of this website is adapted from his [resume-template](https://github.com/jglovier/resume-template) Jekyll theme.
+- [Andrej Karpathy](https://karpathy.ai/), as the home page of his website inspired the home page of this website.
 - [James Ives](https://jamesiv.es/) for [github-pages-deploy-action](https://github.com/JamesIves/github-pages-deploy-action).
 - [Anthropic](https://www.anthropic.com/), as [Claude Code](https://claude.com/claude-code) and Claude Design were used in the creation of this website.

@@ -6,7 +6,6 @@ nav: true
 nav_order: 1
 headshot: /assets/images/headshot_waist_up.jpg
 headshot_alt: Portrait of Christopher Priebe
-# headshot_caption: optional label under the photo, e.g. where it was taken
 ---
 
 Hi, I'm Chris. I'm a PhD student in Computer Engineering at UC San Diego, advised by [Hadi Esmaeilzadeh](https://cseweb.ucsd.edu/~hadi/). I also hold an undergraduate degree in Electrical Engineering from Purdue.
