@@ -453,6 +453,7 @@
   visits: [2025-06-06]
   last_updated: 2026-02-20
 - name: Lido 84
+  closed: 2026-03-22
   slug: lido_84_lake_garda
   coordinates: [45.6252976,10.5759639]
   address: Corso Giuseppe Zanardelli, 196, 25083 Gardone Riviera BS, Italy
@@ -478,16 +479,16 @@
     other: [
       "The World's 50 Best One to Watch Award: 2019",
       "The World's 50 Best Restaurants Highest New Entry Award: 2021",
-      "The World's 50 Best Restaurants 2021-2025: currently at #16; peaked in 2023 at #7; debuted in 2021 at #15",
+      "The World's 50 Best Restaurants 2021-2025: debuted in 2021 at #15; peaked in 2023 at #7; last ranked #16 in 2025",
     ]
   visits: [2025-06-12]
   summary: >
-    Lido 84 delivers thoughtful, minimalist fine dining through simple food, great service, and either a picturesque view of Lake Garda during lunch or a cozy atmosphere during dinner.
-    The kitchen, led by executive chef Riccardo Camanini, produces carefully balanced dishes that blend Italian traditions with thoughtful, minimalist execution.
-    A prime example of this is the signature dish, cacio e pepe en vessie, which features the classic Roman pasta dish prepared "en vessie" (in a pig's bladder, an ancient Roman technique), resulting in a unique "super-al-dente" texture.
+    Lido 84 delivered thoughtful, minimalist fine dining through simple food, great service, and either a picturesque view of Lake Garda during lunch or a cozy atmosphere during dinner.
+    The kitchen, led by executive chef Riccardo Camanini, produced carefully balanced dishes that blended Italian traditions with thoughtful, minimalist execution.
+    A prime example of this was the signature dish, cacio e pepe en vessie, which featured the classic Roman pasta dish prepared "en vessie" (in a pig's bladder, an ancient Roman technique), resulting in a unique "super-al-dente" texture.
     The occasional theatrical touches, such as the tableside presentations, felt at odds with the understated nature of the food.
-    Still, the overall execution was impeccable, making Lido 84 a must-visit for anyone seeking a memorable meal in the Lake Garda region.
-  last_updated: 2026-02-20
+    Still, the overall execution was impeccable, and until it closed in March 2026, Lido 84 was a must-visit for anyone seeking a memorable meal in the Lake Garda region.
+  last_updated: 2026-09-22
 - name: Emozioni Ristorante
   slug: emozioni_lake_garda
   coordinates: [45.8855585,10.8477827]
