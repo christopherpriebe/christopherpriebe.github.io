@@ -1,9 +1,10 @@
 import { setPressed } from "./dom";
 
-// Metric/imperial switching for the routes page.
+// Metric/imperial switching for the Efforts page.
 //
-// Values are stored and compared in metric everywhere — the data file, the
-// filter sliders, the sort order. This module only changes how they are
+// The data file may be written in either unit; routes/canonical.liquid turns
+// it into metric, and everything is compared in metric from there — the data
+// attributes and the filter sliders. This module only changes how they are
 // *displayed*, so switching units can never change which routes match a
 // filter. Liquid renders the metric text server-side; this rewrites it, and
 // switches to miles on load unless the reader has chosen otherwise.

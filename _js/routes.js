@@ -1,10 +1,10 @@
 import L from "leaflet";
 import { setPressed } from "./dom";
 import "leaflet/dist/leaflet.css";
-import { attachBasemaps } from "./basemaps";
+import { attachBasemaps, parseCenter } from "./basemaps";
 import { formatDistance, formatElevation, distanceUnit, elevationUnit, onUnitsChange } from "./units";
 
-// Running/hiking route map. The marker map in map.js plots points; this plots
+// Efforts map (runs and hikes). The marker map in map.js plots points; this plots
 // tracks. Line colour, dash pattern and weight are left to the stylesheet
 // (_sass/_running_routes.sass) — Leaflet writes `stroke` as a presentation
 // attribute, which a stylesheet rule overrides — so the skin stays the one
@@ -12,17 +12,26 @@ import { formatDistance, formatElevation, distanceUnit, elevationUnit, onUnitsCh
 
 const DEFAULT_CENTER = [32.9, -117.1];
 
+// Reads track points, or route points for a planned-route export. Throws
+// rather than returning nothing, so the caller's catch reports the file.
 function parseGpx(xml) {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
-  if (doc.getElementsByTagName("parsererror").length) return [];
+  if (doc.getElementsByTagName("parsererror").length) throw new Error("not well-formed XML");
 
-  const points = doc.getElementsByTagName("trkpt");
+  let points = doc.getElementsByTagName("trkpt");
+  if (!points.length) points = doc.getElementsByTagName("rtept");
+
   const coordinates = [];
   for (let i = 0; i < points.length; i += 1) {
-    const lat = Number(points[i].getAttribute("lat"));
-    const lng = Number(points[i].getAttribute("lon"));
+    const latText = points[i].getAttribute("lat");
+    const lngText = points[i].getAttribute("lon");
+    // Number(null) and Number("") are 0, which would plot a point off Africa.
+    if (!latText || !lngText) continue;
+    const lat = Number(latText);
+    const lng = Number(lngText);
     if (Number.isFinite(lat) && Number.isFinite(lng)) coordinates.push([lat, lng]);
   }
+  if (coordinates.length < 2) throw new Error(`${coordinates.length} usable points`);
   return coordinates;
 }
 
@@ -40,9 +49,7 @@ export function initRouteMap(config) {
   if (!mapElement) return;
 
   const entries = (window.__ROUTE_MAP_DATA__ || {})[config.mapId] || [];
-  const center = Array.isArray(config.center) && config.center.length === 2
-    ? config.center
-    : DEFAULT_CENTER;
+  const center = parseCenter(config.center, config.mapId) || DEFAULT_CENTER;
 
   const map = L.map(mapElement, { zoomControl: false }).setView(center, config.zoom || 11);
   L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -61,12 +68,15 @@ export function initRouteMap(config) {
   const tracks = new Map();
   let activeSlug = null;
 
+  // Other lines mute only when the selected route has a line of its own;
+  // selecting an unmapped route leaves the map as it was.
   function applyLineState() {
+    const highlighting = tracks.has(activeSlug);
     tracks.forEach((track, slug) => {
       const element = track.line.getElement();
       if (!element) return;
       element.classList.toggle("route-line--active", slug === activeSlug);
-      element.classList.toggle("route-line--muted", activeSlug !== null && slug !== activeSlug);
+      element.classList.toggle("route-line--muted", highlighting && slug !== activeSlug);
     });
   }
 
@@ -114,9 +124,14 @@ export function initRouteMap(config) {
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
   }
 
-  function addTrack(entry, coordinates) {
-    if (!coordinates || coordinates.length < 2) return;
+  // A row the filters have hidden keeps its track off the map, including one
+  // whose track arrives after the reader has filtered.
+  function rowVisible(slug) {
+    const row = rows.get(slug);
+    return !row || row.style.display !== "none";
+  }
 
+  function addTrack(entry, coordinates) {
     const isHike = entry.type === "hike";
     const line = L.polyline(coordinates, {
       className: `route-line route-line--${isHike ? "hike" : "run"}`,
@@ -124,23 +139,39 @@ export function initRouteMap(config) {
     });
     line.bindTooltip(entry.name, { sticky: true, direction: "top" });
     line.on("click", () => selectRoute(entry.slug, true));
-    line.addTo(map);
 
     const markers = [
       L.marker(coordinates[0], { icon: endpointIcon(false), interactive: false }),
       L.marker(coordinates[coordinates.length - 1], { icon: endpointIcon(true), interactive: false }),
     ];
-    markers.forEach((marker) => marker.addTo(map));
 
-    tracks.set(entry.slug, { line, markers, visible: true });
+    const visible = rowVisible(entry.slug);
+    if (visible) {
+      line.addTo(map);
+      markers.forEach((marker) => marker.addTo(map));
+    }
 
+    tracks.set(entry.slug, { line, markers, visible });
+    applyLineState();
+  }
+
+  // A track that fails to load costs one route, not the whole map. The reader
+  // is told on the row; the console gets the reason.
+  function markUnavailable(entry, source, error) {
+    console.error(`Could not load track for "${entry.slug}" from ${source}:`, error);
     const row = rows.get(entry.slug);
-    if (row) row.classList.add("has-track");
+    const meta = row ? row.querySelector(".row-details .meta") : null;
+    if (meta) meta.append(" \u00b7 track unavailable");
   }
 
   const loaded = entries.map((entry) => {
     if (Array.isArray(entry.polyline) && entry.polyline.length) {
-      addTrack(entry, entry.polyline);
+      try {
+        if (entry.polyline.length < 2) throw new Error("polyline needs at least two points");
+        addTrack(entry, entry.polyline);
+      } catch (error) {
+        markUnavailable(entry, "its inline polyline", error);
+      }
       return Promise.resolve();
     }
     if (!entry.gpx) return Promise.resolve();
@@ -151,15 +182,14 @@ export function initRouteMap(config) {
         return response.text();
       })
       .then((xml) => addTrack(entry, parseGpx(xml)))
-      .catch((error) => {
-        // A missing or malformed GPX should cost one route, not the whole map.
-        console.error(`Could not load track for "${entry.slug}" from ${entry.gpx}:`, error);
-      });
+      .catch((error) => markUnavailable(entry, entry.gpx, error));
   });
 
+  // Frame every track once they are in, unless the reader has already
+  // picked a route while they were loading.
   Promise.all(loaded).then(() => {
     applyLineState();
-    fitVisible();
+    if (!activeSlug) fitVisible();
   });
 
   rows.forEach((row, slug) => {

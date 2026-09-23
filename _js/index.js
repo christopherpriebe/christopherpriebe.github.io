@@ -7,17 +7,29 @@ import { initUnits } from "./units";
 import { initInstruments } from "./instruments";
 import { initAbstracts } from "./abstracts";
 import { initEmailLinks } from "./email";
+
+// Each step runs on its own so that one that throws (bad data, a missing
+// element) is logged and costs only its own feature, not every one after it.
+function run(name, step) {
+    try {
+        step();
+    } catch (error) {
+        console.error(`${name} failed:`, error);
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-    initEmailLinks();
-    initUnits();
-    enhanceJourneyPins();
+    run("initEmailLinks", initEmailLinks);
+    run("initUnits", initUnits);
+    run("enhanceJourneyPins", enhanceJourneyPins);
+
     const queue = window.__MAP_INIT__ || [];
-    queue.forEach((cfg) => initMap(cfg));
+    queue.forEach((cfg) => run(`initMap(${cfg.mapId})`, () => initMap(cfg)));
 
     const routeQueue = window.__ROUTE_MAP_INIT__ || [];
-    routeQueue.forEach((cfg) => initRouteMap(cfg));
+    routeQueue.forEach((cfg) => run(`initRouteMap(${cfg.mapId})`, () => initRouteMap(cfg)));
 
-    initFilters();
-    initInstruments();
-    initAbstracts();
+    run("initFilters", initFilters);
+    run("initInstruments", initInstruments);
+    run("initAbstracts", initAbstracts);
 });

@@ -1,7 +1,7 @@
 {%- comment -%}
 Instrument 01: cache address decomposition. The arithmetic in
 _js/instruments.js is the real thing, not a mock: it is the part of the cache
-simulator that needs no simulation, so it ships first.
+simulator that needs no simulation, so it can be exact.
 
 The controls come from _data/cache_instrument.yml. Each is a segmented group
 whose buttons carry the value; the one marked is-active is the starting state.
@@ -9,7 +9,7 @@ whose buttons carry the value; the one marked is-active is the starting state.
 <section class="instrument" data-instrument="cache" aria-label="Instrument 01, address decomposition">
     <div class="instrument__head">
         <span class="label">Instrument 01 &middot; address decomposition</span>
-        <span class="label">Working</span>
+        <span class="label" data-status>Working</span>
     </div>
 
     <div class="instrument__controls">
@@ -19,7 +19,10 @@ whose buttons carry the value; the one marked is-active is the starting state.
             <div class="seg" role="group" aria-labelledby="cache-{{ control.param }}-label" data-param="{{ control.param }}">
                 {%- for option in control.options -%}
                     {%- assign active = false -%}
-                    {%- if option.value == control.default -%}{%- assign active = true -%}{%- endif %}
+                    {%- comment -%} Compared as text, so a default of "32" still matches 32. {%- endcomment -%}
+                    {%- assign option_text = option.value | append: "" -%}
+                    {%- assign default_text = control.default | append: "" -%}
+                    {%- if option_text == default_text -%}{%- assign active = true -%}{%- endif %}
                 <button type="button" data-value="{{ option.value }}"{% if active %} class="is-active"{% endif %} aria-pressed="{{ active }}">{{ option.label }}</button>
                 {%- endfor %}
             </div>

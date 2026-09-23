@@ -65,7 +65,7 @@ The `resume` layout is specifically for a resume/CV page, built from the `resume
 
 ## Design Notes
 
-- The palette lives in `_sass/skins/default.sass`. Five neutrals carry every page; the signal colours are fills and strokes only, used inside the instrument plane and on the maps, never for type.
+- The palette lives in `_sass/skins/default.sass`. Seven neutrals carry every page, with the Michelin red and green on Food & drink the only other colours used for type; the signal colours are fills and strokes only, used inside the instrument plane and on the maps, never for type.
 - Spacing is set on a 9px module (18, 27, 36 … 180), and the page is anchored to the left margin rather than centred. The plumb line in `_sass/_layout.sass` is measured from that margin.
 - Type is Archivo for display, Public Sans for text, and IBM Plex Mono for labels, loaded from Google Fonts in `_includes/head.liquid`.
 - There are three components: an entry (meta line, title, paragraph), a ruled row, and a segmented control. See `_sass/_entries.sass`.

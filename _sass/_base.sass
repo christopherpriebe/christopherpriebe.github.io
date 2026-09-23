@@ -6,7 +6,8 @@
     @media (min-width: $screen-sm + 1)
         @content
 
-// The one motion on the site: a ruled row slides 18px on hover.
+// The site's signature motion: a ruled row slides 18px on hover. The map pins
+// and route lines have small transitions of their own.
 @mixin row-slide
     transition: padding-left .3s cubic-bezier(.2, .7, .2, 1)
 

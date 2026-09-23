@@ -33,6 +33,7 @@ and paces are rendered in metric and converted by _js/units.js.
     {%- if route.type != "run" %} &middot; {{ route.type | capitalize | escape }}{% endif -%}
     {%- if route_effort_count > 1 %} &middot; {{ route_effort_count }} outings{% endif -%}
     {%- unless route_primary_gpx %} &middot; not mapped{% endunless -%}
+    {%- if route_time_unquoted %} &middot; time unreadable (quote it in _data/running_routes.yml){% endif -%}
   </p>
 
   <p class="route-item__stats">

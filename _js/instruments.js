@@ -2,7 +2,7 @@
 //
 // Real cache geometry, not a mock. sets = size / (associativity × block), and
 // the address fields fall out of it. This is the part of the cache simulator
-// that needs no simulation, so it can ship now and be correct.
+// that needs no simulation, so it can be exact.
 //
 // Markup lives in _includes/instruments/cache.liquid; colours are classes
 // from _sass/_instruments.sass so the palette stays in the stylesheet.
@@ -12,6 +12,29 @@ import { setPressed } from "./dom";
 const ADDRESS_BITS = 32;
 
 const NUMERIC = new Set(["sizeKB", "assoc", "blockB", "cores"]);
+
+// State bits per line for each protocol the legend knows. MOESI's five states
+// need three bits; the others fit in two.
+const STATE_BITS = { MSI: 2, MOESI: 3, Directory: 2 };
+
+function isPowerOfTwo(value) {
+  return Number.isInteger(value) && value > 0 && (value & (value - 1)) === 0;
+}
+
+// Why a combination of controls has no real geometry, or null when it does.
+// The data file can offer, say, a 48K cache or a 1K one with 16 ways of 128B
+// blocks; the readout should say so rather than print fractional bits.
+function geometryProblem({ sizeKB, assoc, blockB, cores, proto }) {
+  const missing = Object.entries({ sizeKB, assoc, blockB, cores, proto })
+    .filter(([, value]) => value === undefined || Number.isNaN(value))
+    .map(([name]) => name);
+  if (missing.length) return `missing ${missing.join(", ")}`;
+  if (![sizeKB, assoc, blockB].every(isPowerOfTwo)) return "size, associativity and block must be powers of two";
+  if (!Number.isInteger(cores) || cores < 1) return "cores must be a whole number";
+  if (!(proto in STATE_BITS)) return `unknown protocol ${proto}`;
+  if ((sizeKB * 1024) / (assoc * blockB) < 1) return "fewer than one set";
+  return null;
+}
 
 function stateLegend(proto, cores) {
   const invalid = { name: "Invalid", note: "Not present", fill: "swatch--invalid" };
@@ -50,15 +73,37 @@ function bitsLabel(bits) {
   return `${bits} ${bits === 1 ? "bit" : "bits"}`;
 }
 
+function renderInvalid(root, problem) {
+  console.warn(`Cache instrument: ${problem}.`);
+  root.querySelectorAll("[data-field]").forEach((segment) => {
+    segment.style.flexGrow = "1";
+  });
+  root.querySelectorAll("[data-bits], [data-out]").forEach((element) => {
+    element.textContent = "\u2014";
+  });
+  const status = root.querySelector("[data-status]");
+  if (status) status.textContent = "Invalid configuration";
+  const legend = root.querySelector("[data-state-legend]");
+  if (legend) legend.replaceChildren();
+}
+
 function render(root, state) {
+  const problem = geometryProblem(state);
+  if (problem) {
+    renderInvalid(root, problem);
+    return;
+  }
+
+  const status = root.querySelector("[data-status]");
+  if (status) status.textContent = "Working";
+
   const { sizeKB, assoc, blockB, cores, proto } = state;
 
   const sets = (sizeKB * 1024) / (assoc * blockB);
   const offsetBits = Math.log2(blockB);
   const indexBits = Math.log2(sets);
   const tagBits = ADDRESS_BITS - indexBits - offsetBits;
-  // MOESI's five states need three bits; the others fit in two.
-  const stateBits = proto === "MOESI" ? 3 : 2;
+  const stateBits = STATE_BITS[proto];
   const lines = sets * assoc;
   const overheadPct = (lines * (tagBits + stateBits)) / (sizeKB * 1024 * 8) * 100;
   const totalKB = sizeKB * cores;
@@ -115,7 +160,18 @@ function initCache(root) {
       return NUMERIC.has(param) ? Number(raw) : raw;
     };
 
-    const initial = buttons.find((button) => button.classList.contains("is-active")) || buttons[0];
+    if (!buttons.length) {
+      console.warn(`Cache instrument: control "${param}" has no options.`);
+      return;
+    }
+
+    // With no default matching an option, start on the first and show it
+    // pressed, so the readout and the buttons agree.
+    let initial = buttons.find((button) => button.classList.contains("is-active"));
+    if (!initial) {
+      initial = buttons[0];
+      setPressed(initial, true);
+    }
     state[param] = parse(initial);
 
     buttons.forEach((button) => {

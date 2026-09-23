@@ -1,8 +1,8 @@
 {%- comment -%}
 Polyline map, the counterpart to map/marker_map.liquid. Each route is drawn
 from either a GPX file (parsed in the browser) or an inline `polyline` array.
-Metadata is emitted as JSON and picked up by _js/routes.js through the same
-__MAP_INIT__-style queue the marker map uses. The routes themselves are listed
+Metadata is emitted as JSON and picked up by _js/routes.js through its own
+__ROUTE_MAP_INIT__ queue, built the same way as the marker map's __MAP_INIT__. The routes themselves are listed
 beneath the map as rows; selecting one opens its details and highlights its
 track.
 {%- endcomment -%}

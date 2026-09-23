@@ -2,17 +2,19 @@
 Normalises one route, whichever units and shape it was written in.
 
 A route is a *course*; an `efforts:` list holds the dated times run on it. A
-one-off race can skip `efforts:` and carry a flat `time:` and `dates:` — that
-is treated as a single effort, so both shapes work side by side.
+one-off race can skip `efforts:` and carry a flat `time:` (the one time shown)
+and `dates:` (each outing, which sets the count), so both shapes work side by
+side.
 
 Where a recurring race moved its course between years, the effort carries its
 own `gpx:` and overrides the route's. Only one track is ever drawn per route
 (see route_primary_gpx) so re-runs of the same course do not stack up.
 
 Everything below is metric and seconds; miles, feet, and minutes are input and
-display forms only. Elevation and pace keep a decimal place rather than being
-rounded here, so that _js/units.js converting them to feet or minutes per mile
-lands on the figure the author wrote down, not one a rounding step away.
+display forms only. Elevation keeps one decimal place and pace two, rather
+than being rounded to whole numbers here, so that _js/units.js converting them
+to feet or minutes per mile lands on the figure the author wrote down, not one
+a rounding step away.
 
 Sets, for the caller:
   route_km route_m               distance and elevation gain
@@ -22,12 +24,14 @@ Sets, for the caller:
   route_effort_count             how many times it has been run
   route_latest_date              most recent outing
   route_primary_gpx              the single track to draw, if any
+  route_time_unquoted            a time was written bare in the YAML and
+                                 could not be read (routes/parse_time.liquid)
 
 Jekyll leaks every `assign` in an include back to the caller, so these working
 names are also left behind and should be treated as clobbered: route_efforts,
-newest_effort, newest_gpx, primary_gpx, pace_whole, pace_minutes, pace_seconds,
-and — via routes/parse_time.liquid — parsed_sec, parsed_precise, clock,
-clock_h, clock_m, clock_s.
+newest_effort, newest_gpx, primary_gpx, route_km_exact, pace_whole,
+pace_minutes, pace_seconds, and — via routes/parse_time.liquid — parsed_sec,
+parsed_precise, parsed_unquoted, clock, clock_h, clock_m, clock_s.
 {%- endcomment -%}
 
 {%- if include.route.distance_mi -%}
@@ -44,6 +48,7 @@ clock_h, clock_m, clock_s.
 
 {%- assign route_sec = 0 -%}
 {%- assign route_has_seconds = false -%}
+{%- assign route_time_unquoted = false -%}
 {%- assign route_effort_count = 0 -%}
 {%- assign route_latest_date = nil -%}
 {%- assign route_primary_gpx = include.route.gpx -%}
@@ -64,6 +69,7 @@ clock_h, clock_m, clock_s.
   {%- assign primary_gpx = nil -%}
   {%- for effort in route_efforts -%}
     {%- include routes/parse_time.liquid time=effort.time duration_min=effort.duration_min -%}
+    {%- if parsed_unquoted -%}{%- assign route_time_unquoted = true -%}{%- endif -%}
     {%- if parsed_sec > 0 -%}
       {%- if route_sec == 0 or parsed_sec < route_sec -%}
         {%- assign route_sec = parsed_sec -%}
@@ -86,6 +92,7 @@ clock_h, clock_m, clock_s.
   {%- include routes/parse_time.liquid time=include.route.time duration_min=include.route.duration_min -%}
   {%- assign route_sec = parsed_sec -%}
   {%- assign route_has_seconds = parsed_precise -%}
+  {%- assign route_time_unquoted = parsed_unquoted -%}
   {%- if include.route.dates -%}
     {%- assign route_effort_count = include.route.dates | size -%}
     {%- assign route_latest_date = include.route.dates | sort | last -%}

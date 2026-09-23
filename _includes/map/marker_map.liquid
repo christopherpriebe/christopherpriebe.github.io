@@ -7,6 +7,8 @@ A marker map, with an optional filter panel and list beneath it.
   group_by          optional field to group the list by, largest group first
   filters_include   renders the filter panel's <summary> and body
   popup_template    / tooltip_template: templates filled in by _js/map.js
+  list_id           the list element's id; defaults to "<id>-list" when
+                    list_include is given
   zoom, center      initial view; without a center the map fits its markers
 {%- endcomment -%}
 {%- assign items = include.data -%}
@@ -80,13 +82,16 @@ A marker map, with an optional filter panel and list beneath it.
   window.__MAP_DATA__ = window.__MAP_DATA__ || {};
   window.__MAP_DATA__[{{ map_id | jsonify }}] = [
     {%- for item in items -%}
-      {%- if item.coordinates and item.coordinates.size == 2 -%}
+      {%- comment -%}
+      Coordinates go out as written; _js/map.js checks them, so a malformed
+      pair costs one marker and a console warning rather than the script.
+      {%- endcomment -%}
+      {%- if item.coordinates -%}
       {
         slug: {{ item.slug | default: item.name | jsonify }},
-        lat: {{ item.coordinates[0] }},
-        lng: {{ item.coordinates[1] }},
+        coordinates: {{ item.coordinates | jsonify }},
         _item: {{ item | jsonify }}
-      }{%- unless forloop.last -%},{%- endunless -%}
+      },
       {%- endif -%}
     {%- endfor -%}
   ];

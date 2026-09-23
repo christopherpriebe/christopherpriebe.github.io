@@ -14,8 +14,9 @@
 //   width, height  The SVG viewBox is "0 0 width height". Also the marker's
 //                  pixel size on the map at scale 1, so keep them honest.
 //   anchor         [x, y] in viewBox units: the point that sits on the map
-//                  coordinate. A teardrop anchors at its tip ([w/2, height]);
-//                  a dot anchors at its centre.
+//                  coordinate. A teardrop anchors at its tip — the path's
+//                  lowest point, not necessarily the viewBox's bottom edge
+//                  (tier 3 stops 3 units short); a dot anchors at its centre.
 //   shape          SVG child elements as a string — no <svg> wrapper, no
 //                  width/height/viewBox. Use the class names below instead of
 //                  fill/stroke attributes so the pin picks up the site palette;
@@ -33,8 +34,9 @@
 // under .journey-pin--t0 … --t3 in that same stylesheet.
 //
 // Adding a tier 4 means adding an entry here, a --t4 block in the stylesheet,
-// a filter chip in _includes/f_and_b/filters.liquid, and a legend row in
-// _layouts/f_and_b_establishments.liquid.
+// a label in getJourneyLabel (_js/map.js), a filter chip in
+// _includes/f_and_b/filters.liquid, and a row with its prose in the
+// fnb-tier-list in _layouts/f_and_b_establishments.liquid.
 // ---------------------------------------------------------------------------
 
 export const PINS = {
@@ -74,7 +76,7 @@ export const PINS = {
   3: {
     width: 32,
     height: 40,
-    anchor: [16, 40],
+    anchor: [16, 37],
     shape:
       '<circle class="journey-pin__aura" cx="16" cy="13" r="13"/>'
       + '<circle class="journey-pin__aura-ring" cx="16" cy="13" r="12.5"/>'

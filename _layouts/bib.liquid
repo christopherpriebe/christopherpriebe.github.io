@@ -2,8 +2,10 @@
 
 {%- comment -%}
 One publication: a meta line naming the venue and year, the title, the
-author list, and a row of link buttons (and the abstract toggle) beneath it. Conference papers and journal articles go by
-their `abbr` where one is set; @misc entries read as preprints.
+author list, and a row of link buttons (and the abstract toggle) beneath it.
+An entry goes by its `abbr` where one is set, whatever its type; otherwise
+@misc entries read as preprints, and the rest take their journal or
+booktitle.
 {%- endcomment -%}
 {%- if entry.abbr -%}
     {%- assign venue = entry.abbr | append: " " | append: entry.year -%}

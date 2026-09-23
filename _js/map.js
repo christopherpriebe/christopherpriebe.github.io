@@ -1,12 +1,11 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { attachBasemaps } from "./basemaps";
+import { attachBasemaps, parseCenter } from "./basemaps";
 import { buildPinSvg, getJourneyTier, getMarkerMetrics } from "./pins";
 
-// TODO: Refactor this so that there is a generic map engine
-//      right now, some features are specific to the F&B domain
-//      e.g., filtering at the moment is specific to the F&B domain
-//      Also, move the F&B stuff to a separate file
+// TODO: Split the F&B-specific parts (filtering, details, awards) out of this
+//      file so it is a generic marker map. Basemaps and pins already live in
+//      basemaps.js and pins.js, and the route map in routes.js.
 
 // TODO: Write a way to more easily manage F&B awards, as right now
 //      the manual effort to add awards is too much.
@@ -146,8 +145,8 @@ function getJourneyLabel(journeyRating) {
   return "Selected";
 }
 
-// Fills in pins already rendered by Liquid — the filter chips, the sidebar
-// list, and the tier legend. Each carries its tier as a class.
+// Fills in pins already rendered by Liquid — the filter chips, the list under
+// the map, and the tier legend. Each carries its tier as a class.
 export function enhanceJourneyPins(root = document) {
   const nodes = (root.matches && root.matches(".journey-pin"))
     ? [root]
@@ -200,7 +199,8 @@ function getPriceBlockHtml(priceRating) {
   return priceHtml ? getMetaRowHtml(priceHtml, "fnb-meta-row--price") : "";
 }
 
-// The list rows carry cuisines as plain labels; the emoji stay in the popup.
+// The list rows carry cuisines as plain labels; the emoji stay in the details
+// panel.
 function getCuisineLabels(keys) {
   if (!Array.isArray(keys)) return "";
   return keys.map((k) => getCuisineDisplay(k).label).join(", ");
@@ -447,7 +447,8 @@ function applyFilters(config, markerLayer, markerBySlug) {
     if (journeySelections.size && !journeySelections.has(elJourney)) ok = false;
     if (price && Number.isFinite(priceValue)) {
       const elPriceValue = parseInt(elPrice, 10);
-      if (!Number.isFinite(elPriceValue)) ok = false;
+      // Liquid writes 0 for a place with no price rating; it matches no price.
+      if (!(elPriceValue > 0)) ok = false;
       else if (priceMode === "eq" && elPriceValue !== priceValue) ok = false;
       else if (priceMode === "gte" && elPriceValue < priceValue) ok = false;
       else if (!priceMode && elPriceValue > priceValue) ok = false;
@@ -556,7 +557,8 @@ function hydrateList(config, dataset) {
     metaEl.textContent = getCuisineLabels(item.cuisines);
   });
 
-  // Liquid can only title-case the cuisine keys; the table knows "BBQ".
+  // Liquid can only capitalise the first letter of a cuisine key; the table
+  // knows "BBQ" and "Hot Dogs".
   document.querySelectorAll("#filter-cuisine option[value]").forEach((option) => {
     if (option.value) option.textContent = getCuisineDisplay(option.value).label;
   });
@@ -577,7 +579,7 @@ function buildContext(item) {
 }
 
 // The details panel under a selected row: where it is, what it serves, what
-// it costs, what it has won, what I thought, and where to go next.
+// it costs, what I thought, what it has won, and where to go next.
 function buildDetailsHtml(item) {
   const locBits = [item.neighborhood, item.city, item.state, item.country].filter(Boolean);
   const summary = escapeHtml(item.summary || "");
@@ -599,6 +601,24 @@ function buildDetailsHtml(item) {
   ].filter(Boolean).join("");
 }
 
+// Reads a place's `coordinates` from the data file: a [lat, lng] pair, or the
+// "lat, lng" text a map app copies. A place that has neither is left off the
+// map (it stays in the list) and logged, rather than breaking every marker.
+function withLatLng(d, mapId) {
+  let pair = d.coordinates;
+  if (typeof pair === "string") pair = pair.split(",").map((part) => part.trim());
+
+  const [lat, lng] = Array.isArray(pair) && pair.length === 2
+    ? pair.map((value) => (value === null || value === "" ? NaN : Number(value)))
+    : [NaN, NaN];
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    console.warn(`Map "${mapId}": no marker for "${d.slug}"; coordinates ${JSON.stringify(d.coordinates)} are not [lat, lng].`);
+    return null;
+  }
+  return { ...d, lat, lng };
+}
+
 export function initMap(config) {
   const {
     mapId,
@@ -612,8 +632,9 @@ export function initMap(config) {
   const mapEl = document.getElementById(mapId);
   if (!mapEl) return;
 
-  const dataset =
+  const rawDataset =
     (window.__MAP_DATA__ && window.__MAP_DATA__[mapId]) ? window.__MAP_DATA__[mapId] : [];
+  const dataset = rawDataset.map((d) => withLatLng(d, mapId)).filter(Boolean);
 
   const map = L.map(mapId, { scrollWheelZoom: true });
 
@@ -667,14 +688,9 @@ export function initMap(config) {
     applyFilters(config, markerLayer, markerBySlug);
   }
 
-  if (center) {
-    try {
-      const parsed = JSON.parse(center);
-      if (Array.isArray(parsed) && parsed.length === 2) map.setView(parsed, zoom);
-      else map.setView([20, 0], zoom);
-    } catch {
-      map.setView([20, 0], zoom);
-    }
+  const parsedCenter = parseCenter(center, mapId);
+  if (parsedCenter) {
+    map.setView(parsedCenter, zoom);
   } else if (dataset.length) {
     const latlngs = dataset.map((x) => [x.lat, x.lng]);
     map.fitBounds(latlngs, { padding: [30, 30] });

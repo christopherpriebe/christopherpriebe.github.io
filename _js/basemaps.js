@@ -2,7 +2,8 @@ import L from "leaflet";
 import { setPressed } from "./dom";
 
 // Tile layers shared by the F&B marker map and the Efforts map, plus
-// the wiring for the Street/Terrain switcher both pages render.
+// the wiring for the Street/Terrain switcher both pages render, and the
+// reading of the `center` both includes pass through.
 
 export const BASEMAPS = {
   osm: {
@@ -49,4 +50,25 @@ export function attachBasemaps(map, scope) {
   });
 
   return layer;
+}
+
+// A map include's `center`: a [lat, lng] pair, or that pair as JSON text,
+// which is how a Liquid include passes it. Anything else is logged and
+// ignored, and the caller falls back to its default view.
+export function parseCenter(center, mapId) {
+  if (center === undefined || center === null || center === "") return null;
+
+  let value = center;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      value = null;
+    }
+  }
+
+  if (Array.isArray(value) && value.length === 2 && value.every(Number.isFinite)) return value;
+
+  console.warn(`Map "${mapId}": ignoring center ${JSON.stringify(center)}; expected [lat, lng].`);
+  return null;
 }

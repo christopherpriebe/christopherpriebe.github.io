@@ -8,6 +8,12 @@ function reverse(text) {
 
 export function initEmailLinks() {
   document.querySelectorAll("[data-email-user][data-email-domain]").forEach((link) => {
+    // Both halves come from _config.yml; with either missing, a mailto:@ link
+    // would be worse than the readable fallback already on the page.
+    if (!link.getAttribute("data-email-user") || !link.getAttribute("data-email-domain")) {
+      console.warn("Email link left as text: email_user or email_domain is not set in _config.yml.");
+      return;
+    }
     const address = `${reverse(link.getAttribute("data-email-user"))}@${reverse(link.getAttribute("data-email-domain"))}`;
     link.href = `mailto:${address}`;
     link.textContent = address;

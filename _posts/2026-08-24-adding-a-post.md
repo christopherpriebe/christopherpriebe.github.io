@@ -2,6 +2,8 @@
 title: How this blog works
 description: The front matter each post takes, where the topic filter gets its options, and what happens if you leave a field out. Delete this once you have written something real.
 tags: [Tooling]
+# Kept as reference; not built or put in the feed.
+published: false
 ---
 
 This post exists to document the setup and to give the archive something to

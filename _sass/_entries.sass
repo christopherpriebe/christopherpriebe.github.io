@@ -1,11 +1,12 @@
 /*
  * The component vocabulary every page draws from. There are only three: an
  * entry (a meta line, a title, a paragraph), a ruled row, and a segmented
- * control. Nothing on the site carries a radius or a shadow.
+ * control. Nothing on the page carries a radius or a shadow; the map pins,
+ * the Leaflet popup and the pressed chips are the exceptions.
  */
 
 /*
- * Entries: publications, posts, projects, routes
+ * Entries: publications, posts, projects
  */
 .entry
     max-width: $measure-wide
@@ -54,7 +55,7 @@
     font-size: 15px
 
 /*
- * Ruled rows: the home index, the Elsewhere links, lists of places
+ * Ruled rows: the home index, the Elsewhere links, lists of places and efforts
  */
 .rows
     border-bottom: 1px solid $rule-color
