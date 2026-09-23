@@ -1,42 +1,51 @@
-$WHITE: #ffffff
-$GRAY: #808080
-$LIGHT-GRAY: #d3d3d3
-$WHITE-SMOKE: #F5F5F5
-$BLACK: #000000
-    
-$BLUE: #0000ff 
-$NAVY: #000080
+// The site palette. Seven neutrals carry every page, and nothing else is
+// allowed into type except the Michelin red and green on Food & drink, which
+// mark the guide's own distinctions. The signal colours further down are fills
+// and strokes only, and live inside the instrument plane and on the maps.
 
-    
-$background-color: $WHITE
+$PAPER: #FBFBFA
+$CONCRETE: #F1F1EF
+$CONCRETE-DEEP: #E4E5E2
+$RULE: #C8CAC6
+$SLATE: #2C4467
+$NAVY: #16243A
+$INK: #0B1420
 
-$text-color: $BLACK
+$background-color: $PAPER
+$plane-color: $CONCRETE
+$rule-color: $RULE
+$text-color: $SLATE
+$heading-color: $NAVY
+$link-color: $SLATE
+$link-hover-color: $INK
 
-$navbar-title-color: $NAVY
-$navbar-title-hover-color: $BLUE
-$navbar-link-color: $NAVY
-$navbar-link-hover-color: $BLUE
+// Instrument signals. Resolved from oklch at a shared lightness and chroma, so
+// no hue shouts over the others, and each clears 3:1 against both concrete
+// grounds as a fill. Amber measures 3.82:1 on pale concrete and only 4.18:1 even
+// on paper, short of the 4.5:1 text needs, which is why these are never used
+// for type.
+$signal-blue: #3568B2
+$signal-teal: #007E81
+$signal-green: #247C3A
+$signal-amber: #A07100
+$signal-red: #AF3C3A
 
-$bio-social-icon-color: $NAVY
-$bio-social-icon-hover-color: $BLUE
-$bio-social-icon-visited-color: $NAVY
+// One hue at four steps for ordinal magnitudes, lightest first.
+$ramp-1: #8EADDA
+$ramp-2: #5D87C5
+$ramp-3: #335D9B
+$ramp-4: #193763
 
-$history-line-color: $LIGHT-GRAY
+$route-run-color: $NAVY
+$route-hike-color: $signal-blue
 
-$projects-panel-head-color: $WHITE-SMOKE
+$fnb-pin-surface-color: $PAPER
+$fnb-pin-body-color: $NAVY
+$fnb-pin-body-stroke-color: $NAVY
+$fnb-pin-accent-color: $ramp-3
+$fnb-pin-aura-color: $ramp-1
+$fnb-pin-aura-stroke-color: $ramp-2
+$fnb-pin-muted-color: #8A8F8A
 
-$resume-text-color: #333 !default
-$resume-link-color: #333 !default
-$resume-link-hover-color: #9c9c9c !default
-
-$publications-self-color: $NAVY
-$publications-coauthor-link-color: $GRAY
-$publications-coauthor-link-hover-color: $LIGHT-GRAY
-$publications-links-button-background-color: $GRAY
-$publications-links-button-text-color: $WHITE
-$publications-links-buttom-hover-background-color: $LIGHT-GRAY
-$publications-links-button-hover-text-color: $WHITE
-
-$contact-social-icon-color: $NAVY
-$contact-social-icon-hover-color: $BLUE
-$contact-social-icon-visited-color: $NAVY
+$michelin-red-color: #bd2333
+$michelin-green-color: #5f8a00

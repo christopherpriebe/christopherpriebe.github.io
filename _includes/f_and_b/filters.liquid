@@ -1,0 +1,70 @@
+{%- comment -%}
+The F&B filter panel, rendered inside the map's <details>. Wired by _js/map.js,
+which keys off the ids below. Cuisine options come from the data file; map.js
+relabels them from its CUISINES table.
+{%- endcomment -%}
+{%- assign cuisine_keys = items | map: "cuisines" | compact | join: "," | split: "," | uniq | sort -%}
+
+<summary>
+  <span class="filters__title">Filter</span>
+  <span><span data-map-count>{{ items | size }}</span> of {{ items | size }} places</span>
+</summary>
+
+<div class="filters__body">
+  <div class="filters__wide">
+    <label class="visually-hidden" for="filter-q">Search</label>
+    <input id="filter-q" type="search" class="field" placeholder="Search name, city, neighborhood, cuisine">
+  </div>
+
+  <div>
+    <span class="label seg__label">Designation</span>
+    <input id="filter-journey" type="hidden" value="">
+    <div class="seg fnb-toggle-row" data-filter-group="filter-journey" data-filter-multi="true" role="group" aria-label="Filter by designation">
+      <button type="button" data-filter-value="0" aria-label="Selected" title="Selected" aria-pressed="false">
+        <span class="journey-pin journey-pin--inline journey-pin--t0" aria-hidden="true"></span>
+      </button>
+      <button type="button" data-filter-value="1" aria-label="Worth the visit" title="Worth the visit" aria-pressed="false">
+        <span class="journey-pin journey-pin--inline journey-pin--t1" aria-hidden="true"></span>
+      </button>
+      <button type="button" data-filter-value="2" aria-label="Worth planning around" title="Worth planning around" aria-pressed="false">
+        <span class="journey-pin journey-pin--inline journey-pin--t2" aria-hidden="true"></span>
+      </button>
+      <button type="button" data-filter-value="3" aria-label="Worth the trip" title="Worth the trip" aria-pressed="false">
+        <span class="journey-pin journey-pin--inline journey-pin--t3" aria-hidden="true"></span>
+      </button>
+    </div>
+  </div>
+
+  <div>
+    <span class="label seg__label">Price</span>
+    <input id="filter-price" type="hidden" value="">
+    <div class="seg" data-filter-group="filter-price" data-filter-fill-through="true" role="group" aria-label="Filter by price">
+      {%- for p in (1..5) %}
+      <button type="button" class="fnb-price-filter__square" data-filter-value="{{ p }}" aria-label="Up to price {{ p }}" title="Up to price {{ p }}" aria-pressed="false"></button>
+      {%- endfor %}
+    </div>
+    <input id="filter-price-mode" type="hidden" value="">
+    <div class="seg fnb-price-mode" data-filter-group="filter-price-mode" role="group" aria-label="Price filter mode">
+      <button type="button" data-filter-value="eq" aria-pressed="false">Exactly</button>
+      <button type="button" data-filter-value="gte" aria-pressed="false">At least</button>
+    </div>
+  </div>
+
+  <div>
+    <label class="label seg__label" for="filter-cuisine">Cuisine</label>
+    <select id="filter-cuisine" class="field">
+      <option value="">All cuisines</option>
+      {%- for key in cuisine_keys %}
+      <option value="{{ key | escape }}">{{ key | replace: "_", " " | capitalize | escape }}</option>
+      {%- endfor %}
+    </select>
+  </div>
+
+  <div class="filters__wide filters__actions">
+    <span class="filters__checks">
+      <label><input id="filter-value" type="checkbox"> Value recognition only</label>
+      <label><input id="filter-hide-closed" type="checkbox"> Hide closed places</label>
+    </span>
+    <button id="filter-clear" type="button">Clear</button>
+  </div>
+</div>

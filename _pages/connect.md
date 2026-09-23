@@ -1,7 +1,5 @@
 ---
-layout: connect 
-title: Connect
+layout: connect
+title: Elsewhere
 permalink: /connect/
-nav: true
-nav_order: 5
 ---

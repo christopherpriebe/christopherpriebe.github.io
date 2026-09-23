@@ -4,14 +4,15 @@
     {%- include head.liquid -%}
 
     <body>
+        <div class="page">
+            {%- include header.liquid -%}
 
-        {%- include header.liquid -%}
+            <main aria-label="Content">
+                {{ content }}
+            </main>
 
-        <main class="page-content" aria-label="Content">
-            {{ content }}
-        </main>
-
-        {%- include footer.liquid -%}
+            {%- include footer.liquid -%}
+        </div>
 
         {% include scripts/bundle.liquid %}
     </body>

@@ -1,0 +1,110 @@
+{%- comment -%}
+A marker map, with an optional filter panel and list beneath it.
+
+  id                the map element's id
+  data              the items; each needs `coordinates: [lat, lng]`
+  list_include      renders one list item; enables the list
+  group_by          optional field to group the list by, largest group first
+  filters_include   renders the filter panel's <summary> and body
+  popup_template    / tooltip_template: templates filled in by _js/map.js
+  list_id           the list element's id; defaults to "<id>-list" when
+                    list_include is given
+  zoom, center      initial view; without a center the map fits its markers
+{%- endcomment -%}
+{%- assign items = include.data -%}
+{%- assign map_id = include.id | default: "map" -%}
+
+{%- assign list_id = "" -%}
+{%- if include.list_id -%}
+  {%- assign list_id = include.list_id -%}
+{%- elsif include.list_include -%}
+  {%- assign list_id = map_id | append: "-list" -%}
+{%- endif -%}
+
+{% if include.popup_template %}
+  <template id="{{ map_id }}-popup-template">
+    {% include {{ include.popup_template }} %}
+  </template>
+{% endif %}
+
+{% if include.tooltip_template %}
+  <template id="{{ map_id }}-tooltip-template">
+    {% include {{ include.tooltip_template }} %}
+  </template>
+{% endif %}
+
+<div class="map-frame">
+  <div id="{{ map_id }}" class="map-canvas"></div>
+  {% include map/basemap_toggle.liquid %}
+</div>
+
+{% if include.filters_include %}
+  <details class="filters">
+    {% include {{ include.filters_include }} %}
+  </details>
+{% endif %}
+
+{% if include.list_include %}
+  <div class="map-list" id="{{ list_id }}">
+    {%- if include.group_by -%}
+      {%- comment -%}
+      Largest group first; groups of the same size stay in alphabetical order,
+      which a plain sort on size would not keep.
+      {%- endcomment -%}
+      {%- assign groups = items | sort: include.group_by | group_by: include.group_by -%}
+      {%- assign largest = groups | map: "size" | sort | last -%}
+      {%- for group_size in (1..largest) reversed -%}
+      {%- for group in groups -%}
+      {%- if group.size != group_size -%}{%- continue -%}{%- endif %}
+      <div class="rows__group" data-map-group>
+        <p class="rows__group-name">{{ group.name | default: "Elsewhere" | escape }}</p>
+        <div class="rows">
+          {%- assign group_items = group.items | sort: "name" -%}
+          {%- for item in group_items -%}
+            {%- include {{ include.list_include }} item=item -%}
+          {%- endfor %}
+        </div>
+      </div>
+      {%- endfor -%}
+      {%- endfor %}
+    {%- else %}
+      <div class="rows">
+        {%- for item in items -%}
+          {%- include {{ include.list_include }} item=item -%}
+        {%- endfor %}
+      </div>
+    {%- endif %}
+    <p class="filters__empty" data-map-empty>Nothing matches these filters.</p>
+  </div>
+{% endif %}
+
+<script>
+  window.__MAP_DATA__ = window.__MAP_DATA__ || {};
+  window.__MAP_DATA__[{{ map_id | jsonify }}] = [
+    {%- for item in items -%}
+      {%- comment -%}
+      Coordinates go out as written; _js/map.js checks them, so a malformed
+      pair costs one marker and a console warning rather than the script.
+      {%- endcomment -%}
+      {%- if item.coordinates -%}
+      {
+        slug: {{ item.slug | default: item.name | jsonify }},
+        coordinates: {{ item.coordinates | jsonify }},
+        _item: {{ item | jsonify }}
+      },
+      {%- endif -%}
+    {%- endfor -%}
+  ];
+</script>
+
+<script>
+  window.__MAP_INIT__ = window.__MAP_INIT__ || [];
+  window.__MAP_INIT__.push({
+    mapId: {{ map_id | jsonify }},
+    listId: {{ list_id | jsonify }},
+    popupTemplateId: {{ (map_id | append: "-popup-template") | jsonify }},
+    tooltipTemplateId: {{ (map_id | append: "-tooltip-template") | jsonify }},
+    zoom: {{ include.zoom | default: 2 }},
+    center: {{ include.center | default: "" | jsonify }}
+  });
+</script>

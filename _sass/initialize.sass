@@ -1,21 +1,28 @@
-$base-font-size: 16px !default
+// Everything is set on a 9px module: 18, 27, 36, 45 … 180. Type sizes are the
+// exception, and are chosen for the page rather than for the grid.
 
-$base-top-padding: 2.5% !default
-$base-side-padding: 5% !default
+$display-font: Archivo, "Helvetica Neue", Arial, sans-serif
+$body-font: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif
+$mono-font: "IBM Plex Mono", ui-monospace, Menlo, monospace
 
-$navbar-title-size: 2.5rem !default
-$navbar-link-size: 1.5rem !default
+$measure: 612px
+$measure-wide: 756px
 
-$home-profile-photo-height: 200px !default
-$home-profile-photo-width: 200px !default
+// The left margin every line of type starts from. The plumb line in
+// _layout.sass is derived from it, so it moves with this value.
+$page-pad-left: clamp(27px, 9vw, 144px)
+$page-pad-right: clamp(27px, 7vw, 126px)
 
-$resume-body-font-size: 16px !default
+$screen-sm: 640px
 
 @import "_base"
+@import "_photos"
 @import "_layout"
+@import "_entries"
 @import "_home"
-@import "_publications"
-@import "_projects"
+@import "_prose"
+@import "_maps"
+@import "_f_and_b_establishments"
+@import "_running_routes"
+@import "_instruments"
 @import "_resume"
-@import "_bib"
-@import "_connect"

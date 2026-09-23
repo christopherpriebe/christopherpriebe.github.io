@@ -1,0 +1,23 @@
+---
+layout: base
+---
+
+{% include page_title.liquid lede=page.lede %}
+
+{% include instruments/cache.liquid %}
+
+{%- for group in page.planned %}
+<section class="planned">
+    <span class="label">{{ group.group | escape }}</span>
+    {%- for item in group.items %}
+    <div class="planned__item">
+        <h2 class="title">{{ item.title | escape }}</h2>
+        <span class="label">{{ item.status | escape }}</span>
+        <p>{{ item.description | escape }}</p>
+    </div>
+    {%- endfor %}
+    {%- if forloop.last and page.planned_note %}
+    <p class="meta planned__foot">{{ page.planned_note | escape }}</p>
+    {%- endif %}
+</section>
+{%- endfor %}

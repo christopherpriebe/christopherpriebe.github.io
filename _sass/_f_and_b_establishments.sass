@@ -1,0 +1,271 @@
+.journey-marker-icon
+    background: transparent
+    border: 0
+
+/*
+ * Four-tier journey pins. Shapes come from _js/pins.js; every colour comes
+ * from the skin's variables so it remains the one place the palette is
+ * defined. The pins' drop shadows are the exception, a fixed dark tint. Size grows
+ * with the tier, which is the same axis the ratings describe.
+ */
+.journey-pin
+    --pin-scale: 1
+    --pin-width: 22px
+    --pin-height: 30px
+    position: relative
+    display: inline-block
+    width: calc(var(--pin-width) * var(--pin-scale))
+    height: calc(var(--pin-height) * var(--pin-scale))
+    line-height: 0
+    overflow: visible
+    pointer-events: none
+
+.journey-pin__svg
+    display: block
+    width: 100%
+    height: 100%
+    overflow: visible
+    transform-origin: 50% 100%
+    filter: drop-shadow(0 calc(1.5px * var(--pin-scale)) calc(2.5px * var(--pin-scale)) rgba(15, 23, 42, .25))
+    transition: transform .18s ease
+
+.journey-pin__body
+    fill: $fnb-pin-body-color
+    stroke: $fnb-pin-body-stroke-color
+    stroke-width: .8
+
+.journey-pin__eye
+    fill: $fnb-pin-surface-color
+
+.journey-pin__pupil
+    fill: $fnb-pin-body-color
+
+.journey-pin__aura
+    fill: $fnb-pin-aura-color
+    opacity: .32
+
+.journey-pin__aura-ring
+    fill: none
+    stroke: $fnb-pin-aura-stroke-color
+    stroke-width: .8
+    opacity: .6
+
+/*
+ * Tier 0 - Selected. A dot rather than a pin: present, but not a destination.
+ */
+.journey-pin--t0
+    --pin-width: 16px
+    --pin-height: 16px
+
+    .journey-pin__eye
+        fill: $fnb-pin-surface-color
+        stroke: $fnb-pin-muted-color
+        stroke-width: 1.5
+
+    .journey-pin__pupil
+        fill: $fnb-pin-muted-color
+        opacity: .75
+
+    .journey-pin__svg
+        filter: drop-shadow(0 1px 1.5px rgba(15, 23, 42, .12))
+
+/*
+ * Tier 1 - Worth the visit. Tier 0's dot as a hollow teardrop, same grey.
+ * Tiers 0 and 1 are normalised within a city, so neither takes colour.
+ */
+.journey-pin--t1
+    --pin-width: 20px
+    --pin-height: 27px
+
+    .journey-pin__body
+        fill: $fnb-pin-surface-color
+        stroke: $fnb-pin-muted-color
+        stroke-width: 1.5
+
+    .journey-pin__pupil
+        fill: $fnb-pin-muted-color
+
+    .journey-pin__svg
+        filter: drop-shadow(0 1px 1.5px rgba(15, 23, 42, .14))
+
+/*
+ * Tier 2 - Worth planning around. The first solid pin, in navy.
+ */
+.journey-pin--t2
+    --pin-width: 22px
+    --pin-height: 30px
+
+/*
+ * Tier 3 - Worth the trip. Accent body; the aura reads at map scale.
+ */
+.journey-pin--t3
+    --pin-width: 32px
+    --pin-height: 40px
+
+    .journey-pin__body
+        fill: $fnb-pin-accent-color
+        stroke: $fnb-pin-body-color
+        stroke-width: .9
+
+/*
+ * Variants. Scales keep the tier hierarchy visible while bounding the largest
+ * pin to something that fits a filter chip or a list row.
+ */
+.journey-pin--map
+    display: block
+
+.journey-pin--inline
+    --pin-scale: .62
+    vertical-align: middle
+    margin: 0 .2em 0 .05em
+
+.journey-pin--list
+    --pin-scale: .42
+    margin: 0
+
+.leaflet-marker-icon:hover .journey-pin__svg,
+.leaflet-marker-icon:focus .journey-pin__svg
+    transform: translateY(calc(-2px * var(--pin-scale))) scale(1.06)
+
+/*
+ * The place list under the map, grouped by city
+ */
+.map-card__name
+    display: inline-flex
+    flex-wrap: wrap
+    gap: 0 9px
+    align-items: center
+
+.val-badge
+    color: $heading-color
+    font-size: 13px
+
+.fnb-stats
+    display: flex
+    flex-wrap: wrap
+    gap: 0 27px
+
+/*
+ * Filters
+ */
+.fnb-toggle-row
+    .journey-pin
+        --pin-scale: .62
+        margin: 0
+
+.fnb-price-filter__square
+    min-width: 36px
+
+    &::before
+        content: ""
+        display: inline-block
+        width: 9px
+        height: 9px
+        border: 1px solid $rule-color
+        background-color: $CONCRETE-DEEP
+        vertical-align: -1px
+
+    &.is-active::before
+        border-color: $background-color
+        background-color: $background-color
+
+/*
+ * Popups
+ */
+.fnb-popup__head
+    color: $heading-color
+
+    strong
+        font-weight: 500
+
+.fnb-popup .muted,
+.fnb-popup__line
+    font-size: 13px
+    line-height: 21px
+
+.fnb-meta-row
+    margin-top: 4px
+
+.price-meter
+    display: inline-flex
+    align-items: center
+    gap: 9px
+
+.price-meter__label
+    font-size: 13px
+
+.price-meter__track
+    display: inline-flex
+    gap: 3px
+
+.price-meter__square
+    width: 9px
+    height: 9px
+    border: 1px solid $rule-color
+    background-color: $CONCRETE-DEEP
+
+    &.is-filled
+        border-color: $heading-color
+        background-color: $heading-color
+
+.michelin-red
+    color: $michelin-red-color
+
+.michelin-green
+    color: $michelin-green-color
+
+/*
+ * The rating-system essay
+ */
+.fnb-tier-list
+    margin: 29px 0 0
+    padding: 0
+    list-style: none
+
+    > li
+        display: flex
+        align-items: flex-start
+        gap: 18px
+
+    > li + li
+        margin-top: 18px
+
+    .journey-pin--inline
+        --pin-scale: .74
+        margin: 0
+
+// Pins differ in width by tier, so each sits centred in a fixed slot and the
+// text beside them keeps one left edge.
+.fnb-tier-list__pin
+    flex: 0 0 36px
+    text-align: center
+
+.fnb-price-mode
+    margin-top: 9px
+
+// A navy pin would vanish into the navy of a pressed button, so the
+// designation chips mark their pressed state with a frame instead.
+.fnb-toggle-row button.is-active,
+.fnb-toggle-row button[aria-pressed="true"]
+    background-color: $plane-color
+    box-shadow: inset 0 0 0 2px $heading-color
+
+/*
+ * Permanently closed places: a grey pin, a lighter row, and a line in the
+ * details saying when.
+ */
+.journey-pin--closed .journey-pin__svg
+    filter: grayscale(1)
+    opacity: .45
+
+.map-card--closed .map-card__name
+    color: $text-color
+
+.fnb-closed
+    color: $heading-color
+    font-weight: 500
+
+.filters__checks
+    display: inline-flex
+    flex-wrap: wrap
+    gap: 9px 27px

@@ -1,0 +1,20 @@
+{%- comment -%}
+A photo set on an offset concrete plane; see _sass/_photos.sass. Usable from any page or post:
+
+  {% include photo.liquid src="/assets/images/x.jpg" alt="…" caption="…" shape="landscape" %}
+
+  src       image path (required)
+  alt       description for screen readers (required)
+  caption   optional label under the photo; HTML allowed
+  shape     portrait (3:4), landscape (3:2) or square; omit to keep the
+            image's own ratio
+  focus     optional object-position for the crop, e.g. "50% 20%"
+  class     optional extra classes on the figure
+  loading   "lazy" (default) or "eager" for a photo near the top of a page
+{%- endcomment -%}
+<figure class="photo{% if include.shape %} photo--{{ include.shape }}{% endif %}{% if include.class %} {{ include.class }}{% endif %}"{% if include.focus %} style="--photo-focus: {{ include.focus | escape }}"{% endif %}>
+    <span class="photo__plate"><img src="{{ include.src | relative_url }}" alt="{{ include.alt | escape }}" loading="{{ include.loading | default: 'lazy' }}"></span>
+    {%- if include.caption %}
+    <figcaption class="photo__caption">{{ include.caption }}</figcaption>
+    {%- endif %}
+</figure>

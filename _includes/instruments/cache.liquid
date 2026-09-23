@@ -1,0 +1,73 @@
+{%- comment -%}
+Instrument 01: cache address decomposition. The arithmetic in
+_js/instruments.js is the real thing, not a mock: it is the part of the cache
+simulator that needs no simulation, so it can be exact.
+
+The controls come from _data/cache_instrument.yml. Each is a segmented group
+whose buttons carry the value; the one marked is-active is the starting state.
+{%- endcomment -%}
+<section class="instrument" data-instrument="cache" aria-label="Instrument 01, address decomposition">
+    <div class="instrument__head">
+        <span class="label">Instrument 01 &middot; address decomposition</span>
+        <span class="label" data-status>Working</span>
+    </div>
+
+    <div class="instrument__controls">
+        {%- for control in site.data.cache_instrument %}
+        <div>
+            <span class="label seg__label" id="cache-{{ control.param }}-label">{{ control.label }}</span>
+            <div class="seg" role="group" aria-labelledby="cache-{{ control.param }}-label" data-param="{{ control.param }}">
+                {%- for option in control.options -%}
+                    {%- assign active = false -%}
+                    {%- comment -%} Compared as text, so a default of "32" still matches 32. {%- endcomment -%}
+                    {%- assign option_text = option.value | append: "" -%}
+                    {%- assign default_text = control.default | append: "" -%}
+                    {%- if option_text == default_text -%}{%- assign active = true -%}{%- endif %}
+                <button type="button" data-value="{{ option.value }}"{% if active %} class="is-active"{% endif %} aria-pressed="{{ active }}">{{ option.label }}</button>
+                {%- endfor %}
+            </div>
+        </div>
+        {%- endfor %}
+    </div>
+
+    {%- comment -%}
+    Three fields of one address, so the sequential blue ramp rather than three
+    unrelated hues. The bar carries the proportion and the legend carries the
+    names, so a 1-bit index never has to fit its label into 1/32 of the row.
+    {%- endcomment %}
+    <div class="instrument__section">
+        <span class="label">32-bit physical address</span>
+        <div class="address-bar" aria-hidden="true">
+            <span class="fill-tag" data-field="tag"></span>
+            <span class="fill-index" data-field="index"></span>
+            <span class="fill-offset" data-field="offset"></span>
+        </div>
+        <div class="address-legend">
+            <span class="address-legend__item"><span class="swatch fill-tag"></span><b class="label">Tag</b><span class="label" data-bits="tag">&mdash;</span></span>
+            <span class="address-legend__item"><span class="swatch fill-index"></span><b class="label">Index</b><span class="label" data-bits="index">&mdash;</span></span>
+            <span class="address-legend__item"><span class="swatch fill-offset"></span><b class="label">Offset</b><span class="label" data-bits="offset">&mdash;</span></span>
+        </div>
+    </div>
+
+    <div class="instrument__readout" aria-live="polite">
+        <div><span class="label">Sets</span><output data-out="sets">&mdash;</output></div>
+        <div><span class="label">Lines per core</span><output data-out="lines">&mdash;</output></div>
+        <div><span class="label">Tag + state bits</span><output data-out="lineBits">&mdash;</output></div>
+        <div><span class="label">Overhead</span><output data-out="overhead">&mdash;</output></div>
+        <div><span class="label">Total across cores</span><output data-out="total">&mdash;</output></div>
+    </div>
+
+    {%- comment -%}
+    Invalid has no hue at all: absence is drawn as concrete, the one palette
+    idea the page and the instrument share.
+    {%- endcomment %}
+    <div class="instrument__section--ruled">
+        <span class="label"><span data-out="proto">MOESI</span> line states</span>
+        <div class="state-legend" data-state-legend></div>
+        <div class="event-legend">
+            <span><span class="swatch swatch--filled"></span>Hit &mdash; filled</span>
+            <span><span class="swatch swatch--open"></span>Miss &mdash; open</span>
+            <span>Events are shapes, not colours, so the five hues stay free for state.</span>
+        </div>
+    </div>
+</section>

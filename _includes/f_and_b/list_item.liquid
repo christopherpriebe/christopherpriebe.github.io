@@ -1,0 +1,52 @@
+{%- assign r = include.item -%}
+{%- assign slug = r.slug | default: r.name -%}
+{%- assign jr = r.journey_rating | default: 0 -%}
+{%- assign pr = r.price_rating | default: 0 -%}
+
+{%- comment -%}
+`closed` may be true, a year, a year and month, or a full date; the row note
+gives the year when there is one.
+{%- endcomment -%}
+{%- assign closed_note = "" -%}
+{%- if r.closed -%}
+  {%- assign closed_note = "Closed" -%}
+  {%- unless r.closed == true -%}
+    {%- assign closed_year = r.closed | append: "" | slice: 0, 4 -%}
+    {%- assign closed_note = closed_note | append: " " | append: closed_year -%}
+  {%- endunless -%}
+{%- endif -%}
+
+{%- comment -%}
+One ruled row: the name with its tier pin on the left, cuisines on the right.
+Selecting it opens the place's details beneath the row and moves the map to
+it; selecting its marker on the map does the same (_js/map.js, which also
+fills in the details panel from the place's data). A closed place is set
+lighter, with "Closed" and its year in place of the cuisines.
+{%- endcomment %}
+<div class="map-card{% if r.closed %} map-card--closed{% endif %}"
+   data-slug="{{ slug | escape }}"
+   data-name="{{ r.name | escape }}"
+   data-city="{{ r.city | escape }}"
+   data-neighborhood="{{ r.neighborhood | escape }}"
+   data-country="{{ r.country | escape }}"
+   data-journey="{{ jr }}"
+   data-price="{{ pr }}"
+   data-value="{% if r.value_recognition %}1{% else %}0{% endif %}"
+   data-closed="{% if r.closed %}1{% else %}0{% endif %}"
+   data-cuisines="{% if r.cuisines %}{{ r.cuisines | join: ' ' | downcase | escape }}{% endif %}">
+  <button type="button" class="rows__row map-card__toggle" aria-expanded="false" aria-controls="place-{{ slug | slugify }}">
+    <span class="map-card__name">
+      {{- r.name | escape -}}
+      <span class="journey-pin journey-pin--inline journey-pin--list journey-pin--t{{ jr }}{% if r.closed %} journey-pin--closed{% endif %}" aria-hidden="true"></span>
+      {%- if r.value_recognition -%}<span class="val-badge" title="Exceptional value">&#9672;</span>{%- endif -%}
+    </span>
+    <span class="rows__note" data-map-card-meta>
+      {%- if r.closed -%}
+        {{- closed_note -}}
+      {%- elsif r.cuisines and r.cuisines.size > 0 -%}
+        {{- r.cuisines | join: ", " | replace: "_", " " | capitalize | escape -}}
+      {%- endif -%}
+    </span>
+  </button>
+  <div class="row-details" id="place-{{ slug | slugify }}" data-map-card-details hidden></div>
+</div>
