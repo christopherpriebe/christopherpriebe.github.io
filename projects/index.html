@@ -2,133 +2,75 @@
 <html lang="en-US"><head>
     <!-- Required meta tags -->
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Christopher Priebe is a PhD student at UC San Diego working at the interplay of compilers, machine learning, and systems.">
 
 
-    <!-- Link main CSS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100,400..700&family=IBM+Plex+Mono:wght@400&family=Public+Sans:wght@400;500&display=swap">
+
     <link rel="stylesheet" href="/assets/css/main.css">
 
-    <!-- Link custom CSS -->
     <link rel="stylesheet" href="/assets/css/style.css">
 
-    <!-- Configure title element of the page -->
-    <title>
-        
-        
-            Christopher Priebe - Projects
-        
-        
-        
-    </title>
+    <link type="application/atom+xml" rel="alternate" href="https://christopherpriebe.com/feed.xml" title="Christopher Priebe" />
+
+    <title>Christopher Priebe - Projects</title>
 </head>
-<body><header class="site-header">
-    <!-- Create navigation bar with Bootstrap 3 -->
-<nav id="navbar" class="navbar navbar-default">
-    <div class="container-fluid">
-         
-            <div class="navbar-header">
-                <a class="navbar-brand" href="/">Christopher Priebe</a>
-            </div>
-        
-        <ul class="nav navbar-nav navbar-right">
-             
-            
-                
-            
-                
-            
-                
-            
-                
-            
-                
-            
-                
-            
-                
-                    <li><a href=/about/>About</a></li>
-                
-            
-                
-                    <li><a href=/publications/>Publications</a></li>
-                
-            
-                
-                    <li><a href=/projects/>Projects</a></li>
-                
-            
-                
-                    <li><a href=/connect/>Connect</a></li>
-                
-            
-                
-                    <li><a href=/other/>Other</a></li>
-                
-            
-        </ul>
-    </div>
+<body>
+        <div class="page"><header>
+        <nav class="site-nav" aria-label="Site">
+    <a class="site-nav__home" href="/" aria-label="Home">./</a>
+    <a href="/about/">About</a>
+    <a href="/publications/">Publications</a>
+    <a href="/projects/" aria-current="page">Projects</a>
+    <a href="/f_and_b_establishments/">Food</a>
+    <a href="/efforts/">Efforts</a>
+    <a href="/cv/">CV</a>
 </nav>
 
-</header>
-<main class="page-content" aria-label="Content">
-            <div class="container">
-    <div class="projects">
-        
-        
-            <div class="row">
-    <div class="col-xs-12 col-md-6 col-lg-4"> 
-        <div class="panel panel-default hover-shadow-panel projects-panel">
-            <div class="panel-heading projects-panel-head">
-                <div class="row">
-                    <div class="col-xs-12 col-md-8">
-                        <a href="/projects/genesys/">
-                            
-                            <h2 class="panel-title projects-panel-head-title">GeneSys</h2>
-                            <p>Open-Source Parameterizable NPU Generator with Full-Stack Multi-Target Compilation Stack</p>
-                        </a>
-                    </div>
-                    <div class="col-xs-12 col-md-4 text-right-md projects-panel-head-links">
-                        
-                        
-                            <a href="https://actlab-genesys.github.io/" class="projects-panel-head-icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-                        
-                        
-                            <a href="https://github.com/actlab-genesys/GeneSys" class="projects-panel-head-icon"><i class="fa-brands fa-github"></i></a>
-                        
-                    </div>
-                </div>
-            </div>
-            <div class="panel-body">
-                <p class="card-text">An open-source parameterizable neural processing unit (NPU) generator with a full-stack multi-target compilation stack. It allows users to produce complete acceleration systems for emerging deep learning models, such as convolutional neural networks (CNNs) and transformers, with minimal human intervention.
-</p>
-            </div>
-            
-        </div>
+    </header><main aria-label="Content">
+                <div data-filter-root>
+    <div class="page-head measure">
+    <h1 class="page-title">Projects</h1>
+</div>
+
+
+    <div class="page-body"><article class="entry entry--featured" data-project data-categories="computer architecture|compilers|ml systems">
+    <p class="meta">Featured &middot; 2022 — present &middot; ACT Lab, UCSD &middot; Active</p>
+    <h2 class="title"><a href="/projects/genesys/">GeneSys</a></h2>
+    <p class="lede lede--ink">An open-source parameterizable NPU generator with a full-stack, multi-target compilation stack.</p>
+    <p>It lets you produce complete acceleration systems for emerging deep learning models — convolutional networks, transformers — with minimal human intervention.</p>
+
+<p>My primary contribution has been the continued development of the compiler, originally written by Sean Kinzer.
+I packaged it with pip, implemented a greedy memory allocation strategy that cut the DRAM footprint substantially during execution, removed code bloat left over from stitching several projects together, and expanded layer support to accommodate more diverse models.</p>
+
+    <p class="meta"><a href="https://actlab-genesys.github.io/">Project site &rarr;</a> &middot; <a href="https://github.com/actlab-genesys/GeneSys">GitHub &rarr;</a> &middot; <a href="/projects/genesys/">Write-up &rarr;</a>
+    </p>
+    <div class="entry__talks">
+        <p class="meta">Talks</p>
+        <ul>
+            <li>MICRO 2023, Toronto</li>
+            <li>HPCA 2024, Edinburgh</li>
+            <li>ASPLOS 2024, San Diego</li>
+            <li>ISCA 2024, Buenos Aires</li>
+        </ul>
+    </div>
+</article>
+
+        <p class="filters__empty" data-filter-empty>No project matches that filter.</p>
     </div>
 </div>
 
-         
-    </div>
+            </main><footer class="site-footer">
+    <span>Christopher M. Priebe</span>
+    <span>Updated September 2026</span>
+    <a href="/credits/">Credits</a>
+</footer>
 </div>
 
-        </main><footer>
-    <div class="container">
-        <div class="row">
-            <div class="col-xs-12">
-                <p class="text-center">
-                    &copy; Copyright 2026
-                    Christopher
-                    M.
-                    Priebe. Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>. For additional credits, see <a href="/credits/">this</a>.
-
-                    
-                        Last updated: April 07, 2026.
-                    
-                </p>
-            </div>
-        </div>
-    </div>
-</footer><!-- Link all JS -->
+        <!-- Link all JS -->
 <script src="/assets/js/bundle.js"></script>
 
     </body>

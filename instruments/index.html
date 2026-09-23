@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en-US"><head>
+    <!-- Required meta tags -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Christopher Priebe is a PhD student at UC San Diego working at the interplay of compilers, machine learning, and systems.">
+
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100,400..700&family=IBM+Plex+Mono:wght@400&family=Public+Sans:wght@400;500&display=swap">
+
+    <link rel="stylesheet" href="/assets/css/main.css">
+
+    <link rel="stylesheet" href="/assets/css/style.css">
+
+    <link type="application/atom+xml" rel="alternate" href="https://christopherpriebe.com/feed.xml" title="Christopher Priebe" />
+
+    <title>Christopher Priebe - Instruments</title>
+</head>
+<body>
+        <div class="page"><header>
+        <nav class="site-nav" aria-label="Site">
+    <a class="site-nav__home" href="/" aria-label="Home">./</a>
+    <a href="/about/">About</a>
+    <a href="/publications/">Publications</a>
+    <a href="/projects/">Projects</a>
+    <a href="/f_and_b_establishments/">Food</a>
+    <a href="/efforts/">Efforts</a>
+    <a href="/cv/">CV</a>
+</nav>
+
+    </header><main aria-label="Content">
+                <div class="page-head measure">
+    <h1 class="page-title">Instruments</h1>
+    <p class="lede">Things you can take apart. Each one is a working model of something undergraduates are usually asked to picture in their heads, with every parameter exposed.</p>
+</div>
+
+
+<section class="instrument" data-instrument="cache" aria-label="Instrument 01, address decomposition">
+    <div class="instrument__head">
+        <span class="label">Instrument 01 &middot; address decomposition</span>
+        <span class="label" data-status>Working</span>
+    </div>
+
+    <div class="instrument__controls">
+        <div>
+            <span class="label seg__label" id="cache-sizeKB-label">Cache per core</span>
+            <div class="seg" role="group" aria-labelledby="cache-sizeKB-label" data-param="sizeKB">
+                <button type="button" data-value="4" aria-pressed="false">4K</button>
+                <button type="button" data-value="8" aria-pressed="false">8K</button>
+                <button type="button" data-value="16" aria-pressed="false">16K</button>
+                <button type="button" data-value="32" class="is-active" aria-pressed="true">32K</button>
+                <button type="button" data-value="64" aria-pressed="false">64K</button>
+            </div>
+        </div>
+        <div>
+            <span class="label seg__label" id="cache-assoc-label">Associativity</span>
+            <div class="seg" role="group" aria-labelledby="cache-assoc-label" data-param="assoc">
+                <button type="button" data-value="1" aria-pressed="false">Direct</button>
+                <button type="button" data-value="2" aria-pressed="false">2-way</button>
+                <button type="button" data-value="4" class="is-active" aria-pressed="true">4-way</button>
+                <button type="button" data-value="8" aria-pressed="false">8-way</button>
+                <button type="button" data-value="16" aria-pressed="false">16-way</button>
+            </div>
+        </div>
+        <div>
+            <span class="label seg__label" id="cache-blockB-label">Block size</span>
+            <div class="seg" role="group" aria-labelledby="cache-blockB-label" data-param="blockB">
+                <button type="button" data-value="16" aria-pressed="false">16B</button>
+                <button type="button" data-value="32" aria-pressed="false">32B</button>
+                <button type="button" data-value="64" class="is-active" aria-pressed="true">64B</button>
+                <button type="button" data-value="128" aria-pressed="false">128B</button>
+            </div>
+        </div>
+        <div>
+            <span class="label seg__label" id="cache-cores-label">Cores</span>
+            <div class="seg" role="group" aria-labelledby="cache-cores-label" data-param="cores">
+                <button type="button" data-value="1" aria-pressed="false">1</button>
+                <button type="button" data-value="2" aria-pressed="false">2</button>
+                <button type="button" data-value="4" class="is-active" aria-pressed="true">4</button>
+                <button type="button" data-value="8" aria-pressed="false">8</button>
+            </div>
+        </div>
+        <div>
+            <span class="label seg__label" id="cache-proto-label">Coherence</span>
+            <div class="seg" role="group" aria-labelledby="cache-proto-label" data-param="proto">
+                <button type="button" data-value="MSI" aria-pressed="false">MSI</button>
+                <button type="button" data-value="MOESI" class="is-active" aria-pressed="true">MOESI</button>
+                <button type="button" data-value="Directory" aria-pressed="false">Directory</button>
+            </div>
+        </div>
+    </div>
+    <div class="instrument__section">
+        <span class="label">32-bit physical address</span>
+        <div class="address-bar" aria-hidden="true">
+            <span class="fill-tag" data-field="tag"></span>
+            <span class="fill-index" data-field="index"></span>
+            <span class="fill-offset" data-field="offset"></span>
+        </div>
+        <div class="address-legend">
+            <span class="address-legend__item"><span class="swatch fill-tag"></span><b class="label">Tag</b><span class="label" data-bits="tag">&mdash;</span></span>
+            <span class="address-legend__item"><span class="swatch fill-index"></span><b class="label">Index</b><span class="label" data-bits="index">&mdash;</span></span>
+            <span class="address-legend__item"><span class="swatch fill-offset"></span><b class="label">Offset</b><span class="label" data-bits="offset">&mdash;</span></span>
+        </div>
+    </div>
+
+    <div class="instrument__readout" aria-live="polite">
+        <div><span class="label">Sets</span><output data-out="sets">&mdash;</output></div>
+        <div><span class="label">Lines per core</span><output data-out="lines">&mdash;</output></div>
+        <div><span class="label">Tag + state bits</span><output data-out="lineBits">&mdash;</output></div>
+        <div><span class="label">Overhead</span><output data-out="overhead">&mdash;</output></div>
+        <div><span class="label">Total across cores</span><output data-out="total">&mdash;</output></div>
+    </div>
+    <div class="instrument__section--ruled">
+        <span class="label"><span data-out="proto">MOESI</span> line states</span>
+        <div class="state-legend" data-state-legend></div>
+        <div class="event-legend">
+            <span><span class="swatch swatch--filled"></span>Hit &mdash; filled</span>
+            <span><span class="swatch swatch--open"></span>Miss &mdash; open</span>
+            <span>Events are shapes, not colours, so the five hues stay free for state.</span>
+        </div>
+    </div>
+</section>
+
+<section class="planned">
+    <span class="label">Computer architecture</span>
+    <div class="planned__item">
+        <h2 class="title">Multi-core L1 data cache</h2>
+        <span class="label">Planned · first</span>
+        <p>Size, associativity and block size against core count, running snooping MSI or MOESI or a directory protocol. Victim cache later.</p>
+    </div>
+    <div class="planned__item">
+        <h2 class="title">Single-cycle RV32I datapath</h2>
+        <span class="label">Planned</span>
+        <p>One instruction at a time, every control signal and every wire visible as it resolves.</p>
+    </div>
+    <div class="planned__item">
+        <h2 class="title">Pipelined RV32I</h2>
+        <span class="label">Planned</span>
+        <p>The same datapath in five stages, with hazards, stalls and forwarding you can turn off to watch it break.</p>
+    </div>
+    <p class="meta planned__foot">Compilers and IR, and data structures and algorithms, are next up and have nothing in them yet.</p>
+</section>
+
+            </main><footer class="site-footer">
+    <span>Christopher M. Priebe</span>
+    <span>Updated September 2026</span>
+    <a href="/credits/">Credits</a>
+</footer>
+</div>
+
+        <!-- Link all JS -->
+<script src="/assets/js/bundle.js"></script>
+
+    </body>
+
+</html>

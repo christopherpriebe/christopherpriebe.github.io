@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en-US"><head>
+    <!-- Required meta tags -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Christopher Priebe is a PhD student at UC San Diego working at the interplay of compilers, machine learning, and systems.">
+
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100,400..700&family=IBM+Plex+Mono:wght@400&family=Public+Sans:wght@400;500&display=swap">
+
+    <link rel="stylesheet" href="/assets/css/main.css">
+
+    <link rel="stylesheet" href="/assets/css/style.css">
+
+    <link type="application/atom+xml" rel="alternate" href="https://christopherpriebe.com/feed.xml" title="Christopher Priebe" />
+
+    <title>Christopher Priebe - Efforts</title>
+</head>
+<body>
+        <div class="page"><header>
+        <nav class="site-nav" aria-label="Site">
+    <a class="site-nav__home" href="/" aria-label="Home">./</a>
+    <a href="/about/">About</a>
+    <a href="/publications/">Publications</a>
+    <a href="/projects/">Projects</a>
+    <a href="/f_and_b_establishments/">Food</a>
+    <a href="/efforts/" aria-current="page">Efforts</a>
+    <a href="/cv/">CV</a>
+</nav>
+
+    </header><main aria-label="Content">
+                <div class="page-head measure">
+    <h1 class="page-title">Efforts</h1>
+    <p class="lede">A selection of my most notable efforts.</p>
+    <p class="meta"><span class="seg seg--inline" data-unit-toggle role="group" aria-label="Measurement units">
+  <button type="button" data-units="imperial" aria-pressed="false">mi</button>
+  <button type="button" class="is-active" data-units="metric" aria-pressed="true">km</button>
+</span>
+</p>
+</div>
+
+
+<div class="map-frame">
+  <div id="efforts-map" class="map-canvas map-canvas--short"></div>
+
+  <div class="map-overlay map-basemap-toggle seg seg--inline" data-basemap-toggle role="group" aria-label="Base map style">
+  <button type="button" class="is-active" data-basemap="osm" aria-pressed="true">Street</button>
+  <button type="button" data-basemap="topo" aria-pressed="false">Terrain</button>
+</div>
+
+
+  <div class="map-overlay map-legend">
+    <span><span class="route-legend__line"></span>Run</span>
+    <span><span class="route-legend__line route-legend__line--hike"></span>Hike</span>
+  </div>
+</div>
+
+<details class="filters">
+  <summary>
+  <span class="filters__title">Filter</span>
+  <span><span data-routes-count>2</span> of 2 routes</span>
+</summary>
+
+<div class="filters__body">
+  <div class="filters__wide">
+    <label class="visually-hidden" for="routes-filter-q">Search</label>
+    <input id="routes-filter-q" type="search" class="field" placeholder="Search route, region">
+  </div>
+
+  <div>
+    <span class="label seg__label">Activity</span>
+    <div class="seg" data-routes-filter="type" role="group" aria-label="Filter by activity">
+      <button type="button" class="chip-btn" data-filter-value="run" aria-pressed="false">Run</button>
+      <button type="button" class="chip-btn" data-filter-value="hike" aria-pressed="false">Hike</button>
+    </div>
+  </div>
+
+  <div>
+    <span class="label seg__label">Surface</span>
+    <div class="seg" data-routes-filter="surface" role="group" aria-label="Filter by surface">
+      <button type="button" class="chip-btn" data-filter-value="road" aria-pressed="false">Road</button>
+    </div>
+  </div>
+
+  <div>
+    <label class="label seg__label" for="routes-range-distance">
+      Distance, up to
+      <span data-routes-distance-label><span data-unit-value="43" data-unit-kind="distance">43</span> <span data-unit-label="distance">km</span></span>
+    </label>
+    <input id="routes-range-distance" type="range" min="1" max="43" step="1" value="43"
+           data-routes-range="distance">
+  </div>
+
+  <div>
+    <label class="label seg__label" for="routes-range-elevation">
+      Elevation, up to
+      <span data-routes-elevation-label><span data-unit-value="200" data-unit-kind="elevation">200</span> <span data-unit-label="elevation">m</span></span>
+    </label>
+    <input id="routes-range-elevation" type="range" min="0" max="200" step="25" value="200"
+           data-routes-range="elevation">
+  </div>
+
+  <div class="filters__wide filters__actions filters__actions--end">
+    <button id="routes-filter-clear" type="button">Clear</button>
+  </div>
+</div>
+
+</details>
+
+<div class="map-list" id="efforts-map-list">
+  <div class="rows">
+<div class="route-item"
+   data-slug="cim-2025"
+   data-name="California International Marathon 2025"
+   data-type="run"
+   data-surface="road"
+   data-region="Sacramento"
+   data-distance="42.16"
+   data-elevation="187.8">
+
+  <button type="button" class="rows__row route-item__toggle" id="cim-2025" aria-expanded="false" aria-controls="route-cim-2025">
+    <span>California International Marathon 2025</span>
+    <span class="rows__note">
+      <span data-unit-value="42.16" data-unit-kind="distance">42.2</span> <span data-unit-label="distance">km</span> &middot; 2:52:23
+    </span>
+  </button>
+
+  <div class="row-details" id="route-cim-2025" hidden>
+  <p class="meta">7 December 2025 &middot; Sacramento &middot; Road</p>
+
+  <p class="route-item__stats">
+    <span data-unit-value="42.16" data-unit-kind="distance">42.2</span> <span data-unit-label="distance">km</span> &middot; 2:52:23 &middot; <span data-unit-value="245.33" data-unit-kind="pace">4:05</span> <span data-unit-label="pace-words">per km</span> &middot; <span data-unit-value="187.8" data-unit-kind="elevation">188</span> <span data-unit-label="elevation">m</span> gain
+  </p>
+  <p>My first marathon and technically a BQ. The training block was the most mentally and physically exhausting athletic endeavor I have ever undertaken. I struggled or failed to complete many of my prescribed workouts, including a massive effort to complete 16 miles at marathon pace, proceeded immediately by an utter failure to complete even close to the scheduled 18 miles at marathon pace the following week. Despite this, the taper worked wonders, and the race itself was fantastic. I ran a negative split, starting at ~6:50 min/mi and finishing at ~6:30 min/mi, causing me to feel great through 22 miles and easily hold on for the last few to finish strong.</p>
+  </div>
+</div>
+
+<div class="route-item"
+   data-slug="oneamerica-mini-marathon-2022"
+   data-name="OneAmerica Mini Marathon 2022"
+   data-type="run"
+   data-surface="road"
+   data-region="Indianapolis"
+   data-distance="21.08"
+   data-elevation="36.0">
+
+  <button type="button" class="rows__row route-item__toggle" id="oneamerica-mini-marathon-2022" aria-expanded="false" aria-controls="route-oneamerica-mini-marathon-2022">
+    <span>OneAmerica Mini Marathon 2022</span>
+    <span class="rows__note">
+      <span data-unit-value="21.08" data-unit-kind="distance">21.1</span> <span data-unit-label="distance">km</span> &middot; 1:53:23
+    </span>
+  </button>
+
+  <div class="row-details" id="route-oneamerica-mini-marathon-2022" hidden>
+  <p class="meta">7 May 2022 &middot; Indianapolis &middot; Road</p>
+
+  <p class="route-item__stats">
+    <span data-unit-value="21.08" data-unit-kind="distance">21.1</span> <span data-unit-label="distance">km</span> &middot; 1:53:23 &middot; <span data-unit-value="322.72" data-unit-kind="pace">5:23</span> <span data-unit-label="pace-words">per km</span> &middot; <span data-unit-value="36.0" data-unit-kind="elevation">36</span> <span data-unit-label="elevation">m</span> gain
+  </p>
+  <p>First running race! The GPX data is collected via my iPhone and exported from Strava; please excuse the poor quality.</p>
+  </div>
+</div>
+
+  </div>
+  <p class="filters__empty" data-routes-empty>No route matches these filters.</p>
+</div>
+
+<script>
+  window.__ROUTE_MAP_DATA__ = window.__ROUTE_MAP_DATA__ || {};
+  window.__ROUTE_MAP_DATA__["efforts-map"] = [{
+        slug: "cim-2025",
+        name: "California International Marathon 2025",
+        type: "run",
+        gpx: "/assets/gpx/cim-2025.gpx",
+        polyline: null
+      },{
+        slug: "oneamerica-mini-marathon-2022",
+        name: "OneAmerica Mini Marathon 2022",
+        type: "run",
+        gpx: "/assets/gpx/oneamerica-mini-marathon-2022.gpx",
+        polyline: null
+      }];
+</script>
+
+<script>
+  window.__ROUTE_MAP_INIT__ = window.__ROUTE_MAP_INIT__ || [];
+  window.__ROUTE_MAP_INIT__.push({
+    mapId: "efforts-map",
+    listId: "efforts-map-list",
+    zoom: 10,
+    center: ""
+  });
+</script>
+
+
+            </main><footer class="site-footer">
+    <span>Christopher M. Priebe</span>
+    <span>Updated September 2026</span>
+    <a href="/credits/">Credits</a>
+</footer>
+</div>
+
+        <!-- Link all JS -->
+<script src="/assets/js/bundle.js"></script>
+
+    </body>
+
+</html>
