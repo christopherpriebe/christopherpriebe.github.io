@@ -49,16 +49,6 @@
     stroke-width: .8
     opacity: .6
 
-.journey-pin__halo
-    fill: none
-    stroke: $fnb-pin-gold-color
-    stroke-width: 1.4
-    stroke-dasharray: 2.2 2.2
-    opacity: .9
-
-.journey-pin__star
-    fill: $fnb-pin-gold-color
-
 /*
  * Tier 0 - Selected. A dot rather than a pin: present, but not a destination.
  */
@@ -79,16 +69,35 @@
         filter: drop-shadow(0 1px 1.5px rgba(15, 23, 42, .12))
 
 /*
- * Tier 1 - Worth the visit.
+ * Tier 1 - Worth the visit. Tier 0's dot as a hollow teardrop, same grey.
+ * Tiers 0 and 1 are normalised within a city, so neither takes colour.
  */
 .journey-pin--t1
+    --pin-width: 20px
+    --pin-height: 27px
+
+    .journey-pin__body
+        fill: $fnb-pin-surface-color
+        stroke: $fnb-pin-muted-color
+        stroke-width: 1.5
+
+    .journey-pin__pupil
+        fill: $fnb-pin-muted-color
+
+    .journey-pin__svg
+        filter: drop-shadow(0 1px 1.5px rgba(15, 23, 42, .14))
+
+/*
+ * Tier 2 - Worth planning around. The first solid pin, in navy.
+ */
+.journey-pin--t2
     --pin-width: 22px
     --pin-height: 30px
 
 /*
- * Tier 2 - Worth planning around. The aura reads at map scale.
+ * Tier 3 - Worth the trip. Accent body; the aura reads at map scale.
  */
-.journey-pin--t2
+.journey-pin--t3
     --pin-width: 32px
     --pin-height: 40px
 
@@ -96,23 +105,6 @@
         fill: $fnb-pin-accent-color
         stroke: $fnb-pin-body-color
         stroke-width: .9
-
-/*
- * Tier 3 - Worth the trip. Gold halo and star; the only place gold appears.
- */
-.journey-pin--t3
-    --pin-width: 42px
-    --pin-height: 52px
-
-    .journey-pin__aura
-        fill: $fnb-pin-gold-tint-color
-        opacity: .75
-
-    .journey-pin__aura-ring
-        stroke: $fnb-pin-gold-color
-
-    .journey-pin__svg
-        filter: drop-shadow(0 calc(2px * var(--pin-scale)) calc(5px * var(--pin-scale)) rgba(15, 23, 42, .28))
 
 /*
  * Variants. Scales keep the tier hierarchy visible while bounding the largest

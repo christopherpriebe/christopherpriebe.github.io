@@ -28,20 +28,14 @@
 //   journey-pin__pupil       the dot inside the eye
 //   journey-pin__aura        soft halo behind the pin
 //   journey-pin__aura-ring   thin outline on that halo
-//   journey-pin__halo        dashed outer ring (tier 3)
-//   journey-pin__star        the gold star (tier 3)
 //
-// Per-tier overrides (sizes, tier 2's accent fill, tier 3's gold) are grouped
+// Per-tier overrides (sizes, tier 0/1 grey, tier 3's accent fill) are grouped
 // under .journey-pin--t0 … --t3 in that same stylesheet.
 //
 // Adding a tier 4 means adding an entry here, a --t4 block in the stylesheet,
 // a filter chip in _includes/f_and_b/filters.liquid, and a legend row in
 // _layouts/f_and_b_establishments.liquid.
 // ---------------------------------------------------------------------------
-
-const TIER_3_STAR =
-  "M21 11.2 L21.88 13.79 L24.61 13.83 L22.43 15.46 L23.23 18.07 " +
-  "L21 16.5 L18.77 18.07 L19.57 15.46 L17.39 13.83 L20.12 13.79 Z";
 
 export const PINS = {
   // Selected — a dot, not a pin: worth knowing about, not a destination.
@@ -54,8 +48,19 @@ export const PINS = {
       + '<circle class="journey-pin__pupil" cx="8" cy="8" r="2.2"/>',
   },
 
-  // Worth the visit.
+  // Worth the visit — tier 0's dot drawn as a hollow teardrop. Tiers 0 and 1
+  // are local distinctions, so both stay grey; colour starts at tier 2.
   1: {
+    width: 20,
+    height: 27,
+    anchor: [10, 27],
+    shape:
+      '<path class="journey-pin__body" d="M10 1.5c4.4 0 8 3.5 8 8 0 6.2-8 16.5-8 16.5S2 15.7 2 9.5c0-4.5 3.6-8 8-8z"/>'
+      + '<circle class="journey-pin__pupil" cx="10" cy="9.5" r="2.4"/>',
+  },
+
+  // Worth planning around — the first solid pin.
+  2: {
     width: 22,
     height: 30,
     anchor: [11, 30],
@@ -65,8 +70,8 @@ export const PINS = {
       + '<circle class="journey-pin__pupil" cx="11" cy="10" r="1.5"/>',
   },
 
-  // Worth planning around — the aura is what reads at map scale.
-  2: {
+  // Worth the trip — accent body and aura; the aura is what reads at map scale.
+  3: {
     width: 32,
     height: 40,
     anchor: [16, 40],
@@ -76,20 +81,6 @@ export const PINS = {
       + '<path class="journey-pin__body" d="M16 3c5 0 9 4 9 10 0 8-9 24-9 24S7 21 7 13c0-6 4-10 9-10z"/>'
       + '<circle class="journey-pin__eye" cx="16" cy="13" r="4.6"/>'
       + '<circle class="journey-pin__pupil" cx="16" cy="13" r="2"/>',
-  },
-
-  // Worth the trip — the only pin that gets gold.
-  3: {
-    width: 42,
-    height: 52,
-    anchor: [21, 52],
-    shape:
-      '<circle class="journey-pin__halo" cx="21" cy="17" r="17"/>'
-      + '<circle class="journey-pin__aura" cx="21" cy="17" r="14"/>'
-      + '<circle class="journey-pin__aura-ring" cx="21" cy="17" r="13.5"/>'
-      + '<path class="journey-pin__body" d="M21 4c6 0 10 4 10 11 0 9-10 28-10 28S11 24 11 15c0-7 4-11 10-11z"/>'
-      + '<circle class="journey-pin__eye" cx="21" cy="15" r="5.5"/>'
-      + `<path class="journey-pin__star" d="${TIER_3_STAR}"/>`,
   },
 };
 
