@@ -1,0 +1,23 @@
+[package]
+name = "cache-explorer-core"
+version = "0.1.0"
+description = "The cache model of the Interactive Cache Explorer: ops, micro-events, the session log, edits, sharing and guided modules."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+ts = ["dep:tsify", "dep:wasm-bindgen"]   # enabled only by cache-explorer-wasm; tsify's derive names wasm_bindgen by path,
+                                         # so both are needed; tsify's "js" feature brings serde-wasm-bindgen and js-sys
+golden = []                              # enabled only by the facade's dev-dependency: golden fixtures and render
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+miniz_oxide = { workspace = true }
+base64 = { workspace = true }
+rand_core = { workspace = true }
+rand_xoshiro = { workspace = true }
+tsify = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
