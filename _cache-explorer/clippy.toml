@@ -1,0 +1,21 @@
+disallowed-types = [
+  { path = "std::collections::HashMap", reason = "iteration order must be identical on native and wasm; use BTreeMap" },
+  { path = "std::collections::HashSet", reason = "use BTreeSet" },
+]
+disallowed-methods = [
+  { path = "std::time::Instant::now", reason = "the core reads no clock" },
+  { path = "std::time::SystemTime::now", reason = "the core reads no clock" },
+  { path = "std::env::var", reason = "the core reads no environment" },
+]
+disallowed-macros = [
+  { path = "std::assert", reason = "a failed assertion panics; report through Machine::check_invariants" },
+  { path = "std::assert_eq", reason = "as above" },
+  { path = "std::assert_ne", reason = "as above" },
+  { path = "std::debug_assert", reason = "panics in debug builds, which wasm-pack test uses" },
+  { path = "std::debug_assert_eq", reason = "as above" },
+  { path = "std::debug_assert_ne", reason = "as above" },
+]
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
