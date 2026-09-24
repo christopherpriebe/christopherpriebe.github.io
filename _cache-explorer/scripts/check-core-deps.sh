@@ -5,11 +5,13 @@
 # build, which every core test uses, must have none of them.
 #
 # `cargo tree -p cache-explorer-core` resolves the core alone, so the facade's
-# "ts" feature is not unified into it.
+# "ts" feature is not unified into it. `--target all` keeps dependencies that
+# apply only on some platforms, such as a crate's wasm32-only ones; without it
+# cargo tree shows only the host's, and the core also builds for wasm32.
 set -eu
 cd "$(dirname "$0")/.."
 
-tree=$(cargo tree -p cache-explorer-core -e normal --prefix none --locked)
+tree=$(cargo tree -p cache-explorer-core -e normal --target all --prefix none --locked)
 if printf '%s\n' "$tree" | grep -Eq '^(wasm-bindgen|js-sys|serde-wasm-bindgen|tsify|getrandom|web-sys) '; then
   echo "cache-explorer-core pulls a JS or OS dependency in its default build" >&2; exit 1
 fi
