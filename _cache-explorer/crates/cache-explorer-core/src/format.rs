@@ -19,9 +19,53 @@ pub(crate) fn setting(n: impl Into<u64>) -> String {
     grouped(n.into())
 }
 
+/// A data value with its sign: [`data`] of `magnitude`, after a minus sign
+/// (U+2212) when `negative`, as in `−3` and `−32,768`. Zero has no sign.
+pub(crate) fn signed_data(negative: bool, magnitude: u64) -> String {
+    if negative && magnitude > 0 {
+        format!("\u{2212}{}", data(magnitude))
+    } else {
+        data(magnitude)
+    }
+}
+
+/// The lower bound of a signed range in a message: [`setting`] of
+/// `magnitude` after a minus sign (U+2212), as in `−128 to 255`.
+pub(crate) fn negative_setting(magnitude: u64) -> String {
+    format!("\u{2212}{}", setting(magnitude))
+}
+
 /// `0x` and upper-case hex digits, zero-padded to at least `digits` digits.
 pub(crate) fn hex(value: u32, digits: usize) -> String {
     format!("0x{value:0digits$X}")
+}
+
+/// An address or a line address as the student reads it: hex padded to
+/// ⌈`address_bits` / 4⌉ digits, so `0x0A4` with 12-bit addresses and `0x00A4`
+/// with 16-bit ones. A value too wide for the width keeps all its digits.
+pub(crate) fn address(value: u32, address_bits: u8) -> String {
+    hex(value, usize::from(address_bits).div_ceil(4))
+}
+
+/// A tag as the student reads it: hex padded to ⌈`tag_bits` / 4⌉ digits, and to
+/// at least two, so `0x05` for a 5-bit tag and `0x001` for a 9-bit one.
+pub(crate) fn tag(value: u32, tag_bits: u8) -> String {
+    hex(value, usize::from(tag_bits).div_ceil(4).max(2))
+}
+
+/// The low `width` bits of `value` as binary digits, most significant first,
+/// as the address strip shows them: exactly `width` characters, none for 0.
+pub(crate) fn bits(value: u32, width: u8) -> String {
+    (0..u32::from(width))
+        .rev()
+        .map(|bit| {
+            if value.checked_shr(bit).unwrap_or(0) & 1 == 1 {
+                '1'
+            } else {
+                '0'
+            }
+        })
+        .collect()
 }
 
 /// "a" or "an", whichever reads right before `n` spoken aloud: "an 8-line
@@ -108,12 +152,51 @@ mod tests {
     }
 
     #[test]
+    fn signed_values_take_a_minus_sign() {
+        assert_eq!(signed_data(false, 300), "300");
+        assert_eq!(signed_data(true, 3), "\u{2212}3");
+        assert_eq!(signed_data(true, 4_096), "\u{2212}4096");
+        assert_eq!(signed_data(true, 32_768), "\u{2212}32,768");
+        assert_eq!(signed_data(true, 0), "0");
+        assert_eq!(negative_setting(128), "\u{2212}128");
+        assert_eq!(negative_setting(2_048), "\u{2212}2,048");
+    }
+
+    #[test]
     fn hex_is_upper_case_and_padded() {
         assert_eq!(hex(0xA4, 3), "0x0A4");
         assert_eq!(hex(0xA4, 2), "0xA4");
         assert_eq!(hex(0x5, 2), "0x05");
         assert_eq!(hex(0xABCD, 2), "0xABCD");
         assert_eq!(hex(u32::MAX, 8), "0xFFFFFFFF");
+    }
+
+    #[test]
+    fn addresses_are_padded_to_the_address_width() {
+        assert_eq!(address(0xA4, 8), "0xA4");
+        assert_eq!(address(0xA4, 12), "0x0A4");
+        assert_eq!(address(0xA4, 13), "0x00A4");
+        assert_eq!(address(0xA4, 16), "0x00A4");
+        assert_eq!(address(0xA4, 32), "0x000000A4");
+        assert_eq!(address(0x1000, 12), "0x1000");
+    }
+
+    #[test]
+    fn tags_are_padded_to_at_least_two_digits() {
+        assert_eq!(tag(0x1, 1), "0x01");
+        assert_eq!(tag(0x5, 5), "0x05");
+        assert_eq!(tag(0xA, 8), "0x0A");
+        assert_eq!(tag(0x1, 9), "0x001");
+        assert_eq!(tag(0x1, 25), "0x0000001");
+    }
+
+    #[test]
+    fn bits_are_exactly_as_wide_as_asked() {
+        assert_eq!(bits(0xA4, 12), "000010100100");
+        assert_eq!(bits(0b10, 3), "010");
+        assert_eq!(bits(1, 1), "1");
+        assert_eq!(bits(0, 0), "");
+        assert_eq!(bits(u32::MAX, 32), "1".repeat(32));
     }
 
     #[test]

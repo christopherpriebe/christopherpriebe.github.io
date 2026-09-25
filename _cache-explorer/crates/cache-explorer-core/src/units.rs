@@ -127,10 +127,6 @@ impl Addr {
 
 impl LineAddr {
     /// Wraps a line address the caller has already checked against the geometry.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the cache and memory build line addresses")
-    )]
     pub(crate) const fn new_unchecked(value: u32) -> Self {
         Self(value)
     }
@@ -236,10 +232,6 @@ impl OpIndex {
 
 impl Word {
     /// Wraps a value the caller has already fitted to the word size.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "memory, registers and typed input build words")
-    )]
     pub(crate) const fn new_unchecked(value: u64) -> Self {
         Self(value)
     }

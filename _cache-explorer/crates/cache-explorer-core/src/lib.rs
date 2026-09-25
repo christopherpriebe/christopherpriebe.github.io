@@ -21,13 +21,17 @@ pub mod limits;
 mod config;
 mod format;
 mod geometry;
+mod input;
 mod units;
 
 pub use config::{
     presets, AllocatePolicy, CacheConfig, Config, ConfigError, ConfigNumberField, MemoryInit,
     Preset, Repair, Replacement, Timing, WordBytes, WordBytesError, WritePolicy,
 };
-pub use geometry::{Geometry, Placement};
+pub use geometry::{
+    AccessError, AddressField, BitRange, BitRanges, Decoded, FieldKind, Geometry, Placement,
+};
+pub use input::{AddressInput, WordInput};
 pub use units::{
     Addr, Cycle, EventPos, LineAddr, OpIndex, Register, SetIndex, Tag, WayIndex, Word, WordIndex,
 };
