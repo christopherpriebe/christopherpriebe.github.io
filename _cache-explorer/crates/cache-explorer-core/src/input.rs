@@ -11,7 +11,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 use crate::format;
-use crate::geometry::{last_address, AccessError, Decoded, Geometry};
+use crate::geometry::{highest_word, last_address, AccessError, Decoded, Geometry};
 use crate::units::Word;
 
 /// A typed address, read against a geometry.
@@ -98,7 +98,7 @@ enum InputError {
         format::a_or_an(*.word_bytes),
         format::setting(*.word_bytes),
         format::negative_setting(lowest_magnitude(*.word_bytes)),
-        format::setting(highest(*.word_bytes))
+        format::setting(highest_word(*.word_bytes))
     )]
     NotAWord {
         /// The word size, in bytes.
@@ -111,7 +111,7 @@ enum InputError {
         format::a_or_an(*.word_bytes),
         format::setting(*.word_bytes),
         format::negative_setting(lowest_magnitude(*.word_bytes)),
-        format::setting(highest(*.word_bytes))
+        format::setting(highest_word(*.word_bytes))
     )]
     WordTooWide {
         /// Whether the number typed is negative.
@@ -189,7 +189,7 @@ impl Geometry {
         let fits = if negative {
             magnitude <= lowest_magnitude(word_bytes)
         } else {
-            magnitude <= highest(word_bytes)
+            magnitude <= highest_word(word_bytes)
         };
         if !fits {
             return WordInput::Invalid {
@@ -202,7 +202,7 @@ impl Geometry {
             };
         }
         let value = if negative {
-            magnitude.wrapping_neg() & highest(word_bytes)
+            magnitude.wrapping_neg() & highest_word(word_bytes)
         } else {
             magnitude
         };
@@ -230,13 +230,6 @@ fn parse_digits(digits: &str, radix: u32) -> Option<u64> {
             .checked_mul(u64::from(radix))?
             .checked_add(u64::from(digit.to_digit(radix)?))
     })
-}
-
-/// The largest unsigned value a word of `word_bytes` bytes holds: 2^(8w) − 1.
-fn highest(word_bytes: u32) -> u64 {
-    u64::MAX
-        .checked_shr(u64::BITS.saturating_sub(word_bytes.saturating_mul(u8::BITS)))
-        .unwrap_or(0)
 }
 
 /// The magnitude of the most negative signed value a word of `word_bytes`

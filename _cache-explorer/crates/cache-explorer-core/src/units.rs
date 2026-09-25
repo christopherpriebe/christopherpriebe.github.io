@@ -187,10 +187,6 @@ impl WordIndex {
 
 impl Cycle {
     /// Wraps a cycle count the engine has computed.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the engine counts cycles in timed mode")
-    )]
     pub(crate) const fn new_unchecked(value: u64) -> Self {
         Self(value)
     }

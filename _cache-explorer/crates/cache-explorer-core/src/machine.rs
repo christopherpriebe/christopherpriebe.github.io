@@ -17,20 +17,31 @@
 //! - I3: at most one valid way per set holds a given tag.
 //! - I4: a valid way's line address decodes to its own set and tag.
 //! - I5: a dirty way exists only under write-back.
+//! - I6: a valid clean way's data equals memory's copy of its line. Like I2,
+//!   this one holds between accesses: a write-through store writes the cache
+//!   one step before it writes memory.
 //! - I7: under random replacement, and in a one-way set, the ranks equal the
 //!   way numbers.
+//! - I8: every line the cache holds is among the lines memory has recorded
+//!   as touched.
 
 use thiserror::Error;
 
-use crate::cache::{Cache, Set, Way};
+use crate::cache::{Cache, Dirtiness, Set, Slot, Way};
 use crate::config::{Config, ConfigError, Replacement, WritePolicy};
+use crate::cpu::Registers;
+use crate::engine::Request;
 use crate::format;
-use crate::geometry::Geometry;
+use crate::geometry::{Geometry, Location};
+use crate::memory::Memory;
 use crate::prng::Prng;
-use crate::units::{SetIndex, WayIndex};
+use crate::replacement::VictimChoice;
+use crate::stats::Counters;
+use crate::units::{SetIndex, Tag, WayIndex};
 
 /// The state of a run at one point: its configuration and geometry, the
-/// cache and the run's generator.
+/// cache, memory, registers and counters, the access in progress, and the
+/// run's generator.
 ///
 /// There is no way to obtain one from outside the core other than by replaying
 /// a run, so every machine is one a sequence of ops can reach. Not
@@ -44,9 +55,56 @@ pub struct Machine {
     pub(crate) geometry: Geometry,
     /// The cache's contents and replacement order.
     pub(crate) cache: Cache,
+    /// Main memory.
+    pub(crate) memory: Memory,
+    /// The CPU's registers.
+    pub(crate) registers: Registers,
+    /// The run's counters.
+    pub(crate) counters: Counters,
     /// The generator random replacement draws its victims from, seeded from
     /// `config.seed` when the run starts.
     pub(crate) prng: Prng,
+    /// The access of the current entry, from its first event on; `None`
+    /// before the run's first access and while the current entry is not an
+    /// access.
+    pub(crate) access: Option<AccessContext>,
+    /// The run's number, from 1.
+    pub(crate) run: u32,
+    /// The entries the run has had so far; the current entry's number.
+    pub(crate) entries_in_run: u32,
+}
+
+/// The access an entry is making: the request, where its address falls, and
+/// what the lookup and the allocation have found so far. It is controller
+/// state, replaced at the start of each access, and what a view of the cache
+/// shows while the access is in flight.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AccessContext {
+    /// The load or store.
+    pub(crate) request: Request,
+    /// Where its address falls.
+    pub(crate) location: Location,
+    /// What the tag compare found, from the `Hit` or `Miss` event on.
+    pub(crate) lookup: Option<Lookup>,
+    /// The way a miss chose, from the `Victim` event until the `Fill`.
+    pub(crate) victim: Option<VictimChoice>,
+    /// The way the access reads or writes, once the lookup has found it or
+    /// the fill has brought its line in.
+    pub(crate) way: Option<WayIndex>,
+    /// False until the access's last event: while false, the access is in
+    /// flight and the machine is not between entries.
+    pub(crate) done: bool,
+}
+
+/// What an access's tag compare found.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Lookup {
+    /// The way holding the line, on a hit.
+    pub(crate) hit: Option<WayIndex>,
+    /// The tag each way of the set held when it was compared, in way order;
+    /// `None` for an invalid way. The comparators show the compare against
+    /// these, not against the tags the access later fills in.
+    pub(crate) tags: Vec<Option<Tag>>,
 }
 
 /// A machine invariant that no longer holds, and where. `Display` names the
@@ -105,6 +163,18 @@ pub enum InvariantViolation {
         /// The dirty way.
         way: WayIndex,
     },
+    /// I6: a valid clean way's data differs from memory's copy of its line.
+    #[error(
+        "invariant I6 (the clean line in way {} of set {} matches memory)",
+        format::data(.way.get()),
+        format::data(.set.get())
+    )]
+    CleanLineDiffersFromMemory {
+        /// The set.
+        set: SetIndex,
+        /// The clean way.
+        way: WayIndex,
+    },
     /// I7: under random replacement, or in a one-way set, a set's ranks are
     /// not its way numbers.
     #[error(
@@ -115,11 +185,24 @@ pub enum InvariantViolation {
         /// The set.
         set: SetIndex,
     },
+    /// I8: a way holds a line that memory has not recorded as touched.
+    #[error(
+        "invariant I8 (the line in way {} of set {} is among the lines memory has touched)",
+        format::data(.way.get()),
+        format::data(.set.get())
+    )]
+    LineNotInMemory {
+        /// The set.
+        set: SetIndex,
+        /// The way holding the line.
+        way: WayIndex,
+    },
 }
 
 impl Machine {
     /// The machine at the start of a run of `config`: every way invalid and
-    /// ranked by its way number, and the generator seeded from `config.seed`.
+    /// ranked by its way number, memory untouched, registers and counters at
+    /// 0, no access yet, and the generator seeded from `config.seed`.
     ///
     /// # Errors
     ///
@@ -129,14 +212,26 @@ impl Machine {
         let geometry = config.validate()?;
         Ok(Self {
             cache: Cache::new(&geometry),
+            memory: Memory::new(&geometry, config.memory_init),
+            registers: Registers::default(),
+            counters: Counters::default(),
             prng: Prng::new(config.seed),
+            access: None,
+            run: 1,
+            entries_in_run: 0,
             geometry,
             config,
         })
     }
 
-    /// Checks the machine's invariants, set by set. I2 is among them, so the
-    /// machine must be between accesses.
+    /// True while an access has started and not yet had its last event.
+    pub(crate) fn in_flight(&self) -> bool {
+        self.access.as_ref().is_some_and(|access| !access.done)
+    }
+
+    /// Checks the machine's invariants, set by set. I2 and I6 hold only
+    /// between accesses, so they are checked only when no access is in
+    /// flight; the others are checked always.
     ///
     /// # Errors
     ///
@@ -163,7 +258,8 @@ impl Machine {
             return Err(InvariantViolation::RanksNotAPermutation { set, ways: count });
         }
 
-        if matches!(replacement, Replacement::Lru | Replacement::Fifo) {
+        let between_accesses = !self.in_flight();
+        if between_accesses && matches!(replacement, Replacement::Lru | Replacement::Fifo) {
             let last_valid = ways
                 .iter()
                 .filter(|way| way.is_valid())
@@ -220,10 +316,44 @@ impl Machine {
             }
         }
 
+        if between_accesses {
+            let differs = (0_u32..)
+                .zip(ways)
+                .find_map(|(number, way)| match &way.slot {
+                    Slot::Valid {
+                        tag,
+                        dirty: Dirtiness::Clean,
+                        data,
+                    } => {
+                        let line = self.geometry.line_addr(*tag, set);
+                        (!self.memory.holds(line, data)).then_some(number)
+                    }
+                    _ => None,
+                });
+            if let Some(number) = differs {
+                return Err(InvariantViolation::CleanLineDiffersFromMemory {
+                    set,
+                    way: WayIndex::new_unchecked(number),
+                });
+            }
+        }
+
         if (replacement == Replacement::Random || count == 1)
             && !(0_u32..).zip(ways).all(|(number, way)| way.rank == number)
         {
             return Err(InvariantViolation::RanksNotWayNumbers { set });
+        }
+
+        let untouched = (0_u32..).zip(ways).find_map(|(number, way)| {
+            way.tag()
+                .filter(|tag| !self.memory.is_touched(self.geometry.line_addr(*tag, set)))
+                .map(|_| number)
+        });
+        if let Some(number) = untouched {
+            return Err(InvariantViolation::LineNotInMemory {
+                set,
+                way: WayIndex::new_unchecked(number),
+            });
         }
         Ok(())
     }
@@ -248,8 +378,7 @@ mod tests {
     #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
     use super::*;
-    use crate::cache::{Dirtiness, Slot};
-    use crate::config::{AllocatePolicy, CacheConfig, Preset, WordBytes};
+    use crate::config::{AllocatePolicy, CacheConfig, MemoryInit, Preset, WordBytes};
     use crate::limits::{MAX_ADDRESS_BITS, MAX_LINES};
     use crate::units::Tag;
 
@@ -290,8 +419,22 @@ mod tests {
         }
     }
 
-    /// Puts `slot` at rank `rank` into way `index` of set `number`.
+    /// Puts `slot` at rank `rank` into way `index` of set `number`, as a
+    /// fill would: its line is recorded as touched in memory, and a clean
+    /// line takes memory's bytes.
     fn put(machine: &mut Machine, number: u32, index: u32, slot: Slot, rank: u32) {
+        let slot = match slot {
+            Slot::Valid { tag, dirty, data } => {
+                let line = machine.geometry.line_addr(tag, set(number));
+                machine.memory.touch(line);
+                let data = match dirty {
+                    Dirtiness::Clean => machine.memory.line(line),
+                    Dirtiness::Dirty => data,
+                };
+                Slot::Valid { tag, dirty, data }
+            }
+            Slot::Invalid => Slot::Invalid,
+        };
         let target = machine.cache.way_mut(set(number), way(index)).unwrap();
         target.slot = slot;
         target.rank = rank;
@@ -302,13 +445,14 @@ mod tests {
     fn fill_unranked(machine: &mut Machine, addr: u32) -> (SetIndex, WayIndex) {
         let decoded = machine.geometry.decode(addr).unwrap();
         let policy = machine.config.cache.replacement.policy();
-        let line_bytes = machine.geometry.line_bytes() as usize;
+        machine.memory.touch(decoded.line);
+        let data = machine.memory.line(decoded.line);
         let set = machine.cache.set_mut(decoded.index).unwrap();
         let choice = policy.victim(set.ways(), &mut machine.prng);
         set.way_mut(choice.way).unwrap().slot = Slot::Valid {
             tag: decoded.tag,
             dirty: Dirtiness::Clean,
-            data: vec![0; line_bytes],
+            data,
         };
         (decoded.index, choice.way)
     }
@@ -350,7 +494,16 @@ mod tests {
         let machine = start(config.clone());
         assert_eq!(machine.geometry, config.validate().unwrap());
         assert_eq!(machine.cache, Cache::new(&machine.geometry));
+        assert_eq!(
+            machine.memory,
+            Memory::new(&machine.geometry, MemoryInit::Pattern)
+        );
+        assert_eq!(machine.registers, Registers::default());
+        assert_eq!(machine.counters, Counters::default());
         assert_eq!(machine.prng, Prng::new(config.seed));
+        assert_eq!(machine.access, None);
+        assert_eq!((machine.run, machine.entries_in_run), (1, 0));
+        assert!(!machine.in_flight());
         assert_eq!(machine.config, config);
         assert_eq!(machine.check_invariants(), Ok(()));
     }
@@ -566,6 +719,101 @@ mod tests {
     }
 
     #[test]
+    fn i6_reports_a_clean_line_that_differs_from_memory() {
+        let mut machine = start(Preset::TwoWayLru.config());
+        let slot = line(&machine, 1, Dirtiness::Clean);
+        put(&mut machine, 2, 1, slot, 0);
+        machine.cache.way_mut(set(2), way(0)).unwrap().rank = 1;
+        assert_eq!(machine.check_invariants(), Ok(()));
+        let Slot::Valid { data, dirty, .. } =
+            &mut machine.cache.way_mut(set(2), way(1)).unwrap().slot
+        else {
+            panic!("way 1 holds a line");
+        };
+        data[4] ^= 0xFF;
+        assert_eq!(*dirty, Dirtiness::Clean);
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::CleanLineDiffersFromMemory {
+                set: set(2),
+                way: way(1)
+            })
+        );
+        // A dirty line may differ: its words are newer than memory's.
+        if let Slot::Valid { dirty, .. } = &mut machine.cache.way_mut(set(2), way(1)).unwrap().slot
+        {
+            *dirty = Dirtiness::Dirty;
+        }
+        assert_eq!(machine.check_invariants(), Ok(()));
+    }
+
+    #[test]
+    fn i2_and_i6_are_not_checked_while_an_access_is_in_flight() {
+        let mut machine = start(Preset::TwoWayLru.config());
+        // Way 1 of set 2 valid and ranked behind invalid way 0 (I2), with a
+        // clean line that differs from memory (I6).
+        let slot = line(&machine, 1, Dirtiness::Clean);
+        put(&mut machine, 2, 1, slot, 1);
+        if let Slot::Valid { data, .. } = &mut machine.cache.way_mut(set(2), way(1)).unwrap().slot {
+            data[0] ^= 0xFF;
+        }
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::ValidRankedAfterInvalid { set: set(2) })
+        );
+        let geometry = machine.geometry;
+        let addr = geometry.addr(0x0A4).unwrap();
+        machine.access = Some(AccessContext {
+            request: Request::Load {
+                addr,
+                into: crate::units::Register::R1,
+            },
+            location: geometry.locate(addr),
+            lookup: None,
+            victim: None,
+            way: None,
+            done: false,
+        });
+        assert!(machine.in_flight());
+        assert_eq!(machine.check_invariants(), Ok(()));
+        // Once the access is done, both are checked again.
+        machine.access.as_mut().unwrap().done = true;
+        assert!(!machine.in_flight());
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::ValidRankedAfterInvalid { set: set(2) })
+        );
+        // Ranked ahead of the invalid way, the line still differs.
+        machine.cache.way_mut(set(2), way(1)).unwrap().rank = 0;
+        machine.cache.way_mut(set(2), way(0)).unwrap().rank = 1;
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::CleanLineDiffersFromMemory {
+                set: set(2),
+                way: way(1)
+            })
+        );
+    }
+
+    #[test]
+    fn i8_reports_a_line_memory_has_not_touched() {
+        let mut machine = start(Config::default());
+        // Zero memory, so the line's zero bytes match it (I6 holds), but the
+        // line was never recorded as touched.
+        machine.cache.way_mut(set(3), way(0)).unwrap().slot = line(&machine, 1, Dirtiness::Clean);
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::LineNotInMemory {
+                set: set(3),
+                way: way(0)
+            })
+        );
+        let line = machine.geometry.line_addr(Tag::new_unchecked(1), set(3));
+        machine.memory.touch(line);
+        assert_eq!(machine.check_invariants(), Ok(()));
+    }
+
+    #[test]
     fn i7_reports_random_ranks_that_moved() {
         let mut machine = start(config(128, 2, Replacement::Random, WritePolicy::WriteBack));
         machine.cache.way_mut(set(3), way(0)).unwrap().rank = 1;
@@ -668,8 +916,22 @@ mod tests {
                 "invariant I5 (way 1 of set 0 is not dirty under write-through)",
             ),
             (
+                InvariantViolation::CleanLineDiffersFromMemory {
+                    set: set(2),
+                    way: way(1),
+                },
+                "invariant I6 (the clean line in way 1 of set 2 matches memory)",
+            ),
+            (
                 InvariantViolation::RanksNotWayNumbers { set: set(3) },
                 "invariant I7 (the ranks in set 3 equal the way numbers)",
+            ),
+            (
+                InvariantViolation::LineNotInMemory {
+                    set: set(0),
+                    way: way(3),
+                },
+                "invariant I8 (the line in way 3 of set 0 is among the lines memory has touched)",
             ),
         ];
         for (violation, message) in cases {

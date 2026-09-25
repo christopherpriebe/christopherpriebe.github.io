@@ -26,13 +26,6 @@ use crate::prng::Prng;
 use crate::units::WayIndex;
 
 /// Replacement behaviour over the ways of one set, in way order.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the access engine ranks hits and fills and chooses victims"
-    )
-)]
 pub(crate) trait ReplacementPolicy {
     /// A hit on `way`. Returns the rank moves made, in way order; empty if
     /// none.
@@ -129,10 +122,6 @@ pub(crate) enum VictimReason {
 
 impl Replacement {
     /// The behaviour of this policy.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the access engine replaces lines by policy")
-    )]
     pub(crate) fn policy(self) -> &'static dyn ReplacementPolicy {
         match self {
             Replacement::Lru => &Lru,

@@ -68,6 +68,13 @@ pub(crate) fn bits(value: u32, width: u8) -> String {
         .collect()
 }
 
+/// An event's label, `{entry}.{seq}` as in `5.3`. Plain digits, never
+/// grouped: a label names an event rather than counting anything, and a
+/// comma would read as a third number.
+pub(crate) fn label(entry: u32, seq: u32) -> String {
+    format!("{entry}.{seq}")
+}
+
 /// "a" or "an", whichever reads right before `n` spoken aloud: "an 8-line
 /// cache", "a 16-line cache".
 pub(crate) fn a_or_an(n: impl Into<u64>) -> &'static str {
@@ -205,6 +212,12 @@ mod tests {
         for n in [0_u32, 2, 8, 1_000] {
             assert_eq!(plural(n, "way", "ways"), "ways", "{n}");
         }
+    }
+
+    #[test]
+    fn labels_are_entry_dot_seq_in_plain_digits() {
+        assert_eq!(label(5, 3), "5.3");
+        assert_eq!(label(12_345, 10), "12345.10");
     }
 
     #[test]

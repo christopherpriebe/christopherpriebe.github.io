@@ -6,7 +6,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 use crate::format;
-use crate::units::{Addr, LineAddr, SetIndex, Tag, WayIndex, WordIndex};
+use crate::units::{Addr, LineAddr, SetIndex, Tag, WayIndex, Word, WordIndex};
 
 /// The shape of a valid configuration, as `Config::validate` computes it.
 ///
@@ -147,6 +147,23 @@ pub struct Decoded {
     pub bits: String,
     /// The non-empty fields, most significant first: tag, index, offset.
     pub fields: Vec<AddressField>,
+}
+
+/// Where an address falls in the cache: the fields of [`Decoded`] without its
+/// texts, for the engine and the memory, which look addresses up at every
+/// access and must not format strings to do it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Location {
+    /// The address of the line holding the address.
+    pub(crate) line: LineAddr,
+    /// The line's tag.
+    pub(crate) tag: Tag,
+    /// The set the line maps to; 0 when the cache is fully associative.
+    pub(crate) set: SetIndex,
+    /// The byte within the line.
+    pub(crate) offset: u32,
+    /// The word within the line.
+    pub(crate) word: WordIndex,
 }
 
 /// Why an address cannot be accessed. `Display` is the message the student
@@ -307,12 +324,11 @@ impl Geometry {
             address_bits: self.address_bits,
         })?;
         let value = addr.get();
-        // The counts are non-zero powers of two and the tag keeps at least one
-        // bit, so these masks and shifts stay within the address.
-        let offset = value & (self.line_bytes - 1);
-        let index = (value >> self.offset_bits) & (self.sets - 1);
-        let tag = value >> (self.offset_bits + self.index_bits);
-        let word = offset / self.word_bytes;
+        let location = self.locate(addr);
+        let offset = location.offset;
+        let index = location.set.get();
+        let tag = location.tag.get();
+        let word = location.word.get();
         let byte_in_word = offset % self.word_bytes;
         let bit_ranges = BitRanges {
             tag: BitRange {
@@ -361,19 +377,47 @@ impl Geometry {
         Ok(Decoded {
             addr,
             addr_text: format::address(value, self.address_bits),
-            line: LineAddr::new_unchecked(value - offset),
-            line_text: format::address(value - offset, self.address_bits),
-            tag: Tag::new_unchecked(tag),
+            line: location.line,
+            line_text: format::address(location.line.get(), self.address_bits),
+            tag: location.tag,
             tag_text,
-            index: SetIndex::new_unchecked(index),
+            index: location.set,
             offset,
-            word: WordIndex::new_unchecked(word),
+            word: location.word,
             byte_in_word,
             aligned: byte_in_word == 0,
             bit_ranges,
             bits: format::bits(value, self.address_bits),
             fields,
         })
+    }
+
+    /// Where `addr` falls in the cache: its line, tag, set, offset and word,
+    /// computed without the texts [`Geometry::decode`] formats.
+    ///
+    /// An address from [`Geometry::addr`] fits the width. One deserialized from
+    /// outside and not yet validated may not; its excess bits then land in the
+    /// tag, which no valid way can hold.
+    pub(crate) fn locate(&self, addr: Addr) -> Location {
+        let value = addr.get();
+        // The counts are non-zero powers of two and the tag keeps at least one
+        // bit, so these masks and shifts stay within 32 bits.
+        let offset = value & (self.line_bytes - 1);
+        let index = (value >> self.offset_bits) & (self.sets - 1);
+        let tag = value >> (self.offset_bits + self.index_bits);
+        Location {
+            line: LineAddr::new_unchecked(value - offset),
+            tag: Tag::new_unchecked(tag),
+            set: SetIndex::new_unchecked(index),
+            offset,
+            word: WordIndex::new_unchecked(offset / self.word_bytes),
+        }
+    }
+
+    /// The word a store of `value` writes: its low `8 × word_bytes` bits, as
+    /// a register wider than the word is stored.
+    pub(crate) fn fit_word(&self, value: u64) -> Word {
+        Word::new_unchecked(value & highest_word(self.word_bytes))
     }
 
     /// The address of the line with tag `tag` in set `set`: the two fields put
@@ -413,6 +457,13 @@ impl BitRange {
 pub(crate) fn last_address(address_bits: u8) -> u32 {
     u32::MAX
         .checked_shr(u32::BITS.saturating_sub(u32::from(address_bits)))
+        .unwrap_or(0)
+}
+
+/// The largest unsigned value a word of `word_bytes` bytes holds: 2^(8w) − 1.
+pub(crate) fn highest_word(word_bytes: u32) -> u64 {
+    u64::MAX
+        .checked_shr(u64::BITS.saturating_sub(word_bytes.saturating_mul(u8::BITS)))
         .unwrap_or(0)
 }
 

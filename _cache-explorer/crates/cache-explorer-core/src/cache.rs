@@ -47,7 +47,6 @@ pub(crate) enum Slot {
     /// Nothing: no tag, no dirty bit, no data.
     Invalid,
     /// One line of memory.
-    #[cfg_attr(not(test), expect(dead_code, reason = "the access engine fills ways"))]
     Valid {
         /// The line's tag; with the way's set, it gives the line's address.
         tag: Tag,
@@ -63,10 +62,6 @@ pub(crate) enum Slot {
 /// Whether a valid line has been written since it was filled, under
 /// write-back.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the access engine fills and writes lines")
-)]
 pub(crate) enum Dirtiness {
     /// The line matches what it was filled with.
     Clean,
@@ -99,28 +94,16 @@ impl Cache {
     }
 
     /// The set `set` for changing, if the cache has it.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the access engine fills sets and ranks them")
-    )]
     pub(crate) fn set_mut(&mut self, set: SetIndex) -> Option<&mut Set> {
         self.sets.get_mut(usize::try_from(set.get()).ok()?)
     }
 
     /// Way `way` of set `set`, if the cache has it.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the access engine looks ways up")
-    )]
     pub(crate) fn way(&self, set: SetIndex, way: WayIndex) -> Option<&Way> {
         self.set(set)?.way(way)
     }
 
     /// Way `way` of set `set` for changing, if the cache has it.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the access engine fills, writes and evicts ways")
-    )]
     pub(crate) fn way_mut(&mut self, set: SetIndex, way: WayIndex) -> Option<&mut Way> {
         self.set_mut(set)?.way_mut(way)
     }
@@ -134,25 +117,16 @@ impl Set {
 
     /// The set's ways for changing, in way order, as the replacement policies
     /// rank them.
-    #[cfg_attr(not(test), expect(dead_code, reason = "the access engine ranks ways"))]
     pub(crate) fn ways_mut(&mut self) -> &mut [Way] {
         &mut self.ways
     }
 
     /// Way `way`, if the set has it.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the access engine looks ways up")
-    )]
     pub(crate) fn way(&self, way: WayIndex) -> Option<&Way> {
         self.ways.get(usize::try_from(way.get()).ok()?)
     }
 
     /// Way `way` for changing, if the set has it.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the access engine fills, writes and evicts ways")
-    )]
     pub(crate) fn way_mut(&mut self, way: WayIndex) -> Option<&mut Way> {
         self.ways.get_mut(usize::try_from(way.get()).ok()?)
     }

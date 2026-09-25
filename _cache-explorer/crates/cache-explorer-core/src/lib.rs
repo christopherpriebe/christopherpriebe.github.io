@@ -20,23 +20,38 @@ pub mod limits;
 
 mod cache;
 mod config;
+mod cpu;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the session applies ops through the engine")
+)]
+mod engine;
+mod event;
+mod explain;
 mod format;
 mod geometry;
 mod input;
 mod machine;
+mod memory;
+mod op;
 mod prng;
 mod replacement;
+mod stats;
 mod units;
 
 pub use config::{
     presets, AllocatePolicy, CacheConfig, Config, ConfigError, ConfigNumberField, MemoryInit,
     Preset, Repair, Replacement, Timing, WordBytes, WordBytesError, WritePolicy,
 };
+pub use event::{Cause, ChangeRef, Counter, EventKind, MicroEvent};
 pub use geometry::{
     AccessError, AddressField, BitRange, BitRanges, Decoded, FieldKind, Geometry, Placement,
 };
 pub use input::{AddressInput, WordInput};
 pub use machine::{InvariantViolation, Machine};
+pub use memory::StaleInfo;
+pub use op::AccessKind;
+pub use stats::Counters;
 pub use units::{
     Addr, Cycle, EventPos, LineAddr, OpIndex, Register, SetIndex, Tag, WayIndex, Word, WordIndex,
 };
