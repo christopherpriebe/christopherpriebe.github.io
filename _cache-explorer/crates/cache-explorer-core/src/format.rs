@@ -43,6 +43,16 @@ pub(crate) fn capital_a_or_an(n: impl Into<u64>) -> &'static str {
     }
 }
 
+/// The noun that reads right after `n`: `one` for 1 and `many` otherwise, as
+/// in "1 way" and "8 ways".
+pub(crate) fn plural(n: impl Into<u64>, one: &'static str, many: &'static str) -> &'static str {
+    if n.into() == 1 {
+        one
+    } else {
+        many
+    }
+}
+
 /// Whether `n` spoken aloud starts with a vowel sound: when its leading group
 /// of up to three digits is eight, eleven, eighteen, eighty-something or
 /// eight hundred and something.
@@ -104,6 +114,14 @@ mod tests {
         assert_eq!(hex(0x5, 2), "0x05");
         assert_eq!(hex(0xABCD, 2), "0xABCD");
         assert_eq!(hex(u32::MAX, 8), "0xFFFFFFFF");
+    }
+
+    #[test]
+    fn plurals_are_singular_only_for_one() {
+        assert_eq!(plural(1_u32, "way", "ways"), "way");
+        for n in [0_u32, 2, 8, 1_000] {
+            assert_eq!(plural(n, "way", "ways"), "ways", "{n}");
+        }
     }
 
     #[test]

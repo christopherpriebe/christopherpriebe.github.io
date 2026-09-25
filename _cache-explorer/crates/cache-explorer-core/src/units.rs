@@ -93,7 +93,7 @@ pub struct Word(u64);
 /// dropped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "camelCase")]
 pub enum Register {
     /// `r0`, which always reads 0.
     R0 = 0,
@@ -255,6 +255,20 @@ impl Register {
     pub const fn get(self) -> u8 {
         self as u8
     }
+
+    /// The register's name, `r0` to `r7`, as the assembler reads it.
+    const fn name(self) -> &'static str {
+        match self {
+            Register::R0 => "r0",
+            Register::R1 => "r1",
+            Register::R2 => "r2",
+            Register::R3 => "r3",
+            Register::R4 => "r4",
+            Register::R5 => "r5",
+            Register::R6 => "r6",
+            Register::R7 => "r7",
+        }
+    }
 }
 
 impl Serialize for Word {
@@ -325,7 +339,7 @@ impl fmt::Display for Word {
 
 impl fmt::Display for Register {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "r{}", self.get())
+        f.write_str(self.name())
     }
 }
 

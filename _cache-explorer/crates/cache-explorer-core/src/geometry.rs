@@ -8,36 +8,42 @@ use crate::units::{Addr, SetIndex, Tag, WayIndex, WordIndex};
 
 /// The shape of a valid configuration, as `Config::validate` computes it.
 ///
-/// A `Geometry` exists only for a configuration that validated, so its counts
-/// are non-zero powers of two and its widths add up to `address_bits` with at
-/// least one tag bit. Code outside the core cannot build one by hand.
+/// Only `Config::validate` builds a `Geometry`, so its counts are non-zero
+/// powers of two and its widths add up to `address_bits` with at least one tag
+/// bit; the core divides and shifts by them on that basis. Its fields are
+/// private to the core and read through the methods of the same names, so code
+/// outside the core can neither build a `Geometry` nor change one:
+///
+/// ```compile_fail,E0616
+/// let mut geometry = cache_explorer_core::Config::default().validate().unwrap();
+/// geometry.address_bits = 200;
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub struct Geometry {
     /// Width of a byte address.
-    pub address_bits: u8,
+    pub(crate) address_bits: u8,
     /// Bytes per word.
-    pub word_bytes: u32,
+    pub(crate) word_bytes: u32,
     /// Bytes per line.
-    pub line_bytes: u32,
+    pub(crate) line_bytes: u32,
     /// Ways per set: the associativity.
-    pub ways: u32,
+    pub(crate) ways: u32,
     /// Sets in the cache.
-    pub sets: u32,
+    pub(crate) sets: u32,
     /// Lines in the cache: `sets × ways`.
-    pub lines: u32,
+    pub(crate) lines: u32,
     /// Words per line.
-    pub words_per_line: u32,
+    pub(crate) words_per_line: u32,
     /// Width of the offset field: `log2(line_bytes)`.
-    pub offset_bits: u8,
+    pub(crate) offset_bits: u8,
     /// Width of the index field: `log2(sets)`, 0 when fully associative.
-    pub index_bits: u8,
+    pub(crate) index_bits: u8,
     /// Width of the tag field: the address bits left over; at least 1.
-    pub tag_bits: u8,
+    pub(crate) tag_bits: u8,
     /// How lines are placed.
-    pub placement: Placement,
+    pub(crate) placement: Placement,
 }
 
 /// How a cache places lines. A one-line cache is both direct-mapped and fully
@@ -68,6 +74,61 @@ impl Placement {
 }
 
 impl Geometry {
+    /// Width of a byte address.
+    pub const fn address_bits(&self) -> u8 {
+        self.address_bits
+    }
+
+    /// Bytes per word.
+    pub const fn word_bytes(&self) -> u32 {
+        self.word_bytes
+    }
+
+    /// Bytes per line.
+    pub const fn line_bytes(&self) -> u32 {
+        self.line_bytes
+    }
+
+    /// Ways per set: the associativity.
+    pub const fn ways(&self) -> u32 {
+        self.ways
+    }
+
+    /// Sets in the cache.
+    pub const fn sets(&self) -> u32 {
+        self.sets
+    }
+
+    /// Lines in the cache: `sets × ways`.
+    pub const fn lines(&self) -> u32 {
+        self.lines
+    }
+
+    /// Words per line.
+    pub const fn words_per_line(&self) -> u32 {
+        self.words_per_line
+    }
+
+    /// Width of the offset field: `log2(line_bytes)`.
+    pub const fn offset_bits(&self) -> u8 {
+        self.offset_bits
+    }
+
+    /// Width of the index field: `log2(sets)`, 0 when fully associative.
+    pub const fn index_bits(&self) -> u8 {
+        self.index_bits
+    }
+
+    /// Width of the tag field: the address bits left over; at least 1.
+    pub const fn tag_bits(&self) -> u8 {
+        self.tag_bits
+    }
+
+    /// How lines are placed.
+    pub const fn placement(&self) -> Placement {
+        self.placement
+    }
+
     /// `value` as an address, if it fits `address_bits`.
     pub fn addr(&self, value: u32) -> Option<Addr> {
         (u64::from(value) < 1_u64 << self.address_bits).then(|| Addr::new_unchecked(value))

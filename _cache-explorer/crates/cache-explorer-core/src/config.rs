@@ -5,7 +5,8 @@
 //! [`Geometry`] of a valid configuration; the first rule that fails is the
 //! [`ConfigError`], whose `Display` is the message the student reads.
 //! [`Config::repair`] finds the nearest valid configuration for the "Open
-//! with … instead" action. The named configurations, the design's three
+//! with … instead" action, and [`Config::summary`] is the configuration's
+//! one-line description. The named configurations, the design's three
 //! geometries, live here too.
 
 use serde::{Deserialize, Serialize};
@@ -186,7 +187,8 @@ pub enum Preset {
 }
 
 /// Why a configuration is invalid: the first rule it breaks, in the order
-/// `Config::validate` checks them. `Display` is the message the student reads.
+/// `Config::validate` checks them, which is the order of the variants.
+/// `Display` is the message the student reads.
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum ConfigError {
     /// The address width is outside the supported range.
@@ -243,47 +245,6 @@ pub enum ConfigError {
         /// The cache size, in bytes.
         size: u32,
     },
-    /// The associativity is 0.
-    #[error("Associativity must be at least 1.")]
-    AssociativityZero,
-    /// The associativity is not a power of two.
-    #[error(
-        "Associativity {} is not a power of two. It must be {} for {} {}-line cache.",
-        format::setting(*.got),
-        associativity_choices(*.lines),
-        format::a_or_an(*.lines),
-        format::setting(*.lines)
-    )]
-    AssociativityNotPowerOfTwo {
-        /// The associativity given.
-        got: u32,
-        /// Lines in the cache.
-        lines: u32,
-    },
-    /// The associativity exceeds the line count.
-    #[error(
-        "{} {}-line cache can have at most {} ways; got {}.",
-        format::capital_a_or_an(*.lines),
-        format::setting(*.lines),
-        format::setting(*.lines),
-        format::setting(*.got)
-    )]
-    AssociativityTooLarge {
-        /// The associativity given.
-        got: u32,
-        /// Lines in the cache.
-        lines: u32,
-    },
-    /// One way would cover the whole address space, leaving no tag bits.
-    #[error(
-        "With {}-bit addresses one way of this cache would cover all of memory, leaving no \
-         tag bits. Use wider addresses or a smaller cache.",
-        format::setting(*.bits)
-    )]
-    NoTagBits {
-        /// The address width.
-        bits: u8,
-    },
     /// The cache has more lines than fit on screen.
     #[error(
         "Keep the cache to at most {} lines so every set fits on screen; {} B ÷ {} B = {} lines.",
@@ -315,6 +276,48 @@ pub enum ConfigError {
         line: u32,
         /// The word size, in bytes.
         word: u32,
+    },
+    /// The associativity is 0.
+    #[error("Associativity must be at least 1.")]
+    AssociativityZero,
+    /// The associativity is not a power of two.
+    #[error(
+        "Associativity {} is not a power of two. It must be {} for {} {}-line cache.",
+        format::setting(*.got),
+        associativity_choices(*.lines),
+        format::a_or_an(*.lines),
+        format::setting(*.lines)
+    )]
+    AssociativityNotPowerOfTwo {
+        /// The associativity given.
+        got: u32,
+        /// Lines in the cache.
+        lines: u32,
+    },
+    /// The associativity exceeds the line count.
+    #[error(
+        "{} {}-line cache can have at most {} {}; got {}.",
+        format::capital_a_or_an(*.lines),
+        format::setting(*.lines),
+        format::setting(*.lines),
+        format::plural(*.lines, "way", "ways"),
+        format::setting(*.got)
+    )]
+    AssociativityTooLarge {
+        /// The associativity given.
+        got: u32,
+        /// Lines in the cache.
+        lines: u32,
+    },
+    /// One way would cover the whole address space, leaving no tag bits.
+    #[error(
+        "With {}-bit addresses one way of this cache would cover all of memory, leaving no \
+         tag bits. Use wider addresses or a smaller cache.",
+        format::setting(*.bits)
+    )]
+    NoTagBits {
+        /// The address width.
+        bits: u8,
     },
     /// A timing number is outside the supported range.
     #[error(
@@ -363,29 +366,17 @@ impl Config {
             return Err(ConfigError::AddressBits { got: address_bits });
         }
         let (sets, ways, lines) = self.cache.organisation(self.word_bytes)?;
-        let size = self.cache.size_bytes;
+        let word = self.word_bytes.bytes();
         let line = self.cache.line_bytes;
         let offset_bits = log2(line);
         let index_bits = log2(sets);
         // Computed signed: 8-bit addresses with a 512 B direct-mapped cache of
-        // 16 B lines leave 8 − 5 − 4 = −1 tag bits.
+        // 32 B lines leave 8 − 4 − 5 = −1 tag bits.
         let tag_bits = i32::from(address_bits) - i32::from(index_bits) - i32::from(offset_bits);
         let tag_bits = u8::try_from(tag_bits)
             .ok()
             .filter(|&bits| bits >= 1)
             .ok_or(ConfigError::NoTagBits { bits: address_bits })?;
-        if lines > MAX_LINES {
-            return Err(ConfigError::TooManyLines { lines, size, line });
-        }
-        let word = self.word_bytes.bytes();
-        let words_per_line = line / word;
-        if words_per_line > MAX_WORDS_PER_LINE {
-            return Err(ConfigError::TooManyWords {
-                words: words_per_line,
-                line,
-                word,
-            });
-        }
         if let Some(timing) = self.timing {
             check_cycles(ConfigNumberField::HitCycles, timing.hit_cycles)?;
             check_cycles(ConfigNumberField::MissCycles, timing.miss_cycles)?;
@@ -400,7 +391,7 @@ impl Config {
             ways,
             sets,
             lines,
-            words_per_line,
+            words_per_line: line / word,
             offset_bits,
             index_bits,
             tag_bits,
@@ -420,12 +411,14 @@ impl Config {
     ///    clamped between one word and the most words a line may hold;
     /// 3. the cache size is rounded down to a power of two (0 becomes 1), then
     ///    raised to at least one line: the cache grows, the line never shrinks;
-    /// 4. the associativity becomes at least 1, is rounded down to a power of
-    ///    two, and is lowered to at most the line count;
+    /// 4. if the cache was fully associative, its associativity at least its
+    ///    line count, the associativity becomes the new line count; otherwise
+    ///    it becomes at least 1, is rounded down to a power of two, and is
+    ///    lowered to at most the line count;
     /// 5. the cache size becomes the largest power of two, not above the size
-    ///    from step 3, with at most `MAX_LINES` lines and a tag bit, the
-    ///    associativity following the line count if the cache was fully
-    ///    associative and otherwise lowered to it if it no longer fits;
+    ///    from step 3, with at most `MAX_LINES` lines and a tag bit, a fully
+    ///    associative cache keeping as many ways as lines and any other
+    ///    lowering its associativity to the line count if it no longer fits;
     /// 6. timing is clamped to its range, and the seed to `MAX_SEED`.
     ///
     /// The address width, word size, policies, memory contents and
@@ -444,6 +437,54 @@ impl Config {
         self.cache.write_policy == WritePolicy::WriteBack
             && self.cache.allocate_policy == AllocatePolicy::WriteAllocate
             && self.timing.is_none()
+    }
+
+    /// The design's summary line: the size, the line size and the placement,
+    /// then the replacement policy unless the cache is direct-mapped, as in
+    /// "128 B · 16 B lines · 2-way · LRU"; in Advanced, then the write and
+    /// allocate policies, " · write-back · allocate". Timing is not part of it.
+    pub fn summary(&self, advanced: bool) -> String {
+        let cache = &self.cache;
+        let mut text = format!(
+            "{} B · {} B lines · {}",
+            format::setting(cache.size_bytes),
+            format::setting(cache.line_bytes),
+            cache.placement_name()
+        );
+        if cache.placement() != Placement::DirectMapped {
+            text.push_str(" · ");
+            text.push_str(replacement_name(cache.replacement));
+        }
+        if advanced {
+            text.push_str(" · ");
+            text.push_str(match cache.write_policy {
+                WritePolicy::WriteBack => "write-back",
+                WritePolicy::WriteThrough => "write-through",
+            });
+            text.push_str(" · ");
+            text.push_str(match cache.allocate_policy {
+                AllocatePolicy::WriteAllocate => "allocate",
+                AllocatePolicy::WriteNoAllocate => "no-allocate",
+            });
+        }
+        text
+    }
+
+    /// The short summary a shared run's loading screen opens with: the
+    /// placement and the replacement policy, then the size, as in "2-way LRU ·
+    /// 128 B". It starts a sentence, so it starts with a capital: "Direct-mapped
+    /// · 128 B", "Fully associative LRU · 128 B".
+    pub fn short_summary(&self) -> String {
+        let cache = &self.cache;
+        let replacement = replacement_name(cache.replacement);
+        let placement = match cache.placement() {
+            Placement::DirectMapped => "Direct-mapped".to_owned(),
+            Placement::FullyAssociative => format!("Fully associative {replacement}"),
+            Placement::SetAssociative => {
+                format!("{}-way {replacement}", format::setting(cache.associativity))
+            }
+        };
+        format!("{placement} · {} B", format::setting(cache.size_bytes))
     }
 
     /// This configuration with write-back, write-allocate and no timing.
@@ -477,8 +518,21 @@ impl Config {
             .min(largest_line)
             .max(word);
         let size = floor_power_of_two(self.cache.size_bytes).max(line);
-        let associativity = floor_power_of_two(self.cache.associativity).min(size / line);
-        let (size_bytes, associativity) = fit_size(address_bits, line, size, associativity);
+        // Whether the cache had one set: at least as many ways as lines, since
+        // an invalid associativity may be more. Lines of 0 bytes give no line
+        // count, so such a cache had no set to speak of.
+        let fully_associative = self
+            .cache
+            .size_bytes
+            .checked_div(self.cache.line_bytes)
+            .is_some_and(|lines| self.cache.associativity >= lines);
+        let associativity = if fully_associative {
+            size / line
+        } else {
+            floor_power_of_two(self.cache.associativity).min(size / line)
+        };
+        let (size_bytes, associativity) =
+            fit_size(address_bits, line, size, associativity, fully_associative);
         Config {
             address_bits,
             cache: CacheConfig {
@@ -526,6 +580,12 @@ impl Default for Config {
 impl CacheConfig {
     /// Checks the cache rules, from the cache size to the associativity's
     /// limit, and returns the sets, ways and lines.
+    ///
+    /// The caps on lines and words come as soon as the line fits the cache,
+    /// before the associativity: a cache with too many lines is refused for
+    /// that rather than told which associativities it could have, and a line
+    /// within the words cap is short enough that a fully associative cache
+    /// always keeps a tag bit.
     fn organisation(&self, word_bytes: WordBytes) -> Result<(u32, u32, u32), ConfigError> {
         let size = self.size_bytes;
         let line = self.line_bytes;
@@ -543,10 +603,17 @@ impl CacheConfig {
         if size < line {
             return Err(ConfigError::LineLargerThanCache { line, size });
         }
+        let lines = size / line;
+        if lines > MAX_LINES {
+            return Err(ConfigError::TooManyLines { lines, size, line });
+        }
+        let words = line / word;
+        if words > MAX_WORDS_PER_LINE {
+            return Err(ConfigError::TooManyWords { words, line, word });
+        }
         if ways == 0 {
             return Err(ConfigError::AssociativityZero);
         }
-        let lines = size / line;
         if !ways.is_power_of_two() {
             return Err(ConfigError::AssociativityNotPowerOfTwo { got: ways, lines });
         }
@@ -554,6 +621,29 @@ impl CacheConfig {
             return Err(ConfigError::AssociativityTooLarge { got: ways, lines });
         }
         Ok((lines / ways, ways, lines))
+    }
+
+    /// The placement the summaries name, read from the numbers as given so
+    /// that an invalid configuration has one too; for a valid configuration it
+    /// is the geometry's.
+    fn placement(&self) -> Placement {
+        if self.size_bytes.checked_div(self.line_bytes) == Some(self.associativity) {
+            Placement::FullyAssociative
+        } else if self.associativity == 1 {
+            Placement::DirectMapped
+        } else {
+            Placement::SetAssociative
+        }
+    }
+
+    /// The placement as the summaries write it: "direct-mapped", "fully
+    /// associative" or "2-way".
+    fn placement_name(&self) -> String {
+        match self.placement() {
+            Placement::DirectMapped => "direct-mapped".to_owned(),
+            Placement::FullyAssociative => "fully associative".to_owned(),
+            Placement::SetAssociative => format!("{}-way", format::setting(self.associativity)),
+        }
     }
 }
 
@@ -725,6 +815,15 @@ fn associativity_choices(lines: u32) -> String {
     format!("{text} (fully associative)")
 }
 
+/// The replacement policy as the summaries name it.
+fn replacement_name(replacement: Replacement) -> &'static str {
+    match replacement {
+        Replacement::Lru => "LRU",
+        Replacement::Fifo => "FIFO",
+        Replacement::Random => "Random",
+    }
+}
+
 /// The name a timing message gives the number it is about.
 fn timing_name(field: ConfigNumberField) -> &'static str {
     match field {
@@ -763,12 +862,18 @@ fn log2(power_of_two: u32) -> u8 {
 
 /// Step 5 of [`Config::repair`]: the largest power-of-two size, not above
 /// `size`, whose line count is within `MAX_LINES` and whose tag keeps a bit,
-/// with the associativity to go with it. A bounded search over at most 32
-/// sizes; one line always qualifies, because a line is at most
-/// `MAX_WORDS_PER_LINE` words of at most 8 bytes and that is below the
+/// with the associativity to go with it: the line count for a fully
+/// associative cache, and otherwise `associativity` lowered to fit. A bounded
+/// search over at most 32 sizes; one line always qualifies, because a line is
+/// at most `MAX_WORDS_PER_LINE` words of at most 8 bytes and that is below the
 /// narrowest address space, which a unit test of the limits checks.
-fn fit_size(address_bits: u8, line: u32, size: u32, associativity: u32) -> (u32, u32) {
-    let fully_associative = associativity == size / line;
+fn fit_size(
+    address_bits: u8,
+    line: u32,
+    size: u32,
+    associativity: u32,
+    fully_associative: bool,
+) -> (u32, u32) {
     let mut candidate = size;
     while candidate > line {
         let lines = candidate / line;

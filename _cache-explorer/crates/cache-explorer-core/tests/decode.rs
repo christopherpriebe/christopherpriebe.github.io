@@ -69,21 +69,21 @@ fn check_rule(config: &Config, error: &ConfigError, message: &str, label: &str) 
 fn default_config_validates_as_eight_direct_mapped_sets() {
     let config = Config::default();
     let geometry = config.validate().unwrap();
-    assert_eq!(geometry.address_bits, config.address_bits);
-    assert_eq!(geometry.word_bytes, 4);
-    assert_eq!(geometry.line_bytes, 16);
+    assert_eq!(geometry.address_bits(), config.address_bits);
+    assert_eq!(geometry.word_bytes(), 4);
+    assert_eq!(geometry.line_bytes(), 16);
     assert_eq!(
         (
-            geometry.sets,
-            geometry.ways,
-            geometry.lines,
-            geometry.words_per_line
+            geometry.sets(),
+            geometry.ways(),
+            geometry.lines(),
+            geometry.words_per_line()
         ),
         (8, 1, 8, 4)
     );
-    assert_eq!((geometry.offset_bits, geometry.index_bits), (4, 3));
-    assert_eq!(geometry.tag_bits, config.address_bits - 7);
-    assert_eq!(geometry.placement, Placement::DirectMapped);
+    assert_eq!((geometry.offset_bits(), geometry.index_bits()), (4, 3));
+    assert_eq!(geometry.tag_bits(), config.address_bits - 7);
+    assert_eq!(geometry.placement(), Placement::DirectMapped);
 }
 
 /// The one test that pins the default width: 12 bits, the design's, where the
@@ -144,8 +144,8 @@ fn named_configurations_follow_their_table() {
                 preset.id(),
                 config.cache.size_bytes,
                 config.cache.line_bytes,
-                geometry.ways,
-                geometry.sets,
+                geometry.ways(),
+                geometry.sets(),
             )
         })
         .collect();
@@ -231,11 +231,116 @@ fn basics_is_write_back_write_allocate_and_untimed() {
     }
 }
 
-// Validation rules, their messages and their repairs
+// Summaries
 
 #[test]
+fn summaries_name_the_size_the_placement_and_the_policy() {
+    let fully_associative = Config {
+        cache: CacheConfig {
+            replacement: Replacement::Fifo,
+            ..with_cache(128, 16, 8).cache
+        },
+        ..Config::default()
+    };
+    let large = Config {
+        cache: CacheConfig {
+            replacement: Replacement::Random,
+            ..with_cache(2_048, 128, 2).cache
+        },
+        ..Config::default()
+    };
+    let cases = [
+        (
+            Preset::DirectMapped8.config(),
+            "128 B · 16 B lines · direct-mapped",
+            "Direct-mapped · 128 B",
+        ),
+        (
+            Preset::TwoWayLru.config(),
+            "128 B · 16 B lines · 2-way · LRU",
+            "2-way LRU · 128 B",
+        ),
+        (
+            Preset::FourWayWriteBack.config(),
+            "256 B · 16 B lines · 4-way · LRU",
+            "4-way LRU · 256 B",
+        ),
+        (
+            fully_associative,
+            "128 B · 16 B lines · fully associative · FIFO",
+            "Fully associative FIFO · 128 B",
+        ),
+        // One line in one set: fully associative, as its geometry says.
+        (
+            with_cache(16, 16, 1),
+            "16 B · 16 B lines · fully associative · LRU",
+            "Fully associative LRU · 16 B",
+        ),
+        (
+            large,
+            "2,048 B · 128 B lines · 2-way · Random",
+            "2-way Random · 2,048 B",
+        ),
+    ];
+    for (config, summary, short_summary) in cases {
+        assert_eq!(config.summary(false), summary, "{config:?}");
+        assert_eq!(config.short_summary(), short_summary, "{config:?}");
+    }
+}
+
+#[test]
+fn advanced_summaries_add_the_write_and_allocate_policies() {
+    assert_eq!(
+        Config::default().summary(true),
+        "128 B · 16 B lines · direct-mapped · write-back · allocate"
+    );
+    let two_way = Preset::TwoWayLru.config();
+    let config = Config {
+        cache: CacheConfig {
+            write_policy: WritePolicy::WriteThrough,
+            allocate_policy: AllocatePolicy::WriteNoAllocate,
+            ..two_way.cache.clone()
+        },
+        timing: Some(Timing {
+            hit_cycles: 1,
+            miss_cycles: 20,
+        }),
+        ..two_way
+    };
+    assert_eq!(
+        config.summary(true),
+        "128 B · 16 B lines · 2-way · LRU · write-through · no-allocate"
+    );
+    // Timing is never in a summary, and the policies only in Advanced.
+    assert_eq!(config.summary(false), "128 B · 16 B lines · 2-way · LRU");
+    assert_eq!(config.short_summary(), "2-way LRU · 128 B");
+}
+
+#[test]
+fn an_invalid_configuration_is_summarised_as_given() {
+    assert_eq!(
+        with_cache(128, 16, 16).summary(false),
+        "128 B · 16 B lines · 16-way · LRU"
+    );
+    assert_eq!(
+        with_cache(100, 0, 1).summary(false),
+        "100 B · 0 B lines · direct-mapped"
+    );
+}
+
+// Validation rules, their messages and their repairs
+
+/// The caps on lines and words are checked as soon as the cache's shape is
+/// well formed, before its associativity and its tag: a cache with too many
+/// lines is not told which associativities it could have, and a fully
+/// associative cache is never refused for having no tag bits.
+#[test]
 fn rules_are_checked_in_order_and_the_first_failure_wins() {
-    let bad_everything = Config {
+    // At the narrowest width one line of this size covers all of memory, and
+    // it holds more words than a line may.
+    let long_line = 1_u32 << MIN_ADDRESS_BITS;
+    let too_many_lines = (MAX_LINES + 1).next_power_of_two();
+    let mut config = Config {
         address_bits: MAX_ADDRESS_BITS + 1,
         cache: CacheConfig {
             size_bytes: 100,
@@ -250,62 +355,73 @@ fn rules_are_checked_in_order_and_the_first_failure_wins() {
         seed: u64::MAX,
         ..Config::default()
     };
-    assert!(matches!(
-        bad_everything.validate(),
-        Err(ConfigError::AddressBits { .. })
-    ));
-    let bad_cache = Config {
-        address_bits: MAX_ADDRESS_BITS,
-        ..bad_everything.clone()
-    };
-    assert!(matches!(
-        bad_cache.validate(),
-        Err(ConfigError::SizeNotPowerOfTwo { got: 100 })
-    ));
-    let bad_line = Config {
-        cache: CacheConfig {
-            size_bytes: 128,
-            ..bad_cache.cache.clone()
-        },
-        ..bad_cache
-    };
-    assert!(matches!(
-        bad_line.validate(),
-        Err(ConfigError::LineNotPowerOfTwo { got: 24 })
-    ));
-    let bad_ways = Config {
-        cache: CacheConfig {
-            line_bytes: 16,
-            ..bad_line.cache.clone()
-        },
-        ..bad_line
-    };
-    assert!(matches!(
-        bad_ways.validate(),
-        Err(ConfigError::AssociativityZero)
-    ));
-    let bad_timing = Config {
-        cache: CacheConfig {
-            associativity: 1,
-            ..bad_ways.cache.clone()
-        },
-        ..bad_ways
-    };
-    assert!(matches!(
-        bad_timing.validate(),
-        Err(ConfigError::Timing {
+    let first_error = |config: &Config| config.validate().err();
+    assert_eq!(
+        first_error(&config),
+        Some(ConfigError::AddressBits {
+            got: MAX_ADDRESS_BITS + 1
+        })
+    );
+    config.address_bits = MIN_ADDRESS_BITS;
+    assert_eq!(
+        first_error(&config),
+        Some(ConfigError::SizeNotPowerOfTwo { got: 100 })
+    );
+    config.cache.size_bytes = too_many_lines * long_line;
+    assert_eq!(
+        first_error(&config),
+        Some(ConfigError::LineNotPowerOfTwo { got: 24 })
+    );
+    config.cache.line_bytes = long_line;
+    assert_eq!(
+        first_error(&config),
+        Some(ConfigError::TooManyLines {
+            lines: too_many_lines,
+            size: too_many_lines * long_line,
+            line: long_line
+        })
+    );
+    // One line: the associativity and the tag are wrong too.
+    config.cache.size_bytes = long_line;
+    assert_eq!(
+        first_error(&config),
+        Some(ConfigError::TooManyWords {
+            words: long_line / 4,
+            line: long_line,
+            word: 4
+        })
+    );
+    // 16 lines of 16 B, direct-mapped once the associativity is 1.
+    config.cache.size_bytes = 256;
+    config.cache.line_bytes = 16;
+    assert_eq!(first_error(&config), Some(ConfigError::AssociativityZero));
+    config.cache.associativity = 3;
+    assert_eq!(
+        first_error(&config),
+        Some(ConfigError::AssociativityNotPowerOfTwo { got: 3, lines: 16 })
+    );
+    config.cache.associativity = 1;
+    assert_eq!(
+        first_error(&config),
+        Some(ConfigError::NoTagBits {
+            bits: MIN_ADDRESS_BITS
+        })
+    );
+    config.address_bits = MAX_ADDRESS_BITS;
+    assert_eq!(
+        first_error(&config),
+        Some(ConfigError::Timing {
             field: ConfigNumberField::HitCycles,
             got: 0
         })
-    ));
-    let bad_seed = Config {
-        timing: None,
-        ..bad_timing
-    };
-    assert!(matches!(
-        bad_seed.validate(),
-        Err(ConfigError::SeedTooLarge { .. })
-    ));
+    );
+    config.timing = None;
+    assert_eq!(
+        first_error(&config),
+        Some(ConfigError::SeedTooLarge { got: u64::MAX })
+    );
+    config.seed = MAX_SEED;
+    assert_eq!(first_error(&config), None);
 }
 
 #[test]
@@ -343,13 +459,13 @@ fn address_width_outside_its_range() {
 
 #[test]
 fn cache_size_that_is_not_a_power_of_two() {
-    for (got, got_text, repaired) in [
-        (100, "100", "a 64 B"),
-        (1_000, "1,000", "a 512 B"),
-        (0, "0", "a 16 B"),
+    for (got, got_text, line, repaired) in [
+        (100, "100", 16, "a 64 B"),
+        (1_000, "1,000", 32, "a 512 B"),
+        (0, "0", 16, "a 16 B"),
     ] {
         check_rule(
-            &with_cache(got, 16, 1),
+            &with_cache(got, line, 1),
             &ConfigError::SizeNotPowerOfTwo { got },
             &format!(
                 "Cache size must be a power of two, such as 64, 128 or 256 bytes; got {got_text}."
@@ -507,6 +623,12 @@ fn associativity_above_the_line_count() {
         "A 4-line cache can have at most 4 ways; got 8.",
         "Open as fully associative instead",
     );
+    check_rule(
+        &with_cache(16, 16, 2),
+        &ConfigError::AssociativityTooLarge { got: 2, lines: 1 },
+        "A 1-line cache can have at most 1 way; got 2.",
+        "Open as fully associative instead",
+    );
 }
 
 #[test]
@@ -514,10 +636,10 @@ fn no_tag_bits_when_one_way_covers_memory() {
     let message =
         "With 8-bit addresses one way of this cache would cover all of memory, leaving no tag \
                    bits. Use wider addresses or a smaller cache.";
-    // 8 − 5 − 4 = −1 tag bits: the width must be computed signed.
+    // 8 − 4 − 5 = −1 tag bits: the width must be computed signed.
     let negative = Config {
         address_bits: 8,
-        ..with_cache(512, 16, 1)
+        ..with_cache(512, 32, 1)
     };
     check_rule(
         &negative,
@@ -527,8 +649,12 @@ fn no_tag_bits_when_one_way_covers_memory() {
     );
     let repaired = negative.repair().unwrap().config.validate().unwrap();
     assert_eq!(
-        (repaired.tag_bits, repaired.index_bits, repaired.offset_bits),
-        (1, 3, 4)
+        (
+            repaired.tag_bits(),
+            repaired.index_bits(),
+            repaired.offset_bits()
+        ),
+        (1, 2, 5)
     );
 
     // 8 − 4 − 4 = 0 tag bits.
@@ -546,7 +672,7 @@ fn no_tag_bits_when_one_way_covers_memory() {
     // A set-associative cache keeps its ways while it shrinks.
     let two_way = Config {
         address_bits: 8,
-        ..with_cache(1_024, 16, 2)
+        ..with_cache(512, 32, 2)
     };
     check_rule(
         &two_way,
@@ -599,8 +725,20 @@ fn more_lines_than_fit_on_screen() {
         .validate()
         .unwrap();
     assert_eq!(
-        (repaired.ways, repaired.placement),
+        (repaired.ways(), repaired.placement()),
         (fitting, Placement::FullyAssociative)
+    );
+
+    // Too many lines is the first failure even when the associativity is
+    // wrong too, since no associativity would make such a cache valid.
+    check_rule(
+        &Config {
+            address_bits: MAX_ADDRESS_BITS,
+            ..with_cache(too_many * 16, 16, 3)
+        },
+        &error,
+        &message,
+        &label,
     );
 }
 
@@ -625,6 +763,67 @@ fn more_words_per_line_than_a_row_holds() {
             grouped(too_many)
         ),
         &format!("Open with {} B lines instead", grouped(too_many / 2 * 4)),
+    );
+}
+
+/// A one-line cache is fully associative, so once its line is within the
+/// words cap it keeps a tag bit at any width. A line too long for that cap
+/// is refused for its length, even where it would also cover all of memory,
+/// and the repair shortens the line and keeps the cache fully associative.
+#[test]
+fn a_line_too_long_for_a_row_is_refused_before_the_tag_rule() {
+    let line = 1_u32 << MIN_ADDRESS_BITS;
+    let words = line / 8;
+    assert!(words > MAX_WORDS_PER_LINE);
+    let config = Config {
+        address_bits: MIN_ADDRESS_BITS,
+        word_bytes: WordBytes::Eight,
+        ..with_cache(line, line, 1)
+    };
+    let shorter = (MAX_WORDS_PER_LINE + 1).next_power_of_two() / 2 * 8;
+    check_rule(
+        &config,
+        &ConfigError::TooManyWords {
+            words,
+            line,
+            word: 8,
+        },
+        &format!(
+            "A line can hold at most {} words; {} B ÷ 8 B = {}.",
+            grouped(MAX_WORDS_PER_LINE),
+            grouped(line),
+            grouped(words)
+        ),
+        &format!("Open with {} B lines instead", grouped(shorter)),
+    );
+    let repaired = config.repair().unwrap().config;
+    let geometry = repaired.validate().unwrap();
+    assert_eq!(repaired.cache.size_bytes, line);
+    assert_eq!(
+        (geometry.line_bytes(), geometry.ways(), geometry.placement()),
+        (shorter, line / shorter, Placement::FullyAssociative)
+    );
+}
+
+/// Shortening the lines of a fully associative cache gives it more lines,
+/// and its ways follow them, as the configuration bar's line options do.
+#[test]
+fn shorter_lines_keep_a_fully_associative_cache_fully_associative() {
+    let too_many = (MAX_WORDS_PER_LINE + 1).next_power_of_two();
+    let line = too_many * 4;
+    let size = line * 8;
+    let config = with_cache(size, line, 8);
+    let shorter = too_many / 2 * 4;
+    let repair = config.repair().unwrap();
+    assert_eq!(
+        repair.label,
+        format!("Open with {} B lines instead", grouped(shorter))
+    );
+    let geometry = repair.config.validate().unwrap();
+    assert_eq!(repair.config.cache.size_bytes, size);
+    assert_eq!(
+        (geometry.line_bytes(), geometry.ways(), geometry.placement()),
+        (shorter, size / shorter, Placement::FullyAssociative)
     );
 }
 
@@ -732,7 +931,7 @@ fn repair_keeps_what_was_valid() {
         },
         timing: Some(Timing {
             hit_cycles: 2,
-            miss_cycles: 30,
+            miss_cycles: 15,
         }),
         seed: 7,
         advanced: true,
@@ -797,19 +996,19 @@ fn geometry_follows_the_address_split() {
         let geometry = config.validate().unwrap();
         assert_eq!(
             (
-                geometry.tag_bits,
-                geometry.index_bits,
-                geometry.offset_bits,
-                geometry.placement
+                geometry.tag_bits(),
+                geometry.index_bits(),
+                geometry.offset_bits(),
+                geometry.placement()
             ),
             expected,
             "{config:?}"
         );
-        assert_eq!(geometry.lines, size / line);
-        assert_eq!(geometry.sets * geometry.ways, geometry.lines);
-        assert_eq!(geometry.words_per_line, line / word_bytes.bytes());
+        assert_eq!(geometry.lines(), size / line);
+        assert_eq!(geometry.sets() * geometry.ways(), geometry.lines());
+        assert_eq!(geometry.words_per_line(), line / word_bytes.bytes());
         assert_eq!(
-            geometry.tag_bits + geometry.index_bits + geometry.offset_bits,
+            geometry.tag_bits() + geometry.index_bits() + geometry.offset_bits(),
             address_bits
         );
     }
@@ -818,9 +1017,12 @@ fn geometry_follows_the_address_split() {
 #[test]
 fn one_line_cache_is_fully_associative() {
     let geometry = with_cache(16, 16, 1).validate().unwrap();
-    assert_eq!((geometry.sets, geometry.ways, geometry.lines), (1, 1, 1));
-    assert_eq!(geometry.index_bits, 0);
-    assert_eq!(geometry.placement, Placement::FullyAssociative);
+    assert_eq!(
+        (geometry.sets(), geometry.ways(), geometry.lines()),
+        (1, 1, 1)
+    );
+    assert_eq!(geometry.index_bits(), 0);
+    assert_eq!(geometry.placement(), Placement::FullyAssociative);
 }
 
 #[test]
@@ -836,11 +1038,11 @@ fn fully_associative_caches_up_to_max_lines_ways_validate() {
         .validate()
         .unwrap();
         assert_eq!(
-            (geometry.sets, geometry.ways, geometry.index_bits),
+            (geometry.sets(), geometry.ways(), geometry.index_bits()),
             (1, lines, 0)
         );
-        assert_eq!(geometry.tag_bits, config.address_bits - 4);
-        assert_eq!(geometry.placement, Placement::FullyAssociative);
+        assert_eq!(geometry.tag_bits(), config.address_bits - 4);
+        assert_eq!(geometry.placement(), Placement::FullyAssociative);
     }
     // Even the widest lines at the narrowest addresses keep a tag bit.
     let widest_line = (MAX_WORDS_PER_LINE + 1).next_power_of_two() / 2 * 8;
@@ -851,36 +1053,36 @@ fn fully_associative_caches_up_to_max_lines_ways_validate() {
         ..with_cache(widest_line * most_lines, widest_line, most_lines)
     };
     let geometry = widest.validate().unwrap();
-    assert!(geometry.tag_bits >= 1);
-    assert_eq!(geometry.placement, Placement::FullyAssociative);
+    assert!(geometry.tag_bits() >= 1);
+    assert_eq!(geometry.placement(), Placement::FullyAssociative);
 }
 
 #[test]
 fn checked_constructors_accept_only_values_in_range() {
     let geometry = Config::default().validate().unwrap();
-    let address_space = 1_u32 << geometry.address_bits;
+    let address_space = 1_u32 << geometry.address_bits();
     assert_eq!(
         geometry.addr(address_space - 1).map(Addr::get),
         Some(address_space - 1)
     );
     assert_eq!(geometry.addr(address_space), None);
     assert_eq!(
-        geometry.set_index(geometry.sets - 1).map(SetIndex::get),
-        Some(geometry.sets - 1)
+        geometry.set_index(geometry.sets() - 1).map(SetIndex::get),
+        Some(geometry.sets() - 1)
     );
-    assert_eq!(geometry.set_index(geometry.sets), None);
+    assert_eq!(geometry.set_index(geometry.sets()), None);
     assert_eq!(
-        geometry.way_index(geometry.ways - 1).map(WayIndex::get),
-        Some(geometry.ways - 1)
+        geometry.way_index(geometry.ways() - 1).map(WayIndex::get),
+        Some(geometry.ways() - 1)
     );
-    assert_eq!(geometry.way_index(geometry.ways), None);
-    let words = geometry.words_per_line;
+    assert_eq!(geometry.way_index(geometry.ways()), None);
+    let words = geometry.words_per_line();
     assert_eq!(
         geometry.word_index(words - 1).map(WordIndex::get),
         Some(words - 1)
     );
     assert_eq!(geometry.word_index(words), None);
-    let tags = 1_u32 << geometry.tag_bits;
+    let tags = 1_u32 << geometry.tag_bits();
     assert_eq!(geometry.tag(tags - 1).map(Tag::get), Some(tags - 1));
     assert_eq!(geometry.tag(tags), None);
 
@@ -892,7 +1094,7 @@ fn checked_constructors_accept_only_values_in_range() {
     .unwrap();
     assert_eq!(widest.addr(u32::MAX).map(Addr::get), Some(u32::MAX));
     assert!(widest
-        .tag(u32::MAX >> (widest.index_bits + widest.offset_bits))
+        .tag(u32::MAX >> (widest.index_bits() + widest.offset_bits()))
         .is_some());
 }
 

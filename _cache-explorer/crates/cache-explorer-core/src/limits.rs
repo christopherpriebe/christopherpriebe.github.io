@@ -29,8 +29,8 @@ pub const MAX_LINES: u32 = 64;
 /// bytes one event can move. Tunable, within the relations tested below.
 pub const MAX_WORDS_PER_LINE: u32 = 16;
 
-/// The shortest hit time or miss penalty, in cycles. A zero cost would make
-/// timed mode teach nothing.
+/// The shortest hit time or miss penalty, in cycles. Not tunable: a zero cost
+/// would make timed mode teach nothing.
 pub const MIN_CYCLES: u32 = 1;
 
 /// The longest hit time or miss penalty, in cycles. Keeps cycle counts exact
@@ -41,23 +41,31 @@ pub const MAX_CYCLES: u32 = 1_000;
 /// seed would not survive the trip through a JavaScript number.
 pub const MAX_SEED: u64 = (1 << 53) - 1;
 
-/// The most instructions one `Run` op may ask for. Tunable.
+/// The most instructions one `Run` op may ask for, so a single op, whether
+/// typed, read from a shared link or written in a module, is bounded work.
+/// Tunable.
 pub const MAX_RUN_STEPS: u32 = 1_000;
 
 /// The largest program or trace source, in bytes (16 KiB), so parsing a
 /// pasted or shared program is bounded. Tunable.
 pub const MAX_PROGRAM_BYTES: u32 = 16 * 1024;
 
-/// The most source lines in a program or trace. Tunable.
+/// The most source lines in a program or trace, so parsing a pasted or shared
+/// program is bounded however short its lines are. Tunable.
 pub const MAX_PROGRAM_LINES: u32 = 1_000;
 
-/// The most instructions in one assembled program. Tunable.
+/// The most instructions in one assembled program, so a pasted or shared
+/// program is bounded in the memory it takes and in the listing the page
+/// draws. Tunable.
 pub const MAX_PROGRAM_INSTRUCTIONS: u32 = 500;
 
-/// The longest label, in Unicode scalar values. Tunable.
+/// The longest label, in Unicode scalar values, so every label fits the
+/// program listing and the messages that quote it. Tunable.
 pub const MAX_LABEL_CHARS: u32 = 32;
 
-/// The most errors one parse reports; the rest are dropped. Tunable.
+/// The most errors one parse reports; the rest are dropped, so pasting text
+/// that is not a program gives a short list the student can read rather than
+/// an error for every line. Tunable.
 pub const MAX_PARSE_ERRORS: u32 = 20;
 
 /// The instructions one program load may execute before it is stopped, so a
@@ -82,14 +90,17 @@ pub const CHECKPOINT_INTERVAL: u32 = 2_000;
 /// frame. Trades responsiveness against load time. Tunable.
 pub const LOAD_SLICE_EVENTS: u32 = 2_000;
 
-/// The largest share string, in bytes (64 KiB). Tunable.
+/// The largest share string, in bytes (64 KiB), so decoding a link is bounded
+/// whatever was pasted. Tunable.
 pub const MAX_SHARE_TEXT_BYTES: u32 = 64 * 1024;
 
 /// The largest inflated share document, and the largest loaded file, in bytes
-/// (1 MiB). Tunable.
+/// (1 MiB). It is also the limit of the inflate itself, so a short link cannot
+/// decompress into unbounded memory. Tunable.
 pub const MAX_SHARE_JSON_BYTES: u32 = 1024 * 1024;
 
-/// The most ops one share document may hold. Tunable.
+/// The most ops one share document may hold, so reading and checking a link
+/// or a file is bounded before any of it replays. Tunable.
 pub const MAX_SHARE_OPS: u32 = 10_000;
 
 /// The access outcomes the hit and miss sparkline shows. Tunable; the design
