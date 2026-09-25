@@ -20,7 +20,8 @@ use crate::config::{
 };
 use crate::engine::{access, Emitter, EventSink, Flow, Request};
 use crate::event::{ChangeRef, MicroEvent};
-use crate::geometry::{AccessError, Geometry};
+use crate::format;
+use crate::geometry::{highest_word, AccessError, Geometry};
 use crate::machine::Machine;
 use crate::units::{Addr, OpIndex, Register, Word};
 
@@ -50,7 +51,8 @@ pub enum Issue {
     Store {
         /// The word's address.
         addr: Addr,
-        /// The value; it fits the configuration's word.
+        /// The value. It must fit the configuration's word, as an issued
+        /// store's value must, or the fixture is refused.
         value: Word,
     },
 }
@@ -65,6 +67,23 @@ pub enum FixtureError {
     /// word.
     #[error(transparent)]
     Access(#[from] AccessError),
+    /// One of its stores has a value wider than the word. The engine would
+    /// keep only the value's low bits and say nothing, so the fixture is
+    /// refused, as an issued store would be:
+    /// `300 does not fit a 1-byte word (0–255).`
+    #[error(
+        "{} does not fit {} {}-byte word (0\u{2013}{}).",
+        format::data(.value.get()),
+        format::a_or_an(*.word_bytes),
+        format::setting(*.word_bytes),
+        format::setting(highest_word(*.word_bytes))
+    )]
+    Value {
+        /// The store's value.
+        value: Word,
+        /// The word size, in bytes.
+        word_bytes: u32,
+    },
 }
 
 impl Fixture {
@@ -74,9 +93,11 @@ impl Fixture {
     ///
     /// # Errors
     ///
-    /// [`FixtureError::Config`] if the configuration is invalid, or
-    /// [`FixtureError::Access`] for the first access whose address does not
-    /// fit the address width or is not a multiple of the word size.
+    /// [`FixtureError::Config`] if the configuration is invalid. Otherwise,
+    /// for the first access an issue would refuse: [`FixtureError::Access`]
+    /// if its address does not fit the address width or is not a multiple of
+    /// the word size, or [`FixtureError::Value`] if it is a store whose value
+    /// does not fit the word.
     pub fn events(&self) -> Result<Vec<MicroEvent>, FixtureError> {
         let mut machine = Machine::start(self.config.clone())?;
         let mut sink = Recorder::default();
@@ -103,26 +124,34 @@ impl Issue {
         }
     }
 
-    /// The engine's request for this access, once its address is checked
-    /// against `geometry`.
-    fn request(self, geometry: &Geometry) -> Result<Request, AccessError> {
+    /// The engine's request for this access, once its address, and a store's
+    /// value, are checked against `geometry`.
+    fn request(self, geometry: &Geometry) -> Result<Request, FixtureError> {
         let addr = self.addr();
         if !geometry.decode(addr.get())?.aligned {
-            return Err(AccessError::Misaligned {
+            return Err(FixtureError::Access(AccessError::Misaligned {
                 addr,
                 address_bits: geometry.address_bits(),
                 word_bytes: geometry.word_bytes(),
-            });
+            }));
         }
         Ok(match self {
             Issue::Load { .. } => Request::Load {
                 addr,
                 into: Register::R1,
             },
-            Issue::Store { value, .. } => Request::Store {
-                addr,
-                value: value.get(),
-            },
+            Issue::Store { value, .. } => {
+                if geometry.fit_word(value.get()) != value {
+                    return Err(FixtureError::Value {
+                        value,
+                        word_bytes: geometry.word_bytes(),
+                    });
+                }
+                Request::Store {
+                    addr,
+                    value: value.get(),
+                }
+            }
         })
     }
 }
@@ -157,11 +186,6 @@ pub fn render(events: &[MicroEvent]) -> String {
     let lines: Vec<String> = events
         .iter()
         .map(|event| {
-            let label = if event.label.is_empty() {
-                "-"
-            } else {
-                event.label.as_str()
-            };
             let cause = event.cause.map_or_else(absent, |cause| name(&cause));
             let changed = if event.changed.is_empty() {
                 absent()
@@ -171,9 +195,10 @@ pub fn render(events: &[MicroEvent]) -> String {
             };
             let cycle = event.cycle.map_or_else(absent, |cycle| cycle.to_string());
             format!(
-                "{label} | {} | {cause} | {changed} | {cycle} | {}\n",
+                "{} | {} | {cause} | {changed} | {cycle} | {}\n",
+                text(&event.label),
                 name(&event.kind),
-                event.explain
+                text(&event.explain)
             )
         })
         .collect();
@@ -183,6 +208,15 @@ pub fn render(events: &[MicroEvent]) -> String {
 /// The text of an absent field.
 fn absent() -> String {
     "-".to_owned()
+}
+
+/// A text field as written, or `-` when it is empty.
+fn text(field: &str) -> &str {
+    if field.is_empty() {
+        "-"
+    } else {
+        field
+    }
 }
 
 /// The name `value` serializes to, so the text uses the names that cross
@@ -260,16 +294,17 @@ fn flows() -> Vec<Fixture> {
         },
         Fixture {
             name: "frame-3b-accesses",
-            description: "Frame 3b's accesses issued by hand on two-way-lru, untimed: two \
-                          stores dirty 0x1A0 and 0x0B0, a hit makes way 0 of set 2 the most \
-                          recent, and the load of 0x2A4 writes back and evicts the dirty 0x1A0 \
-                          from way 1 (cases 2, 7, 1 and 4). The load goes to r1, where the \
-                          frame's program loads r3.",
+            description: "Frame 3b's accesses issued by hand on two-way-lru, untimed, in the \
+                          order of its program: a store dirties 0x0B0 in set 3, a load fills \
+                          way 0 of set 2 and a store dirties 0x1A0 in way 1, a hit makes way 0 \
+                          the most recent, and the load of 0x2A4 writes back and evicts the \
+                          dirty 0x1A0 from way 1 (cases 7, 2, 7, 1 and 4). Every load goes to \
+                          r1, where the program loads r1, r2 and r3.",
             config: Preset::TwoWayLru.config(),
             issues: vec![
+                store(0x0B0, 5),
                 load(0x0A4),
                 store(0x1A4, 7),
-                store(0x0B0, 5),
                 load(0x0A8),
                 load(0x2A4),
             ],
@@ -562,7 +597,7 @@ mod tests {
              write line 0x1A0 back to memory first.\n\
              5.7 | complete | - | valid 2/1, tag 2/1, dirty 2/1, rank 2/1, word 2/1/3, r3, pc | \
              - | Read word 1 of way 1 (68) into r3.\n\
-             - | setup | - | - | - | \n"
+             - | setup | - | - | - | -\n"
         );
         assert_eq!(render(&[]), "");
     }
@@ -586,18 +621,6 @@ mod tests {
                 "{}",
                 fixture.name
             );
-        }
-    }
-
-    #[test]
-    fn fixture_stores_fit_the_word() {
-        for fixture in fixtures() {
-            let geometry = fixture.config.validate().unwrap();
-            for issue in &fixture.issues {
-                if let Issue::Store { value, .. } = issue {
-                    assert_eq!(geometry.fit_word(value.get()), *value, "{}", fixture.name);
-                }
-            }
         }
     }
 
@@ -670,5 +693,42 @@ mod tests {
             ..fixture(Vec::new())
         };
         assert!(matches!(invalid.events(), Err(FixtureError::Config(_))));
+    }
+
+    #[test]
+    fn a_fixture_refuses_a_store_value_the_word_cannot_hold() {
+        let fixture = |word_bytes, value| Fixture {
+            name: "refused",
+            description: "",
+            config: Config {
+                word_bytes,
+                ..Preset::DirectMapped8.config()
+            },
+            issues: vec![load(0x0A8), store(0x0A8, value)],
+        };
+        let refused = fixture(WordBytes::One, 300).events();
+        assert_eq!(
+            refused,
+            Err(FixtureError::Value {
+                value: Word::new_unchecked(300),
+                word_bytes: 1,
+            })
+        );
+        assert_eq!(
+            refused.map_err(|error| error.to_string()),
+            Err("300 does not fit a 1-byte word (0\u{2013}255).".to_owned())
+        );
+        assert_eq!(
+            FixtureError::Value {
+                value: Word::new_unchecked(u64::from(u32::MAX) + 1),
+                word_bytes: 4,
+            }
+            .to_string(),
+            "4,294,967,296 does not fit a 4-byte word (0\u{2013}4,294,967,295)."
+        );
+        // The largest word of each size still fits.
+        for (word_bytes, largest) in [(WordBytes::One, 255), (WordBytes::Eight, u64::MAX)] {
+            assert!(fixture(word_bytes, largest).events().is_ok());
+        }
     }
 }

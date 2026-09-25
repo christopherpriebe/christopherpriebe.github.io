@@ -327,19 +327,29 @@ mod tests {
     use super::*;
     use crate::config::{CacheConfig, Config, Preset, WordBytes};
 
+    /// The tests' address width: 12 bits, as in every design frame. The lines
+    /// these tests expect are written for it, so the width is set here rather
+    /// than taken from `Config::default()`, and changing the default does not
+    /// break these tests.
+    const ADDRESS_BITS: u8 = 12;
+
     fn geometry(config: &Config) -> Geometry {
         config.validate().unwrap()
     }
 
-    /// A named configuration's geometry, with `Config::default()`'s 12-bit
-    /// addresses as every design frame has them.
+    /// A named configuration's geometry at the tests' address width.
     fn preset(preset: Preset) -> Geometry {
-        geometry(&preset.config())
+        geometry(&Config {
+            address_bits: ADDRESS_BITS,
+            ..preset.config()
+        })
     }
 
-    /// A 128 B cache of 16 B lines with `ways` ways and 12-bit addresses.
+    /// A 128 B cache of 16 B lines with `ways` ways, at the tests' address
+    /// width.
     fn ways(ways: u32) -> Geometry {
         geometry(&Config {
+            address_bits: ADDRESS_BITS,
             cache: CacheConfig {
                 associativity: ways,
                 ..Preset::DirectMapped8.config().cache
@@ -349,9 +359,10 @@ mod tests {
     }
 
     /// The one-line cache: 16 B of 16 B lines, fully associative with one
-    /// way.
+    /// way, at the tests' address width.
     fn one_line() -> Geometry {
         geometry(&Config {
+            address_bits: ADDRESS_BITS,
             cache: CacheConfig {
                 size_bytes: 16,
                 ..Preset::DirectMapped8.config().cache

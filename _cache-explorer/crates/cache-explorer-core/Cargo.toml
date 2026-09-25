@@ -29,5 +29,7 @@ wasm-bindgen = { workspace = true, optional = true }
 [dev-dependencies]
 # tests/golden.rs snapshots the golden fixtures, which only the "golden" feature
 # builds; depending on the crate itself turns the feature on for its own tests.
+# Cargo then builds the library with it too whenever a test target is built, as
+# --all-targets does, so CI also lints the library alone with --lib.
 cache-explorer-core = { path = ".", features = ["golden"] }
 insta = { workspace = true }

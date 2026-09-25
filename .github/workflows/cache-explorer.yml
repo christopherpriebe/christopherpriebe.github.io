@@ -61,4 +61,11 @@ jobs:
         run: sh scripts/check-core-deps.sh
       - run: cargo clippy -p cache-explorer-core --all-targets --locked -- -D warnings
       - run: cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
+      # --all-targets builds the core's tests, whose dev-dependency on the core turns
+      # "golden" on for its library too. These two lint the library as it ships: the
+      # core's default build, and the facade with the core's "ts" alone on wasm32.
+      - name: Core library without the golden feature
+        run: cargo clippy -p cache-explorer-core --lib --locked -- -D warnings
+      - name: Shipped build (facade library, core with ts alone)
+        run: cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --lib --locked -- -D warnings
       - run: cargo test -p cache-explorer-core --locked
