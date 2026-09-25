@@ -1,0 +1,600 @@
+//! The machine: the state of a run at one point, which the engine folds ops
+//! into, and the invariants that state keeps.
+//!
+//! A machine is created only at the start of a run; every later state comes
+//! from replaying ops onto it. [`Machine::check_invariants`] checks the
+//! invariants below and reports the first one broken rather than panicking,
+//! so a bug ends the op with a message instead of poisoning the session:
+//!
+//! - I1: the ranks in each set are a permutation of `0..ways`.
+//! - I2: under LRU and FIFO, every valid way ranks below every invalid way.
+//!   This one holds between accesses rather than at every step of one: a
+//!   fill makes its way valid before the rank update moves it ahead of the
+//!   invalid ways.
+//! - I3: at most one valid way per set holds a given tag.
+//! - I4: a valid way's line address decodes to its own set and tag.
+//! - I5: a dirty way exists only under write-back.
+//! - I7: under random replacement, and in a one-way set, the ranks equal the
+//!   way numbers.
+
+use thiserror::Error;
+
+use crate::cache::{Cache, Set, Way};
+use crate::config::{Config, ConfigError, Replacement, WritePolicy};
+use crate::format;
+use crate::geometry::Geometry;
+use crate::prng::Prng;
+use crate::units::{SetIndex, WayIndex};
+
+/// The state of a run at one point: its configuration and geometry, the
+/// cache and the run's generator.
+///
+/// There is no way to obtain one from outside the core other than by replaying
+/// a run, so every machine is one a sequence of ops can reach. Not
+/// serializable: nothing crosses the boundary as a `Machine`, and the
+/// generator's state never leaves the core.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Machine {
+    /// The run's configuration, which is valid.
+    pub(crate) config: Config,
+    /// The geometry `config` validates to.
+    pub(crate) geometry: Geometry,
+    /// The cache's contents and replacement order.
+    pub(crate) cache: Cache,
+    /// The generator random replacement draws its victims from, seeded from
+    /// `config.seed` when the run starts.
+    pub(crate) prng: Prng,
+}
+
+/// A machine invariant that no longer holds, and where. `Display` names the
+/// invariant as the internal-error message quotes it: "Internal error:
+/// invariant I3 (no two valid ways in set 2 hold the same tag) no longer
+/// holds."
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
+pub enum InvariantViolation {
+    /// I1: a set's ranks are not a permutation of `0..ways`.
+    #[error("invariant I1 ({})", ranks_rule(*.set, *.ways))]
+    RanksNotAPermutation {
+        /// The set.
+        set: SetIndex,
+        /// The ways each set has.
+        ways: u32,
+    },
+    /// I2: under LRU or FIFO, a valid way ranks after an invalid one.
+    #[error(
+        "invariant I2 (every valid way in set {} ranks below every invalid way)",
+        format::data(.set.get())
+    )]
+    ValidRankedAfterInvalid {
+        /// The set.
+        set: SetIndex,
+    },
+    /// I3: two valid ways of a set hold the same tag.
+    #[error(
+        "invariant I3 (no two valid ways in set {} hold the same tag)",
+        format::data(.set.get())
+    )]
+    DuplicateTag {
+        /// The set.
+        set: SetIndex,
+    },
+    /// I4: a valid way's line does not decode to its own set and tag.
+    #[error(
+        "invariant I4 (the line in way {} of set {} decodes to that set and tag)",
+        format::data(.way.get()),
+        format::data(.set.get())
+    )]
+    LineOutsideItsSet {
+        /// The set.
+        set: SetIndex,
+        /// The way holding the line.
+        way: WayIndex,
+    },
+    /// I5: a way is dirty under write-through.
+    #[error(
+        "invariant I5 (way {} of set {} is not dirty under write-through)",
+        format::data(.way.get()),
+        format::data(.set.get())
+    )]
+    DirtyUnderWriteThrough {
+        /// The set.
+        set: SetIndex,
+        /// The dirty way.
+        way: WayIndex,
+    },
+    /// I7: under random replacement, or in a one-way set, a set's ranks are
+    /// not its way numbers.
+    #[error(
+        "invariant I7 (the ranks in set {} equal the way numbers)",
+        format::data(.set.get())
+    )]
+    RanksNotWayNumbers {
+        /// The set.
+        set: SetIndex,
+    },
+}
+
+impl Machine {
+    /// The machine at the start of a run of `config`: every way invalid and
+    /// ranked by its way number, and the generator seeded from `config.seed`.
+    ///
+    /// # Errors
+    ///
+    /// The [`ConfigError`] of the first rule `config` breaks.
+    #[cfg_attr(not(test), expect(dead_code, reason = "the session starts runs"))]
+    pub(crate) fn start(config: Config) -> Result<Self, ConfigError> {
+        let geometry = config.validate()?;
+        Ok(Self {
+            cache: Cache::new(&geometry),
+            prng: Prng::new(config.seed),
+            geometry,
+            config,
+        })
+    }
+
+    /// Checks the machine's invariants, set by set. I2 is among them, so the
+    /// machine must be between accesses.
+    ///
+    /// # Errors
+    ///
+    /// The first invariant found broken: in the lowest-numbered set that
+    /// breaks one, the lowest-numbered invariant it breaks, at the
+    /// lowest-numbered way that breaks it.
+    pub fn check_invariants(&self) -> Result<(), InvariantViolation> {
+        for set in (0..self.geometry.sets()).map(SetIndex::new_unchecked) {
+            // A missing set has no ranks, which I1 reports.
+            let ways = self.cache.set(set).map_or(&[][..], Set::ways);
+            self.check_set(set, ways)?;
+        }
+        Ok(())
+    }
+
+    /// Checks the invariants of one set, whose ways are `ways`.
+    fn check_set(&self, set: SetIndex, ways: &[Way]) -> Result<(), InvariantViolation> {
+        let count = self.geometry.ways();
+        let replacement = self.config.cache.replacement;
+
+        let mut ranks: Vec<u32> = ways.iter().map(|way| way.rank).collect();
+        ranks.sort_unstable();
+        if !ranks.into_iter().eq(0..count) {
+            return Err(InvariantViolation::RanksNotAPermutation { set, ways: count });
+        }
+
+        if matches!(replacement, Replacement::Lru | Replacement::Fifo) {
+            let last_valid = ways
+                .iter()
+                .filter(|way| way.is_valid())
+                .map(|way| way.rank)
+                .max();
+            let first_invalid = ways
+                .iter()
+                .filter(|way| !way.is_valid())
+                .map(|way| way.rank)
+                .min();
+            if let (Some(last_valid), Some(first_invalid)) = (last_valid, first_invalid) {
+                if last_valid > first_invalid {
+                    return Err(InvariantViolation::ValidRankedAfterInvalid { set });
+                }
+            }
+        }
+
+        let duplicate = ways.iter().enumerate().any(|(index, way)| {
+            way.tag().is_some_and(|tag| {
+                ways.iter()
+                    .take(index)
+                    .any(|other| other.tag() == Some(tag))
+            })
+        });
+        if duplicate {
+            return Err(InvariantViolation::DuplicateTag { set });
+        }
+
+        // A way's set is its place in the cache, so the line rebuilt from its
+        // tag and set always has that set's index. It decodes back to the same
+        // tag, and so to the same line, exactly when the tag fits the tag
+        // field: the excess of a wider tag would fall outside the address.
+        let too_wide = (0_u32..).zip(ways).find_map(|(number, way)| {
+            way.tag()
+                .filter(|tag| self.geometry.tag(tag.get()).is_none())
+                .map(|_| number)
+        });
+        if let Some(number) = too_wide {
+            return Err(InvariantViolation::LineOutsideItsSet {
+                set,
+                way: WayIndex::new_unchecked(number),
+            });
+        }
+
+        if self.config.cache.write_policy == WritePolicy::WriteThrough {
+            let dirty = (0_u32..)
+                .zip(ways)
+                .find_map(|(number, way)| way.is_dirty().then_some(number));
+            if let Some(number) = dirty {
+                return Err(InvariantViolation::DirtyUnderWriteThrough {
+                    set,
+                    way: WayIndex::new_unchecked(number),
+                });
+            }
+        }
+
+        if (replacement == Replacement::Random || count == 1)
+            && !(0_u32..).zip(ways).all(|(number, way)| way.rank == number)
+        {
+            return Err(InvariantViolation::RanksNotWayNumbers { set });
+        }
+        Ok(())
+    }
+}
+
+/// I1 as its message states it for a set of `ways` ways: "the ranks in set 2
+/// are a permutation of 0 to 3", or "the only way in set 2 has rank 0".
+fn ranks_rule(set: SetIndex, ways: u32) -> String {
+    let set = format::data(set.get());
+    if ways <= 1 {
+        format!("the only way in set {set} has rank 0")
+    } else {
+        format!(
+            "the ranks in set {set} are a permutation of 0 to {}",
+            format::data(ways - 1)
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+
+    use super::*;
+    use crate::cache::{Dirtiness, Slot};
+    use crate::config::{AllocatePolicy, CacheConfig, Preset, WordBytes};
+    use crate::limits::MAX_LINES;
+    use crate::units::Tag;
+
+    /// A configuration of `size` bytes in 16 B lines, `ways`-way, under
+    /// `replacement` and `write_policy`, with 12-bit addresses.
+    fn config(size: u32, ways: u32, replacement: Replacement, write_policy: WritePolicy) -> Config {
+        Config {
+            cache: CacheConfig {
+                size_bytes: size,
+                line_bytes: 16,
+                associativity: ways,
+                replacement,
+                write_policy,
+                allocate_policy: AllocatePolicy::WriteAllocate,
+            },
+            ..Config::default()
+        }
+    }
+
+    fn start(config: Config) -> Machine {
+        Machine::start(config).unwrap()
+    }
+
+    fn set(index: u32) -> SetIndex {
+        SetIndex::new_unchecked(index)
+    }
+
+    fn way(index: u32) -> WayIndex {
+        WayIndex::new_unchecked(index)
+    }
+
+    fn line(machine: &Machine, tag: u32, dirty: Dirtiness) -> Slot {
+        Slot::Valid {
+            tag: Tag::new_unchecked(tag),
+            dirty,
+            data: vec![0; machine.geometry.line_bytes() as usize],
+        }
+    }
+
+    /// Puts `slot` at rank `rank` into way `index` of set `number`.
+    fn put(machine: &mut Machine, number: u32, index: u32, slot: Slot, rank: u32) {
+        let target = machine.cache.way_mut(set(number), way(index)).unwrap();
+        target.slot = slot;
+        target.rank = rank;
+    }
+
+    /// One load or store of `addr` as the engine will make it: a hit is
+    /// ranked, and a miss fills its victim, clean, and ranks the fill. A
+    /// store under write-back leaves its line dirty.
+    fn access(machine: &mut Machine, addr: u32, store: bool) {
+        let decoded = machine.geometry.decode(addr).unwrap();
+        let policy = machine.config.cache.replacement.policy();
+        let dirty = if store && machine.config.cache.write_policy == WritePolicy::WriteBack {
+            Dirtiness::Dirty
+        } else {
+            Dirtiness::Clean
+        };
+        let line_bytes = machine.geometry.line_bytes() as usize;
+        let set = machine.cache.set_mut(decoded.index).unwrap();
+        let hit = (0_u32..)
+            .zip(set.ways())
+            .find_map(|(index, way)| (way.tag() == Some(decoded.tag)).then_some(index));
+        let target = if let Some(index) = hit {
+            policy.on_access(set.ways_mut(), way(index));
+            way(index)
+        } else {
+            let choice = policy.victim(set.ways(), &mut machine.prng);
+            set.way_mut(choice.way).unwrap().slot = Slot::Valid {
+                tag: decoded.tag,
+                dirty: Dirtiness::Clean,
+                data: vec![0; line_bytes],
+            };
+            policy.on_fill(set.ways_mut(), choice.way);
+            choice.way
+        };
+        if let Slot::Valid { dirty: bit, .. } = &mut set.way_mut(target).unwrap().slot {
+            if dirty == Dirtiness::Dirty {
+                *bit = Dirtiness::Dirty;
+            }
+        }
+    }
+
+    #[test]
+    fn a_run_starts_with_an_empty_cache_and_a_seeded_generator() {
+        let config = Preset::TwoWayLru.config();
+        let machine = start(config.clone());
+        assert_eq!(machine.geometry, config.validate().unwrap());
+        assert_eq!(machine.cache, Cache::new(&machine.geometry));
+        assert_eq!(machine.prng, Prng::new(config.seed));
+        assert_eq!(machine.config, config);
+        assert_eq!(machine.check_invariants(), Ok(()));
+    }
+
+    #[test]
+    fn a_run_cannot_start_from_an_invalid_configuration() {
+        let mut config = Config::default();
+        config.cache.associativity = 3;
+        assert_eq!(
+            Machine::start(config.clone()),
+            Err(config.validate().unwrap_err())
+        );
+    }
+
+    #[test]
+    fn every_invariant_holds_through_a_run_of_accesses() {
+        // Every placement and policy up to a fully associative cache of
+        // `MAX_LINES` lines, under both write policies, over a pseudo-random
+        // stream of loads and stores to three times as many lines as the
+        // cache holds.
+        let mut ways = 1;
+        while ways <= MAX_LINES {
+            for replacement in [Replacement::Lru, Replacement::Fifo, Replacement::Random] {
+                for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
+                    let size = MAX_LINES * 16;
+                    let mut machine = start(Config {
+                        address_bits: 16,
+                        ..config(size, ways, replacement, write_policy)
+                    });
+                    let mut stream = Prng::new(u64::from(ways));
+                    for _ in 0..300 {
+                        let line = stream.draw_way(MAX_LINES * 4) % (MAX_LINES * 3);
+                        let store = stream.draw_way(2) == 1;
+                        access(&mut machine, line * 16, store);
+                        assert_eq!(machine.check_invariants(), Ok(()));
+                    }
+                }
+            }
+            ways *= 2;
+        }
+    }
+
+    #[test]
+    fn random_replacement_draws_from_the_run_generator() {
+        // Two machines with the same seed and the same accesses reach the same
+        // state; a different seed evicts differently.
+        let config = config(128, 4, Replacement::Random, WritePolicy::WriteBack);
+        let addrs: Vec<u32> = (0..40).map(|i| (i * 7 % 13) * 0x40).collect();
+        let run = |config: Config| {
+            let mut machine = start(config);
+            for &addr in &addrs {
+                access(&mut machine, addr, false);
+            }
+            machine
+        };
+        let first = run(config.clone());
+        assert_eq!(first, run(config.clone()));
+        assert_ne!(first.prng, Prng::new(config.seed));
+        let other = run(Config {
+            seed: 1,
+            ..config.clone()
+        });
+        assert_ne!(first.cache, other.cache);
+    }
+
+    #[test]
+    fn i1_reports_ranks_that_are_not_a_permutation() {
+        let mut machine = start(Preset::FourWayWriteBack.config());
+        machine.cache.way_mut(set(2), way(3)).unwrap().rank = 1;
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::RanksNotAPermutation {
+                set: set(2),
+                ways: 4
+            })
+        );
+        machine.cache.way_mut(set(2), way(3)).unwrap().rank = 4;
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::RanksNotAPermutation {
+                set: set(2),
+                ways: 4
+            })
+        );
+        let mut machine = start(Config::default());
+        machine.cache.way_mut(set(5), way(0)).unwrap().rank = 1;
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::RanksNotAPermutation {
+                set: set(5),
+                ways: 1
+            })
+        );
+    }
+
+    #[test]
+    fn i2_reports_a_valid_way_ranked_after_an_invalid_one() {
+        for replacement in [Replacement::Lru, Replacement::Fifo] {
+            let mut machine = start(config(256, 4, replacement, WritePolicy::WriteBack));
+            let slot = line(&machine, 1, Dirtiness::Clean);
+            // Way 1 is valid and ranked 1; way 0 is invalid and ranked 0.
+            put(&mut machine, 3, 1, slot, 1);
+            assert_eq!(
+                machine.check_invariants(),
+                Err(InvariantViolation::ValidRankedAfterInvalid { set: set(3) })
+            );
+        }
+        let mut machine = start(config(256, 4, Replacement::Random, WritePolicy::WriteBack));
+        let slot = line(&machine, 1, Dirtiness::Clean);
+        put(&mut machine, 3, 1, slot, 1);
+        assert_eq!(machine.check_invariants(), Ok(()));
+    }
+
+    #[test]
+    fn i3_reports_a_tag_held_twice_in_a_set() {
+        let mut machine = start(Preset::TwoWayLru.config());
+        let slot = line(&machine, 6, Dirtiness::Clean);
+        put(&mut machine, 1, 0, slot.clone(), 1);
+        put(&mut machine, 1, 1, slot.clone(), 0);
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::DuplicateTag { set: set(1) })
+        );
+        // The same tag in two sets is two different lines.
+        let mut machine = start(Preset::TwoWayLru.config());
+        put(&mut machine, 1, 0, slot.clone(), 0);
+        put(&mut machine, 2, 0, slot, 0);
+        assert_eq!(machine.check_invariants(), Ok(()));
+    }
+
+    #[test]
+    fn i4_reports_a_tag_too_wide_for_its_line_to_decode_back() {
+        // `two-way-lru` has 6 tag bits under 12-bit addresses: tag 0x3F is the
+        // last that fits.
+        let mut machine = start(Preset::TwoWayLru.config());
+        let slot = line(&machine, 0x3F, Dirtiness::Clean);
+        put(&mut machine, 2, 0, slot, 0);
+        assert_eq!(machine.check_invariants(), Ok(()));
+        let slot = line(&machine, 0x40, Dirtiness::Clean);
+        put(&mut machine, 2, 0, slot, 0);
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::LineOutsideItsSet {
+                set: set(2),
+                way: way(0)
+            })
+        );
+    }
+
+    #[test]
+    fn i5_reports_a_dirty_way_under_write_through() {
+        let mut machine = start(config(128, 2, Replacement::Lru, WritePolicy::WriteThrough));
+        let slot = line(&machine, 5, Dirtiness::Dirty);
+        put(&mut machine, 0, 1, slot.clone(), 0);
+        machine.cache.way_mut(set(0), way(0)).unwrap().rank = 1;
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::DirtyUnderWriteThrough {
+                set: set(0),
+                way: way(1)
+            })
+        );
+        let mut machine = start(config(128, 2, Replacement::Lru, WritePolicy::WriteBack));
+        put(&mut machine, 0, 1, slot, 0);
+        machine.cache.way_mut(set(0), way(0)).unwrap().rank = 1;
+        assert_eq!(machine.check_invariants(), Ok(()));
+    }
+
+    #[test]
+    fn i7_reports_random_ranks_that_moved() {
+        let mut machine = start(config(128, 2, Replacement::Random, WritePolicy::WriteBack));
+        machine.cache.way_mut(set(3), way(0)).unwrap().rank = 1;
+        machine.cache.way_mut(set(3), way(1)).unwrap().rank = 0;
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::RanksNotWayNumbers { set: set(3) })
+        );
+        // The same ranks are a valid LRU order.
+        let mut machine = start(config(128, 2, Replacement::Lru, WritePolicy::WriteBack));
+        machine.cache.way_mut(set(3), way(0)).unwrap().rank = 1;
+        machine.cache.way_mut(set(3), way(1)).unwrap().rank = 0;
+        assert_eq!(machine.check_invariants(), Ok(()));
+    }
+
+    #[test]
+    fn the_lowest_set_and_invariant_is_reported_first() {
+        let mut machine = start(config(128, 2, Replacement::Lru, WritePolicy::WriteThrough));
+        let dirty = line(&machine, 5, Dirtiness::Dirty);
+        put(&mut machine, 1, 0, dirty.clone(), 0);
+        put(&mut machine, 1, 1, dirty, 1);
+        machine.cache.way_mut(set(2), way(0)).unwrap().rank = 1;
+        // Set 1 breaks I3 and I5, at ways 1 and 0; set 2 breaks I1.
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::DuplicateTag { set: set(1) })
+        );
+    }
+
+    #[test]
+    fn messages_name_the_invariant_and_where_it_broke() {
+        let cases = [
+            (
+                InvariantViolation::RanksNotAPermutation {
+                    set: set(2),
+                    ways: 4,
+                },
+                "invariant I1 (the ranks in set 2 are a permutation of 0 to 3)",
+            ),
+            (
+                InvariantViolation::RanksNotAPermutation {
+                    set: set(5),
+                    ways: 1,
+                },
+                "invariant I1 (the only way in set 5 has rank 0)",
+            ),
+            (
+                InvariantViolation::ValidRankedAfterInvalid { set: set(3) },
+                "invariant I2 (every valid way in set 3 ranks below every invalid way)",
+            ),
+            (
+                InvariantViolation::DuplicateTag { set: set(1) },
+                "invariant I3 (no two valid ways in set 1 hold the same tag)",
+            ),
+            (
+                InvariantViolation::LineOutsideItsSet {
+                    set: set(2),
+                    way: way(0),
+                },
+                "invariant I4 (the line in way 0 of set 2 decodes to that set and tag)",
+            ),
+            (
+                InvariantViolation::DirtyUnderWriteThrough {
+                    set: set(0),
+                    way: way(1),
+                },
+                "invariant I5 (way 1 of set 0 is not dirty under write-through)",
+            ),
+            (
+                InvariantViolation::RanksNotWayNumbers { set: set(3) },
+                "invariant I7 (the ranks in set 3 equal the way numbers)",
+            ),
+        ];
+        for (violation, message) in cases {
+            assert_eq!(violation.to_string(), message);
+        }
+    }
+
+    #[test]
+    fn a_one_byte_word_cache_keeps_its_invariants() {
+        // The narrowest words and a fully associative cache: every line is
+        // one set, and the tag takes every bit above the offset.
+        let mut machine = start(Config {
+            address_bits: 8,
+            word_bytes: WordBytes::One,
+            ..config(64, 4, Replacement::Fifo, WritePolicy::WriteBack)
+        });
+        for addr in [0x00, 0x10, 0x20, 0x30, 0x40, 0x00, 0x50, 0xF0] {
+            access(&mut machine, addr, true);
+            assert_eq!(machine.check_invariants(), Ok(()));
+        }
+    }
+}

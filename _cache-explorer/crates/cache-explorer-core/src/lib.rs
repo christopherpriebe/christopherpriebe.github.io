@@ -18,10 +18,14 @@
 
 pub mod limits;
 
+mod cache;
 mod config;
 mod format;
 mod geometry;
 mod input;
+mod machine;
+mod prng;
+mod replacement;
 mod units;
 
 pub use config::{
@@ -32,6 +36,7 @@ pub use geometry::{
     AccessError, AddressField, BitRange, BitRanges, Decoded, FieldKind, Geometry, Placement,
 };
 pub use input::{AddressInput, WordInput};
+pub use machine::{InvariantViolation, Machine};
 pub use units::{
     Addr, Cycle, EventPos, LineAddr, OpIndex, Register, SetIndex, Tag, WayIndex, Word, WordIndex,
 };
