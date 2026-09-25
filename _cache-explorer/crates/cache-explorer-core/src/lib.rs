@@ -15,3 +15,19 @@
 //! cross the boundary.
 
 #![forbid(unsafe_code)]
+
+pub mod limits;
+
+mod config;
+mod format;
+mod geometry;
+mod units;
+
+pub use config::{
+    presets, AllocatePolicy, CacheConfig, Config, ConfigError, ConfigNumberField, MemoryInit,
+    Preset, Repair, Replacement, Timing, WordBytes, WordBytesError, WritePolicy,
+};
+pub use geometry::{Geometry, Placement};
+pub use units::{
+    Addr, Cycle, EventPos, LineAddr, OpIndex, Register, SetIndex, Tag, WayIndex, Word, WordIndex,
+};
