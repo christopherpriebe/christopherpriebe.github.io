@@ -2,13 +2,14 @@
 //! counters and changed cells; hit and miss sequences; victims under each
 //! replacement policy; write-backs, write-throughs and write-arounds; miss
 //! counts for compulsory, conflict and capacity examples; staleness; event
-//! numbering; stopping mid-access; and the invariant checks at entry ends.
+//! numbering; stopping mid-access; the invariant checks at entry ends; and
+//! the internal error of a lookup that finds no way.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
 use super::access::access;
 use super::*;
-use crate::cache::{Dirtiness, Slot};
+use crate::cache::{Cache, Dirtiness, Slot};
 use crate::config::{
     AllocatePolicy, CacheConfig, Config, MemoryInit, Preset, Replacement, WordBytes, WritePolicy,
 };
@@ -157,9 +158,15 @@ fn store(at: u32, value: u64) -> Request {
     }
 }
 
+/// The tests' address width: 12 bits, as in every design frame. The design's
+/// addresses, up to 0x2A4, and the request streams need at least 10 bits, so
+/// the width is set here rather than taken from `Config::default()`, and
+/// changing the default does not break these tests.
+const ADDRESS_BITS: u8 = 12;
+
 /// A 16 B-line cache of `size` bytes and `ways` ways under the given
-/// policies, with `Config::default()`'s address width and word size and the
-/// design's pattern memory, so a fill brings in visible values.
+/// policies, with the tests' address width, `Config::default()`'s word size
+/// and the design's pattern memory, so a fill brings in visible values.
 fn config(
     size: u32,
     ways: u32,
@@ -168,6 +175,7 @@ fn config(
     allocate_policy: AllocatePolicy,
 ) -> Config {
     Config {
+        address_bits: ADDRESS_BITS,
         cache: CacheConfig {
             size_bytes: size,
             line_bytes: 16,
@@ -178,6 +186,14 @@ fn config(
         },
         memory_init: MemoryInit::Pattern,
         ..Config::default()
+    }
+}
+
+/// The named configuration `preset` at the tests' address width.
+fn preset(preset: Preset) -> Config {
+    Config {
+        address_bits: ADDRESS_BITS,
+        ..preset.config()
     }
 }
 
@@ -457,7 +473,7 @@ fn case_2_a_load_miss_fills_an_invalid_way() {
 
 #[test]
 fn case_2_in_a_one_way_set_the_empty_way_is_the_only_choice() {
-    let mut run = Run::new(Preset::DirectMapped8.config());
+    let mut run = Run::new(preset(Preset::DirectMapped8));
     let events = run.load(0x0A4);
     assert_eq!(kinds(&events), [Decode, Miss, Victim, Fill, Complete]);
     let victim = event(&events, Victim);
@@ -470,7 +486,7 @@ fn case_2_in_a_one_way_set_the_empty_way_is_the_only_choice() {
 #[test]
 fn case_3_a_load_miss_evicts_a_clean_victim() {
     // Direct-mapped: 0x1A4 maps to 0x0A4's set 2 and replaces it.
-    let mut run = Run::new(Preset::DirectMapped8.config());
+    let mut run = Run::new(preset(Preset::DirectMapped8));
     run.load(0x0A4);
     let trace = run.trace(load(0x1A4, Register::R1));
     let events: Vec<MicroEvent> = trace.iter().map(|(event, _)| event.clone()).collect();
@@ -1054,7 +1070,7 @@ fn eight_byte_words_are_little_endian_in_the_line() {
 
 #[test]
 fn a_load_into_r0_changes_no_register() {
-    let mut run = Run::new(Preset::DirectMapped8.config());
+    let mut run = Run::new(preset(Preset::DirectMapped8));
     let events = run.events(load(0x0A4, Register::R0));
     assert!(event(&events, Complete).changed.is_empty());
     assert_eq!(run.machine.registers, crate::cpu::Registers::default());
@@ -1183,7 +1199,7 @@ fn outcomes(run: &mut Run, requests: &[Request]) -> Vec<bool> {
 
 #[test]
 fn a_direct_mapped_sequence_hits_within_a_line_and_misses_across_conflicts() {
-    let mut run = Run::new(Preset::DirectMapped8.config());
+    let mut run = Run::new(preset(Preset::DirectMapped8));
     let requests = [
         load(0x000, Register::R1),
         load(0x004, Register::R1), // same line
@@ -1215,13 +1231,13 @@ fn an_alternation_that_conflicts_direct_mapped_hits_in_two_ways() {
     let requests: Vec<Request> = (0..8)
         .map(|i| load(if i % 2 == 0 { 0x000 } else { 0x080 }, Register::R1))
         .collect();
-    let mut run = Run::new(Preset::DirectMapped8.config());
+    let mut run = Run::new(preset(Preset::DirectMapped8));
     outcomes(&mut run, &requests);
     assert_eq!(
         (run.machine.counters.misses, run.machine.counters.hits),
         (8, 0)
     );
-    let mut run = Run::new(Preset::TwoWayLru.config());
+    let mut run = Run::new(preset(Preset::TwoWayLru));
     outcomes(&mut run, &requests);
     assert_eq!(
         (run.machine.counters.misses, run.machine.counters.hits),
@@ -1318,7 +1334,7 @@ fn nothing_is_stale_under_write_through() {
 
 #[test]
 fn events_are_numbered_by_log_position_entry_and_step() {
-    let mut run = Run::new(Preset::TwoWayLru.config());
+    let mut run = Run::new(preset(Preset::TwoWayLru));
     let first = run.load(0x0A4);
     let second = run.store(0x1A4, 5);
     let ids: Vec<u64> = first.iter().chain(&second).map(|event| event.id).collect();
@@ -1338,7 +1354,7 @@ fn events_are_numbered_by_log_position_entry_and_step() {
 
 #[test]
 fn the_access_context_follows_the_access() {
-    let mut run = Run::new(Preset::TwoWayLru.config());
+    let mut run = Run::new(preset(Preset::TwoWayLru));
     run.load(0x0A4);
     run.store(0x1A4, 5);
     run.load(0x0A4);
@@ -1395,7 +1411,7 @@ fn the_last_event_ends_the_access_whichever_it_is() {
     // Complete, Write, WriteThrough, MemWrite and Rank can each be last.
     let cases: [(Config, Vec<Request>, EventKind); 5] = [
         (
-            Preset::DirectMapped8.config(),
+            preset(Preset::DirectMapped8),
             vec![load(0x0A4, Register::R1)],
             Complete,
         ),
@@ -1415,7 +1431,7 @@ fn the_last_event_ends_the_access_whichever_it_is() {
             MemWrite,
         ),
         (
-            Preset::TwoWayLru.config(),
+            preset(Preset::TwoWayLru),
             vec![load(0x0A4, Register::R1), load(0x1A4, Register::R1)],
             Rank,
         ),
@@ -1437,7 +1453,7 @@ fn the_last_event_ends_the_access_whichever_it_is() {
 
 #[test]
 fn stopping_after_any_event_leaves_the_machine_as_the_full_run_has_it_there() {
-    let mut run = Run::new(Preset::TwoWayLru.config());
+    let mut run = Run::new(preset(Preset::TwoWayLru));
     run.load(0x0A4);
     run.store(0x1A4, 5);
     run.load(0x0A4);
@@ -1540,7 +1556,7 @@ fn i2_is_checked_between_accesses_only() {
 
 #[test]
 fn a_broken_invariant_at_an_entry_end_ends_the_op_with_an_error() {
-    let mut machine = Machine::start(Preset::TwoWayLru.config()).unwrap();
+    let mut machine = Machine::start(preset(Preset::TwoWayLru)).unwrap();
     // Two ways of set 1 claim the same line.
     for index in [0, 1] {
         machine.cache.way_mut(set(1), way(index)).unwrap().slot = Slot::Valid {
@@ -1573,6 +1589,81 @@ fn a_broken_invariant_at_an_entry_end_ends_the_op_with_an_error() {
     );
     assert_eq!(machine.access, None);
     assert_eq!(machine.entries_in_run, 2);
+}
+
+#[test]
+fn a_lookup_that_finds_no_way_abandons_the_access_with_an_error() {
+    // The cache of a 64 B two-way geometry has only sets 0 and 1, so the
+    // lookup of 0x0A4 finds no set 2 where the configuration promises one.
+    let smaller = config(
+        64,
+        2,
+        Replacement::Lru,
+        WritePolicy::WriteBack,
+        AllocatePolicy::WriteAllocate,
+    )
+    .validate()
+    .unwrap();
+    let start = || {
+        let mut machine = Machine::start(two_way(Replacement::Lru)).unwrap();
+        machine.cache = Cache::new(&smaller);
+        machine
+    };
+    let rule = |invariant: &str| {
+        format!(
+            "Internal error: invariant {invariant} no longer holds. The run stopped here; please \
+             report it with a share link."
+        )
+    };
+    let cases = [
+        // Set 2 is missing, so it has no ranks to permute: I1.
+        (
+            start(),
+            rule("I1 (the ranks in set 2 are a permutation of 0 to 1)"),
+        ),
+        // An earlier set's broken invariant is named instead.
+        (
+            {
+                let mut machine = start();
+                for index in [0, 1] {
+                    machine.cache.way_mut(set(0), way(index)).unwrap().slot = Slot::Valid {
+                        tag: Tag::new_unchecked(1),
+                        dirty: Dirtiness::Clean,
+                        data: vec![0; 16],
+                    };
+                }
+                machine
+            },
+            rule("I3 (no two valid ways in set 0 hold the same tag)"),
+        ),
+    ];
+    for (mut machine, explain) in cases {
+        let before = machine.clone();
+        let mut recorder = Recorder::default();
+        let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(0), 10);
+        assert_eq!(
+            access(&mut machine, load(0x0A4, Register::R1), &mut out),
+            Flow::Stop
+        );
+        let events = recorder.events;
+        assert_eq!(kinds(&events), [Decode, EventKind::Error]);
+        // The access's entry ends at its Decode; the error is an entry of
+        // its own.
+        assert_eq!(events[0].label, "1.1");
+        let error = &events[1];
+        assert_eq!((error.id, error.entry, error.seq), (11, Some(2), 1));
+        assert_eq!(error.label, "2.1");
+        assert_eq!((error.addr, error.set, error.way), (None, None, None));
+        assert!(error.changed.is_empty());
+        assert_eq!(error.cause, None);
+        assert_eq!(error.explain, explain);
+        // The access is abandoned before its compare: nothing counted,
+        // nothing cached.
+        assert_eq!(machine.access, None);
+        assert_eq!(machine.entries_in_run, 2);
+        assert_eq!(machine.counters, before.counters);
+        assert_eq!(machine.cache, before.cache);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1730,32 +1821,54 @@ fn every_event_lists_exactly_the_cells_and_counters_it_changed() {
         }
         ways *= 2;
     }
-    // Every sequence of the ten cases came up, with and without a rank move.
-    for sequence in [
+    // The ten cases have 23 sequences once each optional event is counted,
+    // and the streams produced every one of them and nothing else.
+    let expected: std::collections::BTreeSet<String> = [
+        // 1: load hit.
         vec![Decode, Hit, Complete],
         vec![Decode, Hit, Complete, Rank],
+        // 2: load miss, invalid way.
         vec![Decode, Miss, Victim, Fill, Complete],
         vec![Decode, Miss, Victim, Fill, Complete, Rank],
+        // 3: load miss, clean victim.
         vec![Decode, Miss, Victim, Evict, Fill, Complete],
         vec![Decode, Miss, Victim, Evict, Fill, Complete, Rank],
+        // 4: load miss, dirty victim.
         vec![Decode, Miss, Victim, WriteBack, Evict, Fill, Complete],
         vec![Decode, Miss, Victim, WriteBack, Evict, Fill, Complete, Rank],
+        // 5: store hit, write-back.
         vec![Decode, Hit, Write],
         vec![Decode, Hit, Write, Rank],
+        // 6: store hit, write-through.
         vec![Decode, Hit, Write, WriteThrough],
         vec![Decode, Hit, Write, WriteThrough, Rank],
+        // 7: store miss, write-allocate and write-back: an invalid way, a
+        // clean victim or a dirty one.
         vec![Decode, Miss, Victim, Fill, Write],
+        vec![Decode, Miss, Victim, Fill, Write, Rank],
         vec![Decode, Miss, Victim, Evict, Fill, Write],
+        vec![Decode, Miss, Victim, Evict, Fill, Write, Rank],
+        vec![Decode, Miss, Victim, WriteBack, Evict, Fill, Write],
         vec![Decode, Miss, Victim, WriteBack, Evict, Fill, Write, Rank],
+        // 8: store miss, write-allocate and write-through: an invalid way or
+        // a clean victim, since no line is dirty.
+        vec![Decode, Miss, Victim, Fill, Write, WriteThrough],
         vec![Decode, Miss, Victim, Fill, Write, WriteThrough, Rank],
         vec![Decode, Miss, Victim, Evict, Fill, Write, WriteThrough],
+        vec![Decode, Miss, Victim, Evict, Fill, Write, WriteThrough, Rank],
+        // 9 and 10: store miss, write-no-allocate.
         vec![Decode, Miss, MemWrite],
-    ] {
-        assert!(
-            checked.contains(&format!("{sequence:?}")),
-            "{sequence:?} never came up"
-        );
-    }
+    ]
+    .iter()
+    .map(|sequence| format!("{sequence:?}"))
+    .collect();
+    assert_eq!(expected.len(), 23);
+    let missing: Vec<&String> = expected.difference(&checked).collect();
+    let unexpected: Vec<&String> = checked.difference(&expected).collect();
+    assert!(
+        missing.is_empty() && unexpected.is_empty(),
+        "never came up: {missing:?}; not a case's sequence: {unexpected:?}"
+    );
 }
 
 #[test]
