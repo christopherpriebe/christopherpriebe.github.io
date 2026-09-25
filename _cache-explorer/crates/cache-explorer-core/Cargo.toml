@@ -12,7 +12,8 @@ workspace = true
 [features]
 ts = ["dep:tsify", "dep:wasm-bindgen"]   # enabled only by cache-explorer-wasm; tsify's derive names wasm_bindgen by path,
                                          # so both are needed; tsify's "js" feature brings serde-wasm-bindgen and js-sys
-golden = []                              # enabled only by the facade's dev-dependency: golden fixtures and render
+golden = []                              # enabled only by dev-dependencies, the core's own and the facade's:
+                                         # the golden fixtures and render
 
 [dependencies]
 serde = { workspace = true }
@@ -24,3 +25,9 @@ rand_core = { workspace = true }
 rand_xoshiro = { workspace = true }
 tsify = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
+
+[dev-dependencies]
+# tests/golden.rs snapshots the golden fixtures, which only the "golden" feature
+# builds; depending on the crate itself turns the feature on for its own tests.
+cache-explorer-core = { path = ".", features = ["golden"] }
+insta = { workspace = true }

@@ -47,6 +47,18 @@ pub(crate) fn address(value: u32, address_bits: u8) -> String {
     hex(value, usize::from(address_bits).div_ceil(4))
 }
 
+/// The bytes of a line, first to last, as a fill names them: two
+/// [`address`]es joined by an en dash, `0x2A0–0x2AF` for a 16 B line with
+/// 12-bit addresses.
+pub(crate) fn line_range(line: u32, line_bytes: u32, address_bits: u8) -> String {
+    let last = line.saturating_add(line_bytes.saturating_sub(1));
+    format!(
+        "{}\u{2013}{}",
+        address(line, address_bits),
+        address(last, address_bits)
+    )
+}
+
 /// A tag as the student reads it: hex padded to ⌈`tag_bits` / 4⌉ digits, and to
 /// at least two, so `0x05` for a 5-bit tag and `0x001` for a 9-bit one.
 pub(crate) fn tag(value: u32, tag_bits: u8) -> String {
@@ -73,6 +85,12 @@ pub(crate) fn bits(value: u32, width: u8) -> String {
 /// comma would read as a third number.
 pub(crate) fn label(entry: u32, seq: u32) -> String {
     format!("{entry}.{seq}")
+}
+
+/// An entry's number as the CPU status names it, `#5`: plain digits, never
+/// grouped, since like a label it names an entry rather than counting.
+pub(crate) fn entry_number(entry: u32) -> String {
+    format!("#{entry}")
 }
 
 /// "a" or "an", whichever reads right before `n` spoken aloud: "an 8-line
@@ -189,6 +207,18 @@ mod tests {
     }
 
     #[test]
+    fn line_ranges_run_from_the_first_byte_to_the_last() {
+        assert_eq!(line_range(0x2A0, 16, 12), "0x2A0\u{2013}0x2AF");
+        assert_eq!(line_range(0x2A0, 16, 16), "0x02A0\u{2013}0x02AF");
+        assert_eq!(line_range(0xA0, 32, 8), "0xA0\u{2013}0xBF");
+        assert_eq!(line_range(0xA4, 4, 12), "0x0A4\u{2013}0x0A7");
+        assert_eq!(
+            line_range(0xFFFF_FF80, 128, 32),
+            "0xFFFFFF80\u{2013}0xFFFFFFFF"
+        );
+    }
+
+    #[test]
     fn tags_are_padded_to_at_least_two_digits() {
         assert_eq!(tag(0x1, 1), "0x01");
         assert_eq!(tag(0x5, 5), "0x05");
@@ -218,6 +248,12 @@ mod tests {
     fn labels_are_entry_dot_seq_in_plain_digits() {
         assert_eq!(label(5, 3), "5.3");
         assert_eq!(label(12_345, 10), "12345.10");
+    }
+
+    #[test]
+    fn entry_numbers_are_plain_digits_after_a_number_sign() {
+        assert_eq!(entry_number(5), "#5");
+        assert_eq!(entry_number(12_345), "#12345");
     }
 
     #[test]

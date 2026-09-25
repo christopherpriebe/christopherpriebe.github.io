@@ -1,0 +1,32 @@
+---
+source: crates/cache-explorer-core/tests/golden.rs
+description: "Frame 3b's accesses issued by hand on two-way-lru, untimed: two stores dirty 0x1A0 and 0x0B0, a hit makes way 0 of set 2 the most recent, and the load of 0x2A4 writes back and evicts the dirty 0x1A0 from way 1 (cases 2, 7, 1 and 4). The load goes to r1, where the frame's program loads r3."
+---
+1.1 | decode | lineSize | - | - | Load 0x0A4: tag 0x02, set 2, offset 4 (word 1).
+1.2 | miss | associativity | accesses, loads, misses | - | Set 2: no valid way holds tag 0x02. Miss.
+1.3 | victim | associativity | - | - | Way 0 chosen: it is invalid (empty).
+1.4 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills | - | Fill way 0 with line 0x0A0–0x0AF from memory.
+1.5 | complete | - | r1 | - | Read word 1 of way 0 (53) into r1.
+2.1 | decode | lineSize | - | - | Store 0x1A4: tag 0x06, set 2, offset 4 (word 1).
+2.2 | miss | associativity | accesses, stores, misses | - | Set 2: no valid way holds tag 0x06. Miss.
+2.3 | victim | associativity | - | - | Way 1 chosen: it is invalid (empty).
+2.4 | fill | lineSize | valid 2/1, tag 2/1, word 2/1/0, word 2/1/1, word 2/1/2, word 2/1/3, fills | - | Fill way 1 with line 0x1A0–0x1AF from memory.
+2.5 | write | writePolicy | dirty 2/1, word 2/1/1 | - | Write 7 into word 1 of way 1 and set its dirty bit. Memory at 0x1A4 is now stale.
+2.6 | rank | replacement | rank 2/0, rank 2/1 | - | LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.
+3.1 | decode | lineSize | - | - | Store 0x0B0: tag 0x02, set 3, offset 0 (word 0).
+3.2 | miss | associativity | accesses, stores, misses | - | Set 3: no valid way holds tag 0x02. Miss.
+3.3 | victim | associativity | - | - | Way 0 chosen: it is invalid (empty).
+3.4 | fill | lineSize | valid 3/0, tag 3/0, word 3/0/0, word 3/0/1, word 3/0/2, word 3/0/3, fills | - | Fill way 0 with line 0x0B0–0x0BF from memory.
+3.5 | write | writePolicy | dirty 3/0, word 3/0/0 | - | Write 5 into word 0 of way 0 and set its dirty bit. Memory at 0x0B0 is now stale.
+4.1 | decode | lineSize | - | - | Load 0x0A8: tag 0x02, set 2, offset 8 (word 2).
+4.2 | hit | associativity | accesses, loads, hits | - | Set 2, way 0: valid, and tag 0x02 matches. Hit.
+4.3 | complete | - | r1 | - | Read word 2 of way 0 (66) into r1.
+4.4 | rank | replacement | rank 2/0, rank 2/1 | - | LRU ranks in set 2: way 0 becomes 0 (most recent); way 1 is 1.
+5.1 | decode | lineSize | - | - | Load 0x2A4: tag 0x0A, set 2, offset 4 (word 1).
+5.2 | miss | associativity | accesses, loads, misses | - | Set 2: no valid way holds tag 0x0A. Miss.
+5.3 | victim | replacement | - | - | Way 1 chosen: least recently used (rank 1).
+5.4 | writeBack | writePolicy | memory 0x1A4, writebacks | - | Way 1 is dirty: write line 0x1A0 back to memory first.
+5.5 | evict | replacement | valid 2/1, tag 2/1, dirty 2/1, word 2/1/0, word 2/1/1, word 2/1/2, word 2/1/3, evictions | - | Evict line 0x1A0 (tag 0x06) from way 1.
+5.6 | fill | lineSize | valid 2/1, tag 2/1, word 2/1/0, word 2/1/1, word 2/1/2, word 2/1/3, fills | - | Fill way 1 with line 0x2A0–0x2AF from memory.
+5.7 | complete | - | r1 | - | Read word 1 of way 1 (68) into r1.
+5.8 | rank | replacement | rank 2/0, rank 2/1 | - | LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.

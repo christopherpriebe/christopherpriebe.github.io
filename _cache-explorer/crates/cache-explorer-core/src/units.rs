@@ -215,7 +215,10 @@ impl EventPos {
 
 impl OpIndex {
     /// Wraps an op index the session has checked against its log.
-    #[cfg_attr(not(test), expect(dead_code, reason = "the session numbers ops"))]
+    #[cfg_attr(
+        not(any(test, feature = "golden")),
+        expect(dead_code, reason = "the session numbers ops")
+    )]
     pub(crate) const fn new_unchecked(value: u32) -> Self {
         Self(value)
     }

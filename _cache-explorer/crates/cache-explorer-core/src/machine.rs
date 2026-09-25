@@ -207,7 +207,10 @@ impl Machine {
     /// # Errors
     ///
     /// The [`ConfigError`] of the first rule `config` breaks.
-    #[cfg_attr(not(test), expect(dead_code, reason = "the session starts runs"))]
+    #[cfg_attr(
+        not(any(test, feature = "golden")),
+        expect(dead_code, reason = "the session starts runs")
+    )]
     pub(crate) fn start(config: Config) -> Result<Self, ConfigError> {
         let geometry = config.validate()?;
         Ok(Self {

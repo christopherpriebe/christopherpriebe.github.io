@@ -1,0 +1,25 @@
+---
+source: crates/cache-explorer-core/tests/golden.rs
+description: "Write-through on direct-mapped-8: a store miss fills then writes the cache and memory; store hits write both, the second with the value memory already holds; a store miss evicts a clean line (cases 8 and 6)."
+---
+1.1 | decode | lineSize | - | - | Store 0x0A4: tag 0x01, set 2, offset 4 (word 1).
+1.2 | miss | associativity | accesses, stores, misses | - | Set 2 is invalid. Miss.
+1.3 | victim | associativity | - | - | Set 2 has one way; the line goes there.
+1.4 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills | - | Fill way 0 with line 0x0A0–0x0AF from memory.
+1.5 | write | writePolicy | word 2/0/1 | - | Write 7 into word 1 of way 0.
+1.6 | writeThrough | writePolicy | memory 0xA4, writethroughs | - | Write-through: 7 also goes to memory at 0x0A4.
+2.1 | decode | lineSize | - | - | Store 0x0A8: tag 0x01, set 2, offset 8 (word 2).
+2.2 | hit | associativity | accesses, stores, hits | - | Set 2, way 0: valid, and tag 0x01 matches. Hit.
+2.3 | write | writePolicy | word 2/0/2 | - | Write 9 into word 2 of way 0.
+2.4 | writeThrough | writePolicy | memory 0xA8, writethroughs | - | Write-through: 9 also goes to memory at 0x0A8.
+3.1 | decode | lineSize | - | - | Store 0x0A8: tag 0x01, set 2, offset 8 (word 2).
+3.2 | hit | associativity | accesses, stores, hits | - | Set 2, way 0: valid, and tag 0x01 matches. Hit.
+3.3 | write | writePolicy | - | - | Write 9 into word 2 of way 0.
+3.4 | writeThrough | writePolicy | writethroughs | - | Write-through: 9 also goes to memory at 0x0A8.
+4.1 | decode | lineSize | - | - | Store 0x1A4: tag 0x03, set 2, offset 4 (word 1).
+4.2 | miss | associativity | accesses, stores, misses | - | Set 2 holds tag 0x01, not 0x03. Miss.
+4.3 | victim | associativity | - | - | Direct-mapped: way 0 is the only place for this line, so its current line must go.
+4.4 | evict | associativity | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, evictions | - | Evict line 0x0A0 (tag 0x01) from way 0.
+4.5 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills | - | Fill way 0 with line 0x1A0–0x1AF from memory.
+4.6 | write | writePolicy | word 2/0/1 | - | Write 3 into word 1 of way 0.
+4.7 | writeThrough | writePolicy | memory 0x1A4, writethroughs | - | Write-through: 3 also goes to memory at 0x1A4.

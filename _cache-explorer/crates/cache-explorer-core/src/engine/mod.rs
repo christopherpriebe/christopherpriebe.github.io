@@ -15,6 +15,8 @@ mod access;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "golden")]
+pub(crate) use access::access;
 pub(crate) use access::Request;
 
 use crate::event::{Cause, ChangeRef, EventKind, MicroEvent};

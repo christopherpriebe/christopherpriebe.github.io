@@ -1,0 +1,10 @@
+---
+source: crates/cache-explorer-core/tests/golden.rs
+description: "Write-no-allocate under write-through: store misses go around the cache and count as write-arounds, not write-throughs (case 10)."
+---
+1.1 | decode | lineSize | - | - | Store 0x0A4: tag 0x01, set 2, offset 4 (word 1).
+1.2 | miss | associativity | accesses, stores, misses | - | Set 2 is invalid. Miss.
+1.3 | memWrite | allocatePolicy | memory 0xA4, writearounds | - | Write-no-allocate: 7 goes straight to memory at 0x0A4. The cache is unchanged.
+2.1 | decode | lineSize | - | - | Store 0x1A4: tag 0x03, set 2, offset 4 (word 1).
+2.2 | miss | associativity | accesses, stores, misses | - | Set 2 is invalid. Miss.
+2.3 | memWrite | allocatePolicy | memory 0x1A4, writearounds | - | Write-no-allocate: 3 goes straight to memory at 0x1A4. The cache is unchanged.

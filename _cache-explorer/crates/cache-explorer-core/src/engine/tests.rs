@@ -1,9 +1,10 @@
 //! The access engine: the ten access cases with their events, order,
-//! counters and changed cells; hit and miss sequences; victims under each
-//! replacement policy; write-backs, write-throughs and write-arounds; miss
-//! counts for compulsory, conflict and capacity examples; staleness; event
-//! numbering; stopping mid-access; the invariant checks at entry ends; and
-//! the internal error of a lookup that finds no way.
+//! counters and changed cells, and frame 3b's dirty eviction with its log
+//! lines; hit and miss sequences; victims under each replacement policy;
+//! write-backs, write-throughs and write-arounds; miss counts for
+//! compulsory, conflict and capacity examples; staleness; event numbering;
+//! stopping mid-access; the invariant checks at entry ends; and the internal
+//! error of a lookup that finds no way.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -632,6 +633,28 @@ fn case_4_a_dirty_victim_is_written_back_before_it_is_evicted() {
 }
 
 #[test]
+fn case_4_reads_as_the_design_words_frame_3b() {
+    let (_, trace) = frame_3b_access_5();
+    let lines: Vec<&str> = trace
+        .iter()
+        .map(|(event, _)| event.explain.as_str())
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "Load 0x2A4: tag 0x0A, set 2, offset 4 (word 1).",
+            "Set 2: no valid way holds tag 0x0A. Miss.",
+            "Way 1 chosen: least recently used (rank 1).",
+            "Way 1 is dirty: write line 0x1A0 back to memory first.",
+            "Evict line 0x1A0 (tag 0x06) from way 1.",
+            "Fill way 1 with line 0x2A0\u{2013}0x2AF from memory.",
+            "Read word 1 of way 1 (68) into r3.",
+            "LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.",
+        ]
+    );
+}
+
+#[test]
 fn case_4_the_victim_stays_dirty_until_the_eviction() {
     let (_, trace) = frame_3b_access_5();
     let victim = &trace[2].1;
@@ -1072,7 +1095,12 @@ fn eight_byte_words_are_little_endian_in_the_line() {
 fn a_load_into_r0_changes_no_register() {
     let mut run = Run::new(preset(Preset::DirectMapped8));
     let events = run.events(load(0x0A4, Register::R0));
-    assert!(event(&events, Complete).changed.is_empty());
+    let complete = event(&events, Complete);
+    assert!(complete.changed.is_empty());
+    assert_eq!(
+        complete.explain,
+        "Read word 1 of way 0 (53); r0 always reads 0, so the value is dropped."
+    );
     assert_eq!(run.machine.registers, crate::cpu::Registers::default());
 }
 

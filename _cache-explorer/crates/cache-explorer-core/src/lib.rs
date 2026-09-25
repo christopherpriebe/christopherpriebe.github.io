@@ -12,7 +12,9 @@
 //! dependencies; it reads no clock and does no I/O, so every behaviour is
 //! tested natively with `cargo test`. The optional `ts` feature, enabled only
 //! by `cache-explorer-wasm`, derives TypeScript declarations for the types that
-//! cross the boundary.
+//! cross the boundary. The optional `golden` feature, enabled only by tests,
+//! adds the `golden` module: the golden fixtures and the canonical text of
+//! their events.
 
 #![forbid(unsafe_code)]
 
@@ -22,7 +24,7 @@ mod cache;
 mod config;
 mod cpu;
 #[cfg_attr(
-    not(test),
+    not(any(test, feature = "golden")),
     expect(dead_code, reason = "the session applies ops through the engine")
 )]
 mod engine;
@@ -30,6 +32,8 @@ mod event;
 mod explain;
 mod format;
 mod geometry;
+#[cfg(feature = "golden")]
+pub mod golden;
 mod input;
 mod machine;
 mod memory;

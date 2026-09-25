@@ -28,14 +28,14 @@
 //! A write-back only writes memory: the victim keeps its line and its dirty
 //! bit until `Evict` clears valid, tag, dirty and data together.
 //!
-//! Each event hands the emitter its log line as a closure, built only when
-//! the sink records. The access events are not worded yet: their closures
-//! give an empty line.
+//! Each event hands the emitter its log line as a closure, which the
+//! `explain` module words and which is built only when the sink records.
 
 use crate::cache::{Dirtiness, Slot, Way};
 use crate::config::{AllocatePolicy, WritePolicy};
 use crate::engine::{Draft, Emitter, Flow, Halt};
 use crate::event::{Cause, ChangeRef, Counter, EventKind};
+use crate::explain::{self, WriteNote};
 use crate::geometry::Location;
 use crate::machine::{AccessContext, InvariantViolation, Lookup, Machine};
 use crate::memory::{set_word_at, word_at};
@@ -117,7 +117,9 @@ fn run(machine: &mut Machine, request: Request, out: &mut Emitter<'_>) -> Result
         set: Some(location.set),
         ..Draft::new(EventKind::Decode, Some(Cause::LineSize))
     };
-    out.emit(machine, decode, String::new)?;
+    out.emit(machine, decode, || {
+        explain::decode(&machine.geometry, request.kind(), addr, location)
+    })?;
 
     let hit = lookup(machine, request, location, out)?;
     let way = match (hit, request) {
@@ -165,6 +167,8 @@ fn lookup(
         Some(_) => (EventKind::Hit, Counter::Hits),
         None => (EventKind::Miss, Counter::Misses),
     };
+    // A one-way set's miss names the tag its way held.
+    let held = tags.first().copied().flatten();
     let counters = [Counter::Accesses, kind, outcome];
     for counter in counters {
         machine.counters.add(counter, 1);
@@ -183,7 +187,10 @@ fn lookup(
             .collect(),
         ..Draft::new(event, Some(Cause::Associativity))
     };
-    out.emit(machine, draft, String::new)?;
+    out.emit(machine, draft, || match hit {
+        Some(way) => explain::hit(&machine.geometry, location.set, way, location.tag),
+        None => explain::miss(&machine.geometry, location.set, location.tag, held),
+    })?;
     Ok(hit)
 }
 
@@ -211,18 +218,20 @@ fn allocate(
         way: Some(way),
         ..Draft::new(EventKind::Victim, Some(cause))
     };
-    out.emit(machine, victim, String::new)?;
+    out.emit(machine, victim, || {
+        explain::victim(&machine.geometry, set, choice)
+    })?;
 
     let Some(held) = machine.cache.way(set, way) else {
         return Err(lost(machine, set));
     };
     if let Some(tag) = held.tag() {
-        let line = machine.geometry.line_addr(tag, set);
         let dirty = held.is_dirty();
         if dirty {
+            let line = machine.geometry.line_addr(tag, set);
             write_back(machine, line, set, way, out)?;
         }
-        evict(machine, line, set, way, dirty, cause, out)?;
+        evict(machine, tag, set, way, dirty, cause, out)?;
     }
     fill(machine, location, way, out)?;
     Ok(way)
@@ -261,20 +270,23 @@ fn write_back(
         changed,
         ..Draft::new(EventKind::WriteBack, Some(Cause::WritePolicy))
     };
-    out.emit(machine, draft, String::new)
+    out.emit(machine, draft, || {
+        explain::write_back(&machine.geometry, way, line)
+    })
 }
 
-/// `Evict`: the victim's line leaves the way, which becomes invalid; valid,
-/// tag, dirty and data go together.
+/// `Evict`: the victim's line, with tag `tag`, leaves the way, which becomes
+/// invalid; valid, tag, dirty and data go together.
 fn evict(
     machine: &mut Machine,
-    line: LineAddr,
+    tag: Tag,
     set: SetIndex,
     way: WayIndex,
     dirty: bool,
     cause: Cause,
     out: &mut Emitter<'_>,
 ) -> Result<(), Halt> {
+    let line = machine.geometry.line_addr(tag, set);
     let Some(victim) = machine.cache.way_mut(set, way) else {
         return Err(lost(machine, set));
     };
@@ -294,7 +306,9 @@ fn evict(
         changed,
         ..Draft::new(EventKind::Evict, Some(cause))
     };
-    out.emit(machine, draft, String::new)
+    out.emit(machine, draft, || {
+        explain::evict(&machine.geometry, way, line, tag)
+    })
 }
 
 /// `Fill`: the line comes in from memory, clean, and memory records it as
@@ -332,7 +346,9 @@ fn fill(
         changed,
         ..Draft::new(EventKind::Fill, Some(Cause::LineSize))
     };
-    out.emit(machine, draft, String::new)
+    out.emit(machine, draft, || {
+        explain::fill(&machine.geometry, way, location.line)
+    })
 }
 
 /// A load's `Complete`: the word goes into its register. Unless `ranked`,
@@ -366,7 +382,9 @@ fn complete(
         changed,
         ..Draft::new(EventKind::Complete, None)
     };
-    out.emit(machine, draft, String::new)
+    out.emit(machine, draft, || {
+        explain::load(location.word, way, value, into)
+    })
 }
 
 /// A store's result in the cache: `Write`, which under write-back also sets
@@ -386,13 +404,11 @@ fn write(
     let word_bytes = machine.geometry.word_bytes();
     let start = word_start(machine, location.word);
     let write_back = machine.config.cache.write_policy == WritePolicy::WriteBack;
+    let target = Addr::new_unchecked(location.line.get() + start);
     let mut changed = Vec::new();
-    match machine
-        .cache
-        .way_mut(set, way)
-        .map(|target| &mut target.slot)
-    {
+    let before = match machine.cache.way_mut(set, way).map(|held| &mut held.slot) {
         Some(Slot::Valid { data, dirty, .. }) => {
+            let before = *dirty;
             if word_at(data, start, word_bytes) != word.get() {
                 set_word_at(data, start, word_bytes, word.get());
                 changed.push(ChangeRef::Word {
@@ -405,9 +421,10 @@ fn write(
                 *dirty = Dirtiness::Dirty;
                 changed.push(ChangeRef::Dirty { set, way });
             }
+            before
         }
         _ => return Err(lost(machine, set)),
-    }
+    };
     if write_back && !ranked {
         finish(machine);
     }
@@ -418,12 +435,21 @@ fn write(
         changed,
         ..Draft::new(EventKind::Write, Some(Cause::WritePolicy))
     };
-    out.emit(machine, draft, String::new)?;
+    out.emit(machine, draft, || {
+        let note = if write_back {
+            WriteNote::Back {
+                before,
+                stale: machine.memory.word(target) != word,
+            }
+        } else {
+            WriteNote::Through
+        };
+        explain::write(&machine.geometry, addr, location.word, way, word, note)
+    })?;
     if write_back {
         return Ok(());
     }
 
-    let target = Addr::new_unchecked(location.line.get() + start);
     let mut changed = to_memory(machine, target, word);
     machine.counters.add(Counter::Writethroughs, 1);
     changed.push(ChangeRef::Counter {
@@ -439,7 +465,9 @@ fn write(
         changed,
         ..Draft::new(EventKind::WriteThrough, Some(Cause::WritePolicy))
     };
-    out.emit(machine, draft, String::new)
+    out.emit(machine, draft, || {
+        explain::write_through(&machine.geometry, addr, word)
+    })
 }
 
 /// A store that missed under write-no-allocate: `MemWrite` writes the word
@@ -466,7 +494,9 @@ fn write_around(
         changed,
         ..Draft::new(EventKind::MemWrite, Some(Cause::AllocatePolicy))
     };
-    out.emit(machine, draft, String::new)
+    out.emit(machine, draft, || {
+        explain::write_around(&machine.geometry, addr, word)
+    })
 }
 
 /// The rank moves the hit or the fill on `way` makes, planned before the
@@ -518,7 +548,14 @@ fn rank(
             .collect(),
         ..Draft::new(EventKind::Rank, Some(Cause::Replacement))
     };
-    out.emit(machine, draft, String::new)
+    out.emit(machine, draft, || {
+        let ranks: Vec<u32> = machine
+            .cache
+            .set(set)
+            .map(|target| target.ways().iter().map(|held| held.rank).collect())
+            .unwrap_or_default();
+        explain::rank(machine.config.cache.replacement, set, way, &ranks)
+    })
 }
 
 /// Gives each moved way the rank `rank` picks from its move.

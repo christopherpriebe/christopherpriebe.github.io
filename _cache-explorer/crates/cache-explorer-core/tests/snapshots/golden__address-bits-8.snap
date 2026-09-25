@@ -1,0 +1,21 @@
+---
+source: crates/cache-explorer-core/tests/golden.rs
+description: "The same accesses with 8-bit addresses: two hex digits and a one-bit tag."
+---
+1.1 | decode | lineSize | - | - | Load 0xA8: tag 0x01, set 2, offset 8 (word 2).
+1.2 | miss | associativity | accesses, loads, misses | - | Set 2 is invalid. Miss.
+1.3 | victim | associativity | - | - | Set 2 has one way; the line goes there.
+1.4 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills | - | Fill way 0 with line 0xA0–0xAF from memory.
+1.5 | complete | - | r1 | - | Read word 2 of way 0 (66) into r1.
+2.1 | decode | lineSize | - | - | Load 0x28: tag 0x00, set 2, offset 8 (word 2).
+2.2 | miss | associativity | accesses, loads, misses | - | Set 2 holds tag 0x01, not 0x00. Miss.
+2.3 | victim | associativity | - | - | Direct-mapped: way 0 is the only place for this line, so its current line must go.
+2.4 | evict | associativity | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, evictions | - | Evict line 0xA0 (tag 0x01) from way 0.
+2.5 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills | - | Fill way 0 with line 0x20–0x2F from memory.
+2.6 | complete | - | r1 | - | Read word 2 of way 0 (38) into r1.
+3.1 | decode | lineSize | - | - | Store 0xA8: tag 0x01, set 2, offset 8 (word 2).
+3.2 | miss | associativity | accesses, stores, misses | - | Set 2 holds tag 0x00, not 0x01. Miss.
+3.3 | victim | associativity | - | - | Direct-mapped: way 0 is the only place for this line, so its current line must go.
+3.4 | evict | associativity | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, evictions | - | Evict line 0x20 (tag 0x00) from way 0.
+3.5 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills | - | Fill way 0 with line 0xA0–0xAF from memory.
+3.6 | write | writePolicy | dirty 2/0, word 2/0/2 | - | Write 7 into word 2 of way 0 and set its dirty bit. Memory at 0xA8 is now stale.
