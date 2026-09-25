@@ -1059,6 +1059,11 @@ fn fully_associative_caches_up_to_max_lines_ways_validate() {
     let geometry = widest.validate().unwrap();
     assert!(geometry.tag_bits() >= 1);
     assert_eq!(geometry.placement(), Placement::FullyAssociative);
+    // Its addresses decode, the tag's bit splitting the address space in two.
+    let last = (1_u32 << MIN_ADDRESS_BITS) - 1;
+    for addr in [0, last / 2, last / 2 + 1, last] {
+        check_decoded(&geometry, addr, &geometry.decode(addr).unwrap());
+    }
 }
 
 #[test]
@@ -1296,18 +1301,27 @@ fn check_decoded(geometry: &Geometry, addr: u32, decoded: &Decoded) {
 #[test]
 fn decoding_splits_every_placement_line_size_and_width() {
     let widths = [8, 12, 16, 32];
-    let line_sizes = [1_u32, 2, 4, 8, 16, 32, 64];
+    // Every power of two up to `max`: the line sizes and line counts the
+    // limits allow, up to 16 eight-byte words and `MAX_LINES` lines.
+    let powers_up_to = |max: u32| {
+        std::iter::successors(Some(1_u32), |&n| n.checked_mul(2))
+            .take_while(move |&n| n <= max)
+            .collect::<Vec<_>>()
+    };
+    let line_sizes = powers_up_to(MAX_WORDS_PER_LINE * 8);
+    let line_counts = powers_up_to(MAX_LINES);
     let mut seen = BTreeSet::new();
+    let mut shapes = BTreeSet::new();
     for address_bits in widths {
         let last = u32::try_from((1_u64 << address_bits) - 1).unwrap();
         let addrs = [0, 1, 0x0A4, 0x0A6, last / 5 * 2, last / 3, last - 1, last];
-        for line in line_sizes {
+        for &line in &line_sizes {
             // The narrowest word that keeps the line within a row's words.
             let word_bytes = WordBytes::ALL
                 .into_iter()
                 .find(|word| word.bytes() <= line && line / word.bytes() <= MAX_WORDS_PER_LINE)
                 .unwrap();
-            for lines in [1_u32, 2, 4, 8, 16] {
+            for &lines in &line_counts {
                 for associativity in [1, 2, 4, lines] {
                     let config =
                         config_of(address_bits, word_bytes, lines * line, line, associativity);
@@ -1321,6 +1335,7 @@ fn decoding_splits_every_placement_line_size_and_width() {
                         (Placement::SetAssociative, _) => "4-way",
                     };
                     seen.insert((address_bits, line, placement));
+                    shapes.insert((geometry.sets(), geometry.ways()));
                     for addr in addrs {
                         check_decoded(&geometry, addr, &geometry.decode(addr).unwrap());
                     }
@@ -1328,8 +1343,13 @@ fn decoding_splits_every_placement_line_size_and_width() {
             }
         }
     }
+    // The largest shapes decode too: as many sets, and as many ways, as the
+    // cache has lines.
+    let most_lines = line_counts.last().copied().unwrap();
+    assert!(shapes.contains(&(most_lines, 1)), "{shapes:?}");
+    assert!(shapes.contains(&(1, most_lines)), "{shapes:?}");
     for address_bits in widths {
-        for line in line_sizes {
+        for &line in &line_sizes {
             assert!(
                 seen.iter()
                     .any(|&(bits, size, _)| (bits, size) == (address_bits, line)),
@@ -1534,6 +1554,46 @@ fn line_addresses_are_rebuilt_from_tag_and_set() {
         fully_associative.set_index(0).unwrap(),
     );
     assert_eq!(line.get(), 0xFF0);
+}
+
+#[test]
+fn line_addresses_cut_unchecked_fields_to_their_widths() {
+    // A tag or set deserialized from outside is unchecked until it is
+    // validated; each keeps only its field's bits, so the line stays within
+    // the width and decodes back to the fields it was built from.
+    let tag = |value: u32| serde_json::from_value::<Tag>(json!(value)).unwrap();
+    let set = |value: u32| serde_json::from_value::<SetIndex>(json!(value)).unwrap();
+    // 12-bit addresses, 8 sets of 16 B lines: 5 tag bits, 3 index bits.
+    let direct_mapped = config_of(12, WordBytes::Four, 128, 16, 1)
+        .validate()
+        .unwrap();
+    // 12-bit addresses, one set of 16 B lines: 8 tag bits, no index.
+    let fully_associative = config_of(12, WordBytes::Four, 128, 16, 8)
+        .validate()
+        .unwrap();
+    // 32-bit addresses, one set of 1 B lines: a 32-bit tag.
+    let whole_address = config_of(32, WordBytes::One, 8, 1, 8).validate().unwrap();
+    let max = u32::MAX;
+    let cases = [
+        (direct_mapped, tag(32), set(0), (0x000, 0, 0)),
+        (direct_mapped, tag(0), set(9), (0x010, 0, 1)),
+        (direct_mapped, tag(0x3F), set(15), (0xFF0, 0x1F, 7)),
+        (direct_mapped, tag(max), set(max), (0xFF0, 0x1F, 7)),
+        (fully_associative, tag(0x100), set(1), (0x000, 0, 0)),
+        (fully_associative, tag(0x1FF), set(3), (0xFF0, 0xFF, 0)),
+        (whole_address, tag(max), set(1), (max, max, 0)),
+    ];
+    for (geometry, tag, set, (line, tag_kept, set_kept)) in cases {
+        let context = format!("{geometry:?} {tag:?} {set:?}");
+        let rebuilt = geometry.line_addr(tag, set);
+        assert_eq!(rebuilt.get(), line, "{context}");
+        let decoded = geometry.decode(rebuilt.get()).unwrap();
+        assert_eq!(
+            (decoded.tag.get(), decoded.index.get(), decoded.offset),
+            (tag_kept, set_kept, 0),
+            "{context}"
+        );
+    }
 }
 
 // Typed input

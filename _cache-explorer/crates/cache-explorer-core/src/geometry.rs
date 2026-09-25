@@ -378,10 +378,19 @@ impl Geometry {
 
     /// The address of the line with tag `tag` in set `set`: the two fields put
     /// back in place, with a zero offset.
+    ///
+    /// Each field keeps only as many low bits as it has here. A tag or set from
+    /// [`Geometry::tag`] or [`Geometry::set_index`] fits and is unchanged; one
+    /// deserialized from outside and not yet validated may not, and cutting it
+    /// keeps the line within the address width rather than spilling into the
+    /// neighbouring field or past the last address.
     pub fn line_addr(&self, tag: Tag, set: SetIndex) -> LineAddr {
-        LineAddr::new_unchecked(
-            (tag.get() << (self.offset_bits + self.index_bits)) | (set.get() << self.offset_bits),
-        )
+        // The tag keeps at least one bit, so the shift stays below 32. Whatever
+        // of the tag lands above the address width is its excess, which the
+        // mask below clears.
+        let tag = tag.get() << (self.offset_bits + self.index_bits);
+        let set = (set.get() & (self.sets - 1)) << self.offset_bits;
+        LineAddr::new_unchecked((tag | set) & last_address(self.address_bits))
     }
 }
 
