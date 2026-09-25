@@ -8,9 +8,12 @@
 //!
 //! - I1: the ranks in each set are a permutation of `0..ways`.
 //! - I2: under LRU and FIFO, every valid way ranks below every invalid way.
-//!   This one holds between accesses rather than at every step of one: a
-//!   fill makes its way valid before the rank update moves it ahead of the
-//!   invalid ways.
+//!   This one holds between accesses rather than at every step of one. A
+//!   miss takes the lowest-numbered invalid way, and until an edit moves the
+//!   invalid ways out of way order that way also ranks first among them, so
+//!   without edits I2 holds mid-access too. After such an edit, a fill can
+//!   make a way valid while it still ranks behind an invalid one, until the
+//!   rank update moves it to the front.
 //! - I3: at most one valid way per set holds a given tag.
 //! - I4: a valid way's line address decodes to its own set and tag.
 //! - I5: a dirty way exists only under write-back.
@@ -247,11 +250,12 @@ mod tests {
     use super::*;
     use crate::cache::{Dirtiness, Slot};
     use crate::config::{AllocatePolicy, CacheConfig, Preset, WordBytes};
-    use crate::limits::MAX_LINES;
+    use crate::limits::{MAX_ADDRESS_BITS, MAX_LINES};
     use crate::units::Tag;
 
     /// A configuration of `size` bytes in 16 B lines, `ways`-way, under
-    /// `replacement` and `write_policy`, with 12-bit addresses.
+    /// `replacement` and `write_policy`, with `Config::default()`'s address
+    /// width and word size.
     fn config(size: u32, ways: u32, replacement: Replacement, write_policy: WritePolicy) -> Config {
         Config {
             cache: CacheConfig {
@@ -293,6 +297,22 @@ mod tests {
         target.rank = rank;
     }
 
+    /// A miss on `addr` up to its rank update: the victim filled, clean, and
+    /// not yet ranked. Returns the set and the way filled.
+    fn fill_unranked(machine: &mut Machine, addr: u32) -> (SetIndex, WayIndex) {
+        let decoded = machine.geometry.decode(addr).unwrap();
+        let policy = machine.config.cache.replacement.policy();
+        let line_bytes = machine.geometry.line_bytes() as usize;
+        let set = machine.cache.set_mut(decoded.index).unwrap();
+        let choice = policy.victim(set.ways(), &mut machine.prng);
+        set.way_mut(choice.way).unwrap().slot = Slot::Valid {
+            tag: decoded.tag,
+            dirty: Dirtiness::Clean,
+            data: vec![0; line_bytes],
+        };
+        (decoded.index, choice.way)
+    }
+
     /// One load or store of `addr` as the engine will make it: a hit is
     /// ranked, and a miss fills its victim, clean, and ranks the fill. A
     /// store under write-back leaves its line dirty.
@@ -304,24 +324,19 @@ mod tests {
         } else {
             Dirtiness::Clean
         };
-        let line_bytes = machine.geometry.line_bytes() as usize;
-        let set = machine.cache.set_mut(decoded.index).unwrap();
         let hit = (0_u32..)
-            .zip(set.ways())
+            .zip(machine.cache.set(decoded.index).unwrap().ways())
             .find_map(|(index, way)| (way.tag() == Some(decoded.tag)).then_some(index));
-        let target = if let Some(index) = hit {
-            policy.on_access(set.ways_mut(), way(index));
-            way(index)
-        } else {
-            let choice = policy.victim(set.ways(), &mut machine.prng);
-            set.way_mut(choice.way).unwrap().slot = Slot::Valid {
-                tag: decoded.tag,
-                dirty: Dirtiness::Clean,
-                data: vec![0; line_bytes],
-            };
-            policy.on_fill(set.ways_mut(), choice.way);
-            choice.way
+        let target = match hit {
+            Some(index) => way(index),
+            None => fill_unranked(machine, addr).1,
         };
+        let set = machine.cache.set_mut(decoded.index).unwrap();
+        if hit.is_some() {
+            policy.on_access(set.ways_mut(), target);
+        } else {
+            policy.on_fill(set.ways_mut(), target);
+        }
         if let Slot::Valid { dirty: bit, .. } = &mut set.way_mut(target).unwrap().slot {
             if dirty == Dirtiness::Dirty {
                 *bit = Dirtiness::Dirty;
@@ -355,14 +370,15 @@ mod tests {
         // Every placement and policy up to a fully associative cache of
         // `MAX_LINES` lines, under both write policies, over a pseudo-random
         // stream of loads and stores to three times as many lines as the
-        // cache holds.
+        // cache holds. The widest addresses hold those lines and a tag bit
+        // whatever `MAX_LINES` is.
         let mut ways = 1;
         while ways <= MAX_LINES {
             for replacement in [Replacement::Lru, Replacement::Fifo, Replacement::Random] {
                 for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
                     let size = MAX_LINES * 16;
                     let mut machine = start(Config {
-                        address_bits: 16,
+                        address_bits: MAX_ADDRESS_BITS,
                         ..config(size, ways, replacement, write_policy)
                     });
                     let mut stream = Prng::new(u64::from(ways));
@@ -381,9 +397,11 @@ mod tests {
     #[test]
     fn random_replacement_draws_from_the_run_generator() {
         // Two machines with the same seed and the same accesses reach the same
-        // state; a different seed evicts differently.
+        // state; a different seed evicts differently. The accesses cycle
+        // through eight lines of set 0, twice what it holds, all within the
+        // narrowest addresses.
         let config = config(128, 4, Replacement::Random, WritePolicy::WriteBack);
-        let addrs: Vec<u32> = (0..40).map(|i| (i * 7 % 13) * 0x40).collect();
+        let addrs: Vec<u32> = (0..40).map(|i| (i * 5 % 8) * 0x20).collect();
         let run = |config: Config| {
             let mut machine = start(config);
             for &addr in &addrs {
@@ -450,9 +468,52 @@ mod tests {
     }
 
     #[test]
+    fn i2_breaks_mid_fill_only_after_invalid_ways_leave_way_order() {
+        for replacement in [Replacement::Lru, Replacement::Fifo] {
+            let policy = replacement.policy();
+            let mut machine = start(config(64, 4, replacement, WritePolicy::WriteBack));
+            // Without edits, the invalid way a miss takes also ranks first
+            // among the invalid ways, so I2 holds between a fill and its
+            // rank update.
+            for addr in [0x000, 0x010, 0x020, 0x030] {
+                let (index, filled) = fill_unranked(&mut machine, addr);
+                assert_eq!(machine.check_invariants(), Ok(()));
+                policy.on_fill(machine.cache.set_mut(index).unwrap().ways_mut(), filled);
+                assert_eq!(machine.check_invariants(), Ok(()));
+            }
+            let ranks = |machine: &Machine| -> Vec<u32> {
+                let ways = machine.cache.set(set(0)).unwrap().ways();
+                ways.iter().map(|way| way.rank).collect()
+            };
+            assert_eq!(ranks(&machine), [3, 2, 1, 0]);
+            // An edit that invalidates a way sends it to rank last.
+            // Invalidating way 3 and then way 0 leaves way 0 ranked behind
+            // way 3.
+            for (index, rank) in (0..).zip([3, 1, 0, 2]) {
+                machine.cache.way_mut(set(0), way(index)).unwrap().rank = rank;
+            }
+            for index in [0, 3] {
+                machine.cache.way_mut(set(0), way(index)).unwrap().slot = Slot::Invalid;
+            }
+            assert_eq!(machine.check_invariants(), Ok(()));
+            // The next miss fills way 0, which ranks behind invalid way 3
+            // until its rank update.
+            let (index, filled) = fill_unranked(&mut machine, 0x040);
+            assert_eq!(filled, way(0));
+            assert_eq!(
+                machine.check_invariants(),
+                Err(InvariantViolation::ValidRankedAfterInvalid { set: set(0) })
+            );
+            policy.on_fill(machine.cache.set_mut(index).unwrap().ways_mut(), filled);
+            assert_eq!(ranks(&machine), [0, 2, 1, 3]);
+            assert_eq!(machine.check_invariants(), Ok(()));
+        }
+    }
+
+    #[test]
     fn i3_reports_a_tag_held_twice_in_a_set() {
         let mut machine = start(Preset::TwoWayLru.config());
-        let slot = line(&machine, 6, Dirtiness::Clean);
+        let slot = line(&machine, 1, Dirtiness::Clean);
         put(&mut machine, 1, 0, slot.clone(), 1);
         put(&mut machine, 1, 1, slot.clone(), 0);
         assert_eq!(
@@ -468,13 +529,13 @@ mod tests {
 
     #[test]
     fn i4_reports_a_tag_too_wide_for_its_line_to_decode_back() {
-        // `two-way-lru` has 6 tag bits under 12-bit addresses: tag 0x3F is the
-        // last that fits.
+        // The widest tag the tag field holds is the last that fits.
         let mut machine = start(Preset::TwoWayLru.config());
-        let slot = line(&machine, 0x3F, Dirtiness::Clean);
+        let limit = 1_u32 << machine.geometry.tag_bits();
+        let slot = line(&machine, limit - 1, Dirtiness::Clean);
         put(&mut machine, 2, 0, slot, 0);
         assert_eq!(machine.check_invariants(), Ok(()));
-        let slot = line(&machine, 0x40, Dirtiness::Clean);
+        let slot = line(&machine, limit, Dirtiness::Clean);
         put(&mut machine, 2, 0, slot, 0);
         assert_eq!(
             machine.check_invariants(),
@@ -488,7 +549,7 @@ mod tests {
     #[test]
     fn i5_reports_a_dirty_way_under_write_through() {
         let mut machine = start(config(128, 2, Replacement::Lru, WritePolicy::WriteThrough));
-        let slot = line(&machine, 5, Dirtiness::Dirty);
+        let slot = line(&machine, 1, Dirtiness::Dirty);
         put(&mut machine, 0, 1, slot.clone(), 0);
         machine.cache.way_mut(set(0), way(0)).unwrap().rank = 1;
         assert_eq!(
@@ -523,7 +584,7 @@ mod tests {
     #[test]
     fn the_lowest_set_and_invariant_is_reported_first() {
         let mut machine = start(config(128, 2, Replacement::Lru, WritePolicy::WriteThrough));
-        let dirty = line(&machine, 5, Dirtiness::Dirty);
+        let dirty = line(&machine, 1, Dirtiness::Dirty);
         put(&mut machine, 1, 0, dirty.clone(), 0);
         put(&mut machine, 1, 1, dirty, 1);
         machine.cache.way_mut(set(2), way(0)).unwrap().rank = 1;
@@ -531,6 +592,39 @@ mod tests {
         assert_eq!(
             machine.check_invariants(),
             Err(InvariantViolation::DuplicateTag { set: set(1) })
+        );
+    }
+
+    #[test]
+    fn the_lowest_way_is_reported_first() {
+        // Ways 1 and 3 of a full set break I4, and in a second cache I5;
+        // both times way 1 is named.
+        let mut machine = start(config(256, 4, Replacement::Lru, WritePolicy::WriteBack));
+        let limit = 1_u32 << machine.geometry.tag_bits();
+        for (index, tag) in (0..).zip([0, limit, 1, limit + 1]) {
+            let slot = line(&machine, tag, Dirtiness::Clean);
+            put(&mut machine, 2, index, slot, index);
+        }
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::LineOutsideItsSet {
+                set: set(2),
+                way: way(1)
+            })
+        );
+        let mut machine = start(config(256, 4, Replacement::Lru, WritePolicy::WriteThrough));
+        let clean = Dirtiness::Clean;
+        let dirty = Dirtiness::Dirty;
+        for (index, dirtiness) in (0..).zip([clean, dirty, clean, dirty]) {
+            let slot = line(&machine, index, dirtiness);
+            put(&mut machine, 2, index, slot, index);
+        }
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::DirtyUnderWriteThrough {
+                set: set(2),
+                way: way(1)
+            })
         );
     }
 

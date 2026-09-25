@@ -76,8 +76,9 @@ pub(crate) enum Dirtiness {
 
 impl Cache {
     /// The empty cache a run starts with: every way invalid, and ranked by
-    /// its way number, so way 0 is taken first and every policy starts from
-    /// the same order.
+    /// its way number, so every policy starts from the same order and the
+    /// invalid ways, which misses take lowest-numbered first, also rank in
+    /// way order.
     pub(crate) fn new(geometry: &Geometry) -> Self {
         let set = Set {
             ways: (0..geometry.ways())
@@ -240,7 +241,7 @@ mod tests {
         let before = cache.clone();
         let set = geometry.set_index(2).unwrap();
         let way = geometry.way_index(0).unwrap();
-        let tag = geometry.tag(5).unwrap();
+        let tag = geometry.tag(1).unwrap();
         cache.way_mut(set, way).unwrap().slot = Slot::Valid {
             tag,
             dirty: Dirtiness::Dirty,
