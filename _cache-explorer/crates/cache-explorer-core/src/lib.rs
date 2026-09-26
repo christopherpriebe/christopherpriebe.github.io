@@ -38,23 +38,35 @@ mod op;
 mod prng;
 mod replacement;
 mod session;
+mod snapshot;
 mod stats;
 mod units;
 
 pub use config::{
-    presets, AllocatePolicy, CacheConfig, Config, ConfigError, ConfigNumberField, MemoryInit,
-    Preset, Repair, Replacement, Timing, WordBytes, WordBytesError, WritePolicy,
+    presets, validate_config, AllocatePolicy, CacheConfig, Config, ConfigCheck, ConfigControls,
+    ConfigError, ConfigErrorView, ConfigField, ConfigGroup, ConfigGroupKind, ConfigNumberField,
+    ConfigOption, MemoryInit, Preset, Repair, Replacement, Timing, TimingControl, WordBytes,
+    WordBytesError, WritePolicy,
 };
 pub use event::{Cause, ChangeRef, Counter, EventKind, MicroEvent};
 pub use geometry::{
     AccessError, AddressField, BitRange, BitRanges, Decoded, FieldKind, Geometry, Placement,
 };
-pub use input::{AddressInput, WordInput};
+pub use input::{AddressInput, ConfigNumberInput, IssueDraft, WordInput};
 pub use isa::{ParseError, ParseResult};
 pub use machine::{InvariantViolation, Machine};
 pub use memory::StaleInfo;
 pub use op::{AccessKind, Op, OpError, ProgramFormat, ProgramSource};
-pub use session::{Boundary, ConfigChange, Position, Replay, ReplayError, Session, StepOutcome};
+pub use session::{
+    Boundary, ConfigChange, EntryKind, EntryOutcome, EntryView, EventRow, Position, Replay,
+    ReplayError, Session, StepOutcome, Tense, Timeline,
+};
+pub use snapshot::{
+    BusView, CacheView, ControlAction, Controls, CpuStatus, CpuView, HitMarker, Labels,
+    MemoryLineView, MemoryView, MemoryWordView, ProgramLine, ProgramView, RankCell, RankHeader,
+    RankRole, RegisterView, RequestStatus, RequestView, SetView, Stale, State, Transfer,
+    WayCompare, WayLoc, WayView,
+};
 pub use stats::{Counters, Figure, Outcome, StatKey, StatRow, Stats, Traffic};
 pub use units::{
     Addr, Cycle, EventPos, LineAddr, OpIndex, Register, SetIndex, Tag, WayIndex, Word, WordIndex,

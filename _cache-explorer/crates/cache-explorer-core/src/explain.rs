@@ -1,11 +1,15 @@
 //! The wording of the log: every line built from machine state is written
 //! here, so the tool's voice has one source. That includes the CPU's status
 //! and the Stats lines: AMAT and the measured cost in timed mode, and the
-//! count beside the hit and miss sparkline; and the program drawer's lines:
-//! its summary and the messages of a program or trace that does not parse.
-//! Error messages are the exception; each is the `Display` of its error
-//! type, next to that type. The drawer shares three of those: an address out
-//! of range or misaligned, and a value the word cannot hold.
+//! count beside the hit and miss sparkline; the program drawer's lines: its
+//! summary and the messages of a program or trace that does not parse; the
+//! configuration's summaries, the labels of its repairs and of the
+//! configuration bar's options; and the texts of the views: the cache's and
+//! memory's headings and descriptions, the lanes, the log's headers, the
+//! changed summary and the status line. Error messages are the exception;
+//! each is the `Display` of its error type, next to that type. The drawer
+//! shares three of those: an address out of range or misaligned, and a value
+//! the word cannot hold.
 //!
 //! An access's lines keep the design's wording where it has one, as in "Way 1
 //! chosen: least recently used (rank 1).", and the lines it does not draw
@@ -14,18 +18,24 @@
 //! widths, and values follow the data rule. No line depends on the cursor or
 //! on Basics and Advanced, so the same event always reads the same.
 
+use std::collections::BTreeMap;
+
 use crate::cache::Dirtiness;
-use crate::config::{Config, Replacement};
+use crate::config::{
+    AllocatePolicy, CacheConfig, Config, ConfigError, Replacement, WordBytes, WritePolicy,
+};
+use crate::event::{ChangeRef, Counter, EventKind};
 use crate::format;
 use crate::geometry::{highest_word, Geometry, Location, Placement};
 use crate::isa::{Mnemonic, ParseError};
 use crate::limits::{
     INSTRUCTION_BUDGET, MAX_LABEL_CHARS, MAX_PROGRAM_BYTES, MAX_PROGRAM_INSTRUCTIONS,
-    MAX_PROGRAM_LINES, SESSION_EVENT_LIMIT,
+    MAX_PROGRAM_LINES, MIN_CYCLES, SESSION_EVENT_LIMIT,
 };
 use crate::machine::InvariantViolation;
 use crate::op::{AccessKind, ProgramFormat};
 use crate::replacement::{VictimChoice, VictimReason};
+use crate::session::EntryOutcome;
 use crate::units::{Addr, LineAddr, Register, SetIndex, Tag, WayIndex, Word, WordIndex};
 
 /// What a store's `Write` line says after the word it wrote, which depends on
@@ -182,10 +192,6 @@ pub(crate) enum ParseProblem<'a> {
 /// entry an access; here an instruction without a memory access, an edit and
 /// an error that ends an op are named for what they are.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the CPU status names the cursor's entry")
-)]
 pub(crate) enum EntryNoun {
     /// A load or store, issued by hand or executed by a program.
     Access,
@@ -804,10 +810,6 @@ fn count_of(format: ProgramFormat, instructions: u32) -> String {
 
 /// The CPU status for the cursor's place in its entry, which counts steps,
 /// one per event: "Access #5 · step 3 of 8", "Edit #6 · step 1 of 1".
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the CPU status names the cursor's entry")
-)]
 pub(crate) fn entry_status(noun: EntryNoun, number: u32, step: u32, steps: u32) -> String {
     let noun = match noun {
         EntryNoun::Access => "Access",
@@ -825,10 +827,6 @@ pub(crate) fn entry_status(noun: EntryNoun, number: u32, step: u32, steps: u32) 
 
 /// The CPU status while a miss stalls it, counting down the cycles left:
 /// "Stalled: 40 cycles".
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the CPU status counts a stall down")
-)]
 pub(crate) fn stalled(remaining: u32) -> String {
     format!("Stalled: {}", format::cycles(remaining))
 }
@@ -885,6 +883,613 @@ pub(crate) fn internal_error(violation: &InvariantViolation) -> String {
         "Internal error: {violation} no longer holds. The run stopped here; please report it \
          with a share link."
     )
+}
+
+/// The configuration's summary line, as the design's `cfgSummary` writes
+/// it: the size, the line size and the placement, then the replacement
+/// policy unless the cache is direct-mapped: "128 B · 16 B lines · 2-way ·
+/// LRU". With `advanced`, then the write and allocate policies: " ·
+/// write-back · allocate". The placement is read from the numbers as given,
+/// so an invalid configuration has a summary too.
+pub(crate) fn config_summary(config: &Config, advanced: bool) -> String {
+    let cache = &config.cache;
+    let mut text = format!(
+        "{} B \u{b7} {} B lines \u{b7} {}",
+        format::setting(cache.size_bytes),
+        format::setting(cache.line_bytes),
+        placement_name(cache)
+    );
+    if cache.placement() != Placement::DirectMapped {
+        text.push_str(" \u{b7} ");
+        text.push_str(replacement_name(cache.replacement));
+    }
+    if advanced {
+        text.push_str(" \u{b7} ");
+        text.push_str(match cache.write_policy {
+            WritePolicy::WriteBack => "write-back",
+            WritePolicy::WriteThrough => "write-through",
+        });
+        text.push_str(" \u{b7} ");
+        text.push_str(match cache.allocate_policy {
+            AllocatePolicy::WriteAllocate => "allocate",
+            AllocatePolicy::WriteNoAllocate => "no-allocate",
+        });
+    }
+    text
+}
+
+/// The short summary a shared run's loading screen opens with: the
+/// placement and the replacement policy, then the size, as in "2-way LRU ·
+/// 128 B". It starts a sentence, so its first word has a capital:
+/// "Direct-mapped · 128 B", "Fully associative LRU · 128 B".
+pub(crate) fn short_summary(config: &Config) -> String {
+    let cache = &config.cache;
+    let replacement = replacement_name(cache.replacement);
+    let placement = match cache.placement() {
+        Placement::DirectMapped => "Direct-mapped".to_owned(),
+        Placement::FullyAssociative => format!("Fully associative {replacement}"),
+        Placement::SetAssociative => {
+            format!("{}-way {replacement}", format::setting(cache.associativity))
+        }
+    };
+    format!("{placement} \u{b7} {} B", format::setting(cache.size_bytes))
+}
+
+/// The label of the action that opens `repaired`, the repair of a
+/// configuration whose first broken rule is `first`: it names that rule's
+/// repair, read from the repaired configuration and its `geometry`, as in
+/// "Open with 2-way instead" or "Open as a 1,024 B cache instead".
+pub(crate) fn repair_label(first: &ConfigError, repaired: &Config, geometry: &Geometry) -> String {
+    let size = repaired.cache.size_bytes;
+    match first {
+        ConfigError::AddressBits { .. } => format!(
+            "Open with {}-bit addresses instead",
+            format::setting(repaired.address_bits)
+        ),
+        ConfigError::SizeNotPowerOfTwo { .. }
+        | ConfigError::LineLargerThanCache { .. }
+        | ConfigError::NoTagBits { .. }
+        | ConfigError::TooManyLines { .. } => format!(
+            "Open as {} {} B cache instead",
+            format::a_or_an(size),
+            format::setting(size)
+        ),
+        ConfigError::LineNotPowerOfTwo { .. }
+        | ConfigError::LineSmallerThanWord { .. }
+        | ConfigError::TooManyWords { .. } => format!(
+            "Open with {} B lines instead",
+            format::setting(repaired.cache.line_bytes)
+        ),
+        ConfigError::AssociativityZero
+        | ConfigError::AssociativityNotPowerOfTwo { .. }
+        | ConfigError::AssociativityTooLarge { .. } => match geometry.placement() {
+            Placement::FullyAssociative => "Open as fully associative instead".to_owned(),
+            Placement::DirectMapped => "Open as direct-mapped instead".to_owned(),
+            Placement::SetAssociative => {
+                format!("Open with {}-way instead", format::setting(geometry.ways()))
+            }
+        },
+        ConfigError::Timing { .. } => {
+            let (hit, miss) = repaired.timing.map_or((MIN_CYCLES, MIN_CYCLES), |timing| {
+                (timing.hit_cycles, timing.miss_cycles)
+            });
+            format!(
+                "Open with {} {}/{}-cycle timing instead",
+                format::a_or_an(hit),
+                format::setting(hit),
+                format::setting(miss)
+            )
+        }
+        ConfigError::SeedTooLarge { .. } => {
+            format!("Open with seed {} instead", format::setting(repaired.seed))
+        }
+    }
+}
+
+/// The label of a cache-size or line-size option: "64 B".
+pub(crate) fn bytes_option(bytes: u32) -> String {
+    format!("{} B", format::setting(bytes))
+}
+
+/// The label of an associativity option other than Full: "Direct" for one
+/// way, and otherwise "2-way".
+pub(crate) fn ways_option(ways: u32) -> String {
+    if ways == 1 {
+        "Direct".to_owned()
+    } else {
+        format!("{}-way", format::setting(ways))
+    }
+}
+
+/// The label of the fully associative option.
+pub(crate) fn full_option() -> String {
+    "Full".to_owned()
+}
+
+/// Why the associativity option with as many ways as a cache of `lines`
+/// lines is disabled: "Same as Full for an 8-line cache."
+pub(crate) fn same_as_full(lines: u32) -> String {
+    format!(
+        "Same as Full for {} {}-line cache.",
+        format::a_or_an(lines),
+        format::setting(lines)
+    )
+}
+
+/// The label of a replacement option: "LRU", "FIFO", "Random".
+pub(crate) fn replacement_option(replacement: Replacement) -> String {
+    replacement_name(replacement).to_owned()
+}
+
+/// The label of an address-width option: "12-bit".
+pub(crate) fn address_option(bits: u8) -> String {
+    format!("{}-bit", format::setting(bits))
+}
+
+/// The label of a word-size option: "4 B".
+pub(crate) fn word_option(word: WordBytes) -> String {
+    bytes_option(word.bytes())
+}
+
+/// The label of a write-policy option: "Write-back", "Write-through".
+pub(crate) fn write_option(policy: WritePolicy) -> String {
+    match policy {
+        WritePolicy::WriteBack => "Write-back",
+        WritePolicy::WriteThrough => "Write-through",
+    }
+    .to_owned()
+}
+
+/// The label of an allocate-policy option, in the group headed "On a store
+/// miss": "Allocate", "No allocate".
+pub(crate) fn allocate_option(policy: AllocatePolicy) -> String {
+    match policy {
+        AllocatePolicy::WriteAllocate => "Allocate",
+        AllocatePolicy::WriteNoAllocate => "No allocate",
+    }
+    .to_owned()
+}
+
+/// The cache table's heading: "L1 cache · 4 sets × 2 ways × 16 B".
+pub(crate) fn cache_header(geometry: &Geometry) -> String {
+    let (sets, ways) = (geometry.sets(), geometry.ways());
+    format!(
+        "L1 cache \u{b7} {} {} \u{d7} {} {} \u{d7} {} B",
+        format::setting(sets),
+        format::plural(sets, "set", "sets"),
+        format::setting(ways),
+        format::plural(ways, "way", "ways"),
+        format::setting(geometry.line_bytes())
+    )
+}
+
+/// What one way of the cache holds, as its cell describes itself to a
+/// screen reader: "Set 2, way 0: valid, tag 0x05, dirty, rank 1, victim." A
+/// way has a `tag` when it is valid, and a `rank` when the rank column is
+/// shown.
+pub(crate) fn way_description(
+    set: SetIndex,
+    way: WayIndex,
+    tag: Option<&str>,
+    dirty: bool,
+    rank: Option<u32>,
+    victim: bool,
+) -> String {
+    let mut text = format!(
+        "Set {}, way {}: ",
+        format::data(set.get()),
+        format::data(way.get())
+    );
+    match tag {
+        Some(tag) => {
+            text.push_str("valid, tag ");
+            text.push_str(tag);
+        }
+        None => text.push_str("invalid"),
+    }
+    if dirty {
+        text.push_str(", dirty");
+    }
+    if let Some(rank) = rank {
+        text.push_str(", rank ");
+        text.push_str(&format::data(rank));
+    }
+    if victim {
+        text.push_str(", victim");
+    }
+    text.push('.');
+    text
+}
+
+/// The memory table's caption: how many lines the run has touched, "5 lines
+/// touched".
+pub(crate) fn memory_caption(lines: u32) -> String {
+    format!(
+        "{} {} touched",
+        format::data(lines),
+        format::plural(lines, "line", "lines")
+    )
+}
+
+/// Why a word of memory is marked stale: "Stale: set 2, way 1 holds the
+/// newer value 7."
+pub(crate) fn stale(set: SetIndex, way: WayIndex, cached: Word) -> String {
+    format!(
+        "Stale: set {}, way {} holds the newer value {}.",
+        format::data(set.get()),
+        format::data(way.get()),
+        format::data(cached.get())
+    )
+}
+
+/// What a word of memory holds, as its cell describes itself: "0x0A4 = 53."
+/// A stale word goes on with why: "0x1A4 = 0. Stale: set 2, way 1 holds the
+/// newer value 7."
+pub(crate) fn memory_word(
+    geometry: &Geometry,
+    addr: Addr,
+    value: Word,
+    stale: Option<&str>,
+) -> String {
+    let text = format!(
+        "{} = {}.",
+        address(geometry, addr.get()),
+        format::data(value.get())
+    );
+    match stale {
+        Some(stale) => format!("{text} {stale}"),
+        None => text,
+    }
+}
+
+/// The transfer lane while nothing moves.
+pub(crate) fn bus_idle() -> String {
+    "Bus idle".to_owned()
+}
+
+/// The transfer lane at a `Fill`: "Fill · memory line 0x2A0 → set 2, way 1".
+pub(crate) fn fill_transfer(
+    geometry: &Geometry,
+    line: LineAddr,
+    set: SetIndex,
+    way: WayIndex,
+) -> String {
+    format!(
+        "Fill \u{b7} memory line {} \u{2192} set {}, way {}",
+        address(geometry, line.get()),
+        format::data(set.get()),
+        format::data(way.get())
+    )
+}
+
+/// The transfer lane at a `WriteBack`: "Write-back · set 2, way 1 → memory
+/// line 0x1A0".
+pub(crate) fn write_back_transfer(
+    geometry: &Geometry,
+    line: LineAddr,
+    set: SetIndex,
+    way: WayIndex,
+) -> String {
+    format!(
+        "Write-back \u{b7} set {}, way {} \u{2192} memory line {}",
+        format::data(set.get()),
+        format::data(way.get()),
+        address(geometry, line.get())
+    )
+}
+
+/// The transfer lane at a `WriteThrough`: "Write-through · set 2, way 0 →
+/// memory line 0x0A0".
+pub(crate) fn write_through_transfer(
+    geometry: &Geometry,
+    line: LineAddr,
+    set: SetIndex,
+    way: WayIndex,
+) -> String {
+    format!(
+        "Write-through \u{b7} set {}, way {} \u{2192} memory line {}",
+        format::data(set.get()),
+        format::data(way.get()),
+        address(geometry, line.get())
+    )
+}
+
+/// The transfer lane at a write-around's `MemWrite`, which goes from the CPU
+/// straight to memory: "Write-around · CPU → memory line 0x0A0".
+pub(crate) fn write_around_transfer(geometry: &Geometry, line: LineAddr) -> String {
+    format!(
+        "Write-around \u{b7} CPU \u{2192} memory line {}",
+        address(geometry, line.get())
+    )
+}
+
+/// The request lane while an access is in the cache: "Load 0x0A4 → cache".
+pub(crate) fn request(geometry: &Geometry, kind: AccessKind, addr: Addr) -> String {
+    format!("{} \u{2192} cache", typed_request(geometry, kind, addr))
+}
+
+/// The request lane for an address typed but not issued: "Load 0x0A4".
+pub(crate) fn typed_request(geometry: &Geometry, kind: AccessKind, addr: Addr) -> String {
+    let verb = match kind {
+        AccessKind::Read => "Load",
+        AccessKind::Write => "Store",
+    };
+    format!("{verb} {}", address(geometry, addr.get()))
+}
+
+/// The request lane with no request.
+pub(crate) fn no_request() -> String {
+    "No request".to_owned()
+}
+
+/// Where the address strip's address comes from while an access is at the
+/// cursor: "from access #5".
+pub(crate) fn request_source(entry: u32) -> String {
+    format!("from access {}", format::entry_number(entry))
+}
+
+/// An access issued by hand, written as the instruction it stands for, as
+/// the log's entry and the CPU box name it: "ld r1, [0x0A4]", and for a
+/// store of `value`, "st [0x0A4], #7".
+pub(crate) fn issued(
+    geometry: &Geometry,
+    addr: Addr,
+    into: Register,
+    value: Option<u64>,
+) -> String {
+    let at = address(geometry, addr.get());
+    match value {
+        None => format!("ld {into}, [{at}]"),
+        Some(value) => format!("st [{at}], #{}", format::plain(value)),
+    }
+}
+
+/// An edit of a way, as the log's entry names it: "edit set 2 way 0".
+pub(crate) fn edit_way(set: SetIndex, way: WayIndex) -> String {
+    format!(
+        "edit set {} way {}",
+        format::data(set.get()),
+        format::data(way.get())
+    )
+}
+
+/// An edit of a memory word, as the log's entry names it: "edit memory
+/// 0x0A4".
+pub(crate) fn edit_memory(geometry: &Geometry, addr: Addr) -> String {
+    format!("edit memory {}", address(geometry, addr.get()))
+}
+
+/// A program load, as the log's divider row names it: "Loaded a program of
+/// 5 instructions", or for a trace "Loaded a trace of 5 accesses".
+pub(crate) fn program_divider(format: ProgramFormat, instructions: u32) -> String {
+    let text = program_loaded(format, instructions);
+    let first = text
+        .split_once(". ")
+        .map_or(text.as_str(), |(first, _)| first);
+    first.to_owned()
+}
+
+/// What an entry did, as its header in the log names it: an access's "hit"
+/// or "miss", followed by what else it did, as in "miss · evict ·
+/// write-back"; "CPU only" for an instruction without a memory access;
+/// "edit"; "program" or "trace" for a load; "error". `kinds` are the kinds
+/// of the entry's events, and `format` the loaded program's.
+pub(crate) fn entry_outcome(
+    outcome: EntryOutcome,
+    kinds: &[EventKind],
+    format: Option<ProgramFormat>,
+) -> String {
+    let access = |result: &str| {
+        let mut parts = vec![result];
+        for (kind, name) in [
+            (EventKind::Evict, "evict"),
+            (EventKind::WriteBack, "write-back"),
+            (EventKind::WriteThrough, "write-through"),
+            (EventKind::MemWrite, "write-around"),
+        ] {
+            if kinds.contains(&kind) {
+                parts.push(name);
+            }
+        }
+        parts.join(" \u{b7} ")
+    };
+    match outcome {
+        EntryOutcome::Hit => access("hit"),
+        EntryOutcome::Miss => access("miss"),
+        EntryOutcome::Edit => "edit".to_owned(),
+        EntryOutcome::CpuOnly => "CPU only".to_owned(),
+        EntryOutcome::Program => source_noun(format.unwrap_or(ProgramFormat::Asm)).to_owned(),
+        EntryOutcome::Error => "error".to_owned(),
+    }
+}
+
+/// The sentence the page's live region reads after the cursor moves: the
+/// log line of the event at the cursor. After a move across more than one
+/// event, `entry` gives the entry's number, label and outcome, which open
+/// the sentence: "#5 ld r3, [0x2A4]: miss · evict · write-back. Read word 1
+/// of way 1 (68) into r3."
+pub(crate) fn live(entry: Option<(u32, &str, &str)>, explain: &str) -> String {
+    match entry {
+        Some((number, label, outcome)) => format!(
+            "{} {label}: {outcome}. {explain}",
+            format::entry_number(number)
+        ),
+        None => explain.to_owned(),
+    }
+}
+
+/// The log's header: which step of the run the cursor is on, "step 5 of
+/// 14", or "no steps yet" while the run has none.
+pub(crate) fn log_header(step: u32, steps: u32) -> String {
+    if steps == 0 {
+        "no steps yet".to_owned()
+    } else {
+        format!("step {} of {}", format::data(step), format::data(steps))
+    }
+}
+
+/// The status line over the workbench: the mode and the run's steps, then
+/// "timed" in timed mode: "Basics · 14 steps in this run", "Advanced · 1
+/// step in this run · timed".
+pub(crate) fn status_line(advanced: bool, steps: u32, timed: bool) -> String {
+    format!(
+        "{} \u{b7} {} {} in this run{}",
+        if advanced { "Advanced" } else { "Basics" },
+        format::data(steps),
+        format::plural(steps, "step", "steps"),
+        if timed { " \u{b7} timed" } else { "" }
+    )
+}
+
+/// The CPU's status between entries, whether or not a program is loaded:
+/// it can take the next step or access.
+pub(crate) fn ready() -> String {
+    "Ready".to_owned()
+}
+
+/// The CPU's status once the loaded program has executed its last
+/// instruction.
+pub(crate) fn finished() -> String {
+    "Finished".to_owned()
+}
+
+/// The CPU's status once the loaded program has stopped before its end, at
+/// the instruction on line `line`: "Stopped at line 4".
+pub(crate) fn stopped_at(line: u32) -> String {
+    format!("Stopped at line {}", format::position(line))
+}
+
+/// What the CPU box shows as its instruction when there is none.
+pub(crate) fn no_instruction() -> String {
+    format::NO_FIGURE.to_owned()
+}
+
+/// The log's "changed" line for `changes`, the cells and counters an entry
+/// has changed: ways by set, then way, each with its fields in the order
+/// valid, tag, data, dirty, rank; then memory, addresses ascending; then
+/// registers; then the counters the student would not otherwise notice, in
+/// the Stats region's order: "set 2 way 0 valid, tag, data · r1 · misses",
+/// "memory 0x1A4 · misses, write-backs". Every access moves `accesses` and
+/// `loads` or `stores`, every miss its class, every fill `fills` and timed
+/// runs `cycles`, so those are left out. The pc is left out too. With
+/// nothing to list it reads "nothing changed".
+pub(crate) fn changed_summary(geometry: &Geometry, changes: &[ChangeRef]) -> String {
+    // A way's fields, in the order the line names them.
+    const VALID: usize = 0;
+    const TAG: usize = 1;
+    const DATA: usize = 2;
+    const DIRTY: usize = 3;
+    const RANK: usize = 4;
+    const FIELDS: [&str; 5] = ["valid", "tag", "data", "dirty", "rank"];
+    let mut ways: BTreeMap<(SetIndex, WayIndex), [bool; 5]> = BTreeMap::new();
+    let mut memory = Vec::new();
+    let mut registers = Vec::new();
+    let mut counters = Vec::new();
+    for &change in changes {
+        let (place, field) = match change {
+            ChangeRef::Valid { set, way } => ((set, way), VALID),
+            ChangeRef::Tag { set, way } => ((set, way), TAG),
+            ChangeRef::Word { set, way, .. } => ((set, way), DATA),
+            ChangeRef::Dirty { set, way } => ((set, way), DIRTY),
+            ChangeRef::Rank { set, way } => ((set, way), RANK),
+            ChangeRef::Memory { addr } => {
+                memory.push(addr);
+                continue;
+            }
+            ChangeRef::Register { register } => {
+                registers.push(register);
+                continue;
+            }
+            ChangeRef::Counter { counter } => {
+                counters.extend(counter_name(counter));
+                continue;
+            }
+            ChangeRef::Pc => continue,
+        };
+        if let Some(flag) = ways.entry(place).or_default().get_mut(field) {
+            *flag = true;
+        }
+    }
+    memory.sort_unstable();
+    memory.dedup();
+    registers.sort_unstable();
+    registers.dedup();
+    counters.dedup();
+    let mut parts: Vec<String> = ways
+        .into_iter()
+        .map(|((set, way), fields)| {
+            let names: Vec<&str> = FIELDS
+                .iter()
+                .zip(fields)
+                .filter_map(|(name, on)| on.then_some(*name))
+                .collect();
+            format!(
+                "set {} way {} {}",
+                format::data(set.get()),
+                format::data(way.get()),
+                names.join(", ")
+            )
+        })
+        .collect();
+    if !memory.is_empty() {
+        let addrs: Vec<String> = memory
+            .iter()
+            .map(|addr| address(geometry, addr.get()))
+            .collect();
+        parts.push(format!("memory {}", addrs.join(", ")));
+    }
+    if !registers.is_empty() {
+        let names: Vec<String> = registers.iter().map(ToString::to_string).collect();
+        parts.push(names.join(", "));
+    }
+    if !counters.is_empty() {
+        parts.push(counters.join(", "));
+    }
+    if parts.is_empty() {
+        "nothing changed".to_owned()
+    } else {
+        parts.join(" \u{b7} ")
+    }
+}
+
+/// A counter as the changed summary names it, or `None` for one it leaves
+/// out: the counters every access, miss, fill or timed step moves.
+fn counter_name(counter: Counter) -> Option<&'static str> {
+    match counter {
+        Counter::Hits => Some("hits"),
+        Counter::Misses => Some("misses"),
+        Counter::Evictions => Some("evictions"),
+        Counter::Writebacks => Some("write-backs"),
+        Counter::Writethroughs => Some("write-throughs"),
+        Counter::Writearounds => Some("write-arounds"),
+        Counter::Accesses
+        | Counter::Loads
+        | Counter::Stores
+        | Counter::Fills
+        | Counter::Cycles
+        | Counter::Compulsory
+        | Counter::Capacity
+        | Counter::Conflict => None,
+    }
+}
+
+/// The placement as the summaries write it: "direct-mapped", "fully
+/// associative" or "2-way".
+fn placement_name(cache: &CacheConfig) -> String {
+    match cache.placement() {
+        Placement::DirectMapped => "direct-mapped".to_owned(),
+        Placement::FullyAssociative => "fully associative".to_owned(),
+        Placement::SetAssociative => format!("{}-way", format::setting(cache.associativity)),
+    }
+}
+
+/// The replacement policy as the summaries and options name it.
+fn replacement_name(replacement: Replacement) -> &'static str {
+    match replacement {
+        Replacement::Lru => "LRU",
+        Replacement::Fifo => "FIFO",
+        Replacement::Random => "Random",
+    }
 }
 
 /// An address or a line address, padded to the address width.
@@ -1693,5 +2298,348 @@ mod tests {
         ));
         // Counts are data, grouped from 10,000.
         assert!(needs_reset(12_000, 0).contains("this one has 12,000 steps"));
+    }
+
+    fn config(size: u32, ways: u32, replacement: Replacement) -> Config {
+        Config {
+            address_bits: ADDRESS_BITS,
+            cache: CacheConfig {
+                size_bytes: size,
+                associativity: ways,
+                replacement,
+                ..Preset::DirectMapped8.config().cache
+            },
+            ..Preset::DirectMapped8.config()
+        }
+    }
+
+    #[test]
+    fn summaries_name_the_placement_policy_and_sizes() {
+        let two_way = config(128, 2, Replacement::Lru);
+        assert_eq!(
+            config_summary(&two_way, false),
+            "128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU"
+        );
+        assert_eq!(
+            config_summary(&two_way, true),
+            "128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU \u{b7} write-back \u{b7} allocate"
+        );
+        assert_eq!(short_summary(&two_way), "2-way LRU \u{b7} 128 B");
+        let direct = config(128, 1, Replacement::Fifo);
+        assert_eq!(
+            config_summary(&direct, false),
+            "128 B \u{b7} 16 B lines \u{b7} direct-mapped"
+        );
+        assert_eq!(short_summary(&direct), "Direct-mapped \u{b7} 128 B");
+        let full = config(2_048, 128, Replacement::Random);
+        assert_eq!(
+            config_summary(&full, false),
+            "2,048 B \u{b7} 16 B lines \u{b7} fully associative \u{b7} Random"
+        );
+        assert_eq!(
+            short_summary(&full),
+            "Fully associative Random \u{b7} 2,048 B"
+        );
+    }
+
+    #[test]
+    fn a_repair_label_names_the_repair_of_the_first_rule_broken() {
+        let broken = config(128, 3, Replacement::Lru);
+        let first = broken.validate().unwrap_err();
+        let repaired = config(128, 2, Replacement::Lru);
+        assert_eq!(
+            repair_label(&first, &repaired, &geometry(&repaired)),
+            "Open with 2-way instead"
+        );
+        let too_many = ConfigError::TooManyLines {
+            lines: 128,
+            size: 2_048,
+            line: 16,
+        };
+        let smaller = config(1_024, 1, Replacement::Lru);
+        assert_eq!(
+            repair_label(&too_many, &smaller, &geometry(&smaller)),
+            "Open as a 1,024 B cache instead"
+        );
+    }
+
+    #[test]
+    fn option_labels_are_the_designs() {
+        assert_eq!(bytes_option(64), "64 B");
+        assert_eq!(bytes_option(1_024), "1,024 B");
+        assert_eq!(ways_option(1), "Direct");
+        assert_eq!(ways_option(2), "2-way");
+        assert_eq!(ways_option(16), "16-way");
+        assert_eq!(full_option(), "Full");
+        assert_eq!(replacement_option(Replacement::Fifo), "FIFO");
+        assert_eq!(address_option(12), "12-bit");
+        assert_eq!(word_option(WordBytes::Eight), "8 B");
+        assert_eq!(write_option(WritePolicy::WriteThrough), "Write-through");
+        assert_eq!(
+            allocate_option(AllocatePolicy::WriteNoAllocate),
+            "No allocate"
+        );
+        assert_eq!(same_as_full(8), "Same as Full for an 8-line cache.");
+        assert_eq!(same_as_full(16), "Same as Full for a 16-line cache.");
+        assert_eq!(same_as_full(1), "Same as Full for a 1-line cache.");
+    }
+
+    #[test]
+    fn the_cache_heading_counts_sets_ways_and_line_bytes() {
+        assert_eq!(
+            cache_header(&preset(Preset::TwoWayLru)),
+            "L1 cache \u{b7} 4 sets \u{d7} 2 ways \u{d7} 16 B"
+        );
+        assert_eq!(
+            cache_header(&one_line()),
+            "L1 cache \u{b7} 1 set \u{d7} 1 way \u{d7} 16 B"
+        );
+    }
+
+    #[test]
+    fn a_way_describes_what_it_holds() {
+        assert_eq!(
+            way_description(set(2), way(0), Some("0x05"), true, Some(1), true),
+            "Set 2, way 0: valid, tag 0x05, dirty, rank 1, victim."
+        );
+        assert_eq!(
+            way_description(set(2), way(1), None, false, Some(1), false),
+            "Set 2, way 1: invalid, rank 1."
+        );
+        assert_eq!(
+            way_description(set(0), way(0), Some("0x01"), false, None, false),
+            "Set 0, way 0: valid, tag 0x01."
+        );
+    }
+
+    #[test]
+    fn memory_texts_count_lines_and_name_stale_words() {
+        assert_eq!(memory_caption(5), "5 lines touched");
+        assert_eq!(memory_caption(1), "1 line touched");
+        assert_eq!(memory_caption(0), "0 lines touched");
+        let stale_text = stale(set(2), way(1), Word::new_unchecked(7));
+        assert_eq!(stale_text, "Stale: set 2, way 1 holds the newer value 7.");
+        let geometry = preset(Preset::TwoWayLru);
+        assert_eq!(
+            memory_word(&geometry, addr(0x0A4), Word::new_unchecked(53), None),
+            "0x0A4 = 53."
+        );
+        assert_eq!(
+            memory_word(
+                &geometry,
+                addr(0x1A4),
+                Word::new_unchecked(0),
+                Some(&stale_text)
+            ),
+            "0x1A4 = 0. Stale: set 2, way 1 holds the newer value 7."
+        );
+    }
+
+    #[test]
+    fn the_lanes_name_what_moves_where() {
+        let geometry = preset(Preset::TwoWayLru);
+        assert_eq!(bus_idle(), "Bus idle");
+        assert_eq!(
+            fill_transfer(&geometry, line(0x2A0), set(2), way(1)),
+            "Fill \u{b7} memory line 0x2A0 \u{2192} set 2, way 1"
+        );
+        assert_eq!(
+            write_back_transfer(&geometry, line(0x1A0), set(2), way(1)),
+            "Write-back \u{b7} set 2, way 1 \u{2192} memory line 0x1A0"
+        );
+        assert_eq!(
+            write_through_transfer(&geometry, line(0x0A0), set(2), way(0)),
+            "Write-through \u{b7} set 2, way 0 \u{2192} memory line 0x0A0"
+        );
+        assert_eq!(
+            write_around_transfer(&geometry, line(0x0A0)),
+            "Write-around \u{b7} CPU \u{2192} memory line 0x0A0"
+        );
+        assert_eq!(
+            request(&geometry, AccessKind::Read, addr(0x0A4)),
+            "Load 0x0A4 \u{2192} cache"
+        );
+        assert_eq!(
+            typed_request(&geometry, AccessKind::Write, addr(0x0A4)),
+            "Store 0x0A4"
+        );
+        assert_eq!(no_request(), "No request");
+        assert_eq!(request_source(5), "from access #5");
+    }
+
+    #[test]
+    fn entries_are_named_by_what_they_are() {
+        let geometry = preset(Preset::TwoWayLru);
+        assert_eq!(
+            issued(&geometry, addr(0x0A4), Register::R1, None),
+            "ld r1, [0x0A4]"
+        );
+        assert_eq!(
+            issued(&geometry, addr(0x0A4), Register::R1, Some(10_000)),
+            "st [0x0A4], #10000"
+        );
+        assert_eq!(edit_way(set(2), way(0)), "edit set 2 way 0");
+        assert_eq!(edit_memory(&geometry, addr(0x0A4)), "edit memory 0x0A4");
+        assert_eq!(
+            program_divider(ProgramFormat::Asm, 5),
+            "Loaded a program of 5 instructions"
+        );
+        assert_eq!(
+            program_divider(ProgramFormat::Trace, 1),
+            "Loaded a trace of 1 access"
+        );
+    }
+
+    #[test]
+    fn an_outcome_names_the_result_then_what_else_happened() {
+        use EventKind::{Complete, Decode, Evict, Fill, Hit, MemWrite, Miss, Victim, WriteBack};
+        let dirty = [Decode, Miss, Victim, WriteBack, Evict, Fill, Complete];
+        assert_eq!(
+            entry_outcome(EntryOutcome::Miss, &dirty, None),
+            "miss \u{b7} evict \u{b7} write-back"
+        );
+        assert_eq!(
+            entry_outcome(EntryOutcome::Hit, &[Decode, Hit], None),
+            "hit"
+        );
+        assert_eq!(
+            entry_outcome(EntryOutcome::Miss, &[Decode, Miss, MemWrite], None),
+            "miss \u{b7} write-around"
+        );
+        let through = [Decode, Hit, EventKind::Write, EventKind::WriteThrough];
+        assert_eq!(
+            entry_outcome(EntryOutcome::Hit, &through, None),
+            "hit \u{b7} write-through"
+        );
+        assert_eq!(
+            entry_outcome(EntryOutcome::CpuOnly, &[Complete], None),
+            "CPU only"
+        );
+        assert_eq!(entry_outcome(EntryOutcome::Edit, &[], None), "edit");
+        assert_eq!(entry_outcome(EntryOutcome::Error, &[], None), "error");
+        assert_eq!(
+            entry_outcome(EntryOutcome::Program, &[], Some(ProgramFormat::Trace)),
+            "trace"
+        );
+        assert_eq!(
+            entry_outcome(EntryOutcome::Program, &[], Some(ProgramFormat::Asm)),
+            "program"
+        );
+    }
+
+    #[test]
+    fn the_live_sentence_opens_with_the_entry_after_a_jump() {
+        let line = "Read word 1 of way 1 (68) into r3.";
+        assert_eq!(live(None, line), line);
+        assert_eq!(
+            live(
+                Some((5, "ld r3, [0x2A4]", "miss \u{b7} evict \u{b7} write-back")),
+                line
+            ),
+            "#5 ld r3, [0x2A4]: miss \u{b7} evict \u{b7} write-back. Read word 1 of way 1 (68) \
+             into r3."
+        );
+    }
+
+    #[test]
+    fn headers_and_status_lines_count_steps() {
+        assert_eq!(log_header(5, 14), "step 5 of 14");
+        assert_eq!(log_header(0, 14), "step 0 of 14");
+        assert_eq!(log_header(0, 0), "no steps yet");
+        assert_eq!(log_header(12_000, 12_345), "step 12,000 of 12,345");
+        assert_eq!(
+            status_line(false, 14, false),
+            "Basics \u{b7} 14 steps in this run"
+        );
+        assert_eq!(
+            status_line(true, 1, true),
+            "Advanced \u{b7} 1 step in this run \u{b7} timed"
+        );
+        assert_eq!(ready(), "Ready");
+        assert_eq!(finished(), "Finished");
+        assert_eq!(stopped_at(4), "Stopped at line 4");
+        assert_eq!(no_instruction(), "\u{2014}");
+    }
+
+    #[test]
+    fn the_changed_summary_lists_ways_memory_registers_and_counters_in_order() {
+        let geometry = preset(Preset::TwoWayLru);
+        let counter = |counter| ChangeRef::Counter { counter };
+        let changes = [
+            ChangeRef::Valid {
+                set: set(2),
+                way: way(0),
+            },
+            ChangeRef::Tag {
+                set: set(2),
+                way: way(0),
+            },
+            ChangeRef::Rank {
+                set: set(2),
+                way: way(1),
+            },
+            ChangeRef::Word {
+                set: set(2),
+                way: way(0),
+                word: WordIndex::new_unchecked(1),
+            },
+            ChangeRef::Word {
+                set: set(2),
+                way: way(0),
+                word: WordIndex::new_unchecked(2),
+            },
+            ChangeRef::Memory { addr: addr(0x1A8) },
+            ChangeRef::Memory { addr: addr(0x1A4) },
+            ChangeRef::Register {
+                register: Register::R3,
+            },
+            ChangeRef::Register {
+                register: Register::R1,
+            },
+            ChangeRef::Pc,
+            counter(Counter::Accesses),
+            counter(Counter::Loads),
+            counter(Counter::Misses),
+            counter(Counter::Evictions),
+            counter(Counter::Writebacks),
+            counter(Counter::Fills),
+            counter(Counter::Cycles),
+            counter(Counter::Conflict),
+        ];
+        assert_eq!(
+            changed_summary(&geometry, &changes),
+            "set 2 way 0 valid, tag, data \u{b7} set 2 way 1 rank \u{b7} memory 0x1A4, 0x1A8 \
+             \u{b7} r1, r3 \u{b7} misses, evictions, write-backs"
+        );
+        assert_eq!(
+            changed_summary(
+                &geometry,
+                &[
+                    ChangeRef::Register {
+                        register: Register::R2
+                    },
+                    counter(Counter::Accesses),
+                    counter(Counter::Hits)
+                ]
+            ),
+            "r2 \u{b7} hits"
+        );
+        assert_eq!(
+            changed_summary(
+                &geometry,
+                &[
+                    ChangeRef::Memory { addr: addr(0x0A4) },
+                    counter(Counter::Misses),
+                    counter(Counter::Writearounds),
+                    counter(Counter::Compulsory)
+                ]
+            ),
+            "memory 0x0A4 \u{b7} misses, write-arounds"
+        );
+        assert_eq!(
+            changed_summary(&geometry, &[ChangeRef::Pc]),
+            "nothing changed"
+        );
+        assert_eq!(changed_summary(&geometry, &[]), "nothing changed");
     }
 }

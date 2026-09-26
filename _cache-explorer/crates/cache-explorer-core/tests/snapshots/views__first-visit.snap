@@ -1,0 +1,437 @@
+---
+source: crates/cache-explorer-core/tests/views.rs
+description: "The first visit (frame 5a) on direct-mapped-8 with pattern memory, before anything is issued: an empty cache without a rank column, no lines touched, no request and a ready CPU, `no steps yet`, Undo, Redo and Reset disabled; 0x0A4 typed, decoded to set 2 with one pending comparator; and the configuration bar's options."
+---
+state = {
+  "config": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 128,
+      "lineBytes": 16,
+      "associativity": 1,
+      "replacement": "lru",
+      "writePolicy": "writeBack",
+      "allocatePolicy": "writeAllocate"
+    },
+    "seed": 12345,
+    "advanced": false,
+    "memoryInit": "pattern"
+  },
+  "advanced": false,
+  "geometry": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "lineBytes": 16,
+    "ways": 1,
+    "sets": 8,
+    "lines": 8,
+    "wordsPerLine": 4,
+    "offsetBits": 4,
+    "indexBits": 3,
+    "tagBits": 5,
+    "placement": "directMapped"
+  },
+  "position": {
+    "pos": 0,
+    "opsDone": 0,
+    "run": 1,
+    "seq": 0,
+    "entryLength": 0,
+    "label": "",
+    "boundary": "logEnd",
+    "atRunOrigin": true
+  },
+  "cache": {
+    "header": "L1 cache · 8 sets × 1 way × 16 B",
+    "wordHeads": [
+      "+0",
+      "+4",
+      "+8",
+      "+C"
+    ],
+    "showRank": false,
+    "showDirty": true,
+    "wrap": false,
+    "sets": [
+      {
+        "set": 0,
+        "ways": [
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "victim": false,
+            "description": "Set 0, way 0: invalid."
+          }
+        ]
+      },
+      {
+        "set": 1,
+        "ways": [
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "victim": false,
+            "description": "Set 1, way 0: invalid."
+          }
+        ]
+      },
+      {
+        "set": 2,
+        "ways": [
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "victim": false,
+            "description": "Set 2, way 0: invalid."
+          }
+        ]
+      },
+      {
+        "set": 3,
+        "ways": [
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "victim": false,
+            "description": "Set 3, way 0: invalid."
+          }
+        ]
+      },
+      {
+        "set": 4,
+        "ways": [
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "victim": false,
+            "description": "Set 4, way 0: invalid."
+          }
+        ]
+      },
+      {
+        "set": 5,
+        "ways": [
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "victim": false,
+            "description": "Set 5, way 0: invalid."
+          }
+        ]
+      },
+      {
+        "set": 6,
+        "ways": [
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "victim": false,
+            "description": "Set 6, way 0: invalid."
+          }
+        ]
+      },
+      {
+        "set": 7,
+        "ways": [
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "victim": false,
+            "description": "Set 7, way 0: invalid."
+          }
+        ]
+      }
+    ]
+  },
+  "memory": {
+    "caption": "0 lines touched",
+    "wordHeads": [
+      "+0",
+      "+4",
+      "+8",
+      "+C"
+    ],
+    "lineCount": 0
+  },
+  "bus": {
+    "transfer": "idle",
+    "text": "Bus idle"
+  },
+  "request": {
+    "status": "none",
+    "text": "No request",
+    "sourceText": ""
+  },
+  "cpu": {
+    "instruction": "—",
+    "status": {
+      "state": "noProgram"
+    },
+    "statusText": "Ready",
+    "hitMarker": "none",
+    "registers": [
+      {
+        "register": "r0",
+        "text": "0"
+      },
+      {
+        "register": "r1",
+        "text": "0"
+      },
+      {
+        "register": "r2",
+        "text": "0"
+      },
+      {
+        "register": "r3",
+        "text": "0"
+      },
+      {
+        "register": "r4",
+        "text": "0"
+      },
+      {
+        "register": "r5",
+        "text": "0"
+      },
+      {
+        "register": "r6",
+        "text": "0"
+      },
+      {
+        "register": "r7",
+        "text": "0"
+      }
+    ]
+  },
+  "stats": {
+    "counters": {
+      "accesses": 0,
+      "loads": 0,
+      "stores": 0,
+      "hits": 0,
+      "misses": 0,
+      "evictions": 0,
+      "writebacks": 0,
+      "writethroughs": 0,
+      "writearounds": 0,
+      "fills": 0,
+      "cycles": 0,
+      "compulsory": 0,
+      "capacity": 0,
+      "conflict": 0
+    },
+    "traffic": {
+      "lineReads": 0,
+      "lineWrites": 0,
+      "wordWrites": 0,
+      "bytesRead": 0,
+      "bytesWritten": 0
+    },
+    "rows": [
+      {
+        "key": "accesses",
+        "text": "0",
+        "changed": false
+      },
+      {
+        "key": "hits",
+        "text": "0",
+        "changed": false
+      },
+      {
+        "key": "misses",
+        "text": "0",
+        "changed": false
+      },
+      {
+        "key": "hitRate",
+        "text": "—",
+        "changed": false
+      },
+      {
+        "key": "evictions",
+        "text": "0",
+        "changed": false
+      },
+      {
+        "key": "memoryWrites",
+        "text": "0",
+        "changed": false
+      }
+    ],
+    "recent": []
+  },
+  "highlight": [],
+  "changedSummary": "nothing changed",
+  "controls": {
+    "enabled": [
+      "step",
+      "stepAccess",
+      "run",
+      "issue",
+      "edit",
+      "configure",
+      "program",
+      "load"
+    ]
+  },
+  "labels": {
+    "statusText": "Basics · 0 steps in this run",
+    "configSummary": "128 B · 16 B lines · direct-mapped"
+  }
+}
+timeline = {
+  "run": 1,
+  "runs": 1,
+  "origin": 0,
+  "end": 0,
+  "cursor": 0,
+  "step": 0,
+  "stepCount": 0,
+  "headerText": "no steps yet",
+  "liveText": "",
+  "entryCount": 0
+}
+draft = {
+  "address": {
+    "status": "valid",
+    "decoded": {
+      "addr": 164,
+      "addrText": "0x0A4",
+      "line": 160,
+      "lineText": "0x0A0",
+      "tag": 1,
+      "tagText": "0x01",
+      "index": 2,
+      "offset": 4,
+      "word": 1,
+      "byteInWord": 0,
+      "aligned": true,
+      "bitRanges": {
+        "tag": {
+          "hi": 11,
+          "lo": 7,
+          "width": 5
+        },
+        "index": {
+          "hi": 6,
+          "lo": 4,
+          "width": 3
+        },
+        "offset": {
+          "hi": 3,
+          "lo": 0,
+          "width": 4
+        }
+      },
+      "bits": "000010100100",
+      "fields": [
+        {
+          "field": "tag",
+          "bits": "00001",
+          "valueText": "0x01",
+          "note": "5 bits",
+          "range": {
+            "hi": 11,
+            "lo": 7,
+            "width": 5
+          }
+        },
+        {
+          "field": "index",
+          "bits": "010",
+          "valueText": "2",
+          "note": "3 bits → set 2",
+          "range": {
+            "hi": 6,
+            "lo": 4,
+            "width": 3
+          }
+        },
+        {
+          "field": "offset",
+          "bits": "0100",
+          "valueText": "4",
+          "note": "4 bits → word 1, byte 0",
+          "range": {
+            "hi": 3,
+            "lo": 0,
+            "width": 4
+          }
+        }
+      ]
+    }
+  },
+  "op": {
+    "op": "issue",
+    "kind": "read",
+    "addr": 164
+  },
+  "requestText": "Load 0x0A4",
+  "selectedSet": 2,
+  "compare": [
+    "pending"
+  ]
+}
+config =
+summary: 128 B · 16 B lines · direct-mapped
+timing: on false, hit 1, miss 20, toggle Some(Timing { hit_cycles: 1, miss_cycles: 20 })
+error: None
+CacheSize | 64 B | 64 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+CacheSize | 128 B | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+CacheSize | 256 B | 256 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+CacheSize | 512 B | 512 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+LineSize | 8 B | 128 B · 8 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+LineSize | 16 B | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+LineSize | 32 B | 128 B · 32 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+Associativity | Direct | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+Associativity | 2-way | 128 B · 16 B lines · 2-way · LRU · write-back · allocate | 12-bit, 4 B words
+Associativity | 4-way | 128 B · 16 B lines · 4-way · LRU · write-back · allocate | 12-bit, 4 B words
+Associativity | 8-way | disabled: Same as Full for an 8-line cache. | 128 B · 16 B lines · fully associative · LRU · write-back · allocate | 12-bit, 4 B words
+Associativity | Full | 128 B · 16 B lines · fully associative · LRU · write-back · allocate | 12-bit, 4 B words
+Replacement | LRU | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+Replacement | FIFO | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+Replacement | Random | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+AddressBits | 8-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 8-bit, 4 B words
+AddressBits | 9-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 9-bit, 4 B words
+AddressBits | 10-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 10-bit, 4 B words
+AddressBits | 11-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 11-bit, 4 B words
+AddressBits | 12-bit | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+AddressBits | 13-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 13-bit, 4 B words
+AddressBits | 14-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 14-bit, 4 B words
+AddressBits | 15-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 15-bit, 4 B words
+AddressBits | 16-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 16-bit, 4 B words
+AddressBits | 17-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 17-bit, 4 B words
+AddressBits | 18-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 18-bit, 4 B words
+AddressBits | 19-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 19-bit, 4 B words
+AddressBits | 20-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 20-bit, 4 B words
+AddressBits | 21-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 21-bit, 4 B words
+AddressBits | 22-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 22-bit, 4 B words
+AddressBits | 23-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 23-bit, 4 B words
+AddressBits | 24-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 24-bit, 4 B words
+AddressBits | 25-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 25-bit, 4 B words
+AddressBits | 26-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 26-bit, 4 B words
+AddressBits | 27-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 27-bit, 4 B words
+AddressBits | 28-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 28-bit, 4 B words
+AddressBits | 29-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 29-bit, 4 B words
+AddressBits | 30-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 30-bit, 4 B words
+AddressBits | 31-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 31-bit, 4 B words
+AddressBits | 32-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 32-bit, 4 B words
+WordSize | 1 B | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 1 B words
+WordSize | 2 B | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 2 B words
+WordSize | 4 B | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+WordSize | 8 B | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 8 B words
+WritePolicy (Advanced) | Write-back | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+WritePolicy (Advanced) | Write-through | 128 B · 16 B lines · direct-mapped · write-through · allocate | 12-bit, 4 B words
+AllocatePolicy (Advanced) | Allocate | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+AllocatePolicy (Advanced) | No allocate | 128 B · 16 B lines · direct-mapped · write-back · no-allocate | 12-bit, 4 B words

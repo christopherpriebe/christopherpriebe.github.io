@@ -19,24 +19,47 @@
 //! A position counts events: position 0 is before the first, and position
 //! `k` is after the `k`-th, whose id is `k − 1`. Position 0 acts as the end
 //! of an op before the first.
+//!
+//! The session also answers what the page draws, without the page computing
+//! anything: the snapshot at the cursor, the timeline of the displayed run,
+//! windows of the memory table and of the log, and the issue draft and the
+//! configuration bar for what the student types. Each entry of the log is
+//! recorded once, as its events are, with its label, its outcome and a
+//! summary of what it changed; and the cursor keeps the values its entry
+//! started from, so the highlight of the net change so far costs nothing to
+//! draw.
 
 mod checkpoints;
 mod cursor;
+mod timeline;
+
+use std::collections::BTreeSet;
 
 use serde::Serialize;
 use thiserror::Error;
 
 pub use cursor::{Boundary, Position, StepOutcome};
+pub use timeline::{EntryKind, EntryOutcome, EntryView, EventRow, Tense, Timeline};
+
+pub(crate) use timeline::EntryRecord;
 
 use checkpoints::{due, Checkpoint, Checkpoints};
+use timeline::{Entries, EntryBase};
 
-use crate::config::{Config, ConfigError};
+use crate::config::{Config, ConfigError, Timing};
 use crate::engine::{self, Emitter, EventSink, Flow, OpProgress};
 use crate::event::{EventKind, MicroEvent};
 use crate::explain;
+use crate::geometry::{AccessError, Decoded};
+use crate::isa::ParseResult;
 use crate::machine::Machine;
-use crate::op::{Op, OpError};
-use crate::units::{EventPos, OpIndex};
+use crate::op::{Op, OpError, ProgramFormat};
+use crate::snapshot::{
+    self, BusView, CacheView, ControlAction, Controls, CpuView, Labels, MemoryLineView, MemoryView,
+    ProgramView, RequestView, State,
+};
+use crate::stats::Stats;
+use crate::units::{EventPos, LineAddr, OpIndex};
 
 /// A log of ops over an initial configuration, with an event cursor. The
 /// only owner of machine state.
@@ -47,6 +70,9 @@ pub struct Session {
     /// Whether the student chose Advanced rather than Basics: a presentation
     /// setting that no op records and the fold never reads.
     advanced: bool,
+    /// The memory lines the student asked to see, the "Jump to" rows: a
+    /// presentation setting too.
+    watch: BTreeSet<LineAddr>,
     /// Every op, the undone ones after the cursor included.
     ops: Vec<Op>,
     /// Every event of every op, in order; at most
@@ -54,12 +80,22 @@ pub struct Session {
     events: Vec<MicroEvent>,
     /// Where each op ends: the position after its last event.
     op_ends: Vec<EventPos>,
+    /// Every entry of the log, in order, each written once as its events
+    /// were recorded.
+    entries: Vec<EntryRecord>,
     /// Copies of the machine along the log, which seeks replay from.
     checkpoints: Checkpoints,
     /// The cursor's position.
     cursor: EventPos,
     /// The machine at the cursor, recomputed on every move.
     current: Machine,
+    /// What the cursor's entry changes, with the values before it, which the
+    /// highlight compares the machine at the cursor with; none at a run's
+    /// origin.
+    entry_base: Option<EntryBase>,
+    /// Whether the cursor last moved by a single event, as Space moves it,
+    /// rather than across several.
+    stepped: bool,
 }
 
 /// The result of the fold: the machine after every op, and every event.
@@ -127,12 +163,16 @@ impl Session {
         Ok(Session {
             advanced: initial.advanced,
             initial,
+            watch: BTreeSet::new(),
             ops: Vec::new(),
             events: Vec::new(),
             op_ends: Vec::new(),
+            entries: Vec::new(),
             checkpoints: Checkpoints::new(origin.clone()),
             cursor: EventPos::new_unchecked(0),
             current: origin,
+            entry_base: None,
+            stepped: false,
         })
     }
 
@@ -219,6 +259,161 @@ impl Session {
     /// Every event up to the cursor, in order.
     pub fn events(&self) -> &[MicroEvent] {
         self.events.get(..slot(self.cursor)).unwrap_or_default()
+    }
+
+    /// The events whose ids run from `start` up to but not including `end`,
+    /// as far as the log holds them, the undone ones after the cursor
+    /// included: a window of the log that does not grow with it.
+    pub fn events_range(&self, start: u32, end: u32) -> &[MicroEvent] {
+        let end = usize::try_from(end)
+            .unwrap_or(usize::MAX)
+            .min(self.events.len());
+        let start = usize::try_from(start).unwrap_or(usize::MAX).min(end);
+        self.events.get(start..end).unwrap_or_default()
+    }
+
+    /// What the page draws at the cursor: the machine's views, the event
+    /// there, the highlight of the cursor's entry and its summary, the live
+    /// controls and the texts over the workbench.
+    pub fn state(&self) -> State {
+        let machine = &self.current;
+        let advanced = self.advanced();
+        let position = self.position();
+        let event = self.event_at(self.cursor);
+        let entry = self.record_at(self.cursor).map(|(_, record)| record);
+        let highlight = self.highlight();
+        let rows = snapshot::memory_rows(machine, &self.watch);
+        let bus = snapshot::bus_line(machine, event);
+        let (origin, end) = self.run_bounds(machine.run);
+        let steps = self
+            .steps_through(end)
+            .saturating_sub(self.steps_through(origin));
+        State {
+            config: machine.config.clone(),
+            advanced,
+            geometry: machine.geometry,
+            event: event.cloned(),
+            cache: CacheView::new(machine),
+            memory: MemoryView::new(machine, &rows, bus),
+            bus: BusView::new(machine, event),
+            request: RequestView::new(machine, entry),
+            cpu: CpuView::new(machine, entry, &position),
+            program: ProgramView::new(machine),
+            stats: Stats::new(machine, advanced, &highlight),
+            changed_summary: explain::changed_summary(&machine.geometry, &highlight),
+            highlight,
+            controls: self.controls(),
+            labels: Labels {
+                status_text: explain::status_line(advanced, steps, machine.config.timing.is_some()),
+                config_summary: machine.config.summary(advanced),
+            },
+            position,
+        }
+    }
+
+    /// The Stats region at the cursor, in the mode shown, with the rows the
+    /// cursor's entry has changed so far marked.
+    pub fn stats(&self) -> Stats {
+        Stats::new(&self.current, self.advanced(), &self.highlight())
+    }
+
+    /// The memory table's rows from its `first`, at most `count` of them,
+    /// for the rows in view: the lines the displayed run has touched and the
+    /// lines watched, in ascending order.
+    pub fn memory_lines(&self, first: u32, count: u32) -> Vec<MemoryLineView> {
+        let machine = &self.current;
+        let bus = snapshot::bus_line(machine, self.event_at(self.cursor));
+        snapshot::memory_rows(machine, &self.watch)
+            .into_iter()
+            .skip(usize::try_from(first).unwrap_or(usize::MAX))
+            .take(usize::try_from(count).unwrap_or(usize::MAX))
+            .map(|(line, watched)| MemoryLineView::new(machine, line, watched, bus))
+            .collect()
+    }
+
+    /// Replaces the memory lines the student asked to see, the "Jump to"
+    /// rows, with `lines`. A presentation setting, as the mode is: no op
+    /// records it and no run reads it. The rows show each line that fits
+    /// the displayed run's addresses, from the start of its line, whether
+    /// the run has touched it or not.
+    pub fn set_memory_watch(&mut self, lines: &[LineAddr]) {
+        self.watch = lines.iter().copied().collect();
+    }
+
+    /// `addr` split into its tag, index and offset under the displayed run's
+    /// configuration.
+    ///
+    /// # Errors
+    ///
+    /// [`AccessError::OutOfRange`] if `addr` does not fit the address width.
+    pub fn decode(&self, addr: u32) -> Result<Decoded, AccessError> {
+        self.current.geometry.decode(addr)
+    }
+
+    /// `source` parsed as a program or a trace under the displayed run's
+    /// configuration: the drawer's summary, or its errors.
+    pub fn parse_program(&self, source: &str, format: ProgramFormat) -> ParseResult {
+        self.current.geometry.parse_program(source, format)
+    }
+
+    /// The most recent timing in the log up to the cursor: the timing of
+    /// the latest timed configuration among the `Config` ops the cursor has
+    /// reached, or the initial configuration's; none if neither is timed.
+    pub(crate) fn recent_timing(&self) -> Option<Timing> {
+        let reached = self.op_holding(self.cursor).map_or(0, |op| {
+            usize::try_from(op.get())
+                .unwrap_or(usize::MAX)
+                .saturating_add(1)
+        });
+        self.ops
+            .get(..reached.min(self.ops.len()))
+            .unwrap_or_default()
+            .iter()
+            .rev()
+            .find_map(|op| match op {
+                Op::Config { config } => config.timing,
+                _ => None,
+            })
+            .or(self.initial.timing)
+    }
+
+    /// Which controls are live: Undo away from position 0, Redo while there
+    /// is an undo stop ahead, Reset while the displayed run has an entry up
+    /// to the cursor, and the rest always.
+    fn controls(&self) -> Controls {
+        let mut enabled = Vec::new();
+        if self.cursor.get() > 0 {
+            enabled.push(ControlAction::Undo);
+        }
+        if self.redo_target().is_some() {
+            enabled.push(ControlAction::Redo);
+        }
+        enabled.extend([
+            ControlAction::Step,
+            ControlAction::StepAccess,
+            ControlAction::Run,
+        ]);
+        let run = self.run_entries(self.current.run);
+        let reached = self
+            .entries
+            .get(run)
+            .and_then(<[EntryRecord]>::first)
+            .is_some_and(|record| record.first <= self.cursor);
+        if reached {
+            enabled.push(ControlAction::Reset);
+        }
+        enabled.extend([
+            ControlAction::Issue,
+            ControlAction::Edit,
+            ControlAction::Configure,
+            ControlAction::Program,
+            ControlAction::Load,
+        ]);
+        Controls {
+            enabled,
+            seek_limit: None,
+            guard: None,
+        }
     }
 
     /// Appends `op` at the end of the op holding the cursor, or at position
@@ -335,6 +530,7 @@ impl Session {
             op: OpIndex::new_unchecked(kept),
             last: self.checkpoints.last_at_or_before(base),
             checkpoints: Vec::new(),
+            entries: Entries::new(&machine, self.steps_through(base)),
         };
         let mut op_ends = Vec::with_capacity(ops.len());
         let mut last_start = None;
@@ -352,13 +548,22 @@ impl Session {
             let next = OpIndex::new_unchecked(index.get().saturating_add(1));
             builder.keep(end, &machine, next, OpProgress::START);
         }
+        let Builder {
+            events,
+            checkpoints,
+            entries,
+            ..
+        } = builder;
+        let (records, last_base) = entries.finish();
         Ok(Plan {
             base,
             kept,
             ops,
-            events: builder.events,
+            events,
             op_ends,
-            checkpoints: builder.checkpoints,
+            checkpoints,
+            records,
+            last_base,
             last_start,
             end: machine,
         })
@@ -367,19 +572,27 @@ impl Session {
     /// Makes `plan` the session's: drops the log after its base, appends its
     /// ops and events, and puts the cursor on its last event.
     fn commit(&mut self, plan: Plan) {
+        let from = self.cursor;
         let kept = usize::try_from(plan.kept).unwrap_or(usize::MAX);
         self.ops.truncate(kept);
         self.op_ends.truncate(kept);
         self.events.truncate(slot(plan.base));
+        let entries = self
+            .entries
+            .partition_point(|record| record.last <= plan.base);
+        self.entries.truncate(entries);
         self.checkpoints.truncate_after(plan.base);
         self.ops.extend(plan.ops);
         self.op_ends.extend(plan.op_ends);
         self.events.extend(plan.events);
+        self.entries.extend(plan.records);
         for (pos, checkpoint) in plan.checkpoints {
             self.checkpoints.insert(pos, checkpoint);
         }
         self.cursor = self.end();
         self.current = plan.end;
+        self.entry_base = plan.last_base;
+        self.stepped = self.cursor.get().abs_diff(from.get()) == 1;
     }
 
     /// Where a new op goes: the end of the op holding the cursor, or
@@ -421,17 +634,84 @@ impl Session {
         replay_quietly(start, &self.ops, pos)
     }
 
-    /// Moves the cursor to `pos`, recomputing the machine there.
+    /// The machines at `capture` and at `pos`, `capture` not after `pos`,
+    /// by one quiet replay that passes through both, from the nearest point
+    /// before `capture` that the session holds a machine for.
+    fn machines_at(
+        &self,
+        capture: EventPos,
+        pos: EventPos,
+    ) -> Result<(Machine, Machine), ReplayError> {
+        let (at, checkpoint) = self.checkpoints.at_or_before(capture);
+        let start = if at < self.cursor && self.cursor <= capture && self.is_op_end(self.cursor) {
+            Start {
+                pos: self.cursor,
+                machine: &self.current,
+                op: OpIndex::new_unchecked(self.ops_done(self.cursor)),
+                progress: OpProgress::START,
+            }
+        } else {
+            Start {
+                pos: at,
+                machine: checkpoint.machine,
+                op: checkpoint.op,
+                progress: checkpoint.progress,
+            }
+        };
+        let (machine, captured) = replay_capturing(start, &self.ops, pos, Some(capture))?;
+        let captured = captured.unwrap_or_else(|| machine.clone());
+        Ok((captured, machine))
+    }
+
+    /// Moves the cursor to `pos`, recomputing the machine there and, when
+    /// the cursor enters another entry, the values before that entry, which
+    /// the highlight compares with: from the machine at the cursor when the
+    /// entry starts there, as it does when Space steps into it, and
+    /// otherwise from the same replay that reaches `pos`.
     ///
     /// # Errors
     ///
     /// The [`ReplayError`] of a replay of ops the session has accepted,
     /// which only a bug could cause; the cursor then stays where it was.
     fn move_to(&mut self, pos: EventPos) -> Result<(), ReplayError> {
-        if pos != self.cursor {
-            self.current = self.machine_at(pos)?;
-            self.cursor = pos;
+        if pos == self.cursor {
+            return Ok(());
         }
+        let from = self.cursor;
+        let entry = self
+            .record_at(pos)
+            .map(|(_, record)| (record.first, record.last));
+        let known = entry.is_some_and(|(first, _)| {
+            self.entry_base
+                .as_ref()
+                .is_some_and(|base| base.first == first)
+        });
+        match entry {
+            Some((first, last)) if !known => {
+                let start = EventPos::new_unchecked(first.get().saturating_sub(1));
+                let (at_start, machine) = if start == self.cursor {
+                    (None, self.machine_at(pos)?)
+                } else {
+                    let (at_start, machine) = self.machines_at(start, pos)?;
+                    (Some(at_start), machine)
+                };
+                let events = self.events_between(first, last);
+                let base = EntryBase::from_start(
+                    first,
+                    events,
+                    at_start.as_ref().unwrap_or(&self.current),
+                );
+                self.entry_base = Some(base);
+                self.current = machine;
+            }
+            Some(_) => self.current = self.machine_at(pos)?,
+            None => {
+                self.current = self.machine_at(pos)?;
+                self.entry_base = None;
+            }
+        }
+        self.cursor = pos;
+        self.stepped = pos.get().abs_diff(from.get()) == 1;
         Ok(())
     }
 
@@ -442,7 +722,7 @@ impl Session {
 
     /// The event the cursor rests on at `pos`: the one whose id is `pos − 1`;
     /// none at position 0.
-    fn event_at(&self, pos: EventPos) -> Option<&MicroEvent> {
+    pub(crate) fn event_at(&self, pos: EventPos) -> Option<&MicroEvent> {
         let id = pos.get().checked_sub(1)?;
         self.events.get(usize::try_from(id).ok()?)
     }
@@ -518,6 +798,10 @@ struct Plan {
     op_ends: Vec<EventPos>,
     /// The checkpoints due along them.
     checkpoints: Vec<(EventPos, Checkpoint)>,
+    /// The records of their entries.
+    records: Vec<EntryRecord>,
+    /// The base of the entry of their last event, if it belongs to one.
+    last_base: Option<EntryBase>,
     /// The machine at the start of the last op, when the plan was asked to
     /// keep it.
     last_start: Option<Machine>,
@@ -542,12 +826,34 @@ struct Start<'m> {
 /// Replays `ops` quietly from `start` and returns the machine after the
 /// event at `target`, or after the last op if the ops end first.
 fn replay_quietly(start: Start<'_>, ops: &[Op], target: EventPos) -> Result<Machine, ReplayError> {
+    replay_capturing(start, ops, target, None).map(|(machine, _)| machine)
+}
+
+/// Replays `ops` quietly from `start` as [`replay_quietly`] does, keeping a
+/// copy of the machine at `capture` on the way, when the replay passes that
+/// position.
+fn replay_capturing(
+    start: Start<'_>,
+    ops: &[Op],
+    target: EventPos,
+    capture: Option<EventPos>,
+) -> Result<(Machine, Option<Machine>), ReplayError> {
     let mut machine = start.machine.clone();
+    let at_start = capture
+        .filter(|&capture| capture == start.pos)
+        .map(|_| machine.clone());
     let remaining = target.get().saturating_sub(start.pos.get());
     if remaining == 0 {
-        return Ok(machine);
+        return Ok((machine, at_start));
     }
-    let mut sink = Stopper { remaining };
+    let mut sink = Stopper {
+        remaining,
+        seen: 0,
+        capture: capture
+            .and_then(|capture| capture.get().checked_sub(start.pos.get()))
+            .filter(|&events| events > 0),
+        captured: at_start,
+    };
     let mut next_id = u64::from(start.pos.get());
     let mut progress = start.progress;
     let first = usize::try_from(start.op.get()).unwrap_or(usize::MAX);
@@ -562,7 +868,7 @@ fn replay_quietly(start: Start<'_>, ops: &[Op], target: EventPos) -> Result<Mach
             break;
         }
     }
-    Ok(machine)
+    Ok((machine, sink.captured))
 }
 
 /// The position after `count` events.
@@ -606,6 +912,8 @@ struct Builder {
     last: EventPos,
     /// The checkpoints taken in the stretch.
     checkpoints: Vec<(EventPos, Checkpoint)>,
+    /// The records of the stretch's entries, written as their events come.
+    entries: Entries,
 }
 
 impl Builder {
@@ -640,7 +948,10 @@ impl EventSink for Builder {
         true
     }
 
-    fn event(&mut self, event: Option<MicroEvent>, _after: &Machine) -> Flow {
+    fn event(&mut self, event: Option<MicroEvent>, after: &Machine) -> Flow {
+        if let Some(event) = &event {
+            self.entries.observe(event, after);
+        }
         self.events.extend(event);
         Flow::Continue
     }
@@ -651,10 +962,17 @@ impl EventSink for Builder {
 }
 
 /// Counts events without recording them, and stops the op after the last
-/// one it waits for.
+/// one it waits for, keeping a copy of the machine after one of them if
+/// asked.
 struct Stopper {
     /// The events still to come before it stops.
     remaining: u32,
+    /// The events seen so far.
+    seen: u32,
+    /// After how many events to keep a copy of the machine.
+    capture: Option<u32>,
+    /// The copy kept.
+    captured: Option<Machine>,
 }
 
 impl EventSink for Stopper {
@@ -662,7 +980,11 @@ impl EventSink for Stopper {
         false
     }
 
-    fn event(&mut self, _event: Option<MicroEvent>, _after: &Machine) -> Flow {
+    fn event(&mut self, _event: Option<MicroEvent>, after: &Machine) -> Flow {
+        self.seen = self.seen.saturating_add(1);
+        if self.capture == Some(self.seen) {
+            self.captured = Some(after.clone());
+        }
         self.remaining = self.remaining.saturating_sub(1);
         if self.remaining == 0 {
             Flow::Stop

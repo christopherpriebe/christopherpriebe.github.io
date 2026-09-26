@@ -426,10 +426,6 @@ impl Stats {
     /// the cursor's entry has changed so far; a row is changed when one of
     /// its counters is among it. The hit rate, which no event names, never
     /// is.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the snapshot shows the stats at the cursor")
-    )]
     pub(crate) fn new(machine: &Machine, advanced: bool, highlight: &[ChangeRef]) -> Self {
         let counters = machine.counters;
         let timing = machine.config.timing;

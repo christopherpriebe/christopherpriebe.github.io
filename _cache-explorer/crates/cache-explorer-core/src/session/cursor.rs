@@ -169,12 +169,19 @@ impl Session {
     /// that op's end; from the end of an op, position 0 included, the end of
     /// the next op that is a stop. Returns false at the end of the log.
     pub fn redo(&mut self) -> bool {
+        self.redo_target()
+            .is_some_and(|target| self.move_to(target).is_ok())
+    }
+
+    /// Where [`Session::redo`] moves the cursor: the end of the first op
+    /// that is an undo stop, from the op holding the cursor, when the cursor
+    /// is inside it, or the op after; none at the end of the log.
+    pub(crate) fn redo_target(&self) -> Option<EventPos> {
         let first = self.ops_done(self.cursor);
-        let target = (first..self.op_count())
+        (first..self.op_count())
             .map(OpIndex::new_unchecked)
             .find(|&op| self.is_undo_stop(op))
-            .and_then(|op| self.op_end(op));
-        target.is_some_and(|target| self.move_to(target).is_ok())
+            .and_then(|op| self.op_end(op))
     }
 
     /// Moves the cursor to the end of op `op_index − 1`, where `op_index`
@@ -247,6 +254,10 @@ impl Session {
                 self.cursor = first;
             }
         }
+        // Space shows one event at a time, even when it loads the drawer's
+        // program first; the step's entry is the plan's last, whose base the
+        // plan kept.
+        self.stepped = true;
         StepOutcome::Applied
     }
 

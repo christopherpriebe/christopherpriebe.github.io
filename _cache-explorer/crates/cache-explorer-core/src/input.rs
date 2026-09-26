@@ -1,18 +1,28 @@
 //! Everything the student types that the core reads as a number: an address
-//! in the address box, a value in the Value box.
+//! in the address box, a value in the Value box, and a hit time or miss
+//! penalty in the configuration bar.
 //!
 //! The UI never turns typed text into a number. It passes the text here on
 //! every keystroke and draws what comes back, so the rules for what may be
 //! typed, and the messages for text that does not fit the configuration, are
 //! the core's. An address is read against the displayed run's geometry, which
-//! gives its width; a value against the same geometry's word size.
+//! gives its width; a value against the same geometry's word size. The
+//! address and value boxes together are an issue draft: the op an Issue press
+//! would append, and the typed address's set for the cache table, which shows
+//! it while no access is at the cursor.
 
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::config::{Config, ConfigError, ConfigNumberField, Timing, FALLBACK_TIMING};
+use crate::explain;
 use crate::format;
 use crate::geometry::{highest_word, last_address, AccessError, Decoded, Geometry};
-use crate::units::Word;
+use crate::limits::{MAX_CYCLES, MIN_CYCLES};
+use crate::op::{AccessKind, Op};
+use crate::session::Session;
+use crate::snapshot::WayCompare;
+use crate::units::{SetIndex, Word};
 
 /// A typed address, read against a geometry.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -75,6 +85,57 @@ pub enum WordInput {
     },
 }
 
+/// A typed hit time or miss penalty, applied to a configuration.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(
+    tag = "status",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ConfigNumberInput {
+    /// A number of cycles in range.
+    Valid {
+        /// The configuration with the number in its timing, which is then
+        /// on.
+        config: Config,
+    },
+    /// Text that is not a number of cycles in range.
+    Invalid {
+        /// What is wrong: `Hit time must be between 1 and 1,000 cycles; got
+        /// 0.`, or for text that is not a whole number, `Type a whole number
+        /// of cycles, 1 to 1,000.`
+        message: String,
+    },
+}
+
+/// What the address and value boxes would issue, and what the address strip
+/// and the cache table show of the typed address while no access is at the
+/// cursor.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(rename_all = "camelCase")]
+pub struct IssueDraft {
+    /// The typed address, read.
+    pub address: AddressInput,
+    /// The typed value, read, for a store; absent for a load.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<WordInput>,
+    /// The op an Issue press appends, when the address, and a store's
+    /// value, are valid.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub op: Option<Op>,
+    /// The request lane's label for the typed address: "Load 0x0A4", or "No
+    /// request" when it does not decode.
+    pub request_text: String,
+    /// The typed address's set, when it decodes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_set: Option<SetIndex>,
+    /// One `=?` comparator per way of that set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compare: Option<Vec<WayCompare>>,
+}
+
 /// Why typed text is not a number the core can use. `Display` is the message
 /// the student reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
@@ -104,6 +165,13 @@ enum InputError {
         /// The word size, in bytes.
         word_bytes: u32,
     },
+    /// Text that is not a whole number of cycles.
+    #[error(
+        "Type a whole number of cycles, {} to {}.",
+        format::setting(MIN_CYCLES),
+        format::setting(MAX_CYCLES)
+    )]
+    NotCycles,
     /// A number the word cannot hold, signed or unsigned.
     #[error(
         "{} does not fit {} {}-byte word ({} to {}).",
@@ -193,6 +261,128 @@ impl Geometry {
             },
             Err(message) => WordInput::Invalid { message },
         }
+    }
+
+    /// What the address and value boxes would issue: the typed address read
+    /// as [`Geometry::read_address`] reads it, a store's value as
+    /// [`Geometry::read_word`] does, and the op an Issue press appends when
+    /// both are valid. An address that decodes, aligned or not, has its
+    /// request text and its set, with a pending comparator on each way.
+    pub fn draft_issue(&self, kind: AccessKind, addr_text: &str, value_text: &str) -> IssueDraft {
+        let address = self.read_address(addr_text);
+        let value = (kind == AccessKind::Write).then(|| self.read_word(value_text));
+        let decoded = match &address {
+            AddressInput::Valid { decoded } | AddressInput::Misaligned { decoded, .. } => {
+                Some(decoded)
+            }
+            AddressInput::Empty | AddressInput::Invalid { .. } => None,
+        };
+        let op = match (&address, &value) {
+            (AddressInput::Valid { decoded }, None) => Some(Op::Issue {
+                kind,
+                addr: decoded.addr,
+                value: None,
+            }),
+            (AddressInput::Valid { decoded }, Some(WordInput::Valid { value, .. })) => {
+                Some(Op::Issue {
+                    kind,
+                    addr: decoded.addr,
+                    value: Some(*value),
+                })
+            }
+            _ => None,
+        };
+        IssueDraft {
+            request_text: decoded.map_or_else(explain::no_request, |decoded| {
+                explain::typed_request(self, kind, decoded.addr)
+            }),
+            selected_set: decoded.map(|decoded| decoded.index),
+            compare: decoded.map(|_| (0..self.ways).map(|_| WayCompare::Pending).collect()),
+            address,
+            value,
+            op,
+        }
+    }
+}
+
+/// A typed hit time or miss penalty, `field`, applied to `shown`: a whole
+/// number from [`MIN_CYCLES`] to [`MAX_CYCLES`], spaces around it ignored.
+/// The result's timing is on, with the other number from `shown`'s timing,
+/// or while `shown` is untimed from `recent`, the most recent timing in the
+/// log, or from the fallback timing.
+pub(crate) fn read_config_number(
+    field: ConfigNumberField,
+    text: &str,
+    shown: &Config,
+    recent: Option<Timing>,
+) -> ConfigNumberInput {
+    let text = text.trim();
+    let got = (!text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| text.parse::<u32>().ok())
+        .flatten();
+    let Some(got) = got else {
+        return ConfigNumberInput::Invalid {
+            message: InputError::NotCycles.to_string(),
+        };
+    };
+    if !(MIN_CYCLES..=MAX_CYCLES).contains(&got) {
+        return ConfigNumberInput::Invalid {
+            message: ConfigError::Timing { field, got }.to_string(),
+        };
+    }
+    let base = shown.timing.or(recent).unwrap_or(FALLBACK_TIMING);
+    let timing = match field {
+        ConfigNumberField::HitCycles => Timing {
+            hit_cycles: got,
+            ..base
+        },
+        ConfigNumberField::MissCycles => Timing {
+            miss_cycles: got,
+            ..base
+        },
+    };
+    ConfigNumberInput::Valid {
+        config: Config {
+            timing: Some(timing),
+            ..shown.clone()
+        },
+    }
+}
+
+impl Session {
+    /// A typed address, read against the displayed run's geometry, as
+    /// [`Geometry::read_address`] reads it.
+    pub fn read_address(&self, text: &str) -> AddressInput {
+        self.machine().geometry.read_address(text)
+    }
+
+    /// A typed value, read against the displayed run's word size, as
+    /// [`Geometry::read_word`] reads it.
+    pub fn read_word(&self, text: &str) -> WordInput {
+        self.machine().geometry.read_word(text)
+    }
+
+    /// What the address and value boxes would issue on the displayed run, as
+    /// [`Geometry::draft_issue`] reads them.
+    pub fn draft_issue(&self, kind: AccessKind, addr_text: &str, value_text: &str) -> IssueDraft {
+        self.machine()
+            .geometry
+            .draft_issue(kind, addr_text, value_text)
+    }
+
+    /// A typed hit time or miss penalty, applied to `shown`, the pending
+    /// configuration or the displayed run's: the configuration with that
+    /// number in its timing, which is then on, and the other number as the
+    /// timing fields show it; or C12's message for a number out of range,
+    /// and a prompt for anything else, so nothing the student types reaches
+    /// a configuration as a malformed timing.
+    pub fn read_config_number(
+        &self,
+        field: ConfigNumberField,
+        text: &str,
+        shown: &Config,
+    ) -> ConfigNumberInput {
+        read_config_number(field, text, shown, self.recent_timing())
     }
 }
 

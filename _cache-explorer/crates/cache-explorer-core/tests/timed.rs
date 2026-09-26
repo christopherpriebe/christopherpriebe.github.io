@@ -2,16 +2,16 @@
 //! cycle stamps of each access case, the totals of fixed traces, the stall
 //! countdown the stamps give, the identity between cycles and counts at
 //! entry boundaries, timing that adds only its stalls, and untimed runs that
-//! are never stamped and never stall. The machine's own countdown, and AMAT
-//! with the measured cost, are unit tests of the core until the session
-//! exposes them.
+//! are never stamped and never stall. And as the snapshot shows it: the
+//! CPU's countdown through a stall, the cycle chip of the transfer lane, and
+//! AMAT with the measured cost of fixed traces, mid-access and at the end.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
 use cache_explorer_core::golden::{self, Fixture, Issue};
 use cache_explorer_core::{
-    AllocatePolicy, CacheConfig, ChangeRef, Config, Counter, Cycle, EventKind, MicroEvent, Preset,
-    Replacement, Timing, Word, WritePolicy,
+    AllocatePolicy, CacheConfig, ChangeRef, Config, Counter, CpuStatus, Cycle, EventKind, EventPos,
+    MicroEvent, Preset, Replacement, Session, Timing, Word, WritePolicy,
 };
 
 use EventKind::{
@@ -405,5 +405,222 @@ fn the_fixtures_stamp_only_timed_runs_and_show_every_kind_of_stall() -> Result<(
         kinds.into_iter().collect::<Vec<_>>(),
         ["fill", "write-around", "write-back and fill"]
     );
+    Ok(())
+}
+
+/// A session on `config` with `accesses` issued one after another, from the
+/// run's start.
+fn session(config: &Config, accesses: &[By]) -> Result<Session, String> {
+    let mut session = Session::with_config(config.clone()).map_err(|error| error.to_string())?;
+    for access in accesses {
+        let op = match *access {
+            By::Load(at) => serde_json::json!({"op": "issue", "kind": "read", "addr": at}),
+            By::Store(at, value) => {
+                serde_json::json!({"op": "issue", "kind": "write", "addr": at, "value": value})
+            }
+        };
+        let op = serde_json::from_value(op).map_err(|error| error.to_string())?;
+        session.apply(op).map_err(|error| error.to_string())?;
+    }
+    Ok(session)
+}
+
+/// Frame 3b's first five accesses, issued by hand.
+const FRAME_3B: [By; 5] = [
+    By::Store(0x0B0, 5),
+    By::Load(0x0A4),
+    By::Store(0x1A4, 7),
+    By::Load(0x0A8),
+    By::Load(0x2A4),
+];
+
+/// The position of the first event of `kind` in entry `entry` of
+/// `session`'s log.
+fn position_of(session: &Session, entry: u32, kind: EventKind) -> Result<EventPos, String> {
+    let event = session
+        .events_range(0, u32::MAX)
+        .iter()
+        .find(|event| event.entry == Some(entry) && event.kind == kind)
+        .ok_or_else(|| format!("entry {entry} has no {kind:?}"))?;
+    serde_json::from_value(serde_json::json!(event.id + 1)).map_err(|error| error.to_string())
+}
+
+#[test]
+fn the_cpu_counts_the_stall_down_until_the_last_transfer() -> Result<(), String> {
+    let mut session = session(&timed(Preset::TwoWayLru.config(), 1, 20), &FRAME_3B)?;
+    let status = |session: &mut Session, kind| -> Result<(CpuStatus, String), String> {
+        session.seek(position_of(session, 5, kind)?);
+        let cpu = session.state().cpu;
+        Ok((cpu.status, cpu.status_text))
+    };
+    let stalled = |remaining, text: &str| {
+        (
+            CpuStatus::Stalled {
+                remaining,
+                total: 40,
+            },
+            text.to_owned(),
+        )
+    };
+    assert_eq!(
+        status(&mut session, Stall)?,
+        stalled(40, "Stalled: 40 cycles")
+    );
+    assert_eq!(
+        status(&mut session, WriteBack)?,
+        stalled(20, "Stalled: 20 cycles")
+    );
+    assert_eq!(
+        status(&mut session, Evict)?,
+        stalled(20, "Stalled: 20 cycles")
+    );
+    // From the fill on, the access's steps; after its last, ready.
+    assert_eq!(
+        status(&mut session, Fill)?,
+        (
+            CpuStatus::Busy {
+                entry: 5,
+                seq: 7,
+                of: 9
+            },
+            "Access #5 \u{b7} step 7 of 9".to_owned()
+        )
+    );
+    assert_eq!(
+        status(&mut session, Rank)?,
+        (CpuStatus::NoProgram, "Ready".to_owned())
+    );
+    // Before the stall, the access's steps too.
+    assert_eq!(
+        status(&mut session, Victim)?.1,
+        "Access #5 \u{b7} step 3 of 9"
+    );
+    // The transfer lane's chip gives what each transfer costs.
+    session.seek(position_of(&session, 5, WriteBack)?);
+    assert_eq!(
+        session.state().bus.cycles_text.as_deref(),
+        Some("20 cycles")
+    );
+    Ok(())
+}
+
+#[test]
+fn a_write_around_stalls_for_the_store_alone() -> Result<(), String> {
+    let config = timed(
+        direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteNoAllocate),
+        3,
+        1,
+    );
+    let mut session = session(&config, &[By::Store(0x0A4, 7)])?;
+    session.seek(position_of(&session, 1, Stall)?);
+    let cpu = session.state().cpu;
+    assert_eq!(
+        (cpu.status, cpu.status_text.as_str()),
+        (
+            CpuStatus::Stalled {
+                remaining: 1,
+                total: 1
+            },
+            "Stalled: 1 cycle"
+        )
+    );
+    session.seek(position_of(&session, 1, MemWrite)?);
+    let state = session.state();
+    assert_eq!(state.cpu.status, CpuStatus::NoProgram);
+    assert_eq!(state.bus.cycles_text.as_deref(), Some("1 cycle"));
+    Ok(())
+}
+
+/// The AMAT and measured-cost texts of `session`'s stats at the cursor.
+fn figures(session: &Session) -> (Option<String>, Option<String>) {
+    let stats = session.stats();
+    (
+        stats.amat.map(|figure| figure.text),
+        stats.measured.map(|figure| figure.text),
+    )
+}
+
+#[test]
+fn amat_and_the_measured_cost_follow_the_cursor() -> Result<(), String> {
+    let mut session = session(&timed(Preset::TwoWayLru.config(), 1, 20), &FRAME_3B)?;
+    // At the end: 105 cycles for 5 accesses, 4 misses and 1 write-back.
+    assert_eq!(
+        figures(&session),
+        (
+            Some("AMAT = 1 + 0.80 \u{d7} 20 = 17.0 cycles".to_owned()),
+            Some("Measured: 21.0 cycles per access (AMAT plus 4.0 for 1 write-back).".to_owned())
+        )
+    );
+    // Mid-access, the miss is counted before its penalty is charged.
+    session.seek(position_of(&session, 5, Stall)?);
+    assert_eq!(
+        figures(&session).1.as_deref(),
+        Some("Measured: 13.0 cycles per access (AMAT plus 0.0 for 0 write-backs).")
+    );
+    session.seek(position_of(&session, 5, WriteBack)?);
+    assert_eq!(
+        figures(&session),
+        (
+            Some("AMAT = 1 + 0.80 \u{d7} 20 = 17.0 cycles".to_owned()),
+            Some("Measured: 17.0 cycles per access (AMAT plus 4.0 for 1 write-back).".to_owned())
+        )
+    );
+    // The rate is rounded before AMAT is computed from it.
+    let rounded = self::session(
+        &timed(Preset::DirectMapped8.config(), 1, 20),
+        &[By::Load(0x0A4), By::Load(0x0A8), By::Load(0x0AC)],
+    )?;
+    assert_eq!(
+        figures(&rounded),
+        (
+            Some("AMAT = 1 + 0.33 \u{d7} 20 = 7.6 cycles".to_owned()),
+            Some("Measured: 7.7 cycles per access (AMAT plus 0.0 for 0 write-backs).".to_owned())
+        )
+    );
+    // Neither exists before the first access, nor untimed.
+    session.seek(serde_json::from_value(serde_json::json!(0)).map_err(|error| error.to_string())?);
+    assert_eq!(figures(&session), (None, None));
+    let untimed = self::session(&Preset::TwoWayLru.config(), &FRAME_3B)?;
+    assert_eq!(figures(&untimed), (None, None));
+    Ok(())
+}
+
+#[test]
+fn the_stats_add_up_the_cycles_at_every_entry_boundary() -> Result<(), String> {
+    let config = timed(
+        Config {
+            cache: CacheConfig {
+                replacement: Replacement::Fifo,
+                ..Preset::TwoWayLru.config().cache
+            },
+            ..Preset::TwoWayLru.config()
+        },
+        2,
+        7,
+    );
+    let mut session = session(&config, &stream(8, 3, 40))?;
+    let ends: Vec<EventPos> = session
+        .entries(0, u32::MAX)
+        .iter()
+        .map(|entry| entry.last)
+        .collect();
+    assert_eq!(ends.len(), 40);
+    for end in ends {
+        session.seek(end);
+        let stats = session.stats();
+        let counters = stats.counters;
+        let expected = u64::from(counters.accesses) * 2
+            + u64::from(counters.misses) * 7
+            + u64::from(counters.writebacks) * 7;
+        assert_eq!(counters.cycles.get(), expected);
+        let cycles = stats
+            .rows
+            .iter()
+            .find(|row| serde_json::to_value(row.key).ok() == Some(serde_json::json!("cycles")));
+        assert_eq!(
+            cycles.map(|row| row.text.clone()),
+            Some(expected.to_string())
+        );
+    }
     Ok(())
 }

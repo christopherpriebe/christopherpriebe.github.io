@@ -88,6 +88,16 @@ impl Memory {
         self.lines.contains_key(&line)
     }
 
+    /// Every line the run has touched, in ascending order.
+    pub(crate) fn touched(&self) -> impl Iterator<Item = LineAddr> + '_ {
+        self.lines.keys().copied()
+    }
+
+    /// How many lines the run has touched.
+    pub(crate) fn touched_count(&self) -> u32 {
+        u32::try_from(self.lines.len()).unwrap_or(u32::MAX)
+    }
+
     /// Records `line` as touched, with the contents it has now.
     pub(crate) fn touch(&mut self, line: LineAddr) {
         self.touched_line(line);

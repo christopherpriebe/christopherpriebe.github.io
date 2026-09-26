@@ -33,10 +33,11 @@ use crate::cache::{Cache, Dirtiness, Set, Slot, Way};
 use crate::config::{Config, ConfigError, Replacement, WritePolicy};
 use crate::cpu::{Cpu, Registers};
 use crate::engine::Request;
+use crate::event::ChangeRef;
 use crate::format;
 use crate::geometry::{Geometry, Location};
 use crate::isa::{Placed, Program};
-use crate::memory::Memory;
+use crate::memory::{word_at, Memory};
 use crate::prng::Prng;
 use crate::replacement::VictimChoice;
 use crate::stats::{Counters, Recent, Shadow};
@@ -130,10 +131,6 @@ pub(crate) struct StallWindow {
 /// The CPU's stall countdown at one point of an access: "Stalled: 20
 /// cycles".
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the CPU status counts a stall down")
-)]
 pub(crate) struct Stalled {
     /// The cycles left until memory is done.
     pub(crate) remaining: u32,
@@ -294,10 +291,6 @@ impl Machine {
     /// length in all. With a dirty victim and 20-cycle misses it reads 40,
     /// then 20 once the write-back is done. `None` at every other point, and
     /// always when untimed.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the CPU status counts a stall down")
-    )]
     pub(crate) fn stall(&self) -> Option<Stalled> {
         let window = self.access.as_ref()?.stall?;
         let left = window.end.get().saturating_sub(self.counters.cycles.get());
@@ -305,6 +298,39 @@ impl Machine {
             remaining: u32::try_from(left).unwrap_or(u32::MAX),
             total: window.total,
         })
+    }
+
+    /// The value of the cell or counter `cell` names, as the net change of an
+    /// entry compares it: a flag as 0 or 1, and a number as itself. A way's
+    /// tag, and each of its words, is `None` while the way is invalid, so a
+    /// way whose line changed has a different tag even when the numbers
+    /// happen to agree. `None` too for a way the cache does not have.
+    pub(crate) fn cell(&self, cell: ChangeRef) -> Option<u64> {
+        match cell {
+            ChangeRef::Valid { set, way } => Some(u64::from(self.cache.way(set, way)?.is_valid())),
+            ChangeRef::Tag { set, way } => self
+                .cache
+                .way(set, way)?
+                .tag()
+                .map(|tag| u64::from(tag.get())),
+            ChangeRef::Dirty { set, way } => Some(u64::from(self.cache.way(set, way)?.is_dirty())),
+            ChangeRef::Rank { set, way } => Some(u64::from(self.cache.way(set, way)?.rank)),
+            ChangeRef::Word { set, way, word } => match &self.cache.way(set, way)?.slot {
+                Slot::Valid { data, .. } => {
+                    let word_bytes = self.geometry.word_bytes();
+                    Some(word_at(
+                        data,
+                        word.get().saturating_mul(word_bytes),
+                        word_bytes,
+                    ))
+                }
+                Slot::Invalid => None,
+            },
+            ChangeRef::Memory { addr } => Some(self.memory.word(addr).get()),
+            ChangeRef::Register { register } => Some(self.registers.get(register)),
+            ChangeRef::Pc => Some(u64::from(self.cpu.pc)),
+            ChangeRef::Counter { counter } => Some(self.counters.get(counter)),
+        }
     }
 
     /// Checks the machine's invariants, set by set. I2 and I6 hold only

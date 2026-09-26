@@ -1,0 +1,799 @@
+---
+source: crates/cache-explorer-core/tests/views.rs
+description: "Frame 3b's first five accesses issued by hand on two-way-lru, paused on access #5's write-back, event 5.4: the victim, way 1 of set 2, is still valid and dirty and its word 7 has reached memory, so nothing is stale there; the store to 0x0B0 is still stale. The lane shows the write-back, the CPU step 4 of 8, the comparators a miss, and the changed line the design's `memory 0x1A4 · misses, write-backs`."
+---
+state = {
+  "config": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 128,
+      "lineBytes": 16,
+      "associativity": 2,
+      "replacement": "lru",
+      "writePolicy": "writeBack",
+      "allocatePolicy": "writeAllocate"
+    },
+    "seed": 12345,
+    "advanced": false,
+    "memoryInit": "pattern"
+  },
+  "advanced": false,
+  "geometry": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "lineBytes": 16,
+    "ways": 2,
+    "sets": 4,
+    "lines": 8,
+    "wordsPerLine": 4,
+    "offsetBits": 4,
+    "indexBits": 2,
+    "tagBits": 6,
+    "placement": "setAssociative"
+  },
+  "position": {
+    "pos": 24,
+    "opsDone": 4,
+    "op": 4,
+    "run": 1,
+    "entry": 5,
+    "seq": 4,
+    "entryLength": 8,
+    "label": "5.4",
+    "boundary": "midEntry",
+    "atRunOrigin": false
+  },
+  "event": {
+    "id": 23,
+    "opIndex": 4,
+    "run": 1,
+    "entry": 5,
+    "seq": 4,
+    "label": "5.4",
+    "kind": "writeBack",
+    "addr": 416,
+    "set": 2,
+    "way": 1,
+    "changed": [
+      {
+        "cell": "memory",
+        "addr": 420
+      },
+      {
+        "cell": "counter",
+        "counter": "writebacks"
+      }
+    ],
+    "explain": "Way 1 is dirty: write line 0x1A0 back to memory first.",
+    "cause": "writePolicy"
+  },
+  "cache": {
+    "header": "L1 cache · 4 sets × 2 ways × 16 B",
+    "wordHeads": [
+      "+0",
+      "+4",
+      "+8",
+      "+C"
+    ],
+    "showRank": true,
+    "rankHeader": "lru",
+    "showDirty": true,
+    "wrap": false,
+    "selectedSet": 2,
+    "compare": [
+      "mismatch",
+      "mismatch"
+    ],
+    "sets": [
+      {
+        "set": 0,
+        "ways": [
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "rank": {
+              "value": 0,
+              "role": "mru"
+            },
+            "victim": false,
+            "description": "Set 0, way 0: invalid, rank 0."
+          },
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "rank": {
+              "value": 1,
+              "role": "lru"
+            },
+            "victim": false,
+            "description": "Set 0, way 1: invalid, rank 1."
+          }
+        ]
+      },
+      {
+        "set": 1,
+        "ways": [
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "rank": {
+              "value": 0,
+              "role": "mru"
+            },
+            "victim": false,
+            "description": "Set 1, way 0: invalid, rank 0."
+          },
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "rank": {
+              "value": 1,
+              "role": "lru"
+            },
+            "victim": false,
+            "description": "Set 1, way 1: invalid, rank 1."
+          }
+        ]
+      },
+      {
+        "set": 2,
+        "ways": [
+          {
+            "valid": true,
+            "tagText": "0x02",
+            "lineText": "0x0A0",
+            "dirty": false,
+            "words": [
+              "40",
+              "53",
+              "66",
+              "79"
+            ],
+            "rank": {
+              "value": 0,
+              "role": "mru"
+            },
+            "victim": false,
+            "description": "Set 2, way 0: valid, tag 0x02, rank 0."
+          },
+          {
+            "valid": true,
+            "tagText": "0x06",
+            "lineText": "0x1A0",
+            "dirty": true,
+            "words": [
+              "96",
+              "7",
+              "25",
+              "38"
+            ],
+            "rank": {
+              "value": 1,
+              "role": "lru"
+            },
+            "victim": true,
+            "description": "Set 2, way 1: valid, tag 0x06, dirty, rank 1, victim."
+          }
+        ]
+      },
+      {
+        "set": 3,
+        "ways": [
+          {
+            "valid": true,
+            "tagText": "0x02",
+            "lineText": "0x0B0",
+            "dirty": true,
+            "words": [
+              "5",
+              "8",
+              "21",
+              "34"
+            ],
+            "rank": {
+              "value": 0,
+              "role": "mru"
+            },
+            "victim": false,
+            "description": "Set 3, way 0: valid, tag 0x02, dirty, rank 0."
+          },
+          {
+            "valid": false,
+            "dirty": false,
+            "words": [],
+            "rank": {
+              "value": 1,
+              "role": "lru"
+            },
+            "victim": false,
+            "description": "Set 3, way 1: invalid, rank 1."
+          }
+        ]
+      }
+    ]
+  },
+  "memory": {
+    "caption": "3 lines touched",
+    "wordHeads": [
+      "+0",
+      "+4",
+      "+8",
+      "+C"
+    ],
+    "lineCount": 3,
+    "busRow": 2
+  },
+  "bus": {
+    "transfer": "writeBack",
+    "text": "Write-back · set 2, way 1 → memory line 0x1A0",
+    "line": 416
+  },
+  "request": {
+    "status": "issued",
+    "kind": "read",
+    "text": "Load 0x2A4 → cache",
+    "source": "ld r1, [0x2A4]",
+    "sourceText": "from access #5",
+    "decoded": {
+      "addr": 676,
+      "addrText": "0x2A4",
+      "line": 672,
+      "lineText": "0x2A0",
+      "tag": 10,
+      "tagText": "0x0A",
+      "index": 2,
+      "offset": 4,
+      "word": 1,
+      "byteInWord": 0,
+      "aligned": true,
+      "bitRanges": {
+        "tag": {
+          "hi": 11,
+          "lo": 6,
+          "width": 6
+        },
+        "index": {
+          "hi": 5,
+          "lo": 4,
+          "width": 2
+        },
+        "offset": {
+          "hi": 3,
+          "lo": 0,
+          "width": 4
+        }
+      },
+      "bits": "001010100100",
+      "fields": [
+        {
+          "field": "tag",
+          "bits": "001010",
+          "valueText": "0x0A",
+          "note": "6 bits",
+          "range": {
+            "hi": 11,
+            "lo": 6,
+            "width": 6
+          }
+        },
+        {
+          "field": "index",
+          "bits": "10",
+          "valueText": "2",
+          "note": "2 bits → set 2",
+          "range": {
+            "hi": 5,
+            "lo": 4,
+            "width": 2
+          }
+        },
+        {
+          "field": "offset",
+          "bits": "0100",
+          "valueText": "4",
+          "note": "4 bits → word 1, byte 0",
+          "range": {
+            "hi": 3,
+            "lo": 0,
+            "width": 4
+          }
+        }
+      ]
+    }
+  },
+  "cpu": {
+    "instruction": "ld r1, [0x2A4]",
+    "status": {
+      "state": "busy",
+      "entry": 5,
+      "seq": 4,
+      "of": 8
+    },
+    "statusText": "Access #5 · step 4 of 8",
+    "hitMarker": "miss",
+    "registers": [
+      {
+        "register": "r0",
+        "text": "0"
+      },
+      {
+        "register": "r1",
+        "text": "66"
+      },
+      {
+        "register": "r2",
+        "text": "0"
+      },
+      {
+        "register": "r3",
+        "text": "0"
+      },
+      {
+        "register": "r4",
+        "text": "0"
+      },
+      {
+        "register": "r5",
+        "text": "0"
+      },
+      {
+        "register": "r6",
+        "text": "0"
+      },
+      {
+        "register": "r7",
+        "text": "0"
+      }
+    ]
+  },
+  "stats": {
+    "counters": {
+      "accesses": 5,
+      "loads": 3,
+      "stores": 2,
+      "hits": 1,
+      "misses": 4,
+      "evictions": 0,
+      "writebacks": 1,
+      "writethroughs": 0,
+      "writearounds": 0,
+      "fills": 3,
+      "cycles": 0,
+      "compulsory": 4,
+      "capacity": 0,
+      "conflict": 0
+    },
+    "traffic": {
+      "lineReads": 3,
+      "lineWrites": 1,
+      "wordWrites": 0,
+      "bytesRead": 48,
+      "bytesWritten": 16
+    },
+    "rows": [
+      {
+        "key": "accesses",
+        "text": "5",
+        "changed": true
+      },
+      {
+        "key": "hits",
+        "text": "1",
+        "changed": false
+      },
+      {
+        "key": "misses",
+        "text": "4",
+        "changed": true
+      },
+      {
+        "key": "hitRate",
+        "text": "20%",
+        "changed": false
+      },
+      {
+        "key": "evictions",
+        "text": "0",
+        "changed": false
+      },
+      {
+        "key": "memoryWrites",
+        "text": "1",
+        "changed": true
+      }
+    ],
+    "hitRate": {
+      "value": 0.2,
+      "text": "20%"
+    },
+    "recent": [
+      "miss",
+      "miss",
+      "miss",
+      "hit",
+      "miss"
+    ],
+    "recentText": "1 hit, 4 misses"
+  },
+  "highlight": [
+    {
+      "cell": "memory",
+      "addr": 420
+    },
+    {
+      "cell": "counter",
+      "counter": "accesses"
+    },
+    {
+      "cell": "counter",
+      "counter": "loads"
+    },
+    {
+      "cell": "counter",
+      "counter": "misses"
+    },
+    {
+      "cell": "counter",
+      "counter": "writebacks"
+    },
+    {
+      "cell": "counter",
+      "counter": "compulsory"
+    }
+  ],
+  "changedSummary": "memory 0x1A4 · misses, write-backs",
+  "controls": {
+    "enabled": [
+      "undo",
+      "redo",
+      "step",
+      "stepAccess",
+      "run",
+      "reset",
+      "issue",
+      "edit",
+      "configure",
+      "program",
+      "load"
+    ]
+  },
+  "labels": {
+    "statusText": "Basics · 28 steps in this run",
+    "configSummary": "128 B · 16 B lines · 2-way · LRU"
+  }
+}
+timeline = {
+  "run": 1,
+  "runs": 1,
+  "origin": 0,
+  "end": 28,
+  "cursor": 24,
+  "step": 24,
+  "stepCount": 28,
+  "headerText": "step 24 of 28",
+  "liveText": "#5 ld r1, [0x2A4]: miss · evict · write-back. Way 1 is dirty: write line 0x1A0 back to memory first.",
+  "entryCount": 5,
+  "current": {
+    "index": 4,
+    "number": 5,
+    "label": "ld r1, [0x2A4]",
+    "kind": "access",
+    "outcome": "miss",
+    "outcomeText": "miss · evict · write-back",
+    "first": 21,
+    "last": 28,
+    "tense": "current",
+    "changedSummary": "memory 0x1A4 · misses, write-backs",
+    "events": [
+      {
+        "pos": 21,
+        "label": "5.1",
+        "kind": "decode",
+        "text": "Load 0x2A4: tag 0x0A, set 2, offset 4 (word 1).",
+        "cause": "lineSize",
+        "tense": "past"
+      },
+      {
+        "pos": 22,
+        "label": "5.2",
+        "kind": "miss",
+        "text": "Set 2: no valid way holds tag 0x0A. Miss.",
+        "cause": "associativity",
+        "tense": "past"
+      },
+      {
+        "pos": 23,
+        "label": "5.3",
+        "kind": "victim",
+        "text": "Way 1 chosen: least recently used (rank 1).",
+        "cause": "replacement",
+        "tense": "past"
+      },
+      {
+        "pos": 24,
+        "label": "5.4",
+        "kind": "writeBack",
+        "text": "Way 1 is dirty: write line 0x1A0 back to memory first.",
+        "cause": "writePolicy",
+        "tense": "current"
+      },
+      {
+        "pos": 25,
+        "label": "5.5",
+        "kind": "evict",
+        "text": "Evict line 0x1A0 (tag 0x06) from way 1.",
+        "cause": "replacement",
+        "tense": "future"
+      },
+      {
+        "pos": 26,
+        "label": "5.6",
+        "kind": "fill",
+        "text": "Fill way 1 with line 0x2A0–0x2AF from memory.",
+        "cause": "lineSize",
+        "tense": "future"
+      },
+      {
+        "pos": 27,
+        "label": "5.7",
+        "kind": "complete",
+        "text": "Read word 1 of way 1 (68) into r1.",
+        "tense": "future"
+      },
+      {
+        "pos": 28,
+        "label": "5.8",
+        "kind": "rank",
+        "text": "LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.",
+        "cause": "replacement",
+        "tense": "future"
+      }
+    ]
+  }
+}
+entries = [
+  {
+    "index": 0,
+    "number": 1,
+    "label": "st [0x0B0], #5",
+    "kind": "access",
+    "outcome": "miss",
+    "outcomeText": "miss",
+    "first": 1,
+    "last": 5,
+    "tense": "past",
+    "changedSummary": "set 3 way 0 valid, tag, data, dirty · misses",
+    "events": []
+  },
+  {
+    "index": 1,
+    "number": 2,
+    "label": "ld r1, [0x0A4]",
+    "kind": "access",
+    "outcome": "miss",
+    "outcomeText": "miss",
+    "first": 6,
+    "last": 10,
+    "tense": "past",
+    "changedSummary": "set 2 way 0 valid, tag, data · r1 · misses",
+    "events": []
+  },
+  {
+    "index": 2,
+    "number": 3,
+    "label": "st [0x1A4], #7",
+    "kind": "access",
+    "outcome": "miss",
+    "outcomeText": "miss",
+    "first": 11,
+    "last": 16,
+    "tense": "past",
+    "changedSummary": "set 2 way 0 rank · set 2 way 1 valid, tag, data, dirty, rank · misses",
+    "events": []
+  },
+  {
+    "index": 3,
+    "number": 4,
+    "label": "ld r1, [0x0A8]",
+    "kind": "access",
+    "outcome": "hit",
+    "outcomeText": "hit",
+    "first": 17,
+    "last": 20,
+    "tense": "past",
+    "changedSummary": "set 2 way 0 rank · set 2 way 1 rank · r1 · hits",
+    "events": []
+  },
+  {
+    "index": 4,
+    "number": 5,
+    "label": "ld r1, [0x2A4]",
+    "kind": "access",
+    "outcome": "miss",
+    "outcomeText": "miss · evict · write-back",
+    "first": 21,
+    "last": 28,
+    "tense": "current",
+    "changedSummary": "memory 0x1A4 · misses, write-backs",
+    "events": [
+      {
+        "pos": 21,
+        "label": "5.1",
+        "kind": "decode",
+        "text": "Load 0x2A4: tag 0x0A, set 2, offset 4 (word 1).",
+        "cause": "lineSize",
+        "tense": "past"
+      },
+      {
+        "pos": 22,
+        "label": "5.2",
+        "kind": "miss",
+        "text": "Set 2: no valid way holds tag 0x0A. Miss.",
+        "cause": "associativity",
+        "tense": "past"
+      },
+      {
+        "pos": 23,
+        "label": "5.3",
+        "kind": "victim",
+        "text": "Way 1 chosen: least recently used (rank 1).",
+        "cause": "replacement",
+        "tense": "past"
+      },
+      {
+        "pos": 24,
+        "label": "5.4",
+        "kind": "writeBack",
+        "text": "Way 1 is dirty: write line 0x1A0 back to memory first.",
+        "cause": "writePolicy",
+        "tense": "current"
+      },
+      {
+        "pos": 25,
+        "label": "5.5",
+        "kind": "evict",
+        "text": "Evict line 0x1A0 (tag 0x06) from way 1.",
+        "cause": "replacement",
+        "tense": "future"
+      },
+      {
+        "pos": 26,
+        "label": "5.6",
+        "kind": "fill",
+        "text": "Fill way 1 with line 0x2A0–0x2AF from memory.",
+        "cause": "lineSize",
+        "tense": "future"
+      },
+      {
+        "pos": 27,
+        "label": "5.7",
+        "kind": "complete",
+        "text": "Read word 1 of way 1 (68) into r1.",
+        "tense": "future"
+      },
+      {
+        "pos": 28,
+        "label": "5.8",
+        "kind": "rank",
+        "text": "LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.",
+        "cause": "replacement",
+        "tense": "future"
+      }
+    ]
+  }
+]
+ticks = [3, 2, 2, 2, 2, 3, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 1, 0, 0, 0, 3, 2, 2, 2, 2, 2, 2, 2]
+memory = [
+  {
+    "line": 160,
+    "lineText": "0x0A0",
+    "tagText": "0x02",
+    "set": 2,
+    "resident": {
+      "set": 2,
+      "way": 0
+    },
+    "onBus": false,
+    "watched": false,
+    "words": [
+      {
+        "addr": 160,
+        "text": "40",
+        "description": "0x0A0 = 40."
+      },
+      {
+        "addr": 164,
+        "text": "53",
+        "description": "0x0A4 = 53."
+      },
+      {
+        "addr": 168,
+        "text": "66",
+        "description": "0x0A8 = 66."
+      },
+      {
+        "addr": 172,
+        "text": "79",
+        "description": "0x0AC = 79."
+      }
+    ]
+  },
+  {
+    "line": 176,
+    "lineText": "0x0B0",
+    "tagText": "0x02",
+    "set": 3,
+    "resident": {
+      "set": 3,
+      "way": 0
+    },
+    "onBus": false,
+    "watched": false,
+    "words": [
+      {
+        "addr": 176,
+        "text": "92",
+        "stale": {
+          "set": 3,
+          "way": 0,
+          "text": "Stale: set 3, way 0 holds the newer value 5."
+        },
+        "description": "0x0B0 = 92. Stale: set 3, way 0 holds the newer value 5."
+      },
+      {
+        "addr": 180,
+        "text": "8",
+        "description": "0x0B4 = 8."
+      },
+      {
+        "addr": 184,
+        "text": "21",
+        "description": "0x0B8 = 21."
+      },
+      {
+        "addr": 188,
+        "text": "34",
+        "description": "0x0BC = 34."
+      }
+    ]
+  },
+  {
+    "line": 416,
+    "lineText": "0x1A0",
+    "tagText": "0x06",
+    "set": 2,
+    "resident": {
+      "set": 2,
+      "way": 1
+    },
+    "onBus": true,
+    "watched": false,
+    "words": [
+      {
+        "addr": 416,
+        "text": "96",
+        "description": "0x1A0 = 96."
+      },
+      {
+        "addr": 420,
+        "text": "7",
+        "description": "0x1A4 = 7."
+      },
+      {
+        "addr": 424,
+        "text": "25",
+        "description": "0x1A8 = 25."
+      },
+      {
+        "addr": 428,
+        "text": "38",
+        "description": "0x1AC = 38."
+      }
+    ]
+  }
+]

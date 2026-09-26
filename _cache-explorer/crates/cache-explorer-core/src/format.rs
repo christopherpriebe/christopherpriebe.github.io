@@ -153,6 +153,21 @@ pub(crate) fn position(n: u32) -> String {
     n.to_string()
 }
 
+/// A number the student reads back as source or types back into a field:
+/// plain digits, never grouped, so it reads as the assembly language writes
+/// it (`st [0x0A4], #10000`) and a timing field's text parses as typed
+/// (`1000`).
+pub(crate) fn plain(n: impl Into<u64>) -> String {
+    n.into().to_string()
+}
+
+/// The head of a word's column in the cache and memory tables: `+` and the
+/// word's byte offset within its line in upper-case hex, as in `+0`, `+4`,
+/// `+8`, `+C` for 4-byte words.
+pub(crate) fn word_head(offset: u32) -> String {
+    format!("+{offset:X}")
+}
+
 /// "a" or "an", whichever reads right before `n` spoken aloud: "an 8-line
 /// cache", "a 16-line cache".
 pub(crate) fn a_or_an(n: impl Into<u64>) -> &'static str {
@@ -380,6 +395,20 @@ mod tests {
     fn line_and_column_numbers_are_plain_digits() {
         assert_eq!(position(3), "3");
         assert_eq!(position(16_385), "16385");
+    }
+
+    #[test]
+    fn source_and_field_numbers_are_plain_digits() {
+        assert_eq!(plain(7_u32), "7");
+        assert_eq!(plain(1_000_u32), "1000");
+        assert_eq!(plain(u64::MAX), "18446744073709551615");
+    }
+
+    #[test]
+    fn word_heads_give_the_byte_offset_in_hex() {
+        let heads: Vec<String> = [0, 4, 8, 12].into_iter().map(word_head).collect();
+        assert_eq!(heads, ["+0", "+4", "+8", "+C"]);
+        assert_eq!(word_head(0x78), "+78");
     }
 
     #[test]

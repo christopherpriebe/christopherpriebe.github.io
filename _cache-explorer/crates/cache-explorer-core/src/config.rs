@@ -7,17 +7,21 @@
 //! [`Config::repair`] finds the nearest valid configuration for the "Open
 //! with … instead" action, and [`Config::summary`] is the configuration's
 //! one-line description. The named configurations, the design's three
-//! geometries, live here too.
+//! geometries, live here too, and so do the configuration bar's options:
+//! [`Session::config_controls`] gives each option the whole configuration a
+//! click on it produces, so the page never builds or checks one itself.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::explain;
 use crate::format;
 use crate::geometry::{Geometry, Placement};
 use crate::limits::{
     MAX_ADDRESS_BITS, MAX_CYCLES, MAX_LINES, MAX_SEED, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS,
     MIN_CYCLES,
 };
+use crate::session::Session;
 
 /// A cache and machine configuration. Fixed for a run; a new configuration
 /// starts a new run.
@@ -345,6 +349,180 @@ pub enum ConfigError {
     },
 }
 
+/// A field of a configuration, as an error names the one to change. No rule
+/// names the word size: every word size is valid on its own, and a line too
+/// short for its word is repaired by the line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(rename_all = "camelCase")]
+pub enum ConfigField {
+    /// `address_bits`.
+    AddressBits,
+    /// `word_bytes`.
+    WordBytes,
+    /// `cache.size_bytes`.
+    SizeBytes,
+    /// `cache.line_bytes`.
+    LineBytes,
+    /// `cache.associativity`.
+    Associativity,
+    /// `timing`.
+    Timing,
+    /// `seed`.
+    Seed,
+}
+
+/// Why a configuration is invalid, as the page shows it: the field to
+/// change, the message, and the nearest valid configuration.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigErrorView {
+    /// The field the first broken rule is about: the one its repair
+    /// changes.
+    pub field: ConfigField,
+    /// The rule's message.
+    pub message: String,
+    /// The nearest valid configuration, with its action's label.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repair: Option<Repair>,
+}
+
+/// A configuration checked on its own, for module authoring tools and
+/// tests: its summary and geometry, or why it is invalid.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(
+    tag = "status",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ConfigCheck {
+    /// The configuration is valid.
+    Valid {
+        /// Its summary, in Advanced when its `advanced` flag is set or it
+        /// needs Advanced.
+        summary: String,
+        /// Its geometry.
+        geometry: Geometry,
+    },
+    /// The configuration is invalid.
+    Invalid {
+        /// Why.
+        error: ConfigErrorView,
+    },
+}
+
+/// A group of the configuration bar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(rename_all = "camelCase")]
+pub enum ConfigGroupKind {
+    /// Cache size.
+    CacheSize,
+    /// Line size.
+    LineSize,
+    /// Associativity.
+    Associativity,
+    /// Replacement.
+    Replacement,
+    /// The address width, in the Address and word group.
+    AddressBits,
+    /// The word size, in the Address and word group.
+    WordSize,
+    /// Write policy; Advanced only.
+    WritePolicy,
+    /// On a store miss: the allocate policy; Advanced only.
+    AllocatePolicy,
+}
+
+/// One group of the configuration bar and its options.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigGroup {
+    /// Which group.
+    pub group: ConfigGroupKind,
+    /// Whether Basics hides it.
+    pub advanced_only: bool,
+    /// Its options, in display order.
+    pub options: Vec<ConfigOption>,
+}
+
+/// One option of the configuration bar, with the whole configuration a
+/// click on it produces.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigOption {
+    /// Its label: "Direct", "2-way", "Full", "64 B", "LRU", "Write-back",
+    /// "No allocate".
+    pub label: String,
+    /// Whether it is the configuration's current choice.
+    pub pressed: bool,
+    /// Whether it cannot be chosen.
+    pub disabled: bool,
+    /// Why it cannot be chosen: the message of the rule its configuration
+    /// breaks, or "Same as Full for an 8-line cache."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The configuration a click produces, for `proposeConfig` as it is.
+    pub config: Config,
+}
+
+/// The configuration bar's timing controls.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(rename_all = "camelCase")]
+pub struct TimingControl {
+    /// Whether timed mode is on.
+    pub on: bool,
+    /// The hit time's field: the configuration's, or while timed mode is
+    /// off the most recent in the log, or 1.
+    pub hit_text: String,
+    /// The miss penalty's field, likewise, or 20.
+    pub miss_text: String,
+    /// The configuration the checkbox produces.
+    pub toggle: Config,
+}
+
+/// Everything the configuration bar draws for one configuration.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigControls {
+    /// The configuration's summary in the mode shown: "128 B · 16 B lines ·
+    /// 2-way · LRU".
+    pub summary: String,
+    /// The groups, in display order.
+    pub groups: Vec<ConfigGroup>,
+    /// The timing controls.
+    pub timing: TimingControl,
+    /// Why the configuration itself is invalid, when it is: one from a
+    /// malformed link or module.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ConfigErrorView>,
+}
+
+/// The timing timed mode starts with when the log has none to offer: a
+/// 1-cycle hit and a 20-cycle miss penalty, the design's.
+pub(crate) const FALLBACK_TIMING: Timing = Timing {
+    hit_cycles: 1,
+    miss_cycles: 20,
+};
+
+/// The cache sizes the configuration bar offers, in bytes, as the design
+/// does.
+const SIZE_OPTIONS: [u32; 4] = [64, 128, 256, 512];
+
+/// The line sizes the configuration bar offers, in bytes, as the design
+/// does.
+const LINE_OPTIONS: [u32; 3] = [8, 16, 32];
+
+/// The associativities the configuration bar offers besides Full, as the
+/// design does.
+const WAY_OPTIONS: [u32; 4] = [1, 2, 4, 8];
+
 /// The error of reading a word size that is not 1, 2, 4 or 8 bytes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
 #[error("word size must be 1, 2, 4 or 8 bytes; got {got}")]
@@ -427,7 +605,7 @@ impl Config {
         let first = self.validate().err()?;
         let config = self.repaired();
         let geometry = config.validate().ok()?;
-        let label = first.repair_label(&config, &geometry);
+        let label = explain::repair_label(&first, &config, &geometry);
         Some(Repair { config, label })
     }
 
@@ -444,30 +622,7 @@ impl Config {
     /// "128 B · 16 B lines · 2-way · LRU"; in Advanced, then the write and
     /// allocate policies, " · write-back · allocate". Timing is not part of it.
     pub fn summary(&self, advanced: bool) -> String {
-        let cache = &self.cache;
-        let mut text = format!(
-            "{} B · {} B lines · {}",
-            format::setting(cache.size_bytes),
-            format::setting(cache.line_bytes),
-            cache.placement_name()
-        );
-        if cache.placement() != Placement::DirectMapped {
-            text.push_str(" · ");
-            text.push_str(replacement_name(cache.replacement));
-        }
-        if advanced {
-            text.push_str(" · ");
-            text.push_str(match cache.write_policy {
-                WritePolicy::WriteBack => "write-back",
-                WritePolicy::WriteThrough => "write-through",
-            });
-            text.push_str(" · ");
-            text.push_str(match cache.allocate_policy {
-                AllocatePolicy::WriteAllocate => "allocate",
-                AllocatePolicy::WriteNoAllocate => "no-allocate",
-            });
-        }
-        text
+        explain::config_summary(self, advanced)
     }
 
     /// The short summary a shared run's loading screen opens with: the
@@ -475,16 +630,7 @@ impl Config {
     /// 128 B". It starts a sentence, so it starts with a capital: "Direct-mapped
     /// · 128 B", "Fully associative LRU · 128 B".
     pub fn short_summary(&self) -> String {
-        let cache = &self.cache;
-        let replacement = replacement_name(cache.replacement);
-        let placement = match cache.placement() {
-            Placement::DirectMapped => "Direct-mapped".to_owned(),
-            Placement::FullyAssociative => format!("Fully associative {replacement}"),
-            Placement::SetAssociative => {
-                format!("{}-way {replacement}", format::setting(cache.associativity))
-            }
-        };
-        format!("{placement} · {} B", format::setting(cache.size_bytes))
+        explain::short_summary(self)
     }
 
     /// This configuration with write-back, write-allocate and no timing.
@@ -626,23 +772,13 @@ impl CacheConfig {
     /// The placement the summaries name, read from the numbers as given so
     /// that an invalid configuration has one too; for a valid configuration it
     /// is the geometry's.
-    fn placement(&self) -> Placement {
+    pub(crate) fn placement(&self) -> Placement {
         if self.size_bytes.checked_div(self.line_bytes) == Some(self.associativity) {
             Placement::FullyAssociative
         } else if self.associativity == 1 {
             Placement::DirectMapped
         } else {
             Placement::SetAssociative
-        }
-    }
-
-    /// The placement as the summaries write it: "direct-mapped", "fully
-    /// associative" or "2-way".
-    fn placement_name(&self) -> String {
-        match self.placement() {
-            Placement::DirectMapped => "direct-mapped".to_owned(),
-            Placement::FullyAssociative => "fully associative".to_owned(),
-            Placement::SetAssociative => format!("{}-way", format::setting(self.associativity)),
         }
     }
 }
@@ -741,61 +877,309 @@ pub fn presets() -> [Preset; 3] {
 }
 
 impl ConfigError {
-    /// The label of [`Config::repair`]'s action when this is the first rule
-    /// that failed: it names that rule's repair, read from the repaired
-    /// configuration and its geometry.
-    fn repair_label(&self, repaired: &Config, geometry: &Geometry) -> String {
-        let size = repaired.cache.size_bytes;
+    /// The field the rule is about: the one its repair changes. A cache too
+    /// small for its line, too large for the limit on lines, or covering all
+    /// of memory is repaired by its size; a line of the wrong size, by the
+    /// line.
+    pub fn field(&self) -> ConfigField {
         match self {
-            ConfigError::AddressBits { .. } => {
-                format!(
-                    "Open with {}-bit addresses instead",
-                    format::setting(repaired.address_bits)
-                )
-            }
+            ConfigError::AddressBits { .. } => ConfigField::AddressBits,
             ConfigError::SizeNotPowerOfTwo { .. }
             | ConfigError::LineLargerThanCache { .. }
-            | ConfigError::NoTagBits { .. }
-            | ConfigError::TooManyLines { .. } => {
-                format!(
-                    "Open as {} {} B cache instead",
-                    format::a_or_an(size),
-                    format::setting(size)
-                )
-            }
+            | ConfigError::TooManyLines { .. }
+            | ConfigError::NoTagBits { .. } => ConfigField::SizeBytes,
             ConfigError::LineNotPowerOfTwo { .. }
             | ConfigError::LineSmallerThanWord { .. }
-            | ConfigError::TooManyWords { .. } => {
-                format!(
-                    "Open with {} B lines instead",
-                    format::setting(repaired.cache.line_bytes)
-                )
-            }
+            | ConfigError::TooManyWords { .. } => ConfigField::LineBytes,
             ConfigError::AssociativityZero
             | ConfigError::AssociativityNotPowerOfTwo { .. }
-            | ConfigError::AssociativityTooLarge { .. } => match geometry.placement {
-                Placement::FullyAssociative => "Open as fully associative instead".to_owned(),
-                Placement::DirectMapped => "Open as direct-mapped instead".to_owned(),
-                Placement::SetAssociative => {
-                    format!("Open with {}-way instead", format::setting(geometry.ways))
-                }
-            },
-            ConfigError::Timing { .. } => {
-                let (hit, miss) = repaired.timing.map_or((MIN_CYCLES, MIN_CYCLES), |timing| {
-                    (timing.hit_cycles, timing.miss_cycles)
-                });
-                format!(
-                    "Open with {} {}/{}-cycle timing instead",
-                    format::a_or_an(hit),
-                    format::setting(hit),
-                    format::setting(miss)
-                )
-            }
-            ConfigError::SeedTooLarge { .. } => {
-                format!("Open with seed {} instead", format::setting(repaired.seed))
-            }
+            | ConfigError::AssociativityTooLarge { .. } => ConfigField::Associativity,
+            ConfigError::Timing { .. } => ConfigField::Timing,
+            ConfigError::SeedTooLarge { .. } => ConfigField::Seed,
         }
     }
+}
+
+impl ConfigErrorView {
+    /// The view of `error`, the first rule `config` breaks.
+    fn of(config: &Config, error: &ConfigError) -> Self {
+        Self {
+            field: error.field(),
+            message: error.to_string(),
+            repair: config.repair(),
+        }
+    }
+}
+
+/// `config` checked on its own: its summary and geometry, or the first rule
+/// it breaks with its repair. The summary is in Advanced when the
+/// configuration's `advanced` flag is set or it needs Advanced.
+pub fn validate_config(config: &Config) -> ConfigCheck {
+    match config.validate() {
+        Ok(geometry) => ConfigCheck::Valid {
+            summary: config.summary(config.advanced || !config.fits_basics()),
+            geometry,
+        },
+        Err(error) => ConfigCheck::Invalid {
+            error: ConfigErrorView::of(config, &error),
+        },
+    }
+}
+
+impl Session {
+    /// Everything the configuration bar draws for `shown`, the pending
+    /// configuration or the displayed run's: its summary in the mode shown,
+    /// every option with the whole configuration a click produces, the
+    /// timing controls, and why `shown` itself is invalid, if it is.
+    ///
+    /// A size or line option keeps a fully associative cache fully
+    /// associative, as many ways as its new line count, and otherwise lowers
+    /// the associativity to the new line count when it would no longer fit.
+    /// The associativity option with as many ways as the cache has lines is
+    /// the same as Full, and disabled as such; an option whose configuration
+    /// breaks a rule is disabled with the rule's message. A value off the
+    /// options' lists, from a link or a module, is an extra option, pressed.
+    pub fn config_controls(&self, shown: &Config) -> ConfigControls {
+        controls(shown, self.advanced(), self.recent_timing())
+    }
+}
+
+/// The configuration bar for `shown`, in Advanced when `advanced`, with
+/// `recent` the most recent timing in the log.
+fn controls(shown: &Config, advanced: bool, recent: Option<Timing>) -> ConfigControls {
+    let timing = shown.timing.or(recent).unwrap_or(FALLBACK_TIMING);
+    ConfigControls {
+        summary: shown.summary(advanced),
+        groups: groups(shown),
+        timing: TimingControl {
+            on: shown.timing.is_some(),
+            hit_text: format::plain(timing.hit_cycles),
+            miss_text: format::plain(timing.miss_cycles),
+            toggle: Config {
+                timing: if shown.timing.is_some() {
+                    None
+                } else {
+                    Some(timing)
+                },
+                ..shown.clone()
+            },
+        },
+        error: shown
+            .validate()
+            .err()
+            .map(|error| ConfigErrorView::of(shown, &error)),
+    }
+}
+
+/// The configuration bar's groups for `shown`, in display order.
+fn groups(shown: &Config) -> Vec<ConfigGroup> {
+    let cache = &shown.cache;
+    let group = |group, advanced_only, options| ConfigGroup {
+        group,
+        advanced_only,
+        options,
+    };
+    let widths: Vec<u32> = (MIN_ADDRESS_BITS..=MAX_ADDRESS_BITS)
+        .map(u32::from)
+        .collect();
+    let address_bits = with_current(&widths, u32::from(shown.address_bits))
+        .into_iter()
+        .filter_map(|bits| u8::try_from(bits).ok());
+    vec![
+        group(
+            ConfigGroupKind::CacheSize,
+            false,
+            choices(
+                shown,
+                with_current(&SIZE_OPTIONS, cache.size_bytes),
+                cache.size_bytes,
+                explain::bytes_option,
+                |config, size| *config = resized(shown, size, cache.line_bytes),
+            ),
+        ),
+        group(
+            ConfigGroupKind::LineSize,
+            false,
+            choices(
+                shown,
+                with_current(&LINE_OPTIONS, cache.line_bytes),
+                cache.line_bytes,
+                explain::bytes_option,
+                |config, line| *config = resized(shown, cache.size_bytes, line),
+            ),
+        ),
+        group(
+            ConfigGroupKind::Associativity,
+            false,
+            associativities(shown),
+        ),
+        group(
+            ConfigGroupKind::Replacement,
+            false,
+            choices(
+                shown,
+                [Replacement::Lru, Replacement::Fifo, Replacement::Random],
+                cache.replacement,
+                explain::replacement_option,
+                |config, replacement| config.cache.replacement = replacement,
+            ),
+        ),
+        group(
+            ConfigGroupKind::AddressBits,
+            false,
+            choices(
+                shown,
+                address_bits,
+                shown.address_bits,
+                explain::address_option,
+                |config, bits| config.address_bits = bits,
+            ),
+        ),
+        group(
+            ConfigGroupKind::WordSize,
+            false,
+            choices(
+                shown,
+                WordBytes::ALL,
+                shown.word_bytes,
+                explain::word_option,
+                |config, word| config.word_bytes = word,
+            ),
+        ),
+        group(
+            ConfigGroupKind::WritePolicy,
+            true,
+            choices(
+                shown,
+                [WritePolicy::WriteBack, WritePolicy::WriteThrough],
+                cache.write_policy,
+                explain::write_option,
+                |config, policy| config.cache.write_policy = policy,
+            ),
+        ),
+        group(
+            ConfigGroupKind::AllocatePolicy,
+            true,
+            choices(
+                shown,
+                [
+                    AllocatePolicy::WriteAllocate,
+                    AllocatePolicy::WriteNoAllocate,
+                ],
+                cache.allocate_policy,
+                explain::allocate_option,
+                |config, policy| config.cache.allocate_policy = policy,
+            ),
+        ),
+    ]
+}
+
+/// One option for each of `values`, labelled by `label`, the one equal to
+/// `current` pressed, each with `shown` as `apply` changes it.
+fn choices<T: Copy + PartialEq>(
+    shown: &Config,
+    values: impl IntoIterator<Item = T>,
+    current: T,
+    label: impl Fn(T) -> String,
+    apply: impl Fn(&mut Config, T),
+) -> Vec<ConfigOption> {
+    values
+        .into_iter()
+        .map(|value| {
+            let mut config = shown.clone();
+            apply(&mut config, value);
+            option(shown, label(value), value == current, config)
+        })
+        .collect()
+}
+
+/// The associativity options for `shown`: one way ("Direct"), the other
+/// ways of the list and an extra one off it, then Full, with as many ways
+/// as the cache has lines.
+fn associativities(shown: &Config) -> Vec<ConfigOption> {
+    let cache = &shown.cache;
+    let lines = cache.size_bytes.checked_div(cache.line_bytes).unwrap_or(0);
+    let full = lines > 0 && cache.associativity == lines;
+    let listed: Vec<u32> = if full {
+        WAY_OPTIONS.to_vec()
+    } else {
+        with_current(&WAY_OPTIONS, cache.associativity)
+    };
+    let with_ways = |ways: u32| {
+        let mut config = shown.clone();
+        config.cache.associativity = ways;
+        config
+    };
+    let mut options: Vec<ConfigOption> = listed
+        .into_iter()
+        .map(|ways| {
+            let pressed = !full && ways == cache.associativity;
+            let option = option(shown, explain::ways_option(ways), pressed, with_ways(ways));
+            if ways == lines {
+                ConfigOption {
+                    disabled: true,
+                    title: Some(explain::same_as_full(lines)),
+                    ..option
+                }
+            } else {
+                option
+            }
+        })
+        .collect();
+    options.push(option(
+        shown,
+        explain::full_option(),
+        full,
+        with_ways(lines),
+    ));
+    options
+}
+
+/// The option labelled `label` whose click produces `config`: `shown` itself
+/// when `pressed`, and disabled with the rule's message when its
+/// configuration is invalid.
+fn option(shown: &Config, label: String, pressed: bool, config: Config) -> ConfigOption {
+    let config = if pressed { shown.clone() } else { config };
+    let error = config.validate().err();
+    ConfigOption {
+        label,
+        pressed,
+        disabled: error.is_some(),
+        title: error.map(|error| error.to_string()),
+        config,
+    }
+}
+
+/// `shown` with a cache of `size` bytes and lines of `line`: a fully
+/// associative cache stays fully associative, and any other keeps its
+/// associativity unless the new line count is smaller.
+fn resized(shown: &Config, size: u32, line: u32) -> Config {
+    let cache = &shown.cache;
+    let full = cache.size_bytes.checked_div(cache.line_bytes) == Some(cache.associativity);
+    let lines = size.checked_div(line).unwrap_or(0);
+    let associativity = if lines == 0 {
+        cache.associativity
+    } else if full {
+        lines
+    } else {
+        cache.associativity.min(lines)
+    };
+    let mut config = shown.clone();
+    config.cache.size_bytes = size;
+    config.cache.line_bytes = line;
+    config.cache.associativity = associativity;
+    config
+}
+
+/// `listed`, with `current` in its place among them when it is not one of
+/// them, in ascending order.
+fn with_current(listed: &[u32], current: u32) -> Vec<u32> {
+    let mut values = listed.to_vec();
+    if !values.contains(&current) {
+        values.push(current);
+        values.sort_unstable();
+    }
+    values
 }
 
 /// The associativities a cache of `lines` lines accepts, as the message for
@@ -813,15 +1197,6 @@ fn associativity_choices(lines: u32) -> String {
         None => format::setting(lines),
     };
     format!("{text} (fully associative)")
-}
-
-/// The replacement policy as the summaries name it.
-fn replacement_name(replacement: Replacement) -> &'static str {
-    match replacement {
-        Replacement::Lru => "LRU",
-        Replacement::Fifo => "FIFO",
-        Replacement::Random => "Random",
-    }
 }
 
 /// The name a timing message gives the number it is about.
