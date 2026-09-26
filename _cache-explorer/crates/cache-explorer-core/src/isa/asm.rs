@@ -3,12 +3,17 @@
 //! ```text
 //! line        = ws [ label ws ":" ] ws [ instruction ] ws [ comment ] EOL ;
 //! instruction = "ld"   ws1 reg ws "," ws mem
-//!             | "st"   ws1 mem ws "," ws ( reg | imm )
+//!             | "st"   ws mem ws "," ws ( reg | imm )
 //!             | "add"  ws1 reg ws "," ws reg ws "," ws ( reg | imm )
 //!             | "bnez" ws1 reg ws "," ws label ;
 //! mem         = "[" ws ( hex | reg ) ws "]" ;
 //! imm         = "#" [ "-" ] ( hex | dec ) ;
 //! ```
+//!
+//! `ws` is any run of spaces and tabs, and `ws1` one that is not empty. A
+//! word runs to the next space, tab, `,`, `[`, `]` or `:`, so a mnemonic
+//! needs a space or a tab before a register (`ldr1` is one word, an unknown
+//! instruction) but none before `[` (`st[0x0A4], #7` is a store).
 //!
 //! Mnemonics and registers are read in either case; labels are
 //! case-sensitive, at most [`MAX_LABEL_CHARS`] characters, not a register or

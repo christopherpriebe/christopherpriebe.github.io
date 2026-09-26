@@ -200,8 +200,9 @@ impl Geometry {
 /// `word_bytes` bytes. It fits if it does as a signed or as an unsigned
 /// number, from −2^(8w−1) to 2^(8w) − 1, and a negative one becomes its two's
 /// complement in the word's width, so −3 in a 1-byte word is 253. The Value
-/// box, a `st` immediate and a trace's `W` value all read their numbers so,
-/// and an `add` immediate does with the eight bytes of a register.
+/// box and a `st` immediate read their numbers so, and an `add` immediate
+/// does with the eight bytes of a register. A trace's `W` value has no sign
+/// and is checked against the unsigned range alone.
 ///
 /// # Errors
 ///

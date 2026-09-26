@@ -13,8 +13,8 @@
 //! cases, the design's flows A and B, the dirty eviction of frame 3b, untimed
 //! and timed and as a program, every kind of stall, the widths that change
 //! how numbers are written, and programs: loops, branches, `r0`, a store that
-//! truncates a register, a fault, a trace, and a load issued by hand beside a
-//! program.
+//! truncates a register, a fault, the end of the instruction budget, a trace,
+//! and a load issued by hand beside a program.
 
 use serde::Serialize;
 use thiserror::Error;
@@ -28,6 +28,7 @@ use crate::event::{ChangeRef, MicroEvent};
 use crate::format;
 use crate::geometry::{highest_word, AccessError, Geometry};
 use crate::isa::Program;
+use crate::limits::INSTRUCTION_BUDGET;
 use crate::machine::Machine;
 use crate::op::{OpError, ProgramFormat};
 use crate::units::{Addr, OpIndex, Register, Word};
@@ -632,6 +633,14 @@ const WALK_OFF_THE_END: &str = concat!(
     "        bnez r2, loop",
 );
 
+/// A loop without an exit: `r1` holds 1 and nothing changes it, so the
+/// branch is always taken.
+const ENDLESS_LOOP: &str = concat!(
+    "; r1 is never 0, so the loop has no exit.\n",
+    "        add r1, r0, #1\n",
+    "loop:   bnez r1, loop",
+);
+
 /// Stores of a register that holds more than a 1-byte word: once around
 /// the cache, once into it.
 const TRUNCATION: &str = concat!(
@@ -642,8 +651,9 @@ const TRUNCATION: &str = concat!(
 );
 
 /// Programs and traces: frame 3b's program, untimed and timed; the design's
-/// sample trace; a loop that finishes and one that faults; a store that
-/// truncates a register; and loads issued by hand beside a program.
+/// sample trace; a loop that finishes, one that faults and one that uses its
+/// budget; a store that truncates a register; and loads issued by hand beside
+/// a program.
 fn programs() -> Vec<Fixture> {
     vec![
         Fixture {
@@ -688,6 +698,24 @@ fn programs() -> Vec<Fixture> {
                           load faults with an error entry of its own, and the pc stays at it.",
             config: Preset::DirectMapped8.config(),
             issues: [vec![program(WALK_OFF_THE_END)], steps(8)].concat(),
+        },
+        Fixture {
+            name: "budget-exhaustion",
+            description: "A bnez loop on direct-mapped-8 with no exit, stepped once past its \
+                          budget: every instruction the budget allows executes, and the next \
+                          is replaced by an error entry of its own, with the pc left at the \
+                          branch. The snapshot holds one line per instruction, so it grows \
+                          and shrinks with INSTRUCTION_BUDGET.",
+            config: Preset::DirectMapped8.config(),
+            issues: [
+                vec![program(ENDLESS_LOOP)],
+                steps(
+                    usize::try_from(INSTRUCTION_BUDGET)
+                        .unwrap_or(usize::MAX)
+                        .saturating_add(1),
+                ),
+            ]
+            .concat(),
         },
         Fixture {
             name: "store-truncation",
@@ -888,7 +916,12 @@ mod tests {
             // the last event of the fixture's last op.
             for (at, event) in events.iter().enumerate() {
                 if event.kind == EventKind::Error {
-                    assert!(event.explain.starts_with("Line "), "{}", event.explain);
+                    assert!(
+                        event.explain.starts_with("Line ")
+                            || event.explain == crate::explain::out_of_budget(),
+                        "{}",
+                        event.explain
+                    );
                     assert_eq!(at, events.len() - 1, "{}", fixture.name);
                 }
             }

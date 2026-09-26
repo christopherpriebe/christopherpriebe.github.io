@@ -55,7 +55,7 @@ use crate::explain::{self, StallFor, WriteNote};
 use crate::geometry::Location;
 use crate::machine::{AccessContext, InvariantViolation, Lookup, Machine, StallWindow};
 use crate::memory::{set_word_at, word_at};
-use crate::op::AccessKind;
+use crate::op::{AccessKind, ProgramFormat};
 use crate::replacement::{RankMove, VictimReason};
 use crate::stats::{self, Outcome};
 use crate::units::{Addr, Cycle, LineAddr, Register, SetIndex, Tag, WayIndex, Word, WordIndex};
@@ -487,9 +487,15 @@ fn complete(
     if !ranked {
         changed.extend(finish(machine));
     }
-    // A load issued by hand writes a register the program may be using.
-    let beside_program =
-        origin(machine) == Some(Origin::Hand) && machine.next_instruction().is_some();
+    // A load issued by hand writes a register an assembly program may be
+    // using, while it is loaded and has not finished. One stopped by a fault
+    // or by its budget has not finished: it is still loaded, with its
+    // registers on show. A trace reads no register, so beside one the line
+    // says nothing more.
+    let beside_program = origin(machine) == Some(Origin::Hand)
+        && machine.program.as_ref().is_some_and(|program| {
+            program.format() == ProgramFormat::Asm && machine.cpu.pc < program.len()
+        });
     let draft = Draft {
         addr: Some(addr),
         set: Some(location.set),

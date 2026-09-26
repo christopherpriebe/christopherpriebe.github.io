@@ -256,9 +256,30 @@ mod tests {
             MAX_PARSE_ERRORS >= 4,
             "tests/isa.rs lists the four errors of one program"
         );
+        // The parser tests build sources one over a limit that must stay
+        // within the others, or another limit's error would come first. Each
+        // relation below names the lines a test writes, newline included.
         assert!(
-            MAX_PARSE_ERRORS + 3 <= MAX_PROGRAM_LINES,
-            "the parse tests write one error a line, past the errors a result lists"
+            MAX_PARSE_ERRORS + 3 <= MAX_PROGRAM_LINES
+                && u64::from(MAX_PARSE_ERRORS + 3) * 6 <= u64::from(MAX_PROGRAM_BYTES),
+            "the parse tests write one error a line, `lw r1` in 6 bytes, three past the \
+             errors a result lists"
+        );
+        assert!(
+            MAX_PROGRAM_INSTRUCTIONS + 2 <= MAX_PROGRAM_LINES
+                && u64::from(MAX_PROGRAM_INSTRUCTIONS + 2) * 15 <= u64::from(MAX_PROGRAM_BYTES),
+            "tests/isa.rs writes one instruction a line, `add r1, r1, #1` in 15 bytes, two past \
+             the instruction limit"
+        );
+        assert!(
+            u64::from(MAX_PROGRAM_LINES) * 7 + 14 <= u64::from(MAX_PROGRAM_BYTES),
+            "tests/isa.rs writes `add r1, r1, #1`, then `; more` lines of 7 bytes until one \
+             past the line limit"
+        );
+        assert!(
+            u64::from(MAX_LABEL_CHARS) * 2 + 11 <= u64::from(MAX_PROGRAM_BYTES),
+            "tests/isa.rs defines a label at the limit and branches to it on one line, \
+             `{{label}}: bnez r0, {{label}}`"
         );
     }
 }

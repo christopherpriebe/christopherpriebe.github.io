@@ -157,8 +157,9 @@ pub struct ParseError {
     /// The column where the problem starts, from 1, counted in Unicode
     /// scalar values.
     pub column: u32,
-    /// How many characters to underline from there; 0 when the problem is
-    /// the program as a whole.
+    /// How many characters to underline from there; 0 when there is nothing
+    /// to underline, as for an empty source or an empty line past the line
+    /// limit.
     pub length: u32,
     /// What is wrong: ``unknown instruction `lw`; use ld, st, add or bnez.``
     pub message: String,

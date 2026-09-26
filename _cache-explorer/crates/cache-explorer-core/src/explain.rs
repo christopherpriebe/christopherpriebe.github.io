@@ -17,7 +17,7 @@
 use crate::cache::Dirtiness;
 use crate::config::Replacement;
 use crate::format;
-use crate::geometry::{Geometry, Location, Placement};
+use crate::geometry::{highest_word, Geometry, Location, Placement};
 use crate::isa::Mnemonic;
 use crate::limits::{
     INSTRUCTION_BUDGET, MAX_LABEL_CHARS, MAX_PROGRAM_BYTES, MAX_PROGRAM_INSTRUCTIONS,
@@ -77,7 +77,7 @@ impl StallFor {
 }
 
 /// Why a line of a program or trace does not parse, as the program drawer
-/// lists it. An address out of range or misaligned, and a value the word
+/// lists it. An address out of range or misaligned, and an immediate the word
 /// cannot hold, are not here: typed input gives the same messages, which
 /// live with their error types.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -123,6 +123,12 @@ pub(crate) enum ParseProblem<'a> {
     StoreWithoutValue {
         /// Its address.
         addr: Addr,
+    },
+    /// A trace store's value that the word cannot hold. A trace value has no
+    /// sign, so the range the message gives is unsigned.
+    ValueTooWide {
+        /// The value, as its number.
+        value: u64,
     },
     /// A word where a label goes that is not spelled like one.
     NotALabel {
@@ -375,9 +381,9 @@ pub(crate) fn rank(
 
 /// A load's `Complete` line: "Read word 1 of way 1 (68) into r3." A load into
 /// r0 reads the word and drops it, since r0 always reads 0. A load issued by
-/// hand while a program is loaded and can go on, `beside_program`, says that
-/// the program's register changed: "Read word 1 of way 0 (53) into r1. A
-/// program is loaded, so its r1 now holds 53."
+/// hand while an assembly program is loaded and has not finished,
+/// `beside_program`, says that the program's register changed: "Read word 1
+/// of way 0 (53) into r1. A program is loaded, so its r1 now holds 53."
 pub(crate) fn load(
     word: WordIndex,
     way: WayIndex,
@@ -612,6 +618,13 @@ pub(crate) fn parse_problem(geometry: &Geometry, problem: ParseProblem<'_>) -> S
         ParseProblem::StoreWithoutValue { addr } => format!(
             "a store needs a value: W {} 7.",
             address(geometry, addr.get())
+        ),
+        ParseProblem::ValueTooWide { value } => format!(
+            "{} does not fit {} {}-byte word (0\u{2013}{}).",
+            format::data(value),
+            format::a_or_an(geometry.word_bytes()),
+            format::setting(geometry.word_bytes()),
+            format::setting(highest_word(geometry.word_bytes()))
         ),
         ParseProblem::NotALabel { text } => format!(
             "`{text}` cannot be a label; start it with a letter or `_`, and use only letters, \
@@ -1351,6 +1364,29 @@ mod tests {
                 }
             ),
             "`W` needs an address and a value, like `W 0xA4 7`."
+        );
+    }
+
+    #[test]
+    fn a_trace_value_too_wide_gives_the_word_s_unsigned_range() {
+        let too_wide = |word_bytes: WordBytes, value: u64| {
+            let geometry = geometry(&Config {
+                word_bytes,
+                ..Preset::DirectMapped8.config()
+            });
+            parse_problem(&geometry, ParseProblem::ValueTooWide { value })
+        };
+        assert_eq!(
+            too_wide(WordBytes::One, 300),
+            "300 does not fit a 1-byte word (0\u{2013}255)."
+        );
+        assert_eq!(
+            too_wide(WordBytes::Two, 70_000),
+            "70,000 does not fit a 2-byte word (0\u{2013}65,535)."
+        );
+        assert_eq!(
+            too_wide(WordBytes::Four, 1 << 32),
+            "4,294,967,296 does not fit a 4-byte word (0\u{2013}4,294,967,295)."
         );
     }
 

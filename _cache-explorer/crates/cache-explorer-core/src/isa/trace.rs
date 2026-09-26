@@ -6,11 +6,11 @@
 //!
 //! `R a` executes as `ld r1, [a]` and `W a v` as `st [a], #v`, and the line's
 //! text is what the CPU box and the log show for it. The address follows the
-//! assembler's rules; the value is required and must fit the word.
+//! assembler's rules; the value is required, has no sign and must fit the
+//! word as an unsigned number.
 
 use crate::explain::{self, ParseProblem};
 use crate::geometry::Geometry;
-use crate::input::fit_word;
 use crate::op::AccessKind;
 use crate::units::Register;
 
@@ -81,23 +81,30 @@ fn access(geometry: &Geometry, tokens: &[Token<'_>]) -> Result<Option<Instructio
                 explain::parse_problem(geometry, ParseProblem::StoreWithoutValue { addr });
             Err(Problem::at(first, message))
         }
-        (AccessKind::Write, [value]) => {
-            let magnitude = match value.number() {
-                NumberWord::Hex(Some(magnitude)) | NumberWord::Decimal(Some(magnitude)) => {
-                    magnitude
-                }
+        // The value comes first: a line reports its first problem, so a word
+        // after the value is extra only once the value itself is fine.
+        (AccessKind::Write, [value, after @ ..]) => {
+            let written = match value.number() {
+                NumberWord::Hex(Some(written)) | NumberWord::Decimal(Some(written)) => written,
                 NumberWord::Hex(None) | NumberWord::Decimal(None) => {
                     return Err(Problem::at(value, too_long(geometry, value)));
                 }
                 NumberWord::Other => return Err(shape(value)),
             };
-            let word = fit_word(false, magnitude, geometry.word_bytes())
-                .map_err(|message| Problem::at(value, message))?;
+            let word = geometry.fit_word(written);
+            if word.get() != written {
+                let message =
+                    explain::parse_problem(geometry, ParseProblem::ValueTooWide { value: written });
+                return Err(Problem::at(value, message));
+            }
+            if let Some(extra) = after.first() {
+                return Err(shape(extra));
+            }
             Ok(Some(Instruction::Store {
                 to: from,
                 value: Operand::Immediate(word.get()),
             }))
         }
-        (AccessKind::Read, [extra, ..]) | (AccessKind::Write, [_, extra, ..]) => Err(shape(extra)),
+        (AccessKind::Read, [extra, ..]) => Err(shape(extra)),
     }
 }

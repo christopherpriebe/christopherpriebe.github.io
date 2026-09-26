@@ -441,6 +441,28 @@ fn error_lengths_count_characters() {
 }
 
 #[test]
+fn a_mnemonic_ends_where_its_word_does() {
+    // `[` ends a word, so `st` needs no space before its address.
+    assert_eq!(
+        parse("st[0x0A4], #7", Asm),
+        Ok(ParseResult::Ok {
+            instructions: 1,
+            summary: "1 instruction \u{b7} next: st[0x0A4], #7".to_owned(),
+        })
+    );
+    // A register is a word, so `ld` needs a space or a tab before it.
+    assert_eq!(
+        asm_error("ldr1, [0x0A4]"),
+        Ok(place(
+            1,
+            1,
+            4,
+            "unknown instruction `ldr1`; use ld, st, add or bnez."
+        ))
+    );
+}
+
+#[test]
 fn examples_in_messages_follow_the_address_width_and_the_word() {
     let wide = Config {
         address_bits: 16,
@@ -568,13 +590,56 @@ fn a_trace_address_and_value_follow_the_assembler_s_rules() {
     for (source, expected) in cases {
         assert_eq!(trace_error(source), expected, "{source:?}");
     }
+    // A trace value has no sign, so the range it may take is unsigned.
+    for (source, length, message) in [
+        (
+            "W 0x0A4 300",
+            3,
+            "300 does not fit a 1-byte word (0\u{2013}255).",
+        ),
+        (
+            "W 0x0A4 0x100",
+            5,
+            "256 does not fit a 1-byte word (0\u{2013}255).",
+        ),
+    ] {
+        assert_eq!(
+            only_error(&words(WordBytes::One), source, Trace),
+            Ok(place(1, 9, length, message)),
+            "{source:?}"
+        );
+    }
     assert_eq!(
-        only_error(&words(WordBytes::One), "W 0x0A4 300", Trace),
+        errors_under(&words(WordBytes::One), "W 0x0A4 255", Trace),
+        Ok(Vec::new())
+    );
+}
+
+#[test]
+fn a_trace_store_reports_its_value_before_a_word_after_it() {
+    let cases = [
+        ("W 0x0A4, 7", Ok(place(1, 8, 1, W))),
+        ("W 0x0A4 abc 7", Ok(place(1, 9, 3, W))),
+        (
+            "W 0x0A4 99999999999999999999 7",
+            Ok(place(
+                1,
+                9,
+                20,
+                "`99999999999999999999` does not fit 64 bits.",
+            )),
+        ),
+    ];
+    for (source, expected) in cases {
+        assert_eq!(trace_error(source), expected, "{source:?}");
+    }
+    assert_eq!(
+        only_error(&words(WordBytes::One), "W 0x0A4 300 7", Trace),
         Ok(place(
             1,
             9,
             3,
-            "300 does not fit a 1-byte word (\u{2212}128 to 255)."
+            "300 does not fit a 1-byte word (0\u{2013}255)."
         ))
     );
 }
@@ -892,6 +957,50 @@ fn a_load_issued_by_hand_beside_a_program_overwrites_its_r1() {
         .iter()
         .filter(|event| event.entry == Some(2))
         .all(|event| !event.changed.contains(&ChangeRef::Pc)));
+}
+
+#[test]
+fn a_load_issued_by_hand_beside_a_stopped_program_still_says_its_r1_changed() {
+    let geometry = config().validate().unwrap();
+    let load = Issue::Load {
+        addr: geometry.addr(0x0A4).unwrap(),
+    };
+    let budget = count(INSTRUCTION_BUDGET);
+    // A program that faulted, and one that used its budget, are loaded and
+    // have not finished: the load writes the r1 they show.
+    for stopped in [
+        load_and_step("add r2, r0, #0xA6\nld r1, [r2]", 2),
+        load_and_step("add r1, r0, #1\nloop: bnez r1, loop", budget + 1),
+    ] {
+        let events = run(&config(), &[stopped, vec![load.clone()]].concat()).unwrap();
+        assert!(events.iter().any(|event| event.kind == EventKind::Error));
+        assert_eq!(
+            events.last().map(|event| event.explain.as_str()),
+            Some("Read word 1 of way 0 (53) into r1. A program is loaded, so its r1 now holds 53.")
+        );
+    }
+}
+
+#[test]
+fn a_load_issued_by_hand_beside_a_trace_says_nothing_of_it() {
+    // A trace reads no register, so the r1 the load writes is nothing it
+    // uses, even with one of its two accesses still to come.
+    let geometry = config().validate().unwrap();
+    let issues = [
+        Issue::Program {
+            source: "R 0x0B0\nW 0x0B4 7".to_owned(),
+            format: Trace,
+        },
+        Issue::Step,
+        Issue::Load {
+            addr: geometry.addr(0x0A4).unwrap(),
+        },
+    ];
+    let events = run(&config(), &issues).unwrap();
+    assert_eq!(
+        events.last().map(|event| event.explain.as_str()),
+        Some("Read word 1 of way 0 (53) into r1.")
+    );
 }
 
 #[test]

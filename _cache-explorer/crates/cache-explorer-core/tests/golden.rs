@@ -91,6 +91,7 @@ snapshots! {
     sample_trace => "sample-trace",
     count_down_loop => "count-down-loop",
     register_address_fault => "register-address-fault",
+    budget_exhaustion => "budget-exhaustion",
     store_truncation => "store-truncation",
     issue_beside_program => "issue-beside-program",
 }
