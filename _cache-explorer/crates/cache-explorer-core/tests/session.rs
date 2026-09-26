@@ -7,8 +7,11 @@
 //! the cursor as they were; configuration changes, applied at once as ops
 //! of their own or asked about first, and Reset; switching between Basics
 //! and Advanced; new runs keeping the program; the session's event limit,
-//! which the editors report before planning; and every state the cursor
-//! reaches equal to the fold's, from checkpoints or not.
+//! which the editors report before planning; every state the cursor
+//! reaches equal to the fold's, from checkpoints or not; and the gate a
+//! guided module's unanswered prediction sets, which refuses every op,
+//! holds the cursor at or before where the prediction began, and shows in
+//! the controls.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -17,14 +20,15 @@ use cache_explorer_core::limits::{
     SESSION_EVENT_LIMIT,
 };
 use cache_explorer_core::{
-    AccessKind, Boundary, CacheConfig, Config, ConfigChange, ConfigError, EditOutcome, EventKind,
-    MicroEvent, Op, OpError, OpIndex, Preset, ProgramFormat, ProgramSource, Replacement,
-    ReplayError, Session, StepOutcome, WordBytes, WritePolicy,
+    AccessKind, Boundary, CacheConfig, Config, ConfigChange, ConfigError, ControlAction,
+    EditOutcome, EventKind, MicroEvent, Op, OpError, OpIndex, Preset, ProgramFormat, ProgramSource,
+    Replacement, ReplayError, Session, StepOutcome, WordBytes, WritePolicy,
 };
 
 use support::{
-    addr, apply_all, config, drawer, edit, edit_word, editors_refuse_for_room, grouped, load, log,
-    log_end, pos, program, refused, session, store, table, varied, word,
+    addr, apply_all, config, drawer, edit, edit_word, editors_refuse_for_room, end_of,
+    gated_at_end, gated_mid_log, grouped, load, log, log_end, pos, program, refused, session,
+    store, table, varied, word,
 };
 
 /// An `add` then a load: two entries, the second an access.
@@ -51,8 +55,9 @@ const WALK: &str = concat!(
 #[cfg(test)]
 mod support {
     use cache_explorer_core::{
-        AccessKind, Addr, Config, EditOutcome, EventPos, MicroEvent, Op, OpError, Preset,
-        ProgramFormat, ProgramSource, RefusalReason, Session, Tone, WayForm, Word,
+        AccessKind, Addr, Boundary, Config, EditOutcome, EventPos, MicroEvent, Module, ModuleRun,
+        Op, OpError, Preset, ProgramFormat, ProgramSource, RefusalReason, Session, Tone, WayForm,
+        Word,
     };
 
     use super::{ADD_THEN_LOAD, WALK};
@@ -265,6 +270,36 @@ mod support {
         assert_eq!(session.position(), before.position());
         assert_eq!(session.machine(), before.machine());
         assert_eq!(log(session), log(&before), "{op:?}");
+    }
+
+    /// The module with a prediction in the middle of the log, taken to its
+    /// prediction on a new session.
+    pub(crate) fn gated_mid_log() -> (ModuleRun, Session) {
+        let mut session = session();
+        let mut run = ModuleRun::new(Module::parse(super::PREDICT_MID_LOG).unwrap());
+        run.start(&mut session).unwrap();
+        run.show_me(&mut session);
+        run.show_me(&mut session);
+        assert_eq!(session.position().label, "1.2");
+        assert!(session.gate().is_some());
+        (run, session)
+    }
+
+    /// The module whose first step is a prediction, started on a new session:
+    /// the prediction begins at the end of the log.
+    pub(crate) fn gated_at_end() -> (ModuleRun, Session) {
+        let mut session = session();
+        let mut run = ModuleRun::new(Module::parse(super::PREDICT_AT_END).unwrap());
+        run.start(&mut session).unwrap();
+        assert!(session.gate().is_some());
+        assert_eq!(session.position().boundary, Boundary::LogEnd);
+        (run, session)
+    }
+
+    /// The position after the last event of `session`'s log, which a gate
+    /// does not clamp.
+    pub(crate) fn end_of(session: &Session) -> EventPos {
+        pos(u32::try_from(session.events_range(0, u32::MAX).len()).unwrap())
     }
 }
 
@@ -1442,4 +1477,176 @@ fn no_call_rewrites_an_op_the_log_keeps() {
     // run's configuration there, which drops everything after it.
     assert_eq!(session.ops(), [Op::Config { config: config() }]);
     assert_eq!(session.position().run, 2);
+}
+
+/// A module that runs a three-line trace, moves the cursor back to access
+/// 1's tag compare, and asks a prediction there, so the prediction begins
+/// in the middle of the log.
+const PREDICT_MID_LOG: &str = r#"{
+  "id": "90-gate-mid-log",
+  "title": "Gate",
+  "description": "A prediction in the middle of the log.",
+  "advanced": false,
+  "preset": {
+    "addressBits": 12, "wordBytes": 4,
+    "cache": { "sizeBytes": 128, "lineBytes": 16, "associativity": 1, "replacement": "lru",
+               "writePolicy": "writeBack", "allocatePolicy": "writeAllocate" },
+    "seed": 12345, "advanced": false, "memoryInit": "pattern"
+  },
+  "program": { "source": "R 0x0A4\nR 0x0A8\nR 0x1A4", "format": "trace" },
+  "steps": [
+    { "kind": "instruct", "text": "Run the trace.",
+      "expect": { "counter": "accesses", "op": "==", "value": 3 },
+      "showMe": [{ "op": "run", "n": 3 }] },
+    { "kind": "observe", "text": "Go back to the first miss.",
+      "until": { "event": { "kind": "miss", "entry": 1 } } },
+    { "kind": "predict", "text": "Does the second load hit?", "options": ["Hit", "Miss"],
+      "answer": 0, "explain": "It is in the same line.",
+      "then": [{ "op": "issue", "kind": "read", "addr": "0x0A8" }] }
+  ]
+}"#;
+
+/// A module whose first step is a prediction, which begins at the end of
+/// the log.
+const PREDICT_AT_END: &str = r#"{
+  "id": "91-gate-at-end",
+  "title": "Gate",
+  "description": "A prediction at the end of the log.",
+  "advanced": false,
+  "preset": {
+    "addressBits": 12, "wordBytes": 4,
+    "cache": { "sizeBytes": 128, "lineBytes": 16, "associativity": 1, "replacement": "lru",
+               "writePolicy": "writeBack", "allocatePolicy": "writeAllocate" },
+    "seed": 12345, "advanced": false, "memoryInit": "pattern"
+  },
+  "steps": [
+    { "kind": "predict", "text": "Will `0x0A4` miss?", "options": ["Yes", "No"],
+      "answer": 0, "explain": "The cache is empty." }
+  ]
+}"#;
+
+/// The guard's message.
+const GUARD: &str = "Answer the prediction in the module panel first.";
+
+#[test]
+fn the_gate_refuses_every_op() {
+    let (_run, mut session) = gated_mid_log();
+    assert_eq!(OpError::Gated.to_string(), GUARD);
+    assert_eq!(session.gate().unwrap().message(), GUARD);
+    // Issue, an edit, Reset and "Reset and apply", a trace through Load,
+    // a step: each refused, and nothing changes.
+    let reset = Op::Config {
+        config: session.config().clone(),
+    };
+    let trace = Op::Program {
+        source: "R 0x0A4".to_owned(),
+        format: ProgramFormat::Trace,
+    };
+    for op in [
+        load(0x0A4),
+        store(0x0A4, 3),
+        edit_word(),
+        reset,
+        trace,
+        Op::Step,
+    ] {
+        refused(&mut session, &op, &OpError::Gated);
+    }
+    let two_way = Config {
+        cache: CacheConfig {
+            associativity: 2,
+            ..config().cache
+        },
+        ..config()
+    };
+    assert_eq!(session.propose_config(two_way), Err(OpError::Gated));
+    // Even a configuration equal to the displayed run's.
+    let same = session.config().clone();
+    assert_eq!(session.propose_config(same), Err(OpError::Gated));
+    // Space and Shift+Space at the end of the log append nothing, the
+    // drawer's program included.
+    let (_run, mut session) = gated_at_end();
+    let ops = session.op_count();
+    let idle = StepOutcome::Idle {
+        message: GUARD.to_owned(),
+    };
+    assert_eq!(session.step_event(None), idle);
+    assert_eq!(session.step_event(Some(&drawer("ld r1, [0x0A4]"))), idle);
+    assert_eq!(session.step_access(None), idle);
+    assert_eq!(session.step_access(Some(&drawer("ld r1, [0x0A4]"))), idle);
+    assert_eq!(session.op_count(), ops);
+    assert_eq!(session.position().boundary, Boundary::LogEnd);
+}
+
+#[test]
+fn the_gate_holds_the_cursor_at_or_before_its_limit() {
+    let (_run, mut session) = gated_mid_log();
+    let limit = session.gate().unwrap().seek_limit();
+    let end = end_of(&session);
+    assert!(limit < end);
+    let idle = StepOutcome::Idle {
+        message: GUARD.to_owned(),
+    };
+    // Space and Shift+Space inside the log refuse a move past the limit.
+    assert_eq!(session.step_event(None), idle);
+    assert_eq!(session.step_access(None), idle);
+    assert_eq!(session.position().pos, limit);
+    // A seek and a scrub stop at the limit.
+    session.seek(end);
+    assert_eq!(session.position().pos, limit);
+    session.scrub_to(session.op_count());
+    assert_eq!(session.position().pos, limit);
+    // Moves at or before the limit are allowed: a seek back, and Space up
+    // to the limit.
+    session.seek(pos(limit.get() - 1));
+    assert_eq!(session.step_event(None), StepOutcome::Moved);
+    assert_eq!(session.position().pos, limit);
+    // Undo is allowed; Redo is refused when its stop, the end of the Run
+    // op, lies past the limit.
+    assert!(session.undo());
+    let undone = session.position().pos;
+    assert!(undone < limit);
+    assert!(!session.redo());
+    assert_eq!(session.position().pos, undone);
+    // Shift+Space goes to the end of the program load, before the limit,
+    // then refuses the end of the Run op, past it.
+    assert_eq!(session.step_access(None), StepOutcome::Moved);
+    let loaded = session.position().pos;
+    assert!(undone < loaded && loaded < limit);
+    assert_eq!(session.step_access(None), idle);
+    assert_eq!(session.position().pos, loaded);
+    // The log is as it was.
+    assert_eq!(end_of(&session), end);
+}
+
+#[test]
+fn the_controls_show_the_gate() {
+    let (mut run, mut session) = gated_mid_log();
+    let limit = session.gate().unwrap().seek_limit();
+    let controls = session.state().controls;
+    assert_eq!(controls.enabled, [ControlAction::Undo]);
+    assert_eq!(controls.seek_limit, Some(limit));
+    assert_eq!(controls.guard.as_deref(), Some(GUARD));
+    assert_eq!(
+        serde_json::to_value(&controls).unwrap(),
+        serde_json::json!({"enabled": ["undo"], "seekLimit": limit.get(), "guard": GUARD})
+    );
+    // At position 0, Redo to the end of the preset's op, before the limit,
+    // is live, and Undo is not.
+    session.seek(pos(0));
+    let controls = session.state().controls;
+    assert_eq!(controls.enabled, [ControlAction::Redo]);
+    // Once the prediction is answered, the gate goes and the `then` op is
+    // appended at the cursor.
+    session.seek(limit);
+    run.select(0);
+    run.check(&mut session);
+    assert!(session.gate().is_none());
+    let controls = session.state().controls;
+    assert!(controls.seek_limit.is_none() && controls.guard.is_none());
+    assert!(controls.enabled.contains(&ControlAction::Issue));
+    assert!(controls.enabled.contains(&ControlAction::Load));
+    assert!(session.eval_predicate(
+        &serde_json::from_value(serde_json::json!({"lastAccess": {"addr": 0x0A8}})).unwrap()
+    ));
 }

@@ -665,6 +665,65 @@ pub(crate) fn check(
         .map_err(|refused| OpError::Edit(Box::new(refusal(machine, target, patch, &refused))))
 }
 
+/// Checks what of an `Edit` op holds whatever the cache and memory contain,
+/// against `machine`'s configuration: the target exists, the patch is of
+/// the target's kind and shape, a way's line fits the address width, and a
+/// memory word's address fits and is aligned and its value fits the word.
+/// The rules that read the contents are left to the op's own check when it
+/// is applied. A guided module's ops are checked this way when the module
+/// is read.
+///
+/// # Errors
+///
+/// [`OpError::Edit`] with the refusal of the first of these the edit
+/// breaks.
+pub(crate) fn check_form(
+    machine: &Machine,
+    target: &EditTarget,
+    patch: &EditPatch,
+) -> Result<(), OpError> {
+    let geometry = &machine.geometry;
+    let form = match (*target, patch) {
+        (EditTarget::Way { set, way }, EditPatch::Way(patch)) => way_form(machine, set, way, patch),
+        (EditTarget::Memory { addr }, EditPatch::Memory { value }) => {
+            if geometry.addr(addr.get()).is_none() {
+                Err(Malformed::AddressOutOfRange { addr }.into())
+            } else if geometry.fit_word(value.get()) != *value {
+                Err(Malformed::ValueTooWide { value: *value }.into())
+            } else if addr.get() % geometry.word_bytes() != 0 {
+                Err(Malformed::Misaligned { addr }.into())
+            } else {
+                Ok(())
+            }
+        }
+        // A patch of the other kind is refused before any rule reads the
+        // contents.
+        _ => decide(machine, target, patch).map(|_| ()),
+    };
+    form.map_err(|refused| OpError::Edit(Box::new(refusal(machine, target, patch, &refused))))
+}
+
+/// The form of a way's edit: the way exists, the patch has its shape, and
+/// the line it gives fits the address width.
+fn way_form(
+    machine: &Machine,
+    set: SetIndex,
+    way: WayIndex,
+    patch: &WayPatch,
+) -> Result<(), Refused> {
+    let geometry = &machine.geometry;
+    let ways = machine.cache.set(set).ok_or(Malformed::NoSuchSet { set })?;
+    ways.way(way).ok_or(Malformed::NoSuchWay { set, way })?;
+    check_shape(geometry, set, patch)?;
+    match patch
+        .line
+        .filter(|addr| geometry.addr(addr.get()).is_none())
+    {
+        Some(addr) => Err(Refused::LineOutOfRange { addr }),
+        None => Ok(()),
+    }
+}
+
 /// Why the session refuses any edit at its cursor before the rules see it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Blocked {

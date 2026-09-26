@@ -1,0 +1,125 @@
+{
+  "id": "02-fixture-switch-config",
+  "title": "Fixture: conflicts, then two ways",
+  "description": "`0x000` and `0x080` share a set: they *conflict* until the cache has two ways.",
+  "advanced": false,
+  "preset": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 128,
+      "lineBytes": 16,
+      "associativity": 1,
+      "replacement": "lru",
+      "writePolicy": "writeBack",
+      "allocatePolicy": "writeAllocate"
+    },
+    "seed": 12345,
+    "advanced": false,
+    "memoryInit": "pattern"
+  },
+  "program": { "source": "R 0x000\nR 0x080\nR 0x000\nR 0x080", "format": "trace" },
+  "steps": [
+    {
+      "kind": "instruct",
+      "text": "Run the trace.",
+      "expect": {
+        "all": [
+          { "counter": "accesses", "op": "==", "value": 4 },
+          { "counter": "compulsory", "op": "==", "value": 2 },
+          { "counter": "conflict", "op": "==", "value": 2 },
+          { "not": { "line": { "addr": "0x000" } } }
+        ]
+      },
+      "showMe": [{ "op": "run", "n": 4 }],
+      "callout": "stats"
+    },
+    {
+      "kind": "predict",
+      "text": "With two ways per set, how many of the four loads miss?",
+      "options": ["2", "4"],
+      "answer": 0,
+      "explain": "Both lines fit in set 0, so only the first load of each misses.",
+      "hint": "Two ways hold two lines of the same set.",
+      "then": [
+        {
+          "op": "config",
+          "config": {
+            "addressBits": 12,
+            "wordBytes": 4,
+            "cache": {
+              "sizeBytes": 128,
+              "lineBytes": 16,
+              "associativity": 2,
+              "replacement": "lru",
+              "writePolicy": "writeBack",
+              "allocatePolicy": "writeAllocate"
+            },
+            "seed": 12345,
+            "advanced": false,
+            "memoryInit": "pattern"
+          }
+        },
+        { "op": "run", "n": 4 }
+      ],
+      "callout": "config"
+    },
+    {
+      "kind": "observe",
+      "text": "Find the first hit of the new run.",
+      "until": { "event": { "kind": "hit", "entry": 3 } },
+      "callout": "log"
+    },
+    {
+      "kind": "instruct",
+      "text": "Switch Replacement to FIFO, then reset.",
+      "expect": { "config": { "associativity": 2, "replacement": "fifo" } },
+      "showMe": [
+        {
+          "op": "config",
+          "config": {
+            "addressBits": 12,
+            "wordBytes": 4,
+            "cache": {
+              "sizeBytes": 128,
+              "lineBytes": 16,
+              "associativity": 2,
+              "replacement": "fifo",
+              "writePolicy": "writeBack",
+              "allocatePolicy": "writeAllocate"
+            },
+            "seed": 12345,
+            "advanced": false,
+            "memoryInit": "pattern"
+          }
+        }
+      ],
+      "callout": "config"
+    },
+    {
+      "kind": "instruct",
+      "text": "Run the trace under FIFO.",
+      "expect": {
+        "all": [
+          { "way": { "set": 0, "way": 1 }, "valid": true, "rank": 0 },
+          { "counter": "hits", "op": ">=", "value": 2 },
+          { "not": { "line": { "addr": "0x040" } } },
+          {
+            "any": [
+              { "counter": "misses", "op": "==", "value": 3 },
+              { "counter": "misses", "op": "<=", "value": 2 }
+            ]
+          },
+          { "config": { "timed": false, "writePolicy": "writeBack" } }
+        ]
+      },
+      "showMe": [{ "op": "run", "n": 4 }],
+      "callout": { "set": 0 }
+    },
+    {
+      "kind": "explain",
+      "text": "FIFO and LRU agree here: nothing is reused out of order.",
+      "callout": "config"
+    }
+  ]
+}

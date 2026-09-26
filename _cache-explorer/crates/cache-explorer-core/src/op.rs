@@ -256,6 +256,11 @@ pub enum OpError {
         format::setting(MAX_RUN_STEPS)
     )]
     RunSteps,
+    /// A guided module's prediction is unanswered, and the session refuses
+    /// every op until it is answered, so nothing can reveal the answer
+    /// first.
+    #[error("Answer the prediction in the module panel first.")]
+    Gated,
     /// The log up to where the op would be appended leaves no room for one
     /// more entry under [`SESSION_EVENT_LIMIT`].
     #[error(
@@ -378,7 +383,7 @@ impl EditKind {
 /// issue's optional `value` reads it as no value, as serde reads a `null`
 /// option.
 #[derive(Default)]
-enum Field<T> {
+pub(crate) enum Field<T> {
     /// The field is not there.
     #[default]
     Absent,
@@ -396,12 +401,12 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Field<T> {
 
 impl<T> Field<T> {
     /// Whether the field is there, `null` included.
-    fn is_present(&self) -> bool {
+    pub(crate) fn is_present(&self) -> bool {
         !matches!(self, Field::Absent)
     }
 
     /// The field's value; none if it is absent or `null`.
-    fn value(self) -> Option<T> {
+    pub(crate) fn value(self) -> Option<T> {
         match self {
             Field::Value(value) => Some(value),
             Field::Absent | Field::Null => None,

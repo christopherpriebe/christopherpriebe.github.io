@@ -399,6 +399,39 @@ fn check(machine: &Machine, op: &Op, events: u64) -> Result<Checked, OpError> {
     }
 }
 
+/// Checks what of `op` holds whatever state a run has reached, against
+/// `machine`, a machine of the configuration in force: a configuration
+/// validates, an issued access's address and value fit, a program parses, a
+/// `Run` asks for a count in range, and an edit has the form
+/// [`edit::check_form`] checks. Whether there is a program to execute, and
+/// the rules of an edit that read the cache and memory, depend on the state
+/// the op meets, and are left to its own check. A guided module's ops are
+/// checked this way when the module is read.
+///
+/// # Errors
+///
+/// The [`OpError`] of the first of these checks `op` fails.
+pub(crate) fn check_form(machine: &Machine, op: &Op) -> Result<(), OpError> {
+    match op {
+        Op::Config { config } => config.validate().map(|_| ()).map_err(OpError::Config),
+        Op::Issue { kind, addr, value } => {
+            request(&machine.geometry, *kind, *addr, *value).map(|_| ())
+        }
+        Op::Program { source, format } => Program::parse(&machine.geometry, source, *format)
+            .map(|_| ())
+            .map_err(ParseFailure::into_op_error),
+        Op::Step | Op::StepAccess => Ok(()),
+        Op::Run { n } => {
+            if (1..=MAX_RUN_STEPS).contains(n) {
+                Ok(())
+            } else {
+                Err(OpError::RunSteps)
+            }
+        }
+        Op::Edit { target, patch } => edit::check_form(machine, target, patch),
+    }
+}
+
 /// The request of an access issued by hand, once its address and value are
 /// checked against `geometry`: the address must fit the width and be a
 /// multiple of the word size, and a store's value must fit the word. A load

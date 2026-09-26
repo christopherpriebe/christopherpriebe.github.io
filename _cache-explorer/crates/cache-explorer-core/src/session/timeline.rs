@@ -29,8 +29,8 @@ use crate::engine::{Origin, Request};
 use crate::event::{Cause, ChangeRef, EventKind, MicroEvent};
 use crate::explain;
 use crate::machine::Machine;
-use crate::op::ProgramFormat;
-use crate::units::{EventPos, Register, SetIndex, WayIndex};
+use crate::op::{AccessKind, ProgramFormat};
+use crate::units::{Addr, EventPos, Register, SetIndex, WayIndex};
 
 /// The log of the displayed run: which run it is, where it starts and ends,
 /// the step the cursor is on, the log's header, the live region's sentence,
@@ -199,6 +199,17 @@ pub(crate) struct EntryRecord {
     pub(crate) summary: Option<String>,
     /// The steps in the log before it.
     pub(crate) steps_before: u32,
+    /// The load or store it makes, for an access.
+    pub(crate) access: Option<EntryAccess>,
+}
+
+/// The load or store an access entry makes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct EntryAccess {
+    /// Whether it loads or stores.
+    pub(crate) kind: AccessKind,
+    /// The word's address.
+    pub(crate) addr: Addr,
 }
 
 /// The cells and counters an entry's events change, each with its value
@@ -260,6 +271,8 @@ struct Open {
     label: String,
     /// The format of the program it loads, for a program load.
     format: Option<ProgramFormat>,
+    /// The load or store it makes, for an access.
+    access: Option<EntryAccess>,
     /// The kinds of its events so far.
     kinds: Vec<EventKind>,
     /// Each cell and counter its events have changed, with its value before
@@ -340,6 +353,13 @@ impl Entries {
                 self.latest.clear();
             } else {
                 let (kind, label, format) = describe(event, after, self.pc);
+                let access = (kind == EntryKind::Access)
+                    .then_some(after.access.as_ref())
+                    .flatten()
+                    .map(|access| EntryAccess {
+                        kind: access.request.kind(),
+                        addr: access.request.addr(),
+                    });
                 self.open = Some(Open {
                     first: pos,
                     last: pos,
@@ -348,6 +368,7 @@ impl Entries {
                     kind,
                     label,
                     format,
+                    access,
                     kinds: Vec::new(),
                     before: BTreeMap::new(),
                     steps_before: self.steps,
@@ -415,6 +436,7 @@ impl Entries {
             label: open.label,
             summary,
             steps_before: open.steps_before,
+            access: open.access,
         };
         self.steps = self.steps.saturating_add(record.steps());
         self.records.push(record);

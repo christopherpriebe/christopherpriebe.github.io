@@ -62,12 +62,20 @@ pub use input::{AddressInput, ConfigNumberInput, IssueDraft, WordInput};
 pub use isa::{ParseError, ParseResult};
 pub use machine::{InvariantViolation, Machine};
 pub use memory::StaleInfo;
-pub use module::{TextSegment, TextStyle};
+pub use module::{
+    parse_module_index, AccessMatch, AddrLoc, AllPredicate, AnyPredicate, Callout, CalloutArea,
+    CellRef, CmpOp, ConfigMatch, ConfigPredicate, CounterPredicate, EvalContext, EventMatch,
+    EventPredicate, Feedback, FeedbackTone, LastAccessPredicate, LinePredicate, Markdown,
+    MarkupError, MemoryPredicate, Module, ModuleAction, ModuleActionKind, ModuleCard, ModuleError,
+    ModuleIndexView, ModuleProblem, ModuleRun, ModuleStepKind, ModuleView, NotPredicate,
+    OptionState, OptionView, Predicate, RegisterPredicate, Step, TextSegment, TextStyle,
+    WayPredicate,
+};
 pub use op::{
     AccessKind, EditPatch, EditTarget, Op, OpError, ProgramFormat, ProgramSource, WayPatch,
 };
 pub use session::{
-    Boundary, ConfigChange, EntryKind, EntryOutcome, EntryView, EventRow, Position, Replay,
+    Boundary, ConfigChange, EntryKind, EntryOutcome, EntryView, EventRow, Gate, Position, Replay,
     ReplayError, Session, StepOutcome, Tense, Timeline,
 };
 pub use share::{

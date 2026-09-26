@@ -33,10 +33,17 @@
 //! A session is written out as a share document, keeping each op's JSON as
 //! the op is appended, and is built again from one a slice of events at a
 //! time, each op checked as it was when it was appended.
+//!
+//! A guided module's unanswered prediction gates the session: while the
+//! gate is set, every op is refused and the cursor cannot pass the point
+//! where the prediction began. Each op appended is numbered with a serial
+//! that is never reused, which is how a module tells an op made since one
+//! of its steps began.
 
 mod checkpoints;
 mod cursor;
 mod edit;
+mod gate;
 mod load;
 mod timeline;
 
@@ -46,6 +53,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 pub use cursor::{Boundary, Position, StepOutcome};
+pub use gate::Gate;
 pub use timeline::{EntryKind, EntryOutcome, EntryView, EventRow, Tense, Timeline};
 
 pub(crate) use load::{position_in_op, Loader};
@@ -82,8 +90,17 @@ pub struct Session {
     /// The memory lines the student asked to see, the "Jump to" rows: a
     /// presentation setting too.
     watch: BTreeSet<LineAddr>,
+    /// Set by a guided module while its prediction is unanswered: every op
+    /// is refused, and the cursor stays at or before the gate's limit.
+    gate: Option<Gate>,
     /// Every op, the undone ones after the cursor included.
     ops: Vec<Op>,
+    /// Each op's serial, in the order of `ops`: the serials rise along the
+    /// log and are never reused, whatever is dropped.
+    serials: Vec<u64>,
+    /// The serial the last op appended was given, dropped or not; 0 before
+    /// the first.
+    last_serial: u64,
     /// Each op as a share document writes it, kept as ops are appended and
     /// dropped, so a share string written after a cursor move serializes
     /// only the cursor.
@@ -177,7 +194,10 @@ impl Session {
             advanced: initial.advanced,
             initial,
             watch: BTreeSet::new(),
+            gate: None,
             ops: Vec::new(),
+            serials: Vec::new(),
+            last_serial: 0,
             ops_json: Vec::new(),
             events: Vec::new(),
             op_ends: Vec::new(),
@@ -393,14 +413,27 @@ impl Session {
 
     /// Which controls are live: Undo away from position 0, Redo while there
     /// is an undo stop ahead, Reset while the displayed run has an entry up
-    /// to the cursor, and the rest always.
+    /// to the cursor, and the rest always. While a gate is set, Redo only
+    /// to a stop at or before its limit, and none of the controls that
+    /// append an op or move the cursor on.
     fn controls(&self) -> Controls {
         let mut enabled = Vec::new();
         if self.cursor.get() > 0 {
             enabled.push(ControlAction::Undo);
         }
-        if self.redo_target().is_some() {
+        let limit = self.limit();
+        if self
+            .redo_target()
+            .is_some_and(|target| limit.is_none_or(|limit| target <= limit))
+        {
             enabled.push(ControlAction::Redo);
+        }
+        if let Some(gate) = &self.gate {
+            return Controls {
+                enabled,
+                seek_limit: Some(gate.seek_limit()),
+                guard: Some(gate.message().to_owned()),
+            };
         }
         enabled.extend([
             ControlAction::Step,
@@ -433,20 +466,17 @@ impl Session {
     /// Appends `op` at the end of the op holding the cursor, or at position
     /// 0 if there is none, and moves the cursor to the op's last event.
     ///
-    /// The op is first checked against the machine there, and against the
-    /// session's event limit. Only once it is accepted is the log dropped
-    /// after that point: the op holding the cursor is kept whole, and the
-    /// undone ops after it go.
+    /// The op is first checked against the gate, if one is set, then
+    /// against the session's event limit and the machine there. Only once
+    /// it is accepted is the log dropped after that point: the op holding
+    /// the cursor is kept whole, and the undone ops after it go.
     ///
     /// # Errors
     ///
     /// The [`OpError`] refusing the op. A refused op changes nothing: the
     /// log, the undone ops and the cursor are as they were.
     pub fn apply(&mut self, op: Op) -> Result<Vec<MicroEvent>, OpError> {
-        let plan = self.plan(vec![op], false)?;
-        let first = slot(plan.base);
-        self.commit(plan);
-        Ok(self.events.get(first..).unwrap_or_default().to_vec())
+        self.apply_all(vec![op])
     }
 
     /// A change from the configuration bar to `config`.
@@ -461,9 +491,13 @@ impl Session {
     ///
     /// # Errors
     ///
-    /// [`OpError::Config`] if `config` is invalid, and the error refusing
-    /// the `Config` op when it would be applied at once.
+    /// [`OpError::Gated`] while a gate is set, [`OpError::Config`] if
+    /// `config` is invalid, and the error refusing the `Config` op when it
+    /// would be applied at once.
     pub fn propose_config(&mut self, config: Config) -> Result<ConfigChange, OpError> {
+        if self.gate.is_some() {
+            return Err(OpError::Gated);
+        }
         config.validate()?;
         let displayed = &self.current.config;
         let same = Config {
@@ -527,6 +561,22 @@ impl Session {
         )
     }
 
+    /// Appends `ops` together at the end of the op holding the cursor, as
+    /// [`Session::apply`] appends one: each is checked against the machine
+    /// the ones before it leave, and none is appended unless all are
+    /// accepted. Each is an op of its own, with its own undo stop. The
+    /// cursor goes to the last one's last event.
+    ///
+    /// # Errors
+    ///
+    /// The [`OpError`] refusing the first op refused; nothing changes.
+    pub(crate) fn apply_all(&mut self, ops: Vec<Op>) -> Result<Vec<MicroEvent>, OpError> {
+        let plan = self.plan(ops, false)?;
+        let first = slot(plan.base);
+        self.commit(plan);
+        Ok(self.events.get(first..).unwrap_or_default().to_vec())
+    }
+
     /// Checks `ops` in turn, each against the machine the ones before it
     /// leave, from the end of the op holding the cursor, and executes them
     /// there, without changing the session. With `keep_start`, the plan
@@ -534,8 +584,12 @@ impl Session {
     ///
     /// # Errors
     ///
-    /// The [`OpError`] refusing the first op refused.
+    /// [`OpError::Gated`] while a gate is set, and otherwise the
+    /// [`OpError`] refusing the first op refused.
     fn plan(&self, ops: Vec<Op>, keep_start: bool) -> Result<Plan, OpError> {
+        if self.gate.is_some() {
+            return Err(OpError::Gated);
+        }
         let (base, kept) = self.base();
         let mut machine = self.machine_at(base).map_err(ReplayError::into_op)?;
         let mut builder = Builder {
@@ -584,11 +638,17 @@ impl Session {
     }
 
     /// Makes `plan` the session's: drops the log after its base, appends its
-    /// ops and events, and puts the cursor on its last event.
+    /// ops and events, each op with the next serial, and puts the cursor on
+    /// its last event.
     fn commit(&mut self, plan: Plan) {
         let from = self.cursor;
         let kept = usize::try_from(plan.kept).unwrap_or(usize::MAX);
         self.ops.truncate(kept);
+        self.serials.truncate(kept);
+        for _ in &plan.ops {
+            self.last_serial = self.last_serial.saturating_add(1);
+            self.serials.push(self.last_serial);
+        }
         self.ops_json.truncate(kept);
         self.op_ends.truncate(kept);
         self.events.truncate(slot(plan.base));
@@ -870,21 +930,38 @@ fn replay_capturing(
             .filter(|&events| events > 0),
         captured: at_start,
     };
+    resume_into(&mut machine, start, ops, &mut sink, |sink| {
+        sink.remaining == 0
+    })?;
+    Ok((machine, sink.captured))
+}
+
+/// Replays `ops` into `machine`, the machine of `start`, from `start`'s op
+/// and progress, handing each event to `sink`, until the ops end or, after
+/// an op, `finished` says the sink has what it waits for; a sink stops the
+/// op it wants to end inside.
+fn resume_into<S: EventSink>(
+    machine: &mut Machine,
+    start: Start<'_>,
+    ops: &[Op],
+    sink: &mut S,
+    finished: impl Fn(&S) -> bool,
+) -> Result<(), ReplayError> {
     let mut next_id = u64::from(start.pos.get());
     let mut progress = start.progress;
     let first = usize::try_from(start.op.get()).unwrap_or(usize::MAX);
     for (index, op) in (0_u32..).zip(ops).skip(first) {
         let index = OpIndex::new_unchecked(index);
-        let mut out = Emitter::new(&mut sink, index, next_id);
-        engine::resume(&mut machine, op, progress, &mut out)
+        let mut out = Emitter::new(&mut *sink, index, next_id);
+        engine::resume(machine, op, progress, &mut out)
             .map_err(|error| ReplayError::Op { index, error })?;
         next_id = out.next_id();
         progress = OpProgress::START;
-        if sink.remaining == 0 {
+        if finished(sink) {
             break;
         }
     }
-    Ok((machine, sink.captured))
+    Ok(())
 }
 
 /// The position after `count` events.

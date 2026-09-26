@@ -167,9 +167,11 @@ impl Session {
 
     /// Moves the cursor to the next undo stop after it: from inside an op,
     /// that op's end; from the end of an op, position 0 included, the end of
-    /// the next op that is a stop. Returns false at the end of the log.
+    /// the next op that is a stop. Returns false at the end of the log, and
+    /// while a gate is set, when that stop lies beyond the gate's limit.
     pub fn redo(&mut self) -> bool {
         self.redo_target()
+            .filter(|&target| self.within_gate(target))
             .is_some_and(|target| self.move_to(target).is_ok())
     }
 
@@ -186,21 +188,23 @@ impl Session {
 
     /// Moves the cursor to the end of op `op_index − 1`, where `op_index`
     /// ops are complete; 0 moves it to position 0. A count beyond the log's
-    /// ops moves it to the end of the log.
+    /// ops moves it to the end of the log. While a gate is set, a target
+    /// beyond its limit is the limit.
     pub fn scrub_to(&mut self, op_index: u32) {
         let done = op_index.min(self.op_count());
         let target = done
             .checked_sub(1)
             .and_then(|last| self.op_end(OpIndex::new_unchecked(last)))
             .unwrap_or(EventPos::new_unchecked(0));
+        let target = self.clamp_to_gate(target);
         // A replay of accepted ops cannot fail; if it did, the cursor stays.
         let _ = self.move_to(target);
     }
 
     /// Moves the cursor to position `pos`, or to the end of the log if `pos`
-    /// is past it.
+    /// is past it; while a gate is set, to its limit if `pos` is beyond it.
     pub fn seek(&mut self, pos: EventPos) {
-        let target = pos.min(self.end());
+        let target = self.clamp_to_gate(pos.min(self.end()));
         // A replay of accepted ops cannot fail; if it did, the cursor stays.
         let _ = self.move_to(target);
     }
@@ -213,10 +217,15 @@ impl Session {
     /// own that undoes together with the step.
     ///
     /// Nothing happens, with the reason, when there is nothing to execute,
-    /// when the drawer's program does not parse, or when an op is refused.
+    /// when the drawer's program does not parse, or when an op is refused;
+    /// and while a gate is set, with its message, when the move would pass
+    /// its limit or an op would be appended.
     pub fn step_event(&mut self, program: Option<&ProgramSource>) -> StepOutcome {
         if self.cursor < self.end() {
             let next = EventPos::new_unchecked(self.cursor.get().saturating_add(1));
+            if !self.within_gate(next) {
+                return idle(OpError::Gated);
+            }
             return moved(self.move_to(next));
         }
         let mut ops: Vec<Op> = self.load_first(program).into_iter().collect();
@@ -266,6 +275,8 @@ impl Session {
     /// end of the next op. At the end of the log, loads the drawer's program
     /// as [`Session::step_event`] does, then executes instructions until one
     /// memory access has completed, and the cursor rests on the last event.
+    /// While a gate is set, nothing happens, with its message, when the move
+    /// would pass its limit or an op would be appended.
     pub fn step_access(&mut self, program: Option<&ProgramSource>) -> StepOutcome {
         if self.cursor < self.end() {
             let op = if self.is_op_end(self.cursor) {
@@ -276,6 +287,9 @@ impl Session {
             let target = op
                 .and_then(|op| self.op_end(op))
                 .unwrap_or_else(|| self.end());
+            if !self.within_gate(target) {
+                return idle(OpError::Gated);
+            }
             return moved(self.move_to(target));
         }
         let mut ops: Vec<Op> = self.load_first(program).into_iter().collect();

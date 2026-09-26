@@ -16,7 +16,7 @@
 
 use std::collections::BTreeSet;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::cache::{Set, Slot, Way};
 use crate::config::Config;
@@ -236,10 +236,12 @@ pub struct MemoryWordView {
     pub description: String,
 }
 
-/// A way of the cache, named by its set and its number.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+/// A way of the cache, named by its set and its number. A way predicate
+/// names its way this way too; one read from JSON is unchecked until the
+/// module is checked against the configuration in force.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WayLoc {
     /// The set.
     pub set: SetIndex,
