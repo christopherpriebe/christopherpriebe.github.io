@@ -794,6 +794,13 @@ fn a_change_on_an_empty_run_at_the_end_of_the_log_is_appended_at_once() {
         })
         .collect();
     assert_eq!(session.ops(), expected);
+    // Every change is in the share document, and a link opens them all.
+    let doc = session.share_doc();
+    assert_eq!(doc.config, config());
+    assert_eq!(doc.ops, expected);
+    let reopened = Session::from_share_string(&session.to_share_string()).unwrap();
+    assert_eq!(reopened.ops(), expected);
+    assert_eq!(reopened.position(), session.position());
     let mut runs = Vec::new();
     while session.undo() {
         runs.push(session.position().run);

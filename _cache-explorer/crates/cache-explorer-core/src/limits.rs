@@ -90,6 +90,14 @@ pub const CHECKPOINT_INTERVAL: u32 = 2_000;
 /// frame. Trades responsiveness against load time. Tunable.
 pub const LOAD_SLICE_EVENTS: u32 = 2_000;
 
+/// Bytes of program source that take about as long to parse as one event
+/// takes to replay. A sliced share load counts the parsing an op does as
+/// this many bytes an event: a `Program` op parses its source, and a
+/// `Config` op parses the loaded program again under its configuration,
+/// work its one `Setup` event does not measure. So a slice of such ops is no
+/// longer than a slice of events. Tunable, after measuring both.
+pub const PARSE_BYTES_PER_EVENT: u32 = 64;
+
 /// The largest share string, in bytes (64 KiB), so decoding a link is bounded
 /// whatever was pasted. Tunable.
 pub const MAX_SHARE_TEXT_BYTES: u32 = 64 * 1024;
@@ -174,6 +182,10 @@ mod tests {
             "the session checkpoints every CHECKPOINT_INTERVAL events"
         );
         assert!(LOAD_SLICE_EVENTS > 0, "a sliced load must make progress");
+        assert!(
+            PARSE_BYTES_PER_EVENT > 0,
+            "a sliced load divides the bytes it parses by PARSE_BYTES_PER_EVENT"
+        );
         assert!(
             RECENT_OUTCOMES > 0,
             "the sparkline shows at least the latest access"

@@ -85,28 +85,51 @@ impl Segments {
     }
 }
 
-/// `text` with every stretch between a pair of backticks in mono, the
+/// `text` with every stretch it quotes between backticks in mono, the
 /// backticks dropped, as serde and the core's messages quote a field or a
 /// name: ``unknown field `ways` `` becomes `unknown field ` and `ways` in
-/// mono. A backtick without a partner stays as it is.
+/// mono. A backtick opens a stretch only where it follows no letter, digit,
+/// `_` or backtick, and closes one only where none follows it, so a name
+/// quoted as it came keeps a backtick of its own: ``unknown field `a`b` ``
+/// sets ``a`b`` in mono. A backtick that opens no stretch, or opens one
+/// that nothing closes, stays as it is.
 pub(crate) fn code_spans(text: &str) -> Vec<TextSegment> {
-    let parts: Vec<&str> = text.split('`').collect();
-    // An odd number of parts means every backtick has a partner; otherwise
-    // the last one has none, and the text after it stays plain.
-    let paired = parts.len() % 2 == 1;
     let mut segments = Segments::new();
-    let last = parts.len().saturating_sub(1);
-    for (index, part) in parts.into_iter().enumerate() {
-        if index % 2 == 1 && (paired || index < last) {
-            segments.push(TextStyle::Code, part);
-        } else if index % 2 == 1 {
-            segments.push(TextStyle::Plain, "`");
-            segments.push(TextStyle::Plain, part);
-        } else {
-            segments.push(TextStyle::Plain, part);
+    // Where the running text starts, and where the open stretch of code
+    // starts, after its backtick, if one is open.
+    let mut plain = 0;
+    let mut open: Option<usize> = None;
+    let mut before: Option<char> = None;
+    let mut chars = text.char_indices().peekable();
+    while let Some((at, c)) = chars.next() {
+        if c == '`' {
+            let after = chars.peek().map(|&(_, next)| next);
+            match open {
+                None if !in_word(before) => {
+                    segments.push(TextStyle::Plain, text.get(plain..at).unwrap_or_default());
+                    open = Some(at.saturating_add(1));
+                }
+                Some(start) if !in_word(after) => {
+                    segments.push(TextStyle::Code, text.get(start..at).unwrap_or_default());
+                    open = None;
+                    plain = at.saturating_add(1);
+                }
+                _ => {}
+            }
         }
+        before = Some(c);
     }
+    // A stretch that nothing closes is running text, its backtick included.
+    let rest = open.map_or(plain, |start| start.saturating_sub(1));
+    segments.push(TextStyle::Plain, text.get(rest..).unwrap_or_default());
     segments.into_vec()
+}
+
+/// Whether `c`, beside a backtick, is part of a word, so that the backtick
+/// cannot open or close a stretch of code there: a letter, a digit, `_` or
+/// another backtick. The edge of the text, `None`, is not.
+fn in_word(c: Option<char>) -> bool {
+    c.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '`')
 }
 
 #[cfg(test)]
@@ -178,6 +201,41 @@ mod tests {
             [plain("a "), code("b"), plain(" c `d")]
         );
         assert_eq!(code_spans("`"), [plain("`")]);
+    }
+
+    #[test]
+    fn a_backtick_inside_a_quoted_name_stays_in_it() {
+        // serde quotes a name as it came, backticks and all.
+        assert_eq!(
+            code_spans("unknown field `a`b`, expected one of `schema_version`, `config`"),
+            [
+                plain("unknown field "),
+                code("a`b"),
+                plain(", expected one of "),
+                code("schema_version"),
+                plain(", "),
+                code("config"),
+            ]
+        );
+        assert_eq!(
+            code_spans("unknown field ``a``, expected `at`"),
+            [
+                plain("unknown field "),
+                code("`a`"),
+                plain(", expected "),
+                code("at"),
+            ]
+        );
+        // One that ends a name early spoils that name alone.
+        assert_eq!(
+            code_spans("unknown field `a` b`, expected one of `at`"),
+            [
+                plain("unknown field "),
+                code("a"),
+                plain(" b`, expected one of "),
+                code("at"),
+            ]
+        );
     }
 
     #[test]

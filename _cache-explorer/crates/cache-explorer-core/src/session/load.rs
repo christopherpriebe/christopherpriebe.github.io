@@ -4,7 +4,10 @@
 //!
 //! A slice ends at an entry boundary: between two ops, or between two
 //! instructions of a `Run` or `StepAccess` op, which the next slice resumes
-//! from there, as a seek resumes one from a checkpoint. Each op is checked
+//! from there, as a seek resumes one from a checkpoint. It is bounded by
+//! work, counted in events: the events it replays, and the programs its ops
+//! parse, which one `Setup` event does not measure, at
+//! [`PARSE_BYTES_PER_EVENT`] bytes an event. Each op is checked
 //! as [`Session::apply`] checks it, the session's event limit included, so a
 //! log that could not have been built cannot be loaded either. The session
 //! built is the one the ops would have built had they been applied one by
@@ -17,7 +20,7 @@
 use super::{Builder, Entries, Plan, ReplayError, Session};
 use crate::engine::{self, Emitter, EventSink, Flow, OpProgress};
 use crate::event::MicroEvent;
-use crate::limits::MAX_EVENTS_PER_ENTRY;
+use crate::limits::{MAX_EVENTS_PER_ENTRY, PARSE_BYTES_PER_EVENT};
 use crate::machine::Machine;
 use crate::op::Op;
 use crate::units::{EventPos, OpIndex};
@@ -73,9 +76,9 @@ impl Loader {
 
     /// Replays the next slice: at least one entry, then more while another
     /// entry is sure to fit within `max_events` events of the slice, since
-    /// an entry has fewer than [`MAX_EVENTS_PER_ENTRY`]. The slice ends at an
-    /// entry boundary, inside an op or between two. Returns true once every
-    /// op has been replayed.
+    /// an entry has fewer than [`MAX_EVENTS_PER_ENTRY`], its parsing counted
+    /// as events too. The slice ends at an entry boundary, inside an op or
+    /// between two. Returns true once every op has been replayed.
     ///
     /// # Errors
     ///
@@ -84,6 +87,8 @@ impl Loader {
     /// after it is replayed.
     pub(crate) fn advance(&mut self, max_events: u32) -> Result<bool, ReplayError> {
         let start = self.builder.events.len();
+        // The slice's parsing so far, in events.
+        let mut parsed: u64 = 0;
         loop {
             let index = OpIndex::new_unchecked(self.next);
             let Some(op) = self
@@ -92,16 +97,20 @@ impl Loader {
             else {
                 return Ok(true);
             };
-            if self.progress == OpProgress::START
-                && full(self.builder.events.len().saturating_sub(start), max_events)
-            {
-                return Ok(false);
+            if self.progress == OpProgress::START {
+                let parsing = parsed.saturating_add(parse_cost(&self.machine, op));
+                let replayed = self.builder.events.len().saturating_sub(start);
+                if full(replayed, parsing, max_events) {
+                    return Ok(false);
+                }
+                parsed = parsing;
             }
             self.builder.op = index;
             let first = self.builder.next_id();
             let mut sink = Slice {
                 builder: &mut self.builder,
                 start,
+                parsed,
                 max_events,
                 stopped: None,
             };
@@ -228,11 +237,31 @@ fn op_start(op_ends: &[EventPos], op: u32) -> EventPos {
         .unwrap_or(EventPos::new_unchecked(0))
 }
 
-/// Whether a slice that has replayed `replayed` events is full: it has
-/// replayed something, and another entry might not fit within `max_events`.
-fn full(replayed: usize, max_events: u32) -> bool {
+/// Whether a slice that has replayed `replayed` events, and parsed programs
+/// worth `parsed` events, the next op's included, is full: it has replayed
+/// something, and another entry might not fit within `max_events`.
+fn full(replayed: usize, parsed: u64, max_events: u32) -> bool {
     let replayed = u64::try_from(replayed).unwrap_or(u64::MAX);
-    replayed > 0 && replayed.saturating_add(u64::from(MAX_EVENTS_PER_ENTRY)) > u64::from(max_events)
+    replayed > 0
+        && replayed
+            .saturating_add(parsed)
+            .saturating_add(u64::from(MAX_EVENTS_PER_ENTRY))
+            > u64::from(max_events)
+}
+
+/// The parsing `op` does when it starts on `machine`, in events: a
+/// `Program` op parses its source, and a `Config` op parses the loaded
+/// program again under the new configuration.
+fn parse_cost(machine: &Machine, op: &Op) -> u64 {
+    let bytes = match op {
+        Op::Program { source, .. } => source.len(),
+        Op::Config { .. } => machine
+            .program
+            .as_ref()
+            .map_or(0, |program| program.source().len()),
+        Op::Issue { .. } | Op::Step | Op::StepAccess | Op::Run { .. } | Op::Edit { .. } => 0,
+    };
+    u64::try_from(bytes).unwrap_or(u64::MAX) / u64::from(PARSE_BYTES_PER_EVENT)
 }
 
 /// The sink of a slice: builds the log as a session's builder does, and
@@ -242,6 +271,8 @@ struct Slice<'b> {
     builder: &'b mut Builder,
     /// The events before the slice.
     start: usize,
+    /// The slice's parsing, in events.
+    parsed: u64,
     /// The events the slice may replay.
     max_events: u32,
     /// The progress of the op where the slice stopped it, if it did.
@@ -262,7 +293,7 @@ impl EventSink for Slice<'_> {
         // when the op resumes from this boundary, it is not due again.
         self.builder.boundary(machine, progress);
         let replayed = self.builder.events.len().saturating_sub(self.start);
-        if full(replayed, self.max_events) {
+        if full(replayed, self.parsed, self.max_events) {
             self.stopped = Some(progress);
             Flow::Stop
         } else {
@@ -277,7 +308,10 @@ mod tests {
 
     use super::*;
     use crate::config::Preset;
-    use crate::limits::{CHECKPOINT_INTERVAL, LOAD_SLICE_EVENTS};
+    use crate::limits::{
+        CHECKPOINT_INTERVAL, LOAD_SLICE_EVENTS, MAX_PROGRAM_BYTES, MAX_PROGRAM_LINES,
+        MAX_RUN_STEPS, PARSE_BYTES_PER_EVENT,
+    };
     use crate::op::{AccessKind, ProgramFormat};
     use crate::units::Addr;
 
@@ -397,6 +431,78 @@ mod tests {
         // Small slices end inside the ops that execute several instructions.
         let (_, slices) = loaded(&ops, 1, &whole);
         assert!(slices.len() > ops.len() * 2);
+    }
+
+    /// An assembly program as long as a program may be: `ENDLESS`, then
+    /// comment lines up to `MAX_PROGRAM_BYTES`, each long enough that there
+    /// are fewer than `MAX_PROGRAM_LINES`.
+    fn long_program() -> String {
+        let width = usize::try_from(MAX_PROGRAM_BYTES / MAX_PROGRAM_LINES + 1).unwrap();
+        let line = format!("; {}\n", "x".repeat(width));
+        let mut source = format!("{ENDLESS}\n");
+        while source.len() + line.len() <= usize::try_from(MAX_PROGRAM_BYTES).unwrap() {
+            source.push_str(&line);
+        }
+        source
+    }
+
+    #[test]
+    fn a_slice_counts_the_programs_its_ops_parse() {
+        // A long program, then new runs that each parse it again, and runs
+        // of it, which slices end inside: each parse is one event, and far
+        // more work than one.
+        let source = long_program();
+        let mut ops = vec![program(&source)];
+        for change in 0..24 {
+            let preset = if change % 2 == 0 {
+                Preset::TwoWayLru
+            } else {
+                Preset::FourWayWriteBack
+            };
+            ops.push(Op::Config {
+                config: preset.config(),
+            });
+        }
+        let run = Op::Run { n: MAX_RUN_STEPS };
+        ops.extend([run.clone(), program(&source), run]);
+        let whole = applied(&ops);
+        let parse = u64::try_from(source.len()).unwrap() / u64::from(PARSE_BYTES_PER_EVENT);
+        // Every op here that parses parses the long program.
+        let parsing = |op: &Op| matches!(op, Op::Program { .. } | Op::Config { .. });
+        for max_events in [1, MAX_EVENTS_PER_ENTRY, 700, LOAD_SLICE_EVENTS, u32::MAX] {
+            let mut loader = Loader::new(empty(), ops.clone());
+            loop {
+                let events = loader.events().len();
+                let replayed = loader.op_ends().len();
+                let resumed = loader.progress != OpProgress::START;
+                let done = loader.advance(max_events).unwrap();
+                let slice = loader.events().get(events..).unwrap();
+                // The ops the slice started: those it finished, but one it
+                // resumed, and one it stopped inside.
+                let started = replayed + usize::from(resumed)
+                    ..loader.op_ends().len() + usize::from(loader.progress != OpProgress::START);
+                let parsed = ops
+                    .get(started)
+                    .unwrap()
+                    .iter()
+                    .filter(|op| parsing(op))
+                    .count();
+                let work =
+                    u64::try_from(slice.len()).unwrap() + u64::try_from(parsed).unwrap() * parse;
+                // A slice holds at least an entry, then no more work than
+                // its events.
+                let entries = slice.iter().filter(|event| event.seq == 1).count();
+                assert!(
+                    entries <= 1 || work <= u64::from(max_events),
+                    "{max_events}: {entries} entries, {work} events of work"
+                );
+                if done {
+                    break;
+                }
+            }
+            let end = loader.op_ends().last().copied().unwrap();
+            assert_eq!(loader.finish(end).events, whole.events, "{max_events}");
+        }
     }
 
     #[test]

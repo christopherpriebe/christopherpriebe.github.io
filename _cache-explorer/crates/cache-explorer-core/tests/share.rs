@@ -11,20 +11,22 @@
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
 use cache_explorer_core::limits::{
-    LOAD_SLICE_EVENTS, MAX_ADDRESS_BITS, MAX_CYCLES, MAX_EVENTS_PER_ENTRY, MAX_LINES,
-    MAX_PROGRAM_BYTES, MAX_SEED, MAX_SHARE_JSON_BYTES, MAX_SHARE_OPS, MAX_SHARE_TEXT_BYTES,
-    MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS, MIN_CYCLES, SESSION_EVENT_LIMIT,
+    INSTRUCTION_BUDGET, LOAD_SLICE_EVENTS, MAX_ADDRESS_BITS, MAX_CYCLES, MAX_EVENTS_PER_ENTRY,
+    MAX_LINES, MAX_PROGRAM_BYTES, MAX_SEED, MAX_SHARE_JSON_BYTES, MAX_SHARE_OPS,
+    MAX_SHARE_TEXT_BYTES, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS, MIN_CYCLES, PARSE_BYTES_PER_EVENT,
+    SESSION_EVENT_LIMIT,
 };
 use cache_explorer_core::{
-    CacheConfig, Config, ConfigError, ConfigNumberField, EncodingError, LoadError, LoadProgress,
-    Op, OpError, Preset, ProgramFormat, Session, ShareAt, ShareDoc, ShareLoad, ShareSummary,
-    TextSegment, TooLarge, WordBytes, SCHEMA_VERSION,
+    CacheConfig, Config, ConfigError, ConfigNumberField, EncodingError, LoadError, LoadFailure,
+    LoadProgress, Op, OpError, Preset, ProgramFormat, Session, ShareAt, ShareDoc, ShareLoad,
+    ShareSummary, TextSegment, TooLarge, WordBytes, SCHEMA_VERSION,
 };
 use serde_json::{json, Value};
 
 use support::{
     apply_all, code, config, counted, failure_of, file_failure, grouped, link, link_failure,
-    link_of, load, loaded, pathological, plain, pos, same, session, varied, with_ops,
+    link_of, load, loaded, long_program, pathological, plain, pos, program, same, session, varied,
+    with_ops,
 };
 
 /// A loop without an exit and without a memory access: one event per
@@ -37,7 +39,7 @@ const ENDLESS: &str = "        add r1, r0, #1\nloop:   bnez r1, loop";
 mod support {
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine as _;
-    use cache_explorer_core::limits::LOAD_SLICE_EVENTS;
+    use cache_explorer_core::limits::{LOAD_SLICE_EVENTS, MAX_PROGRAM_BYTES, MAX_PROGRAM_LINES};
     use cache_explorer_core::{
         AccessKind, Config, EventPos, LoadError, LoadFailure, LoadProgress, Op, Preset,
         ProgramFormat, Session, ShareLoad, TextSegment, TextStyle, Word,
@@ -98,6 +100,36 @@ mod support {
             source: source.to_owned(),
             format: ProgramFormat::Asm,
         }
+    }
+
+    /// An assembly program as long as a program may be: one instruction,
+    /// then comment lines up to `MAX_PROGRAM_BYTES`, each long enough that
+    /// there are fewer than `MAX_PROGRAM_LINES`. With a seed, the comments
+    /// are pseudo-random text that deflate cannot shorten much, a different
+    /// text for each seed; without one, the same text on every line.
+    pub(crate) fn long_program(seed: Option<u64>) -> String {
+        const ALPHABET: &[u8; 64] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let width = (MAX_PROGRAM_BYTES / MAX_PROGRAM_LINES + 1).max(32) as usize;
+        let mut state = seed.unwrap_or_default() | 1;
+        let mut source = String::from("add r1, r0, #1\n");
+        while source.len() + width + 3 <= MAX_PROGRAM_BYTES as usize {
+            source.push_str("; ");
+            for index in 0..width {
+                let pick = if seed.is_some() {
+                    // xorshift64: six bits of each state.
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    (state >> 58) as usize
+                } else {
+                    index % ALPHABET.len()
+                };
+                source.push(char::from(ALPHABET[pick]));
+            }
+            source.push('\n');
+        }
+        source
     }
 
     /// An edit of the memory word at 0x0A4 to 1.
@@ -315,6 +347,10 @@ fn text(segments: &[TextSegment]) -> String {
 const LINK_LEAD: &str =
     "This link doesn't describe a cache the Interactive Cache Explorer can build.";
 
+/// The lead of a file that cannot be opened.
+const FILE_LEAD: &str =
+    "This file doesn't describe a cache the Interactive Cache Explorer can build.";
+
 #[test]
 fn a_share_string_reopens_the_session_wherever_its_cursor_is() {
     let mut original = varied();
@@ -367,7 +403,7 @@ fn the_document_keeps_its_keys_as_the_spec_spells_them() {
         json!({
             "schema_version": SCHEMA_VERSION,
             "config": {
-                "addressBits": 12,
+                "addressBits": Config::default().address_bits,
                 "wordBytes": 4,
                 "cache": {
                     "sizeBytes": 128,
@@ -621,6 +657,45 @@ fn json_that_is_not_a_document_names_its_line_and_column() {
     let failure = file_failure(broken);
     assert_eq!(failure.title, "Could not open file");
     assert_eq!(failure.contents.as_deref(), Some(broken));
+    // An empty file, or a link that unpacks to nothing, ends before its
+    // first character, which is column 1 as columns count.
+    let empty = LoadError::Json {
+        line: 1,
+        column: 1,
+        message: "EOF while parsing a value".to_owned(),
+    };
+    assert_eq!(Session::from_json("").unwrap_err(), empty);
+    assert_eq!(Session::from_share_string(&link("")).unwrap_err(), empty);
+    assert_eq!(
+        empty.to_string(),
+        "Line 1, column 1: EOF while parsing a value"
+    );
+    assert_eq!(
+        file_failure("").message,
+        [plain("Line 1, column 1: EOF while parsing a value")]
+    );
+    // Text that ends just after a line break ends in the next line's first
+    // column.
+    let LoadError::Json { line, column, .. } = Session::from_json("{\n").unwrap_err() else {
+        panic!("an object cut short");
+    };
+    assert_eq!((line, column), (2, 1));
+    // A backtick in a name serde quotes stays in the name, which is still
+    // set in mono, as are the names after it.
+    let quoted = "{\"schema_version\":1,\"a`b\":2}";
+    let error = Session::from_json(quoted).unwrap_err();
+    let LoadError::Json { line, column, .. } = &error else {
+        panic!("{error:?}");
+    };
+    assert_eq!(
+        file_failure(quoted).message.get(..4).unwrap(),
+        [
+            plain(&format!("Line {line}, column {column}: unknown field ")),
+            code("a`b"),
+            plain(", expected one of "),
+            code("schema_version"),
+        ]
+    );
 }
 
 #[test]
@@ -822,10 +897,7 @@ fn a_file_that_cannot_be_opened_says_it_is_a_file() {
     let json = json!({"schema_version": 1, "config": narrow, "ops": []}).to_string();
     let failure = file_failure(&json);
     assert_eq!(failure.title, "Could not open file");
-    assert_eq!(
-        failure.lead,
-        "This file doesn't describe a cache the Interactive Cache Explorer can build."
-    );
+    assert_eq!(failure.lead, FILE_LEAD);
     assert_eq!(
         failure.message,
         [
@@ -873,8 +945,18 @@ fn a_share_string_one_byte_over_its_limit_is_too_large() {
             grouped(MAX_SHARE_TEXT_BYTES)
         )
     );
-    let failure = link_failure(&over);
-    assert_eq!(failure.contents, None);
+    // Nothing was decoded, so there is nothing to show, repair or replay.
+    assert_eq!(
+        link_failure(&over),
+        LoadFailure {
+            title: "Could not open link".to_owned(),
+            lead: LINK_LEAD.to_owned(),
+            message: vec![plain(&error.to_string())],
+            contents: None,
+            repair: None,
+            prefix: None,
+        }
+    );
 }
 
 #[test]
@@ -913,7 +995,18 @@ fn json_one_byte_over_its_limit_is_too_large() {
             grouped(MAX_SHARE_JSON_BYTES)
         )
     );
-    assert_eq!(file_failure(&over).contents, None);
+    // The file is not read, so there is nothing to show, repair or replay.
+    assert_eq!(
+        file_failure(&over),
+        LoadFailure {
+            title: "Could not open file".to_owned(),
+            lead: FILE_LEAD.to_owned(),
+            message: vec![plain(&error.to_string())],
+            contents: None,
+            repair: None,
+            prefix: None,
+        }
+    );
     // A link unpacks no further than the limit.
     let error = Session::from_share_string(&link(&over)).unwrap_err();
     assert_eq!(
@@ -926,6 +1019,17 @@ fn json_one_byte_over_its_limit_is_too_large() {
             "The link unpacks to more than the {} bytes of JSON that can be opened.",
             grouped(MAX_SHARE_JSON_BYTES)
         )
+    );
+    assert_eq!(
+        link_failure(&link(&over)),
+        LoadFailure {
+            title: "Could not open link".to_owned(),
+            lead: LINK_LEAD.to_owned(),
+            message: vec![plain(&error.to_string())],
+            contents: None,
+            repair: None,
+            prefix: None,
+        }
     );
 }
 
@@ -955,8 +1059,25 @@ fn a_log_one_op_over_its_limit_is_too_large() {
         )
     );
     assert_eq!(Session::from_json(&over).unwrap_err(), error);
-    // The document was read, so its contents are there to show.
-    assert!(file_failure(&over).contents.is_some());
+    // The document was read, so its contents are there to show; nothing
+    // replayed, so there is nothing to repair or to open before it.
+    let read: ShareDoc = serde_json::from_str(&over).unwrap();
+    let failure = |title: &str, lead: &str| LoadFailure {
+        title: title.to_owned(),
+        lead: lead.to_owned(),
+        message: vec![plain(&error.to_string())],
+        contents: Some(read.to_json()),
+        repair: None,
+        prefix: None,
+    };
+    assert_eq!(
+        link_failure(&link(&over)),
+        failure("Could not open link", LINK_LEAD)
+    );
+    assert_eq!(
+        file_failure(&over),
+        failure("Could not open file", FILE_LEAD)
+    );
 }
 
 #[test]
@@ -991,6 +1112,28 @@ fn a_program_one_byte_over_its_limit_is_too_large() {
             grouped(MAX_PROGRAM_BYTES + 1),
             grouped(MAX_PROGRAM_BYTES)
         )
+    );
+    // The document was read, the program too long included, so its
+    // contents are there to show; nothing replayed, so there is nothing to
+    // repair or to open before it.
+    let over = doc(MAX_PROGRAM_BYTES + 1);
+    let read: ShareDoc = serde_json::from_str(&over).unwrap();
+    let failure = |title: &str, lead: &str| LoadFailure {
+        title: title.to_owned(),
+        lead: lead.to_owned(),
+        message: vec![plain(&error.to_string())],
+        contents: Some(read.to_json()),
+        repair: None,
+        prefix: None,
+    };
+    assert_eq!(
+        link_failure(&link(&over)),
+        failure("Could not open link", LINK_LEAD)
+    );
+    assert_eq!(Session::from_json(&over).unwrap_err(), error);
+    assert_eq!(
+        file_failure(&over),
+        failure("Could not open file", FILE_LEAD)
     );
 }
 
@@ -1046,6 +1189,157 @@ fn the_session_limit_stops_a_pathological_link() {
 }
 
 #[test]
+fn a_slice_counts_the_programs_its_ops_parse() {
+    // A program as long as a program may be, then configuration changes that
+    // each parse it again under the new configuration: one event an op, but
+    // a program's parsing each.
+    let source = long_program(None);
+    let changes: u32 = 64;
+    let mut original = Session::with_config(Preset::TwoWayLru.config()).unwrap();
+    apply_all(&mut original, [program(&source)]);
+    for change in 0..changes {
+        let preset = if change % 2 == 0 {
+            Preset::FourWayWriteBack
+        } else {
+            Preset::TwoWayLru
+        };
+        apply_all(
+            &mut original,
+            [Op::Config {
+                config: preset.config(),
+            }],
+        );
+    }
+    assert!(original.state().program.is_some(), "every run keeps it");
+    let link = original.to_share_string();
+    let mut load = ShareLoad::from_share_string(&link);
+    let progress = loaded(&mut load, LOAD_SLICE_EVENTS);
+    // Each slice parses no more than its events' worth of source, so the
+    // program and its parses again take a slice for every
+    // `LOAD_SLICE_EVENTS` of them.
+    let parses = u64::from(changes + 1) * (source.len() as u64 / u64::from(PARSE_BYTES_PER_EVENT));
+    assert!(
+        progress.len() as u64 >= parses / u64::from(LOAD_SLICE_EVENTS),
+        "{} slices for {parses} events of parsing",
+        progress.len()
+    );
+    assert!(matches!(progress.last(), Some(LoadProgress::Done { .. })));
+    same(
+        &load.take_session().unwrap(),
+        &original,
+        "sliced by parsing",
+    );
+}
+
+#[test]
+fn the_loading_state_opens_at_the_step_named_once_the_replay_passes_it() {
+    // A place in the middle of one long op, which slices end inside.
+    let mut original = Session::with_config(Preset::TwoWayLru.config()).unwrap();
+    apply_all(&mut original, [program(ENDLESS), Op::StepAccess]);
+    original.seek(pos(1 + INSTRUCTION_BUDGET / 2));
+    let opening = original.share_summary().opening_step;
+    assert!(opening > 0 && opening < original.share_summary().step_count);
+    let link = original.to_share_string();
+    let mut passed = false;
+    for max_events in [1, MAX_EVENTS_PER_ENTRY, 100, LOAD_SLICE_EVENTS] {
+        let mut load = ShareLoad::from_share_string(&link);
+        let progress = loaded(&mut load, max_events);
+        let Some((LoadProgress::Done { summary }, replaying)) = progress.split_last() else {
+            panic!("{max_events}: {:?}", progress.last());
+        };
+        assert_eq!(summary.opening_step, opening, "{max_events}");
+        for progress in replaying {
+            let LoadProgress::Replaying { summary: so_far } = progress else {
+                panic!("{progress:?}");
+            };
+            // The steps so far until the replay has passed the place, then
+            // the place's step, even while its op is still replaying.
+            assert_eq!(
+                so_far.opening_step,
+                so_far.step_count.min(opening),
+                "{max_events}: {} steps so far",
+                so_far.step_count
+            );
+            passed |= so_far.step_count > opening;
+        }
+        same(
+            &load.take_session().unwrap(),
+            &original,
+            &format!("slices of {max_events}"),
+        );
+    }
+    assert!(passed, "a slice ends inside the op, after the place");
+}
+
+#[test]
+fn a_file_too_large_for_a_link_offers_no_link() {
+    // Programs of text deflate cannot shorten much, until the document is
+    // more than a link can hold, though not more than a file can.
+    let mut doc = ShareDoc {
+        schema_version: SCHEMA_VERSION,
+        config: config(),
+        ops: Vec::new(),
+        at: None,
+    };
+    let mut seed = 0;
+    while doc.to_share_string().len() <= MAX_SHARE_TEXT_BYTES as usize {
+        seed += 1;
+        doc.ops.push(program(&long_program(Some(seed))));
+    }
+    assert!(doc.to_json().len() <= MAX_SHARE_JSON_BYTES as usize);
+    let programs = doc.ops.len();
+    // A first run whose cache fails: its repair is a link too long to open.
+    let three = Config {
+        cache: CacheConfig {
+            associativity: 3,
+            ..config().cache
+        },
+        ..config()
+    };
+    let bad = ShareDoc {
+        config: three.clone(),
+        ..doc.clone()
+    };
+    let failure = file_failure(&bad.to_json());
+    assert_eq!(failure.title, "Could not open file");
+    assert!(matches!(
+        Session::from_json(&bad.to_json()).unwrap_err(),
+        LoadError::InitialConfig { .. }
+    ));
+    assert_eq!(failure.contents.as_deref(), Some(bad.to_json().as_str()));
+    assert_eq!(failure.repair, None);
+    assert_eq!(failure.prefix, None);
+    // A configuration change that fails after the programs: its repair and
+    // the ops before it are links too long to open.
+    let mut bad = doc.clone();
+    bad.ops.push(Op::Config { config: three });
+    bad.ops.push(load(0x0A4));
+    let error = Session::from_json(&bad.to_json()).unwrap_err();
+    assert!(
+        matches!(error, LoadError::Op { index, error: OpError::Config(_), .. }
+            if index as usize == programs),
+        "{error:?}"
+    );
+    let failure = file_failure(&bad.to_json());
+    assert_eq!(failure.repair, None);
+    assert_eq!(failure.prefix, None);
+    // A file whose repair fits a link still offers it.
+    let small = ShareDoc {
+        config: Config {
+            cache: CacheConfig {
+                associativity: 3,
+                ..config().cache
+            },
+            ..config()
+        },
+        ops: doc.ops.get(..1).unwrap().to_vec(),
+        ..doc
+    };
+    let repair = file_failure(&small.to_json()).repair.unwrap();
+    assert!(Session::from_share_string(&repair.share).is_ok());
+}
+
+#[test]
 fn loading_in_slices_gives_the_session_one_slice_gives() {
     let mut original = varied();
     original.seek(pos(61));
@@ -1068,7 +1362,11 @@ fn loading_in_slices_gives_the_session_one_slice_gives() {
             assert!(so_far.ticks.starts_with(ticks), "{max_events}");
             assert!(summary.ticks.starts_with(&so_far.ticks), "{max_events}");
             assert_eq!(so_far.step_count as usize, so_far.ticks.len());
-            assert!(so_far.opening_step <= so_far.step_count);
+            assert_eq!(
+                so_far.opening_step,
+                so_far.step_count.min(summary.opening_step),
+                "{max_events}"
+            );
             assert_eq!(so_far.runs, summary.runs);
             assert_eq!(so_far.op_count, summary.op_count);
             assert_eq!(so_far.config_summary, summary.config_summary);

@@ -222,11 +222,12 @@ pub struct LoadFailure {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contents: Option<String>,
     /// The same document with the configuration that failed repaired:
-    /// "Open with 2-way instead".
+    /// "Open with 2-way instead"; absent when a link cannot hold it, as for
+    /// a file larger than a link.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repair: Option<LoadOption>,
     /// The ops before the one that failed, opening at their end: "Open the
-    /// first 8 steps".
+    /// first 8 steps"; absent when a link cannot hold them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prefix: Option<LoadOption>,
 }
@@ -436,7 +437,7 @@ impl LoadError {
     /// the names serde and the op messages quote between backticks. Then, for
     /// a configuration or an op that failed, how many steps were not
     /// replayed.
-    pub fn segments(&self) -> Vec<TextSegment> {
+    pub(crate) fn segments(&self) -> Vec<TextSegment> {
         match self {
             LoadError::InitialConfig { error, total_ops } => Segments::new()
                 .then(error.segments())
@@ -731,12 +732,14 @@ impl Opening {
         if self.step.is_some() {
             return;
         }
-        // The place is known once its op has replayed, or every op has.
+        // The place is known once its op has replayed, or every op has, or
+        // once the op being replayed has replayed as far as the place.
         let op_ends = loader.op_ends();
         let replayed = count(op_ends.len());
         let done = replayed == self.op_count;
         let target = match at {
             Some(at) if done || at.op < replayed => Some(position_in_op(op_ends, at.op, at.event)),
+            Some(at) if at.op == replayed => reached(op_ends, at.event, events.len()),
             None if done => Some(end_of(op_ends)),
             _ => None,
         };
@@ -835,7 +838,8 @@ impl Session {
 
     /// The session as a share string, as [`ShareDoc::to_share_string`]
     /// writes its document. The ops' JSON is kept as they are appended, so
-    /// after a cursor move only the cursor is serialized again.
+    /// after a cursor move only the configuration and the cursor are
+    /// serialized again.
     pub fn to_share_string(&self) -> String {
         encode(&self.share_json())
     }
@@ -1019,14 +1023,16 @@ fn format_version<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u32, D::
 }
 
 /// The [`LoadError::Json`] of `error`: its place, and serde's message
-/// without the place `serde_json` appends to it.
+/// without the place `serde_json` appends to it. `serde_json` gives column 0
+/// where the text ends at the start of a line, as an empty file does; the
+/// message counts columns from 1, so that is column 1.
 fn json_error(error: &serde_json::Error) -> LoadError {
     let text = error.to_string();
     let place = format!(" at line {} column {}", error.line(), error.column());
     let message = text.strip_suffix(&place).unwrap_or(&text).to_owned();
     LoadError::Json {
-        line: count(error.line()),
-        column: count(error.column()),
+        line: count(error.line()).max(1),
+        column: count(error.column()).max(1),
         message,
     }
 }
@@ -1065,7 +1071,8 @@ fn contents(doc: Option<&ShareDoc>, text: Option<&str>) -> Option<String> {
 }
 
 /// "Open with 2-way instead": `doc` with the configuration that `error`
-/// found invalid repaired, the first run's or a `Config` op's.
+/// found invalid repaired, the first run's or a `Config` op's, when a link
+/// can hold it.
 fn repair(doc: &ShareDoc, error: &LoadError) -> Option<LoadOption> {
     let (repair, ops) = match error {
         LoadError::InitialConfig { .. } => (doc.config.repair()?, None),
@@ -1097,12 +1104,13 @@ fn repair(doc: &ShareDoc, error: &LoadError) -> Option<LoadOption> {
     }
     Some(LoadOption {
         label: repair.label,
-        share: repaired.to_share_string(),
+        share: openable(&repaired)?,
     })
 }
 
 /// "Open the first 8 steps": `doc` up to the op that `error` refused,
-/// opening at its end, when an op before it replayed.
+/// opening at its end, when an op before it replayed and a link can hold
+/// them.
 fn prefix(doc: &ShareDoc, error: &LoadError) -> Option<LoadOption> {
     let LoadError::Op { index, .. } = error else {
         return None;
@@ -1119,8 +1127,21 @@ fn prefix(doc: &ShareDoc, error: &LoadError) -> Option<LoadOption> {
     };
     Some(LoadOption {
         label: explain::prefix_label(*index),
-        share: prefix.to_share_string(),
+        share: openable(&prefix)?,
     })
+}
+
+/// `doc` as a share string, if one can be opened: a file holds more than a
+/// link, so a document read from a file may be too large for a link, its
+/// JSON or its share string. Its ops and programs are those of a document
+/// that was read, or fewer, so they are within their limits.
+fn openable(doc: &ShareDoc) -> Option<String> {
+    let json = to_json(doc);
+    if exceeds(json.len(), MAX_SHARE_JSON_BYTES) {
+        return None;
+    }
+    let share = encode(&json);
+    (!exceeds(share.len(), MAX_SHARE_TEXT_BYTES)).then_some(share)
 }
 
 /// The sentence after a configuration or an op that failed, saying how
@@ -1159,6 +1180,15 @@ fn json_too_large(bytes: Option<u32>) -> String {
             format::setting(MAX_SHARE_JSON_BYTES)
         ),
     }
+}
+
+/// The position `event` events into the op being replayed, the one after
+/// the ops that end at `op_ends`, once the `events` replayed so far reach
+/// it; none before.
+fn reached(op_ends: &[EventPos], event: u32, events: usize) -> Option<EventPos> {
+    let place = end_of(op_ends).get().checked_add(event)?;
+    let replayed = usize::try_from(place).ok()? <= events;
+    replayed.then_some(EventPos::new_unchecked(place))
 }
 
 /// The end of a log whose ops end at `op_ends`.
