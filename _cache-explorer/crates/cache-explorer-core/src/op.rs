@@ -6,7 +6,7 @@
 //! and leaves no trace, and whatever goes wrong only while an accepted op
 //! executes is recorded as an `Error` event instead.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use crate::config::{Config, ConfigError};
@@ -186,19 +186,63 @@ struct RawOp {
     /// The op's kind.
     op: OpName,
     /// A `Config` op's configuration.
-    config: Option<Config>,
+    #[serde(default)]
+    config: Field<Config>,
     /// An `Issue` op's kind of access.
-    kind: Option<AccessKind>,
+    #[serde(default)]
+    kind: Field<AccessKind>,
     /// An `Issue` op's address.
-    addr: Option<Addr>,
+    #[serde(default)]
+    addr: Field<Addr>,
     /// An `Issue` op's value.
-    value: Option<Word>,
+    #[serde(default)]
+    value: Field<Word>,
     /// A `Program` op's source.
-    source: Option<String>,
+    #[serde(default)]
+    source: Field<String>,
     /// A `Program` op's format.
-    format: Option<ProgramFormat>,
+    #[serde(default)]
+    format: Field<ProgramFormat>,
     /// A `Run` op's count.
-    n: Option<u32>,
+    #[serde(default)]
+    n: Field<u32>,
+}
+
+/// A field of a flat op as the JSON gives it: absent, `null`, or a value.
+/// A `null` is still a field, so a kind that does not have the field
+/// refuses it; a kind that requires the field finds it missing, and an
+/// issue's optional `value` reads it as no value, as serde reads a `null`
+/// option.
+#[derive(Default)]
+enum Field<T> {
+    /// The field is not there.
+    #[default]
+    Absent,
+    /// The field is there, as `null`.
+    Null,
+    /// The field is there, with a value.
+    Value(T),
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Field<T> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Option::<T>::deserialize(deserializer).map(|value| value.map_or(Field::Null, Field::Value))
+    }
+}
+
+impl<T> Field<T> {
+    /// Whether the field is there, `null` included.
+    fn is_present(&self) -> bool {
+        !matches!(self, Field::Absent)
+    }
+
+    /// The field's value; none if it is absent or `null`.
+    fn value(self) -> Option<T> {
+        match self {
+            Field::Value(value) => Some(value),
+            Field::Absent | Field::Null => None,
+        }
+    }
 }
 
 /// The kinds of op, as the `op` field names them.
@@ -262,13 +306,13 @@ impl TryFrom<RawOp> for Op {
     fn try_from(raw: RawOp) -> Result<Self, ShapeError> {
         let name = raw.op;
         let present = [
-            ("config", raw.config.is_some()),
-            ("kind", raw.kind.is_some()),
-            ("addr", raw.addr.is_some()),
-            ("value", raw.value.is_some()),
-            ("source", raw.source.is_some()),
-            ("format", raw.format.is_some()),
-            ("n", raw.n.is_some()),
+            ("config", raw.config.is_present()),
+            ("kind", raw.kind.is_present()),
+            ("addr", raw.addr.is_present()),
+            ("value", raw.value.is_present()),
+            ("source", raw.source.is_present()),
+            ("format", raw.format.is_present()),
+            ("n", raw.n.is_present()),
         ];
         let allowed: &[&str] = match name {
             OpName::Config => &["config"],
@@ -292,21 +336,21 @@ impl TryFrom<RawOp> for Op {
         };
         Ok(match name {
             OpName::Config => Op::Config {
-                config: raw.config.ok_or_else(|| missing("config"))?,
+                config: raw.config.value().ok_or_else(|| missing("config"))?,
             },
             OpName::Issue => Op::Issue {
-                kind: raw.kind.ok_or_else(|| missing("kind"))?,
-                addr: raw.addr.ok_or_else(|| missing("addr"))?,
-                value: raw.value,
+                kind: raw.kind.value().ok_or_else(|| missing("kind"))?,
+                addr: raw.addr.value().ok_or_else(|| missing("addr"))?,
+                value: raw.value.value(),
             },
             OpName::Program => Op::Program {
-                source: raw.source.ok_or_else(|| missing("source"))?,
-                format: raw.format.ok_or_else(|| missing("format"))?,
+                source: raw.source.value().ok_or_else(|| missing("source"))?,
+                format: raw.format.value().ok_or_else(|| missing("format"))?,
             },
             OpName::Step => Op::Step,
             OpName::StepAccess => Op::StepAccess,
             OpName::Run => Op::Run {
-                n: raw.n.ok_or_else(|| missing("n"))?,
+                n: raw.n.value().ok_or_else(|| missing("n"))?,
             },
         })
     }
@@ -460,6 +504,50 @@ mod tests {
         );
         refused("{\"op\":\"step\",\"steps\":3}", "unknown field `steps`");
         refused("{\"n\":3}", "missing field `op`");
+    }
+
+    #[test]
+    fn a_null_field_is_still_a_field() {
+        let read = |json: &str| serde_json::from_str::<Op>(json).map_err(|error| error.to_string());
+        let refused = |json: &str, message: &str| {
+            let error = read(json).unwrap_err();
+            assert!(error.starts_with(message), "{json}: {error}");
+        };
+        // A kind that does not have the field refuses it, null or not.
+        refused(
+            "{\"op\":\"step\",\"n\":null}",
+            "unexpected field `n` for op `step`",
+        );
+        refused(
+            "{\"op\":\"stepAccess\",\"config\":null}",
+            "unexpected field `config` for op `stepAccess`",
+        );
+        refused(
+            "{\"op\":\"run\",\"n\":3,\"value\":null}",
+            "unexpected field `value` for op `run`",
+        );
+        refused(
+            "{\"op\":\"issue\",\"kind\":\"read\",\"addr\":164,\"source\":null}",
+            "unexpected field `source` for op `issue`",
+        );
+        // A kind that requires it finds it missing.
+        refused(
+            "{\"op\":\"run\",\"n\":null}",
+            "missing field `n` for op `run`",
+        );
+        refused(
+            "{\"op\":\"program\",\"source\":\"\",\"format\":null}",
+            "missing field `format` for op `program`",
+        );
+        // An issue's value is optional, so null is no value.
+        assert_eq!(
+            read("{\"op\":\"issue\",\"kind\":\"write\",\"addr\":164,\"value\":null}"),
+            Ok(Op::Issue {
+                kind: AccessKind::Write,
+                addr: Addr::new_unchecked(164),
+                value: None,
+            })
+        );
     }
 
     #[test]

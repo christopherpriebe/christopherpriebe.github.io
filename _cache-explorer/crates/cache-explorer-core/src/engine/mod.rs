@@ -453,8 +453,7 @@ fn new_run(machine: &mut Machine, start: Machine, out: &mut Emitter<'_>) {
     let restart = machine
         .program
         .as_ref()
-        .and_then(|program| program.get(0))
-        .map(|placed| placed.line);
+        .and_then(|program| Some((program.format(), program.get(0)?.line)));
     let draft = Draft::new(EventKind::Setup, None);
     let config = &machine.config;
     let result = out.emit(machine, draft, || explain::new_run(config, restart));

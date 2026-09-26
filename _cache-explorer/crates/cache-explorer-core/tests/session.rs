@@ -5,9 +5,10 @@
 //! program); appending, which drops the undone ops only once the op is
 //! accepted; a refused op of each kind leaving the log, the undone ops and
 //! the cursor as they were; configuration changes, applied at once as ops
-//! of their own or asked about first, and Reset; new runs keeping the
-//! program; the session's event limit; and every state the cursor reaches
-//! equal to the fold's, from checkpoints or not.
+//! of their own or asked about first, and Reset; switching between Basics
+//! and Advanced; new runs keeping the program; the session's event limit;
+//! and every state the cursor reaches equal to the fold's, from checkpoints
+//! or not.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -928,6 +929,21 @@ fn a_new_run_restarts_the_program_it_keeps_or_unloads_one_that_no_longer_parses(
     session.seek(pos(session.position().pos.get() - 1));
     assert!(session.position().at_run_origin);
     assert_eq!(session.position().boundary, Boundary::EntryEnd);
+    // A trace the new run keeps is named as a trace.
+    let mut session = self::session();
+    let trace = Op::Program {
+        source: "R 0x0A4\nR 0x0A8".to_owned(),
+        format: ProgramFormat::Trace,
+    };
+    let two_way = Preset::TwoWayLru.config();
+    apply_all(&mut session, [trace, Op::Config { config: two_way }]);
+    assert_eq!(
+        session.events().last().map(|event| event.explain.as_str()),
+        Some(
+            "New run: 128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU. The cache is empty and \
+             memory, registers and counters are reset. The trace is kept and restarts at line 1."
+        )
+    );
 }
 
 #[test]
@@ -950,6 +966,82 @@ fn a_configuration_needing_advanced_names_its_policies_in_the_new_runs_line() {
              \u{b7} allocate. The cache is empty and memory, registers and counters are reset."
         )
     );
+}
+
+#[test]
+fn switching_mode_is_not_an_op_and_basics_asks_first_while_the_run_needs_advanced() {
+    let through = Config {
+        cache: CacheConfig {
+            write_policy: WritePolicy::WriteThrough,
+            ..config().cache
+        },
+        ..config()
+    };
+    // The mode starts as the initial configuration names it.
+    assert!(!session().advanced());
+    let chosen = Config {
+        advanced: true,
+        ..config()
+    };
+    assert!(Session::with_config(chosen).unwrap().advanced());
+    // On a run that fits Basics, either switch changes the mode and nothing
+    // else.
+    let mut session = table();
+    let before = session.clone();
+    assert_eq!(session.set_advanced(true), ConfigChange::Applied);
+    assert!(session.advanced());
+    assert_eq!(session.set_advanced(false), ConfigChange::Applied);
+    assert!(!session.advanced());
+    assert_eq!(session.set_advanced(true), ConfigChange::Applied);
+    assert_eq!(session.ops(), before.ops());
+    assert_eq!(session.position(), before.position());
+    assert_eq!(session.machine(), before.machine());
+    // On a run that needs Advanced, switching to Basics changes nothing and
+    // asks first, offering the configuration's Basics form.
+    apply_all(
+        &mut session,
+        [
+            Op::Config {
+                config: through.clone(),
+            },
+            load(0x0A4),
+        ],
+    );
+    let before = session.clone();
+    assert_eq!(
+        session.set_advanced(false),
+        ConfigChange::NeedsReset {
+            config: through.to_basics(),
+            message: "Configuration is fixed for a run. Applying starts a new, empty run; this \
+                      one has 5 steps and stays reachable with Undo."
+                .to_owned()
+        }
+    );
+    assert!(session.advanced());
+    assert_eq!(session.ops(), before.ops());
+    assert_eq!(session.position(), before.position());
+    // "Reset and apply": the Basics run is appended, and the mode is still
+    // Advanced until the switch is made again.
+    apply_all(
+        &mut session,
+        [Op::Config {
+            config: through.to_basics(),
+        }],
+    );
+    assert!(session.advanced());
+    assert_eq!(session.set_advanced(false), ConfigChange::Applied);
+    assert!(!session.advanced());
+    // Undoing back into the write-through run shows Advanced again, and
+    // switching to Basics there asks first.
+    assert!(session.undo());
+    assert_eq!(session.config(), &through);
+    assert!(session.advanced());
+    assert!(matches!(
+        session.set_advanced(false),
+        ConfigChange::NeedsReset { .. }
+    ));
+    assert!(session.redo());
+    assert!(!session.advanced());
 }
 
 #[test]
@@ -1190,6 +1282,10 @@ fn no_call_rewrites_an_op_the_log_keeps() {
                 session.propose_config(small.clone()),
                 Ok(ConfigChange::Applied)
             );
+        }),
+        Box::new(|session| {
+            assert_eq!(session.set_advanced(true), ConfigChange::Applied);
+            assert_eq!(session.set_advanced(false), ConfigChange::Applied);
         }),
         Box::new(|session| {
             session.step_event(Some(&sample));

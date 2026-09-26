@@ -44,6 +44,9 @@ use crate::units::{EventPos, OpIndex};
 pub struct Session {
     /// The first run's configuration, which is not an op.
     initial: Config,
+    /// Whether the student chose Advanced rather than Basics: a presentation
+    /// setting that no op records and the fold never reads.
+    advanced: bool,
     /// Every op, the undone ones after the cursor included.
     ops: Vec<Op>,
     /// Every event of every op, in order; at most
@@ -86,7 +89,8 @@ pub enum ReplayError {
     },
 }
 
-/// What a change from the configuration bar did.
+/// What a change from the configuration bar, or a switch between Basics and
+/// Advanced, did.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(
@@ -96,7 +100,7 @@ pub enum ReplayError {
 )]
 pub enum ConfigChange {
     /// Nothing more is needed: the configuration was the displayed run's
-    /// already, or the change started a new run at once.
+    /// already, the change started a new run at once, or the mode changed.
     Applied,
     /// The change starts a new run, and the student is asked first.
     NeedsReset {
@@ -112,7 +116,8 @@ pub enum ConfigChange {
 
 impl Session {
     /// A session with an empty log whose first run has the configuration
-    /// `initial`, with the cursor at position 0.
+    /// `initial`, with the cursor at position 0, in the mode `initial`'s
+    /// `advanced` names.
     ///
     /// # Errors
     ///
@@ -120,6 +125,7 @@ impl Session {
     pub fn with_config(initial: Config) -> Result<Session, ConfigError> {
         let origin = Machine::start(initial.clone())?;
         Ok(Session {
+            advanced: initial.advanced,
             initial,
             ops: Vec::new(),
             events: Vec::new(),
@@ -185,6 +191,13 @@ impl Session {
     /// cursor is in.
     pub fn config(&self) -> &Config {
         &self.current.config
+    }
+
+    /// Whether the page shows Advanced: the mode the student chose, or
+    /// Advanced whatever the choice while the displayed run's configuration
+    /// needs it, as after undoing back into a write-through run.
+    pub fn advanced(&self) -> bool {
+        self.advanced || !self.current.config.fits_basics()
     }
 
     /// The machine at the cursor.
@@ -259,6 +272,26 @@ impl Session {
             message: self.reset_question(),
             config,
         })
+    }
+
+    /// Switches between Basics (`on` false) and Advanced (`on` true). The
+    /// mode is a presentation setting, not an op: it starts no run and
+    /// changes no machine.
+    ///
+    /// Switching to Basics while the displayed run's configuration needs
+    /// Advanced changes nothing and asks first, as a change from the
+    /// configuration bar does, offering the configuration's Basics form as a
+    /// new run. Once that run is applied, switching again succeeds.
+    pub fn set_advanced(&mut self, on: bool) -> ConfigChange {
+        let displayed = &self.current.config;
+        if !on && !displayed.fits_basics() {
+            return ConfigChange::NeedsReset {
+                config: displayed.to_basics(),
+                message: self.reset_question(),
+            };
+        }
+        self.advanced = on;
+        ConfigChange::Applied
     }
 
     /// The question asked before a configuration change starts a new run: it

@@ -563,18 +563,20 @@ pub(crate) fn program_loaded(format: ProgramFormat, instructions: u32) -> String
 
 /// The `Setup` line of a new run: "New run: 128 B · 16 B lines · 2-way · LRU.
 /// The cache is empty and memory, registers and counters are reset." With a
-/// program kept, restarting at its first instruction, on line `restart`: "…
-/// The program is kept and restarts at line 1."
+/// program kept, written in `format` and restarting at its first
+/// instruction, on line `line`: "… The program is kept and restarts at line
+/// 1." A trace is "The trace".
 ///
 /// The summary names the write and allocate policies when the configuration
 /// needs Advanced, as a write-through, no-allocate or timed one does, so the
 /// line depends on the configuration alone, never on the mode the student is
 /// in.
-pub(crate) fn new_run(config: &Config, restart: Option<u32>) -> String {
+pub(crate) fn new_run(config: &Config, restart: Option<(ProgramFormat, u32)>) -> String {
     let kept = restart
-        .map(|line| {
+        .map(|(format, line)| {
             format!(
-                " The program is kept and restarts at line {}.",
+                " The {} is kept and restarts at line {}.",
+                source_noun(format),
                 format::position(line)
             )
         })
@@ -1599,10 +1601,19 @@ mod tests {
              memory, registers and counters are reset."
         );
         assert_eq!(
-            new_run(&Preset::DirectMapped8.config(), Some(3)),
+            new_run(
+                &Preset::DirectMapped8.config(),
+                Some((ProgramFormat::Asm, 3))
+            ),
             "New run: 128 B \u{b7} 16 B lines \u{b7} direct-mapped. The cache is empty and \
              memory, registers and counters are reset. The program is kept and restarts at line \
              3."
+        );
+        // A trace is named as a trace.
+        assert_eq!(
+            new_run(&two_way, Some((ProgramFormat::Trace, 1))),
+            "New run: 128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU. The cache is empty and \
+             memory, registers and counters are reset. The trace is kept and restarts at line 1."
         );
         // A configuration that needs Advanced names its policies, whatever
         // mode the student is in, and the presentation flag changes nothing.
