@@ -648,6 +648,23 @@ fn way_view(
     }
 }
 
+/// The view of `way` as way `index` of set `set` would show it on its own,
+/// outside any access: what an editor shows of the way an edit would leave.
+pub(crate) fn lone_way_view(
+    machine: &Machine,
+    set: SetIndex,
+    index: WayIndex,
+    way: &Way,
+) -> WayView {
+    let rank_header = machine
+        .config
+        .cache
+        .replacement
+        .policy()
+        .rank_header(machine.geometry.ways());
+    way_view(machine, set, index, way, rank_header, None)
+}
+
 /// The mark of `rank` in a set of `ways` ways ranked as `header` says.
 fn rank_role(header: RankHeader, rank: u32, ways: u32) -> Option<RankRole> {
     let last = ways.saturating_sub(1);
@@ -1036,7 +1053,7 @@ fn between_entries(machine: &Machine) -> (CpuStatus, String) {
 }
 
 /// What the CPU status calls an entry of `kind`.
-fn noun(kind: EntryKind) -> EntryNoun {
+pub(crate) fn noun(kind: EntryKind) -> EntryNoun {
     match kind {
         EntryKind::Access | EntryKind::Program => EntryNoun::Access,
         EntryKind::Instruction => EntryNoun::Instruction,

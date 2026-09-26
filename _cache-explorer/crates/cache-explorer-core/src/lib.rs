@@ -48,6 +48,10 @@ pub use config::{
     ConfigOption, MemoryInit, Preset, Repair, Replacement, Timing, TimingControl, WordBytes,
     WordBytesError, WritePolicy,
 };
+pub use engine::{
+    Consequence, EditDraft, EditOutcome, EditPlan, EditRefusal, FieldChange, FieldInput,
+    MemoryEditDraft, RefusalReason, Suggestion, Tone, WayForm, WordMark,
+};
 pub use event::{Cause, ChangeRef, Counter, EventKind, MicroEvent};
 pub use geometry::{
     AccessError, AddressField, BitRange, BitRanges, Decoded, FieldKind, Geometry, Placement,
@@ -56,7 +60,9 @@ pub use input::{AddressInput, ConfigNumberInput, IssueDraft, WordInput};
 pub use isa::{ParseError, ParseResult};
 pub use machine::{InvariantViolation, Machine};
 pub use memory::StaleInfo;
-pub use op::{AccessKind, Op, OpError, ProgramFormat, ProgramSource};
+pub use op::{
+    AccessKind, EditPatch, EditTarget, Op, OpError, ProgramFormat, ProgramSource, WayPatch,
+};
 pub use session::{
     Boundary, ConfigChange, EntryKind, EntryOutcome, EntryView, EventRow, Position, Replay,
     ReplayError, Session, StepOutcome, Tense, Timeline,

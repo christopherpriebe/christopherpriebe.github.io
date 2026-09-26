@@ -10,22 +10,24 @@ use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use crate::config::{Config, ConfigError};
+use crate::engine::EditRefusal;
 use crate::format;
 use crate::geometry::{highest_word, AccessError};
 use crate::isa::ParseError;
 use crate::limits::{MAX_RUN_STEPS, SESSION_EVENT_LIMIT};
-use crate::units::{Addr, Word};
+use crate::units::{Addr, SetIndex, WayIndex, Word};
 
 /// One item in the session log. The session's state is a fold over these.
 ///
 /// Serialized with its kind under `op`: `{"op":"config","config":{…}}`,
 /// `{"op":"issue","kind":"write","addr":164,"value":7}`,
 /// `{"op":"program","source":"…","format":"asm"}`, `{"op":"step"}`,
-/// `{"op":"stepAccess"}` and `{"op":"run","n":20}`. It is read through a flat
-/// form with every field optional, which then requires the fields of its
-/// kind and refuses any other: that keeps serde's line and column in the
-/// errors of a share document and avoids the code serde generates to buffer
-/// an internally tagged enum.
+/// `{"op":"stepAccess"}`, `{"op":"run","n":20}` and
+/// `{"op":"edit","target":{…},"patch":{…}}`. It is read through a flat form
+/// with every field optional, which then requires the fields of its kind and
+/// refuses any other: that keeps serde's line and column in the errors of a
+/// share document and avoids the code serde generates to buffer an
+/// internally tagged enum.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(
@@ -68,6 +70,93 @@ pub enum Op {
         /// How many instructions at most.
         n: u32,
     },
+    /// Change a cache way or a memory word. It is planned again against the
+    /// machine it applies to, and applied only if that plan succeeds.
+    Edit {
+        /// The way or the memory word.
+        target: EditTarget,
+        /// What changes.
+        patch: EditPatch,
+    },
+}
+
+/// What an edit changes: one way of the cache, or one word of memory.
+///
+/// Serialized with its kind under `kind`: `{"kind":"way","set":2,"way":0}`
+/// or `{"kind":"memory","addr":176}`. Its numbers are unchecked until the
+/// edit is planned against the configuration in force. Read through a flat
+/// form, as an [`Op`] is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    try_from = "RawEditTarget"
+)]
+pub enum EditTarget {
+    /// Way `way` of set `set`.
+    Way {
+        /// The set.
+        set: SetIndex,
+        /// The way within the set.
+        way: WayIndex,
+    },
+    /// The memory word at `addr`, which must be a multiple of the word size.
+    Memory {
+        /// The word's address.
+        addr: Addr,
+    },
+}
+
+/// The change an edit makes, of the target's kind.
+///
+/// Serialized with its kind under `kind`: a way's patch with the fields it
+/// gives beside it, `{"kind":"way","line":192,"dirty":true}`, or a memory
+/// word's new value, `{"kind":"memory","value":12}`. Read through a flat
+/// form, as an [`Op`] is.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    try_from = "RawEditPatch"
+)]
+pub enum EditPatch {
+    /// The fields of a way that change.
+    Way(WayPatch),
+    /// A memory word's new value.
+    Memory {
+        /// The value, which must fit the word.
+        value: Word,
+    },
+}
+
+/// The fields of a way an edit changes; a field left out keeps its value,
+/// or takes the one the edit implies. A way is given the line it holds by
+/// an address, from which the tag follows: a bare tag has no index bits, so
+/// it could not be checked against the way's set.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WayPatch {
+    /// Whether the way holds a line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub valid: Option<bool>,
+    /// Any byte address inside the line the way should hold. Its index bits
+    /// must equal the way's set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<Addr>,
+    /// The whole line, one value per word.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<Vec<Word>>,
+    /// Whether the line is dirty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dirty: Option<bool>,
+    /// The way's place in its set's replacement order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rank: Option<u32>,
 }
 
 /// Whether an access reads or writes memory.
@@ -175,6 +264,10 @@ pub enum OpError {
         format::setting(SESSION_EVENT_LIMIT)
     )]
     SessionFull,
+    /// The edit's plan refuses it; the message is the refusal's title and
+    /// text: `Refused. 0x120 has index 2, so it can only live in set 2, …`.
+    #[error("{}. {}", .0.title, .0.text)]
+    Edit(Box<EditRefusal>),
 }
 
 /// An op as read from JSON: its kind, and every field any kind has, each
@@ -206,6 +299,77 @@ struct RawOp {
     /// A `Run` op's count.
     #[serde(default)]
     n: Field<u32>,
+    /// An `Edit` op's target.
+    #[serde(default)]
+    target: Field<EditTarget>,
+    /// An `Edit` op's patch.
+    #[serde(default)]
+    patch: Field<EditPatch>,
+}
+
+/// An edit's target as read from JSON: its kind, and every field either kind
+/// has, each optional.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RawEditTarget {
+    /// The target's kind.
+    kind: EditKind,
+    /// A way's set.
+    #[serde(default)]
+    set: Field<SetIndex>,
+    /// A way's number within its set.
+    #[serde(default)]
+    way: Field<WayIndex>,
+    /// A memory word's address.
+    #[serde(default)]
+    addr: Field<Addr>,
+}
+
+/// An edit's patch as read from JSON: its kind, and every field either kind
+/// has, each optional.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RawEditPatch {
+    /// The patch's kind.
+    kind: EditKind,
+    /// A way patch's valid bit.
+    #[serde(default)]
+    valid: Field<bool>,
+    /// A way patch's line.
+    #[serde(default)]
+    line: Field<Addr>,
+    /// A way patch's data.
+    #[serde(default)]
+    data: Field<Vec<Word>>,
+    /// A way patch's dirty bit.
+    #[serde(default)]
+    dirty: Field<bool>,
+    /// A way patch's rank.
+    #[serde(default)]
+    rank: Field<u32>,
+    /// A memory patch's value.
+    #[serde(default)]
+    value: Field<Word>,
+}
+
+/// The kinds of edit target and patch, as their `kind` field names them.
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum EditKind {
+    /// `way`.
+    Way,
+    /// `memory`.
+    Memory,
+}
+
+impl EditKind {
+    /// The name the `kind` field gives it.
+    fn name(self) -> &'static str {
+        match self {
+            EditKind::Way => "way",
+            EditKind::Memory => "memory",
+        }
+    }
 }
 
 /// A field of a flat op as the JSON gives it: absent, `null`, or a value.
@@ -261,26 +425,32 @@ enum OpName {
     StepAccess,
     /// `run`.
     Run,
+    /// `edit`.
+    Edit,
 }
 
-/// Why a flat op does not have the fields of its kind. Lower case and
-/// unterminated, like serde's own messages, since it reaches a reader only
-/// through serde, which adds the line and column.
+/// Why a flat op, edit target or edit patch does not have the fields of its
+/// kind. Lower case and unterminated, like serde's own messages, since it
+/// reaches a reader only through serde, which adds the line and column.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
 enum ShapeError {
     /// A field the kind requires is absent.
-    #[error("missing field `{field}` for op `{op}`")]
+    #[error("missing field `{field}` for {form} `{kind}`")]
     Missing {
-        /// The op's kind.
-        op: &'static str,
+        /// What has the kind: "op", "target" or "patch".
+        form: &'static str,
+        /// The kind.
+        kind: &'static str,
         /// The absent field.
         field: &'static str,
     },
     /// A field the kind does not have is present.
-    #[error("unexpected field `{field}` for op `{op}`")]
+    #[error("unexpected field `{field}` for {form} `{kind}`")]
     Unexpected {
-        /// The op's kind.
-        op: &'static str,
+        /// What has the kind: "op", "target" or "patch".
+        form: &'static str,
+        /// The kind.
+        kind: &'static str,
         /// The field that does not belong.
         field: &'static str,
     },
@@ -296,7 +466,25 @@ impl OpName {
             OpName::Step => "step",
             OpName::StepAccess => "stepAccess",
             OpName::Run => "run",
+            OpName::Edit => "edit",
         }
+    }
+}
+
+/// Refuses the first field that is `present` but not `allowed` for the kind
+/// `kind` of `form`.
+fn only_allowed(
+    form: &'static str,
+    kind: &'static str,
+    present: &[(&'static str, bool)],
+    allowed: &[&str],
+) -> Result<(), ShapeError> {
+    match present
+        .iter()
+        .find(|(field, present)| *present && !allowed.contains(field))
+    {
+        Some(&(field, _)) => Err(ShapeError::Unexpected { form, kind, field }),
+        None => Ok(()),
     }
 }
 
@@ -313,6 +501,8 @@ impl TryFrom<RawOp> for Op {
             ("source", raw.source.is_present()),
             ("format", raw.format.is_present()),
             ("n", raw.n.is_present()),
+            ("target", raw.target.is_present()),
+            ("patch", raw.patch.is_present()),
         ];
         let allowed: &[&str] = match name {
             OpName::Config => &["config"],
@@ -320,18 +510,12 @@ impl TryFrom<RawOp> for Op {
             OpName::Program => &["source", "format"],
             OpName::Step | OpName::StepAccess => &[],
             OpName::Run => &["n"],
+            OpName::Edit => &["target", "patch"],
         };
-        if let Some((field, _)) = present
-            .iter()
-            .find(|(field, present)| *present && !allowed.contains(field))
-        {
-            return Err(ShapeError::Unexpected {
-                op: name.name(),
-                field,
-            });
-        }
+        only_allowed("op", name.name(), &present, allowed)?;
         let missing = |field| ShapeError::Missing {
-            op: name.name(),
+            form: "op",
+            kind: name.name(),
             field,
         };
         Ok(match name {
@@ -351,6 +535,81 @@ impl TryFrom<RawOp> for Op {
             OpName::StepAccess => Op::StepAccess,
             OpName::Run => Op::Run {
                 n: raw.n.value().ok_or_else(|| missing("n"))?,
+            },
+            OpName::Edit => Op::Edit {
+                target: raw.target.value().ok_or_else(|| missing("target"))?,
+                patch: raw.patch.value().ok_or_else(|| missing("patch"))?,
+            },
+        })
+    }
+}
+
+impl TryFrom<RawEditTarget> for EditTarget {
+    type Error = ShapeError;
+
+    fn try_from(raw: RawEditTarget) -> Result<Self, ShapeError> {
+        let kind = raw.kind;
+        let present = [
+            ("set", raw.set.is_present()),
+            ("way", raw.way.is_present()),
+            ("addr", raw.addr.is_present()),
+        ];
+        let allowed: &[&str] = match kind {
+            EditKind::Way => &["set", "way"],
+            EditKind::Memory => &["addr"],
+        };
+        only_allowed("target", kind.name(), &present, allowed)?;
+        let missing = |field| ShapeError::Missing {
+            form: "target",
+            kind: kind.name(),
+            field,
+        };
+        Ok(match kind {
+            EditKind::Way => EditTarget::Way {
+                set: raw.set.value().ok_or_else(|| missing("set"))?,
+                way: raw.way.value().ok_or_else(|| missing("way"))?,
+            },
+            EditKind::Memory => EditTarget::Memory {
+                addr: raw.addr.value().ok_or_else(|| missing("addr"))?,
+            },
+        })
+    }
+}
+
+impl TryFrom<RawEditPatch> for EditPatch {
+    type Error = ShapeError;
+
+    // A way patch's fields are all optional, and a `null` one is left out, as
+    // serde reads a `null` option; a memory patch requires its value.
+    fn try_from(raw: RawEditPatch) -> Result<Self, ShapeError> {
+        let kind = raw.kind;
+        let present = [
+            ("valid", raw.valid.is_present()),
+            ("line", raw.line.is_present()),
+            ("data", raw.data.is_present()),
+            ("dirty", raw.dirty.is_present()),
+            ("rank", raw.rank.is_present()),
+            ("value", raw.value.is_present()),
+        ];
+        let allowed: &[&str] = match kind {
+            EditKind::Way => &["valid", "line", "data", "dirty", "rank"],
+            EditKind::Memory => &["value"],
+        };
+        only_allowed("patch", kind.name(), &present, allowed)?;
+        Ok(match kind {
+            EditKind::Way => EditPatch::Way(WayPatch {
+                valid: raw.valid.value(),
+                line: raw.line.value(),
+                data: raw.data.value(),
+                dirty: raw.dirty.value(),
+                rank: raw.rank.value(),
+            }),
+            EditKind::Memory => EditPatch::Memory {
+                value: raw.value.value().ok_or(ShapeError::Missing {
+                    form: "patch",
+                    kind: kind.name(),
+                    field: "value",
+                })?,
             },
         })
     }
@@ -395,7 +654,6 @@ mod tests {
 
     use super::*;
     use crate::config::Preset;
-    use crate::units::Addr;
 
     #[test]
     fn access_kinds_serialize_by_lower_case_name() {
@@ -547,6 +805,133 @@ mod tests {
                 addr: Addr::new_unchecked(164),
                 value: None,
             })
+        );
+    }
+
+    #[test]
+    fn edits_serialize_with_their_kinds() {
+        let way = EditTarget::Way {
+            set: SetIndex::new_unchecked(2),
+            way: WayIndex::new_unchecked(0),
+        };
+        let memory = EditTarget::Memory {
+            addr: Addr::new_unchecked(176),
+        };
+        let patch = EditPatch::Way(WayPatch {
+            line: Some(Addr::new_unchecked(192)),
+            data: Some(vec![Word::new_unchecked(u64::MAX)]),
+            dirty: Some(true),
+            ..WayPatch::default()
+        });
+        let shapes = [
+            (
+                Op::Edit {
+                    target: way,
+                    patch: patch.clone(),
+                },
+                "{\"op\":\"edit\",\"target\":{\"kind\":\"way\",\"set\":2,\"way\":0},\
+                 \"patch\":{\"kind\":\"way\",\"line\":192,\"data\":[18446744073709551615],\
+                 \"dirty\":true}}",
+            ),
+            (
+                Op::Edit {
+                    target: memory,
+                    patch: EditPatch::Memory {
+                        value: Word::new_unchecked(12),
+                    },
+                },
+                "{\"op\":\"edit\",\"target\":{\"kind\":\"memory\",\"addr\":176},\
+                 \"patch\":{\"kind\":\"memory\",\"value\":12}}",
+            ),
+            (
+                Op::Edit {
+                    target: way,
+                    patch: EditPatch::Way(WayPatch::default()),
+                },
+                "{\"op\":\"edit\",\"target\":{\"kind\":\"way\",\"set\":2,\"way\":0},\
+                 \"patch\":{\"kind\":\"way\"}}",
+            ),
+        ];
+        for (op, json) in shapes {
+            assert_eq!(serde_json::to_string(&op).unwrap(), json);
+            assert_eq!(serde_json::from_str::<Op>(json).unwrap(), op);
+        }
+        // A way patch alone reads as its fields, and refuses others.
+        let alone = "{\"valid\":false}";
+        assert_eq!(
+            serde_json::from_str::<WayPatch>(alone).unwrap(),
+            WayPatch {
+                valid: Some(false),
+                ..WayPatch::default()
+            }
+        );
+        assert!(serde_json::from_str::<WayPatch>("{\"tag\":1}").is_err());
+    }
+
+    #[test]
+    fn an_edit_is_read_with_the_fields_of_its_kinds_only() {
+        let target = |json: &str| {
+            serde_json::from_str::<EditTarget>(json).map_err(|error| error.to_string())
+        };
+        let patch =
+            |json: &str| serde_json::from_str::<EditPatch>(json).map_err(|error| error.to_string());
+        let refused = |result: Result<(), String>, message: &str| {
+            let error = result.unwrap_err();
+            assert!(error.starts_with(message), "{error}");
+        };
+        refused(
+            target("{\"kind\":\"way\",\"set\":2}").map(drop),
+            "missing field `way` for target `way`",
+        );
+        refused(
+            target("{\"kind\":\"way\",\"set\":2,\"way\":0,\"addr\":4}").map(drop),
+            "unexpected field `addr` for target `way`",
+        );
+        refused(
+            target("{\"kind\":\"memory\",\"set\":null}").map(drop),
+            "unexpected field `set` for target `memory`",
+        );
+        refused(
+            target("{\"kind\":\"cell\"}").map(drop),
+            "unknown variant `cell`, expected `way` or `memory`",
+        );
+        refused(
+            patch("{\"kind\":\"way\",\"value\":1}").map(drop),
+            "unexpected field `value` for patch `way`",
+        );
+        refused(
+            patch("{\"kind\":\"memory\",\"value\":null}").map(drop),
+            "missing field `value` for patch `memory`",
+        );
+        refused(
+            patch("{\"kind\":\"memory\",\"value\":1,\"dirty\":false}").map(drop),
+            "unexpected field `dirty` for patch `memory`",
+        );
+        refused(
+            patch("{\"kind\":\"way\",\"tag\":1}").map(drop),
+            "unknown field `tag`",
+        );
+        // A way patch's null field is left out, as a null option is.
+        assert_eq!(
+            patch("{\"kind\":\"way\",\"line\":null,\"rank\":1}"),
+            Ok(EditPatch::Way(WayPatch {
+                rank: Some(1),
+                ..WayPatch::default()
+            }))
+        );
+        refused(
+            serde_json::from_str::<Op>(
+                "{\"op\":\"edit\",\"target\":{\"kind\":\"memory\",\"addr\":4}}",
+            )
+            .map(drop)
+            .map_err(|error| error.to_string()),
+            "missing field `patch` for op `edit`",
+        );
+        refused(
+            serde_json::from_str::<Op>("{\"op\":\"step\",\"patch\":null}")
+                .map(drop)
+                .map_err(|error| error.to_string()),
+            "unexpected field `patch` for op `step`",
         );
     }
 

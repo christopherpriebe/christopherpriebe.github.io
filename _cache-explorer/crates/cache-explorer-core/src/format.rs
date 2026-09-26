@@ -133,6 +133,12 @@ pub(crate) fn percent(numerator: u64, denominator: u64) -> Option<String> {
 /// from, such as the hit rate before the run's first access: an em dash.
 pub(crate) const NO_FIGURE: &str = "\u{2014}";
 
+/// A valid or dirty bit as the cache table and an edit's preview show it:
+/// `1` when set, `0` when clear.
+pub(crate) fn bit(on: bool) -> String {
+    u8::from(on).to_string()
+}
+
 /// An event's label, `{entry}.{seq}` as in `5.3`. Plain digits, never
 /// grouped: a label names an event rather than counting anything, and a
 /// comma would read as a third number.

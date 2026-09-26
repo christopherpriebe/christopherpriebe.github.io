@@ -19,11 +19,17 @@
 //! without that room.
 
 mod access;
+mod edit;
 mod exec;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use access::{Origin, Request};
+pub(crate) use edit::{draft_memory, draft_way, plan_edit, unfinished};
+pub use edit::{
+    Consequence, EditDraft, EditOutcome, EditPlan, EditRefusal, FieldChange, FieldInput,
+    MemoryEditDraft, RefusalReason, Suggestion, Tone, WayForm, WordMark,
+};
 
 use access::access;
 use exec::{execute, load_program, ready, step, Until};
@@ -296,6 +302,8 @@ enum Checked {
     Step,
     /// Instructions until the condition, the first of which there is.
     Execute(Until),
+    /// An edit the rules accept.
+    Edit(edit::Decision),
 }
 
 /// Applies `op` to `machine`, handing its events to `out`: checks the op
@@ -308,8 +316,8 @@ enum Checked {
 /// The [`OpError`] refusing the op, with the machine unchanged and no event
 /// emitted: no room left in the log for one more entry, an invalid
 /// configuration, an issued access with a bad address or value, a program
-/// that does not parse, a `Run` of no instructions or of too many, or
-/// nothing to execute.
+/// that does not parse, a `Run` of no instructions or of too many, nothing
+/// to execute, or an edit its plan refuses.
 pub(crate) fn apply(machine: &mut Machine, op: &Op, out: &mut Emitter<'_>) -> Result<(), OpError> {
     let checked = check(machine, op, out.next_id())?;
     match checked {
@@ -324,6 +332,9 @@ pub(crate) fn apply(machine: &mut Machine, op: &Op, out: &mut Emitter<'_>) -> Re
             step(machine, out);
         }
         Checked::Execute(until) => execute(machine, until, OpProgress::START, out),
+        Checked::Edit(decision) => {
+            edit::edit(machine, &decision, out);
+        }
     }
     Ok(())
 }
@@ -351,7 +362,7 @@ pub(crate) fn resume(
         Op::Run { n } => execute(machine, Until::Count(*n), progress, out),
         // Every other op is one entry, or a setup and the error after it, so
         // no boundary inside it is ever handed to a sink.
-        Op::Config { .. } | Op::Issue { .. } | Op::Program { .. } | Op::Step => {}
+        Op::Config { .. } | Op::Issue { .. } | Op::Program { .. } | Op::Step | Op::Edit { .. } => {}
     }
     Ok(())
 }
@@ -379,6 +390,7 @@ fn check(machine: &Machine, op: &Op, events: u64) -> Result<Checked, OpError> {
             }
             ready(machine).map(|()| Checked::Execute(Until::Count(*n)))
         }
+        Op::Edit { target, patch } => edit::check(machine, target, patch).map(Checked::Edit),
     }
 }
 

@@ -8,13 +8,14 @@
 //! snapshot diff and the two builds are known to agree.
 //!
 //! Each fixture is a configuration and what a student could do on it, in
-//! order: loads and stores issued by hand, program and trace loads, and
-//! single steps of the loaded program. Together they cover the ten access
+//! order: loads and stores issued by hand, program and trace loads, single
+//! steps of the loaded program, and edits. Together they cover the ten access
 //! cases, the design's flows A and B, the dirty eviction of frame 3b, untimed
 //! and timed and as a program, every kind of stall, the widths that change
-//! how numbers are written, and programs: loops, branches, `r0`, a store that
+//! how numbers are written, programs: loops, branches, `r0`, a store that
 //! truncates a register, a fault, the end of the instruction budget, a trace,
-//! and a load issued by hand beside a program.
+//! and a load issued by hand beside a program; and each rule that applies an
+//! edit, of a way or of a memory word.
 
 use serde::Serialize;
 use thiserror::Error;
@@ -26,9 +27,9 @@ use crate::config::{
 use crate::event::{ChangeRef, MicroEvent};
 use crate::geometry::AccessError;
 use crate::limits::INSTRUCTION_BUDGET;
-use crate::op::{self, AccessKind, Op, OpError, ProgramFormat};
+use crate::op::{self, AccessKind, EditPatch, EditTarget, Op, OpError, ProgramFormat, WayPatch};
 use crate::session::Session;
-use crate::units::{Addr, Word};
+use crate::units::{Addr, SetIndex, WayIndex, Word};
 
 /// A run the snapshots pin: a configuration and what is done on it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,8 +45,8 @@ pub struct Fixture {
 }
 
 /// One op a student could apply by hand: a load or store issued by hand, a
-/// program or trace loaded, or one instruction of the loaded program
-/// executed, as Space executes it at the end of the log. A hand-issued load
+/// program or trace loaded, one instruction of the loaded program executed,
+/// as Space executes it at the end of the log, or an edit. A hand-issued load
 /// writes `r1`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Issue {
@@ -73,6 +74,14 @@ pub enum Issue {
     /// The loaded program's next instruction executed. There must be one,
     /// or the fixture is refused.
     Step,
+    /// A way or a memory word edited. The edit's plan must accept it, or the
+    /// fixture is refused.
+    Edit {
+        /// The way or the word.
+        target: EditTarget,
+        /// What changes.
+        patch: EditPatch,
+    },
 }
 
 /// Why a fixture's events cannot be produced.
@@ -96,9 +105,9 @@ pub enum FixtureError {
         /// The word size, in bytes.
         word_bytes: u32,
     },
-    /// One of its programs does not parse, or one of its steps has no
-    /// instruction to execute: no program is loaded, or it has finished or
-    /// stopped.
+    /// One of its programs does not parse, one of its steps has no
+    /// instruction to execute (no program is loaded, or it has finished or
+    /// stopped), or one of its edits is refused.
     #[error(transparent)]
     Op(OpError),
 }
@@ -134,7 +143,8 @@ impl Fixture {
     /// its address does not fit the address width or is not a multiple of
     /// the word size, [`FixtureError::Value`] if it is a store whose value
     /// does not fit the word, or [`FixtureError::Op`] if it is a program that
-    /// does not parse, or a step with no instruction to execute.
+    /// does not parse, a step with no instruction to execute, or an edit its
+    /// plan refuses.
     pub fn events(&self) -> Result<Vec<MicroEvent>, FixtureError> {
         let mut session = Session::with_config(self.config.clone())?;
         for issue in &self.issues {
@@ -163,6 +173,10 @@ impl Issue {
                 format: *format,
             },
             Issue::Step => Op::Step,
+            Issue::Edit { target, patch } => Op::Edit {
+                target: *target,
+                patch: patch.clone(),
+            },
         }
     }
 }
@@ -243,6 +257,7 @@ pub fn fixtures() -> Vec<Fixture> {
     fixtures.extend(widths());
     fixtures.extend(timed());
     fixtures.extend(programs());
+    fixtures.extend(edits());
     fixtures
 }
 
@@ -686,6 +701,153 @@ fn programs() -> Vec<Fixture> {
     ]
 }
 
+/// Frame 3b's first four accesses issued by hand, to the end of access #4:
+/// set 2 holds 0x0A0, clean, in way 0, the most recent, and 0x1A0, dirty
+/// with 7 at 0x1A4, in way 1; set 3 holds 0x0B0, dirty with 5, in way 0.
+fn frame_3b_to_access_4() -> Vec<Issue> {
+    vec![store(0x0B0, 5), load(0x0A4), store(0x1A4, 7), load(0x0A8)]
+}
+
+/// Edits, one fixture per rule that applies one, each on two-way-lru at the
+/// end of frame 3b's access #4: a way made empty; a way's data, dirty bit
+/// and rank, a way made valid, and a dirty way given another line; and a
+/// memory word no line holds, one a clean line holds, and one a dirty line
+/// holds, with another value and with its own.
+fn edits() -> Vec<Fixture> {
+    let config = Preset::TwoWayLru.config();
+    let after = |issues: Vec<Issue>| [frame_3b_to_access_4(), issues].concat();
+    vec![
+        Fixture {
+            name: "edit-invalidate",
+            description: "Ways made empty at the end of frame 3b's access #4: the clean \
+                          0x0A0 in set 2, way 0, which ranks last, then the dirty 0x1A0 in way \
+                          1, which discards the 7 memory never received. Loads of 0x0A4 and \
+                          0x1A4 then miss as compulsory, since the edits took their lines out \
+                          of the run's record of lines filled; they fill the lowest empty way \
+                          first, and 0x1A4 reads the 12 memory kept.",
+            config: config.clone(),
+            issues: after(vec![
+                invalidate(2, 0),
+                invalidate(2, 1),
+                load(0x0A4),
+                load(0x1A4),
+            ]),
+        },
+        Fixture {
+            name: "edit-way",
+            description: "Ways edited at the end of frame 3b's access #4: editor state 4a, \
+                          word 1 of set 2, way 0 set to 9 with its dirty bit and rank 1, so way \
+                          1 moves to rank 0 and 0x0A4 becomes stale; set 0, way 0 made valid \
+                          with 0x0C0, which it takes from memory, clean, at rank 0; and the \
+                          dirty set 3, way 0 given 0x1B0, which discards the 5 at 0x0B0. Loads \
+                          then hit on the edited words.",
+            config: config.clone(),
+            issues: after(vec![
+                edit_way(
+                    2,
+                    0,
+                    WayPatch {
+                        data: Some(words(&[40, 9, 66, 79])),
+                        dirty: Some(true),
+                        rank: Some(1),
+                        ..WayPatch::default()
+                    },
+                ),
+                edit_way(
+                    0,
+                    0,
+                    WayPatch {
+                        valid: Some(true),
+                        line: Some(Addr::new_unchecked(0x0C0)),
+                        ..WayPatch::default()
+                    },
+                ),
+                edit_way(
+                    3,
+                    0,
+                    WayPatch {
+                        line: Some(Addr::new_unchecked(0x1B0)),
+                        ..WayPatch::default()
+                    },
+                ),
+                load(0x0A4),
+                load(0x0C8),
+            ]),
+        },
+        Fixture {
+            name: "edit-memory-only",
+            description: "A memory word no line holds, edited at the end of frame 3b's access \
+                          #4: only memory changes, and a load then brings the new value in.",
+            config: config.clone(),
+            issues: after(vec![edit_memory(0x300, 1), load(0x300)]),
+        },
+        Fixture {
+            name: "edit-memory-clean",
+            description: "A memory word the clean line in set 2, way 0 holds, edited at the \
+                          end of frame 3b's access #4: memory and the cached copy change \
+                          together, so the line stays clean, and a load hits on the new value.",
+            config: config.clone(),
+            issues: after(vec![edit_memory(0x0A8, 12), load(0x0A8)]),
+        },
+        Fixture {
+            name: "edit-memory-dirty",
+            description: "Editor state 4e applied: 0x0B0, which the dirty line in set 3, way 0 \
+                          holds as 5, edited to 12 at the end of frame 3b's access #4. Memory \
+                          changes and the word stays stale; a load still reads the line's 5.",
+            config: config.clone(),
+            issues: after(vec![edit_memory(0x0B0, 12), load(0x0B0)]),
+        },
+        Fixture {
+            name: "edit-memory-matches-dirty",
+            description: "0x1A4, which the dirty line in set 2, way 1 holds as 7, edited to 7 \
+                          at the end of frame 3b's access #4: memory now matches the line, so \
+                          the word is no longer stale, though the line stays dirty.",
+            config,
+            issues: after(vec![edit_memory(0x1A4, 7), load(0x1A4)]),
+        },
+    ]
+}
+
+/// An edit of way `way` of set `set` with `patch`.
+fn edit_way(set: u32, way: u32, patch: WayPatch) -> Issue {
+    Issue::Edit {
+        target: EditTarget::Way {
+            set: SetIndex::new_unchecked(set),
+            way: WayIndex::new_unchecked(way),
+        },
+        patch: EditPatch::Way(patch),
+    }
+}
+
+/// An edit that makes way `way` of set `set` empty.
+fn invalidate(set: u32, way: u32) -> Issue {
+    edit_way(
+        set,
+        way,
+        WayPatch {
+            valid: Some(false),
+            ..WayPatch::default()
+        },
+    )
+}
+
+/// An edit of the memory word at `addr` to `value`.
+fn edit_memory(addr: u32, value: u64) -> Issue {
+    Issue::Edit {
+        target: EditTarget::Memory {
+            addr: Addr::new_unchecked(addr),
+        },
+        patch: EditPatch::Memory {
+            value: Word::new_unchecked(value),
+        },
+    }
+}
+
+/// `values` as a line's data.
+fn words(values: &[u64]) -> Vec<Word> {
+    values.iter().copied().map(Word::new_unchecked).collect()
+}
+
 /// A load of the word at `addr`.
 fn load(addr: u32) -> Issue {
     Issue::Load {
@@ -852,7 +1014,8 @@ mod tests {
             let events = fixture.events().unwrap();
             assert!(!events.is_empty(), "{}", fixture.name);
             // Only a program's fault or budget ends an op early, and then as
-            // the last event of the fixture's last op.
+            // the last event of the fixture's last op; edits end with no
+            // error of their own.
             for (at, event) in events.iter().enumerate() {
                 if event.kind == EventKind::Error {
                     assert!(
@@ -996,6 +1159,25 @@ mod tests {
             ..fixture(Vec::new())
         };
         assert!(matches!(invalid.events(), Err(FixtureError::Config(_))));
+    }
+
+    #[test]
+    fn a_fixture_refuses_an_edit_its_plan_refuses() {
+        let fixture = Fixture {
+            name: "refused",
+            description: "",
+            config: Preset::TwoWayLru.config(),
+            issues: [frame_3b_to_access_4(), vec![invalidate(0, 0)]].concat(),
+        };
+        let refused = fixture.events();
+        assert!(
+            matches!(&refused, Err(FixtureError::Op(OpError::Edit(_)))),
+            "{refused:?}"
+        );
+        assert_eq!(
+            refused.map_err(|error| error.to_string()),
+            Err("No changes. Edit a field to preview what will change.".to_owned())
+        );
     }
 
     #[test]

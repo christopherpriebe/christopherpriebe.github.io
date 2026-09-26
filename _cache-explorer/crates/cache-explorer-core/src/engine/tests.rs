@@ -11,7 +11,9 @@
 //! entry ends, and AMAT and the measured cost of fixed traces; and programs:
 //! loading one, each instruction retiring at its last event, the changed
 //! cells of every program event, stopping mid-instruction, faults, the
-//! budget, and hand-issued accesses beside a program.
+//! budget, and hand-issued accesses beside a program; and edits: the cells
+//! each lists, the counters none moves, the lines they take in and out of
+//! what the classification of misses remembers, and a refused edit.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -29,7 +31,7 @@ use crate::isa::Program;
 use crate::limits::{INSTRUCTION_BUDGET, MAX_ADDRESS_BITS, MAX_EVENTS_PER_ENTRY, MAX_LINES};
 use crate::machine::Stalled;
 use crate::memory::StaleInfo;
-use crate::op::{OpError, ProgramFormat};
+use crate::op::{EditPatch, EditTarget, OpError, ProgramFormat, WayPatch};
 use crate::prng::Prng;
 use crate::replacement::VictimReason;
 use crate::units::{Cycle, LineAddr, Register, Tag, Word, WordIndex};
@@ -1761,16 +1763,20 @@ fn every_miss_is_classed_by_the_lines_filled_and_a_fully_associative_cache_besid
 
 #[test]
 fn a_line_an_edit_takes_out_is_compulsory_again() {
-    // What an edit that invalidates a line does to the classification,
-    // done by hand until edits exist: the line leaves the filled lines and
+    // An edit that invalidates a line takes it out of the filled lines and
     // the shadow, so its next miss is compulsory rather than a conflict the
     // cache did not cause.
     let mut run = Run::new(preset(Preset::DirectMapped8));
     run.load(0x0A4);
-    let line = line_addr(0x0A0);
-    run.machine.cache.way_mut(set(2), way(0)).unwrap().slot = Slot::Invalid;
-    run.machine.filled.remove(&line);
-    run.machine.shadow.forget(line);
+    let invalidate = way_edit(
+        2,
+        0,
+        WayPatch {
+            valid: Some(false),
+            ..WayPatch::default()
+        },
+    );
+    assert_eq!(apply_op(&mut run.machine, &invalidate, 0).0, Ok(()));
     assert_eq!(
         classes(&mut run, &[load(0x0A4, Register::R1)]),
         [COMPULSORY]
@@ -2127,9 +2133,9 @@ fn quiet_and_recording_runs_reach_equal_machines() {
 
 #[test]
 fn i2_is_checked_between_accesses_only() {
-    // A full four-way LRU set whose way 3 and then way 0 are invalidated, as
-    // an edit does, each sent to rank last; the next miss fills way 0, which
-    // ranks behind invalid way 3 until the Rank event moves it to the front.
+    // A full four-way LRU set whose way 3 and then way 0 are invalidated by
+    // edits, each sent to rank last; the next miss fills way 0, which ranks
+    // behind invalid way 3 until the Rank event moves it to the front.
     let config = config(
         64,
         4,
@@ -2141,12 +2147,27 @@ fn i2_is_checked_between_accesses_only() {
     for at in [0x000, 0x010, 0x020, 0x030] {
         run.load(at);
     }
-    for (index, rank) in (0..).zip([3, 1, 0, 2]) {
-        run.machine.cache.way_mut(set(0), way(index)).unwrap().rank = rank;
+    for index in [3, 0] {
+        let invalidate = way_edit(
+            0,
+            index,
+            WayPatch {
+                valid: Some(false),
+                ..WayPatch::default()
+            },
+        );
+        assert_eq!(apply_op(&mut run.machine, &invalidate, 0).0, Ok(()));
     }
-    for index in [0, 3] {
-        run.machine.cache.way_mut(set(0), way(index)).unwrap().slot = Slot::Invalid;
-    }
+    let ranks: Vec<u32> = run
+        .machine
+        .cache
+        .set(set(0))
+        .unwrap()
+        .ways()
+        .iter()
+        .map(|way| way.rank)
+        .collect();
+    assert_eq!(ranks, [3, 1, 0, 2]);
     assert_eq!(run.machine.check_invariants(), Ok(()));
 
     let trace = run.trace(load(0x040, Register::R1));
@@ -3821,4 +3842,206 @@ fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
     );
     assert!(events.is_empty());
     assert_eq!(machine, expected);
+}
+
+// ---------------------------------------------------------------------------
+// Edits.
+// ---------------------------------------------------------------------------
+
+/// An edit of way `w` of set `s` with `patch`.
+fn way_edit(s: u32, w: u32, patch: WayPatch) -> Op {
+    Op::Edit {
+        target: EditTarget::Way {
+            set: set(s),
+            way: way(w),
+        },
+        patch: EditPatch::Way(patch),
+    }
+}
+
+/// An edit of the memory word at `at` to `value`.
+fn memory_edit(at: u32, value: u64) -> Op {
+    Op::Edit {
+        target: EditTarget::Memory { addr: addr(at) },
+        patch: EditPatch::Memory {
+            value: Word::new_unchecked(value),
+        },
+    }
+}
+
+/// `two-way-lru` after frame 3b's first four accesses: set 2 holds 0x0A0,
+/// clean, and 0x1A0, dirty; set 3 holds 0x0B0, dirty with 5.
+fn frame_3b_at_access_4() -> Machine {
+    let mut run = Run::new(preset(Preset::TwoWayLru));
+    run.store(0x0B0, 5);
+    run.load(0x0A4);
+    run.store(0x1A4, 7);
+    run.load(0x0A8);
+    run.machine
+}
+
+#[test]
+fn an_edit_lists_every_cell_it_changes_and_moves_no_counter() {
+    let mut machine = frame_3b_at_access_4();
+    let words = |values: [u64; 4]| Some(values.map(Word::new_unchecked).to_vec());
+    let edits = [
+        // Memory words: under a clean line, under no line, under a dirty
+        // line with another value, then with its own.
+        memory_edit(0x0A8, 12),
+        memory_edit(0x100, 1),
+        memory_edit(0x0B0, 12),
+        memory_edit(0x0B0, 5),
+        // Ways: a word, the dirty bit and the rank; a dirty way made empty;
+        // an empty way made valid with data and the dirty bit; a dirty way
+        // given another line; a rank moved back.
+        way_edit(
+            2,
+            0,
+            WayPatch {
+                data: words([40, 9, 12, 79]),
+                dirty: Some(true),
+                rank: Some(1),
+                ..WayPatch::default()
+            },
+        ),
+        way_edit(
+            2,
+            1,
+            WayPatch {
+                valid: Some(false),
+                ..WayPatch::default()
+            },
+        ),
+        way_edit(
+            0,
+            1,
+            WayPatch {
+                valid: Some(true),
+                line: Some(addr(0x0C4)),
+                data: words([1, 2, 3, 4]),
+                dirty: Some(true),
+                ..WayPatch::default()
+            },
+        ),
+        way_edit(
+            3,
+            0,
+            WayPatch {
+                line: Some(addr(0x130)),
+                ..WayPatch::default()
+            },
+        ),
+        way_edit(
+            0,
+            1,
+            WayPatch {
+                rank: Some(0),
+                data: words([1, 2, 3, 5]),
+                ..WayPatch::default()
+            },
+        ),
+    ];
+    for op in edits {
+        let before = machine.clone();
+        let (result, events) = apply_op(&mut machine, &op, 0);
+        assert_eq!(result, Ok(()), "{op:?}");
+        let [event] = events.as_slice() else {
+            panic!("one event: {events:?}");
+        };
+        assert_eq!(event.kind, EventKind::Edit);
+        assert_eq!(event.cause, None);
+        assert_eq!(event.changed, diff(&before, &machine), "{op:?}");
+        assert_eq!(machine.check_invariants(), Ok(()), "{op:?}");
+        assert_eq!(machine.counters, before.counters);
+        assert_eq!(machine.prng, before.prng);
+        assert_eq!(machine.access, None);
+        assert_eq!(machine.entries_in_run, before.entries_in_run + 1);
+        // A quiet sink reaches the same machine, and gets no event.
+        let mut quiet_machine = before.clone();
+        let mut quiet = Quiet::default();
+        let mut out = Emitter::new(&mut quiet, OpIndex::new_unchecked(1), 0);
+        assert_eq!(apply(&mut quiet_machine, &op, &mut out), Ok(()));
+        assert_eq!((quiet_machine, quiet.seen), (machine.clone(), 1));
+    }
+}
+
+#[test]
+fn an_edit_that_moves_a_line_updates_what_the_classification_of_misses_remembers() {
+    let mut machine = frame_3b_at_access_4();
+    let a0 = LineAddr::new_unchecked(0x0A0);
+    let c0 = LineAddr::new_unchecked(0x0C0);
+    assert!(machine.filled.contains(&a0) && machine.shadow.lines().contains(&a0));
+    let (result, _) = apply_op(
+        &mut machine,
+        &way_edit(
+            2,
+            0,
+            WayPatch {
+                valid: Some(false),
+                ..WayPatch::default()
+            },
+        ),
+        0,
+    );
+    assert_eq!(result, Ok(()));
+    assert!(!machine.filled.contains(&a0) && !machine.shadow.lines().contains(&a0));
+    assert!(!machine.memory.is_touched(c0));
+    let (result, _) = apply_op(
+        &mut machine,
+        &way_edit(
+            0,
+            0,
+            WayPatch {
+                valid: Some(true),
+                line: Some(addr(0x0C0)),
+                ..WayPatch::default()
+            },
+        ),
+        0,
+    );
+    assert_eq!(result, Ok(()));
+    assert!(machine.filled.contains(&c0));
+    assert_eq!(machine.shadow.lines().first(), Some(&c0));
+    // The line the way takes is one memory has touched, as a fill's is.
+    assert!(machine.memory.is_touched(c0));
+    // An edit of data only moves nothing there.
+    let shadow = machine.shadow.clone();
+    let (result, _) = apply_op(
+        &mut machine,
+        &way_edit(
+            0,
+            0,
+            WayPatch {
+                dirty: Some(true),
+                ..WayPatch::default()
+            },
+        ),
+        0,
+    );
+    assert_eq!(result, Ok(()));
+    assert_eq!(machine.shadow, shadow);
+}
+
+#[test]
+fn a_refused_edit_changes_nothing_and_says_why() {
+    let mut machine = frame_3b_at_access_4();
+    let before = machine.clone();
+    let (result, events) = apply_op(
+        &mut machine,
+        &way_edit(
+            3,
+            0,
+            WayPatch {
+                line: Some(addr(0x120)),
+                ..WayPatch::default()
+            },
+        ),
+        0,
+    );
+    let Err(OpError::Edit(refusal)) = result else {
+        panic!("refused: {result:?}");
+    };
+    assert_eq!(refusal.reason, RefusalReason::WrongSetFull);
+    assert!(events.is_empty());
+    assert_eq!(machine, before);
 }

@@ -94,6 +94,12 @@ snapshots! {
     budget_exhaustion => "budget-exhaustion",
     store_truncation => "store-truncation",
     issue_beside_program => "issue-beside-program",
+    edit_invalidate => "edit-invalidate",
+    edit_way => "edit-way",
+    edit_memory_only => "edit-memory-only",
+    edit_memory_clean => "edit-memory-clean",
+    edit_memory_dirty => "edit-memory-dirty",
+    edit_memory_matches_dirty => "edit-memory-matches-dirty",
 }
 
 #[test]

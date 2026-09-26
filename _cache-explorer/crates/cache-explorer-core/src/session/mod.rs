@@ -22,8 +22,9 @@
 //!
 //! The session also answers what the page draws, without the page computing
 //! anything: the snapshot at the cursor, the timeline of the displayed run,
-//! windows of the memory table and of the log, and the issue draft and the
-//! configuration bar for what the student types. Each entry of the log is
+//! windows of the memory table and of the log, and for what the student
+//! types the issue draft, the configuration bar and the editors' drafts,
+//! with the plan of an edit at the cursor. Each entry of the log is
 //! recorded once, as its events are, with its label, its outcome and a
 //! summary of what it changed; and the cursor keeps the values its entry
 //! started from, so the highlight of the net change so far costs nothing to
@@ -31,6 +32,7 @@
 
 mod checkpoints;
 mod cursor;
+mod edit;
 mod timeline;
 
 use std::collections::BTreeSet;

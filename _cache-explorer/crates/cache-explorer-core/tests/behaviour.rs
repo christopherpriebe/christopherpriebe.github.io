@@ -5,13 +5,14 @@
 //! LRU, FIFO and seeded random replacement; a dirty victim still dirty at
 //! its write-back and gone at its eviction; write-through and write-around
 //! counts kept apart; allocating against not allocating; and the classes of
-//! misses in known examples. The engine's unit tests check the same cases on
-//! the machine itself, with its every cell diffed event by event.
+//! misses in known examples, edits that take lines in and out of the cache
+//! included. The engine's unit tests check the same cases on the machine
+//! itself, with its every cell diffed event by event.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
 use cache_explorer_core::{
-    AllocatePolicy, CacheConfig, Config, EventKind, Preset, Replacement, WritePolicy,
+    AllocatePolicy, CacheConfig, Config, EventKind, Op, Preset, Replacement, WritePolicy,
 };
 
 use support::{cases, cells, load, memory, moved, pos, session, short, store, two_way, victims};
@@ -684,6 +685,76 @@ fn misses_are_classed_compulsory_capacity_or_conflict() {
         .stats()
         .counters;
     assert_eq!((counters.misses, counters.compulsory), (2, 2));
+}
+
+#[test]
+fn a_line_an_edit_takes_out_misses_as_compulsory_and_one_it_brings_in_as_filled() {
+    let edit = |set: u32, fields: serde_json::Value| {
+        let mut patch = fields;
+        patch["kind"] = serde_json::json!("way");
+        Op::Edit {
+            target: serde_json::from_value(
+                serde_json::json!({"kind": "way", "set": set, "way": 0}),
+            )
+            .unwrap(),
+            patch: serde_json::from_value(patch).unwrap(),
+        }
+    };
+    let invalidate = || edit(2, serde_json::json!({"valid": false}));
+    // Without the edit, 0x0A4's return after 0x1A4 evicted it is a conflict.
+    let evicted = session(
+        Preset::DirectMapped8.config(),
+        [load(0x0A4), load(0x1A4), load(0x0A4)],
+    );
+    let counters = evicted.stats().counters;
+    assert_eq!((counters.compulsory, counters.conflict), (2, 1));
+    // Made empty by an edit, the line is as good as never filled: its return
+    // is compulsory, not a conflict the cache did not cause.
+    let edited = session(
+        Preset::DirectMapped8.config(),
+        [load(0x0A4), invalidate(), load(0x0A4)],
+    );
+    let counters = edited.stats().counters;
+    assert_eq!(
+        (
+            counters.misses,
+            counters.compulsory,
+            counters.conflict,
+            counters.capacity
+        ),
+        (2, 2, 0, 0)
+    );
+    // Given to a way by an edit, a line counts as filled, as a fill would
+    // make it: when 0x1A4 takes its place, its return is a conflict.
+    let validated = session(
+        Preset::DirectMapped8.config(),
+        [
+            edit(2, serde_json::json!({"valid": true, "line": 0x0A0})),
+            load(0x0A4),
+            load(0x1A4),
+            load(0x0A4),
+        ],
+    );
+    let counters = validated.stats().counters;
+    assert_eq!(
+        (
+            counters.hits,
+            counters.misses,
+            counters.compulsory,
+            counters.conflict
+        ),
+        (1, 2, 1, 1)
+    );
+    // Edits move no counter of their own.
+    let before = session(Preset::DirectMapped8.config(), [load(0x0A4)])
+        .stats()
+        .counters;
+    assert_eq!(
+        session(Preset::DirectMapped8.config(), [load(0x0A4), invalidate()])
+            .stats()
+            .counters,
+        before
+    );
 }
 
 #[test]

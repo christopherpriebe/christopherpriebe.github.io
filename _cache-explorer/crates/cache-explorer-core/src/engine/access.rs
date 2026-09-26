@@ -685,7 +685,7 @@ fn rank(
 }
 
 /// Gives each moved way the rank `rank` picks from its move.
-fn set_ranks(ways: &mut [Way], moves: &[RankMove], rank: impl Fn(&RankMove) -> u32) {
+pub(crate) fn set_ranks(ways: &mut [Way], moves: &[RankMove], rank: impl Fn(&RankMove) -> u32) {
     for moved in moves {
         let target = usize::try_from(moved.way.get())
             .ok()
@@ -812,7 +812,7 @@ fn word_start(machine: &Machine, word: WordIndex) -> u32 {
 /// The error of finding no way where the geometry promises one. A set
 /// without all its ways breaks I1; if the invariant check finds an earlier
 /// problem, that one is named instead.
-fn lost(machine: &Machine, set: SetIndex) -> Halt {
+pub(crate) fn lost(machine: &Machine, set: SetIndex) -> Halt {
     Halt::Broken(machine.check_invariants().err().unwrap_or(
         InvariantViolation::RanksNotAPermutation {
             set,
