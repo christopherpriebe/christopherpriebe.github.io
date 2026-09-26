@@ -26,8 +26,18 @@ enum By {
     Store(u32, u64),
 }
 
-/// `config` in timed mode, with `hit`-cycle hits and `miss`-cycle misses.
+/// The floor under `MAX_CYCLES`: the shipped timing charges 20-cycle misses,
+/// so the constant may be lowered this far without a test edit, and a test
+/// that charged more would have its configuration refused.
+const CYCLE_FLOOR: u32 = 20;
+
+/// `config` in timed mode, with `hit`-cycle hits and `miss`-cycle misses,
+/// neither above the floor under `MAX_CYCLES`.
 fn timed(config: Config, hit: u32, miss: u32) -> Config {
+    assert!(
+        hit.max(miss) <= CYCLE_FLOOR,
+        "MAX_CYCLES may be lowered to {CYCLE_FLOOR}; a test charges no more"
+    );
     Config {
         timing: Some(Timing {
             hit_cycles: hit,

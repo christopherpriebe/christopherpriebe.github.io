@@ -150,9 +150,14 @@ impl Counters {
     /// (AMAT plus 2.0 for 1 write-back)." Each number is rounded half up to
     /// one decimal on its own. Between accesses the cycles are exactly the
     /// hit time per access and the miss penalty per miss and per write-back,
-    /// so the two agree but for rounding; in the middle of an access the
-    /// miss is counted before its penalty is charged. `None` before the
-    /// run's first access.
+    /// so the measured cost is the exact AMAT plus the write-backs' part.
+    /// The printed AMAT is not the exact one: it is computed from the miss
+    /// rate rounded to two places, which moves it by up to half a hundredth
+    /// of the miss penalty (5 cycles at 1,000 cycles), either way, so it can
+    /// print above the measured cost, and a rate below 0.005 prints as 0.00
+    /// though there are misses. In the middle of an access the miss is
+    /// counted before its penalty is charged, so until the fill the measured
+    /// cost can read far below AMAT. `None` before the run's first access.
     #[cfg_attr(
         not(test),
         expect(
@@ -355,6 +360,27 @@ mod tests {
         );
         let measured = run(3, 1, 1, 43).measured(timing(1, 20)).unwrap();
         assert!((measured.value - 43.0 / 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn the_printed_rate_can_move_amat_by_half_a_hundredth_of_the_miss_penalty() {
+        // 1 miss at 1/1,000 spends 1,000 cycles more than the accesses' hit
+        // time. In 201 accesses, 1,201 cycles are 5.98 per access, but the
+        // rate 0.004975 prints as 0.00; in 200, 1,200 cycles are 6.0 per
+        // access, but the rate 0.005 prints as 0.01, and AMAT reads 5 cycles
+        // above the exact 6.0. Each line is still true as printed.
+        let slow = timing(1, 1_000);
+        for (accesses, amat) in [
+            (201, "AMAT = 1 + 0.00 \u{d7} 1,000 = 1.0 cycles"),
+            (200, "AMAT = 1 + 0.01 \u{d7} 1,000 = 11.0 cycles"),
+        ] {
+            let counters = run(accesses, 1, 0, u64::from(accesses) + 1_000);
+            assert_eq!(text(counters.amat(slow)).as_deref(), Some(amat));
+            assert_eq!(
+                text(counters.measured(slow)).as_deref(),
+                Some("Measured: 6.0 cycles per access (AMAT plus 0.0 for 0 write-backs).")
+            );
+        }
     }
 
     #[test]

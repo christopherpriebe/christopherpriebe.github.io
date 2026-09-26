@@ -233,8 +233,18 @@ fn direct_mapped(write_policy: WritePolicy, allocate_policy: AllocatePolicy) -> 
     config(128, 1, Replacement::Lru, write_policy, allocate_policy)
 }
 
-/// Timed mode with `hit`-cycle hits and `miss`-cycle misses.
+/// The floor under `MAX_CYCLES`: the shipped timing charges 20-cycle misses,
+/// so the constant may be lowered this far without a test edit, and a test
+/// that charged more would have its configuration refused.
+const CYCLE_FLOOR: u32 = 20;
+
+/// Timed mode with `hit`-cycle hits and `miss`-cycle misses, neither above
+/// the floor under `MAX_CYCLES`.
 fn timing(hit: u32, miss: u32) -> Timing {
+    assert!(
+        hit.max(miss) <= CYCLE_FLOOR,
+        "MAX_CYCLES may be lowered to {CYCLE_FLOOR}; a test charges no more"
+    );
     Timing {
         hit_cycles: hit,
         miss_cycles: miss,
@@ -2121,19 +2131,19 @@ fn case_4_timed_is_stamped_as_the_design_example_reads() {
     assert_eq!(run.machine.counters.cycles.get(), 141);
 }
 
-/// The countdown of a stall for one transfer, and for two, at 30-cycle
+/// The countdown of a stall for one transfer, and for two, at 20-cycle
 /// misses: `(remaining, total)` right after the `Stall` event.
-const ONE_TRANSFER: Option<(u32, u32)> = Some((30, 30));
-const TWO_TRANSFERS: Option<(u32, u32)> = Some((60, 60));
+const ONE_TRANSFER: Option<(u32, u32)> = Some((20, 20));
+const TWO_TRANSFERS: Option<(u32, u32)> = Some((40, 40));
 
 /// Runs `setup`, then `request` as access case `case`, on `config` timed with
-/// 2-cycle hits and 30-cycle misses, and checks the request's events against
+/// 2-cycle hits and 20-cycle misses, and checks the request's events against
 /// `expected`: kinds, stamps from the access's first, and the countdown
 /// after each. The events that move the cycle counter, and only those, list
 /// it among their changes: the compare, the write-back, the fill and the
 /// write-around.
 fn check_timed(case: u8, config: Config, setup: &[Request], request: Request, expected: &[Timed]) {
-    let mut run = Run::new(timed(config, 2, 30));
+    let mut run = Run::new(timed(config, 2, 20));
     for earlier in setup {
         run.events(*earlier);
     }
@@ -2201,8 +2211,8 @@ fn timed_misses_stall_for_the_fill() {
             (Miss, 2, None),
             (Victim, 2, None),
             (Stall, 2, ONE_TRANSFER),
-            (Fill, 32, None),
-            (Complete, 32, None),
+            (Fill, 22, None),
+            (Complete, 22, None),
         ],
     );
     check_timed(
@@ -2216,8 +2226,8 @@ fn timed_misses_stall_for_the_fill() {
             (Victim, 2, None),
             (Stall, 2, ONE_TRANSFER),
             (Evict, 2, ONE_TRANSFER),
-            (Fill, 32, None),
-            (Complete, 32, None),
+            (Fill, 22, None),
+            (Complete, 22, None),
         ],
     );
     check_timed(
@@ -2230,9 +2240,9 @@ fn timed_misses_stall_for_the_fill() {
             (Miss, 2, None),
             (Victim, 2, None),
             (Stall, 2, ONE_TRANSFER),
-            (Fill, 32, None),
-            (Write, 32, None),
-            (WriteThrough, 32, None),
+            (Fill, 22, None),
+            (Write, 22, None),
+            (WriteThrough, 22, None),
         ],
     );
 }
@@ -2240,10 +2250,10 @@ fn timed_misses_stall_for_the_fill() {
 #[test]
 fn timed_dirty_victims_stall_for_the_write_back_and_the_fill() {
     // Cases 4 and 7: two miss penalties, the write-back's first, so the
-    // countdown reads 60, then 30 once the line is back in memory.
+    // countdown reads 40, then 20 once the line is back in memory.
     let back = direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate);
     let dirty = [store(0x0A4, 7)];
-    let written_back = Some((30, 60));
+    let written_back = Some((20, 40));
     for (case, request, result) in [
         (4, load(0x1A4, Register::R1), Complete),
         (7, store(0x1A4, 3), Write),
@@ -2258,10 +2268,10 @@ fn timed_dirty_victims_stall_for_the_write_back_and_the_fill() {
                 (Miss, 2, None),
                 (Victim, 2, None),
                 (Stall, 2, TWO_TRANSFERS),
-                (WriteBack, 32, written_back),
-                (Evict, 32, written_back),
-                (Fill, 62, None),
-                (result, 62, None),
+                (WriteBack, 22, written_back),
+                (Evict, 22, written_back),
+                (Fill, 42, None),
+                (result, 42, None),
             ],
         );
     }
@@ -2281,7 +2291,7 @@ fn timed_write_arounds_stall_right_after_the_compare() {
                 (Decode, 0, None),
                 (Miss, 2, None),
                 (Stall, 2, ONE_TRANSFER),
-                (MemWrite, 32, None),
+                (MemWrite, 22, None),
             ],
         );
     }
