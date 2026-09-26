@@ -7,10 +7,10 @@
 //! wording with it.
 //!
 //! The values marked tunable are starting points that may be lowered after
-//! measuring, down to the floors the shipped data needs, or raised within the
-//! relations the code relies on. The unit tests at the bottom of this file
-//! check both, so a value moved too far fails here, naming what needs it,
-//! before any other test does.
+//! measuring, down to the floors the shipped data and the tests need, or
+//! raised within the relations the code relies on. The unit tests at the
+//! bottom of this file check both, so a value moved too far fails here,
+//! naming what needs it, before any other test does.
 
 /// The narrowest byte address, in bits. Not tunable: the spec's range starts
 /// here, and repair's smallest cache relies on it to keep a tag bit.
@@ -168,12 +168,16 @@ mod tests {
     }
 
     #[test]
-    fn intervals_are_not_zero() {
+    fn intervals_and_windows_are_not_zero() {
         assert!(
             CHECKPOINT_INTERVAL > 0,
             "the session checkpoints every CHECKPOINT_INTERVAL events"
         );
         assert!(LOAD_SLICE_EVENTS > 0, "a sliced load must make progress");
+        assert!(
+            RECENT_OUTCOMES > 0,
+            "the sparkline shows at least the latest access"
+        );
     }
 
     #[test]
@@ -208,6 +212,16 @@ mod tests {
         assert!(
             MAX_CYCLES >= 20,
             "the fallback timing, module 09 and the timed golden fixture charge 20-cycle misses"
+        );
+    }
+
+    #[test]
+    fn the_unit_tests_fit_the_limits() {
+        // A test that stays below a limit relies on it without naming it, and
+        // that reliance is a floor like the shipped data's.
+        assert!(
+            RECENT_OUTCOMES >= 5,
+            "the engine's stats test shows all five accesses of its run, with no suffix"
         );
     }
 }

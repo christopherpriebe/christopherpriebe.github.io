@@ -12,7 +12,8 @@
 //! sees every access, hit or miss, and on a miss of its own it allocates as
 //! the run's cache would: always for a load, and for a store only under
 //! write-allocate. So under write-no-allocate a store miss fills neither,
-//! and the load that follows it is compulsory too.
+//! and when its line was never filled, the next load of that line is
+//! compulsory too.
 //!
 //! [`Stats`] is what the Stats region shows at one point of a run: the
 //! counters, the memory traffic they add up to, the rows of the mode on
@@ -956,8 +957,9 @@ mod tests {
         recent.push(Outcome::Hit);
         let outcomes: Vec<Outcome> = recent.outcomes().collect();
         assert_eq!(outcomes.len(), limit);
-        assert_eq!(outcomes.last(), Some(&Outcome::Hit));
-        assert!(outcomes[..limit - 1].iter().all(|&o| o == Outcome::Miss));
+        let (last, older) = outcomes.split_last().unwrap();
+        assert_eq!(*last, Outcome::Hit);
+        assert!(older.iter().all(|&o| o == Outcome::Miss));
     }
 
     /// A machine at the start of a run of `config`, with `outcomes` recorded
@@ -1012,7 +1014,10 @@ mod tests {
         // no suffix. One miss, the rest hits.
         let mut outcomes = vec![Miss];
         outcomes.resize(limit, Hit);
-        let hits = format::data(RECENT_OUTCOMES - 1);
+        // Saturating, so that a limit lowered to 0 still builds and fails
+        // in limits.rs, which says why.
+        let hit_count = RECENT_OUTCOMES.saturating_sub(1);
+        let hits = format::data(hit_count);
         let stats = Stats::new(
             &after(crate::config::Config::default(), &outcomes),
             false,
@@ -1023,7 +1028,7 @@ mod tests {
             stats.recent_text,
             Some(format!(
                 "{hits} {}, 1 miss",
-                format::plural(RECENT_OUTCOMES - 1, "hit", "hits")
+                format::plural(hit_count, "hit", "hits")
             ))
         );
         // One more, a miss: the first access drops out of the counts, which
@@ -1040,7 +1045,7 @@ mod tests {
             stats.recent_text,
             Some(format!(
                 "{hits} {}, 1 miss (last {})",
-                format::plural(RECENT_OUTCOMES - 1, "hit", "hits"),
+                format::plural(hit_count, "hit", "hits"),
                 format::setting(RECENT_OUTCOMES)
             ))
         );

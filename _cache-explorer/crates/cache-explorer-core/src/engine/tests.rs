@@ -1528,7 +1528,9 @@ fn a_store_miss_under_write_no_allocate_fills_nothing_so_the_next_miss_on_its_li
 #[test]
 fn a_store_miss_under_write_no_allocate_is_classed_like_any_other_miss() {
     // On a line filled before, it is a conflict if a fully associative
-    // cache would still hold the line...
+    // cache would still hold the line. It allocates nowhere, so the load
+    // after it misses too, and is a conflict as well, not a compulsory
+    // miss, since the line was filled before...
     let mut run = Run::new(direct_mapped(
         WritePolicy::WriteBack,
         AllocatePolicy::WriteNoAllocate,
@@ -1537,10 +1539,11 @@ fn a_store_miss_under_write_no_allocate_is_classed_like_any_other_miss() {
         load(0x0A4, Register::R1),
         load(0x1A4, Register::R1),
         store(0x0A4, 7),
+        load(0x0A4, Register::R1),
     ];
     assert_eq!(
         classes(&mut run, &requests),
-        [COMPULSORY, COMPULSORY, CONFLICT]
+        [COMPULSORY, COMPULSORY, CONFLICT, CONFLICT]
     );
     // ...and for capacity if it would not. Five lines through a fully
     // associative cache of four push out the first; the store to it misses
