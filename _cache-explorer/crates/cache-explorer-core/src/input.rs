@@ -85,7 +85,7 @@ enum InputError {
         "Type {} {}-bit hex address, {} to {}.",
         format::a_or_an(*.address_bits),
         format::setting(*.address_bits),
-        format::address(0, *.address_bits),
+        format::address(0_u32, *.address_bits),
         format::address(last_address(*.address_bits), *.address_bits)
     )]
     NotAnAddress {
@@ -186,31 +186,47 @@ impl Geometry {
                 message: InputError::NotAWord { word_bytes }.to_string(),
             };
         };
-        let fits = if negative {
-            magnitude <= lowest_magnitude(word_bytes)
-        } else {
-            magnitude <= highest_word(word_bytes)
-        };
-        if !fits {
-            return WordInput::Invalid {
-                message: InputError::WordTooWide {
-                    negative,
-                    magnitude,
-                    word_bytes,
-                }
-                .to_string(),
-            };
-        }
-        let value = if negative {
-            magnitude.wrapping_neg() & highest_word(word_bytes)
-        } else {
-            magnitude
-        };
-        WordInput::Valid {
-            value: Word::new_unchecked(value),
-            text: format::data(value),
+        match fit_word(negative, magnitude, word_bytes) {
+            Ok(value) => WordInput::Valid {
+                value,
+                text: format::data(value.get()),
+            },
+            Err(message) => WordInput::Invalid { message },
         }
     }
+}
+
+/// A number, `magnitude` after a minus sign when `negative`, as a word of
+/// `word_bytes` bytes. It fits if it does as a signed or as an unsigned
+/// number, from −2^(8w−1) to 2^(8w) − 1, and a negative one becomes its two's
+/// complement in the word's width, so −3 in a 1-byte word is 253. The Value
+/// box, a `st` immediate and a trace's `W` value all read their numbers so,
+/// and an `add` immediate does with the eight bytes of a register.
+///
+/// # Errors
+///
+/// The word-fit message, for a number the word cannot hold: `300 does not
+/// fit a 1-byte word (−128 to 255).`
+pub(crate) fn fit_word(negative: bool, magnitude: u64, word_bytes: u32) -> Result<Word, String> {
+    let fits = if negative {
+        magnitude <= lowest_magnitude(word_bytes)
+    } else {
+        magnitude <= highest_word(word_bytes)
+    };
+    if !fits {
+        return Err(InputError::WordTooWide {
+            negative,
+            magnitude,
+            word_bytes,
+        }
+        .to_string());
+    }
+    let value = if negative {
+        magnitude.wrapping_neg() & highest_word(word_bytes)
+    } else {
+        magnitude
+    };
+    Ok(Word::new_unchecked(value))
 }
 
 /// `text` after a `0x` or `0X` prefix, if it has one.

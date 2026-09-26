@@ -242,9 +242,29 @@ impl Word {
 }
 
 impl Register {
+    /// Every register, in number order.
+    pub(crate) const ALL: [Register; 8] = [
+        Register::R0,
+        Register::R1,
+        Register::R2,
+        Register::R3,
+        Register::R4,
+        Register::R5,
+        Register::R6,
+        Register::R7,
+    ];
+
     /// The register's number, 0 to 7.
     pub const fn get(self) -> u8 {
         self as u8
+    }
+
+    /// The register numbered `number`, if there is one.
+    pub(crate) fn numbered(number: u32) -> Option<Register> {
+        usize::try_from(number)
+            .ok()
+            .and_then(|index| Register::ALL.get(index))
+            .copied()
     }
 
     /// The register's name, `r0` to `r7`, as the assembler reads it.
@@ -428,18 +448,18 @@ mod tests {
     }
 
     #[test]
+    fn registers_are_numbered_zero_to_seven() {
+        for (number, register) in (0_u32..).zip(Register::ALL) {
+            assert_eq!(u32::from(register.get()), number);
+            assert_eq!(Register::numbered(number), Some(register));
+        }
+        assert_eq!(Register::numbered(8), None);
+        assert_eq!(Register::numbered(u32::MAX), None);
+    }
+
+    #[test]
     fn registers_serialize_as_lower_case_names() {
-        let all = [
-            Register::R0,
-            Register::R1,
-            Register::R2,
-            Register::R3,
-            Register::R4,
-            Register::R5,
-            Register::R6,
-            Register::R7,
-        ];
-        for register in all {
+        for register in Register::ALL {
             let json = serde_json::to_string(&register).unwrap();
             assert_eq!(json, format!("\"{register}\""));
             assert_eq!(serde_json::from_str::<Register>(&json).unwrap(), register);

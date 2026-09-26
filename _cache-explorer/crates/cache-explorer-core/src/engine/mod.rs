@@ -12,12 +12,15 @@
 //! panic, so the run stops with a message and a share link reproduces it.
 
 mod access;
+mod exec;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "golden")]
-pub(crate) use access::access;
 pub(crate) use access::Request;
+#[cfg(feature = "golden")]
+pub(crate) use access::{access, Origin};
+#[cfg(feature = "golden")]
+pub(crate) use exec::{load_program, ready, step};
 
 use crate::event::{Cause, ChangeRef, EventKind, MicroEvent};
 use crate::explain;
@@ -93,6 +96,8 @@ impl Draft {
 /// An event's id is its place in the whole log, so the emitter starts from
 /// the id the op's first event gets. Entries are numbered by the machine,
 /// which counts them within the run; events are numbered within their entry.
+/// A program load's `Setup` is an entry without a number, and its event has
+/// no label.
 pub(crate) struct Emitter<'s> {
     /// Where the events go.
     sink: &'s mut dyn EventSink,
@@ -102,6 +107,8 @@ pub(crate) struct Emitter<'s> {
     next_id: u64,
     /// The events of the current entry so far.
     seq: u32,
+    /// Whether the current entry is a setup, which is not numbered.
+    setup: bool,
 }
 
 impl<'s> Emitter<'s> {
@@ -112,6 +119,7 @@ impl<'s> Emitter<'s> {
             op,
             next_id: first_id,
             seq: 0,
+            setup: false,
         }
     }
 
@@ -120,6 +128,14 @@ impl<'s> Emitter<'s> {
     pub(crate) fn begin_entry(&mut self, machine: &mut Machine) {
         machine.entries_in_run = machine.entries_in_run.saturating_add(1);
         self.seq = 0;
+        self.setup = false;
+    }
+
+    /// Starts a setup: an entry the run does not count, whose events have no
+    /// entry number and no label.
+    pub(crate) fn begin_setup(&mut self) {
+        self.seq = 0;
+        self.setup = true;
     }
 
     /// Numbers `draft` as the next event of the current entry and hands it to
@@ -140,7 +156,7 @@ impl<'s> Emitter<'s> {
         let id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
         let event = self.sink.records().then(|| {
-            let entry = machine.entries_in_run;
+            let entry = (!self.setup).then_some(machine.entries_in_run);
             let mut changed = draft.changed;
             changed.sort_unstable();
             changed.dedup();
@@ -148,9 +164,9 @@ impl<'s> Emitter<'s> {
                 id,
                 op_index: self.op,
                 run: machine.run,
-                entry: Some(entry),
+                entry,
                 seq: self.seq,
-                label: format::label(entry, self.seq),
+                label: entry.map_or_else(String::new, |entry| format::label(entry, self.seq)),
                 // The run's cycle count once the event's effect is complete.
                 cycle: machine.config.timing.map(|_| machine.counters.cycles),
                 kind: draft.kind,
@@ -177,5 +193,26 @@ impl<'s> Emitter<'s> {
         let draft = Draft::new(EventKind::Error, None);
         // The op ends here whatever the sink answers.
         let _ = self.emit(machine, draft, || explain::internal_error(&violation));
+    }
+}
+
+/// Ends an entry whose events went as far as `result` says: checks the
+/// machine's invariants if the entry is complete, and ends the op with an
+/// internal error if one no longer holds.
+///
+/// Returns [`Flow::Stop`] when the sink stopped the entry, or when an
+/// invariant no longer holds.
+pub(crate) fn end_entry(
+    machine: &mut Machine,
+    result: Result<(), Halt>,
+    out: &mut Emitter<'_>,
+) -> Flow {
+    match result.and_then(|()| machine.check_invariants().map_err(Halt::Broken)) {
+        Ok(()) => Flow::Continue,
+        Err(Halt::Stopped) => Flow::Stop,
+        Err(Halt::Broken(violation)) => {
+            out.internal_error(machine, violation);
+            Flow::Stop
+        }
     }
 }

@@ -1,0 +1,17 @@
+---
+source: crates/cache-explorer-core/tests/golden.rs
+description: "1-byte words under write-no-allocate: r2 holds 300, so a store of it keeps its low 8 bits, 44, and its result line says so, whether the store goes around the cache or hits it (cases 9, 2 and 5)."
+---
+- | setup | - | - | - | Loaded a program of 4 instructions. Registers and the pc are reset; the cache and memory keep their contents.
+1.1 | complete | - | r2, pc | - | add: r2 ← 300. No memory access.
+2.1 | decode | lineSize | - | - | Store 0x0A4: tag 0x01, set 2, offset 4 (word 4).
+2.2 | miss | associativity | accesses, stores, misses, compulsory | - | Set 2 is invalid. Miss.
+2.3 | memWrite | allocatePolicy | memory 0xA4, pc, writearounds | - | r2 = 300 does not fit a 1-byte word, so its low 8 bits, 44, are stored. Write-no-allocate: 44 goes straight to memory at 0x0A4. The cache is unchanged.
+3.1 | decode | lineSize | - | - | Load 0x0A4: tag 0x01, set 2, offset 4 (word 4).
+3.2 | miss | associativity | accesses, loads, misses, compulsory | - | Set 2 is invalid. Miss.
+3.3 | victim | associativity | - | - | Set 2 has one way; the line goes there.
+3.4 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, word 2/0/4, word 2/0/5, word 2/0/6, word 2/0/7, word 2/0/8, word 2/0/9, word 2/0/10, word 2/0/11, word 2/0/12, word 2/0/13, word 2/0/14, word 2/0/15, fills | - | Fill way 0 with line 0x0A0–0x0AF from memory.
+3.5 | complete | - | r3, pc | - | Read word 4 of way 0 (44) into r3.
+4.1 | decode | lineSize | - | - | Store 0x0A4: tag 0x01, set 2, offset 4 (word 4).
+4.2 | hit | associativity | accesses, stores, hits | - | Set 2, way 0: valid, and tag 0x01 matches. Hit.
+4.3 | write | writePolicy | dirty 2/0, pc | - | r2 = 300 does not fit a 1-byte word, so its low 8 bits, 44, are stored. Write 44 into word 4 of way 0 and set its dirty bit. Memory at 0x0A4 already holds 44.

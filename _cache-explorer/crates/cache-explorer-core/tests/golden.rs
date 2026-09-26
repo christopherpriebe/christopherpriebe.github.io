@@ -86,6 +86,13 @@ snapshots! {
     timed_write_through => "timed-write-through",
     timed_write_no_allocate => "timed-write-no-allocate",
     timed_one_cycle_misses => "timed-one-cycle-misses",
+    frame_3b_program => "frame-3b-program",
+    frame_3b_program_timed => "frame-3b-program-timed",
+    sample_trace => "sample-trace",
+    count_down_loop => "count-down-loop",
+    register_address_fault => "register-address-fault",
+    store_truncation => "store-truncation",
+    issue_beside_program => "issue-beside-program",
 }
 
 #[test]
@@ -129,7 +136,12 @@ fn the_fixtures_cover_the_ten_access_cases() {
     let mut seen = [false; 10];
     for fixture in golden::fixtures() {
         let events = fixture.events().unwrap();
-        for access in events.chunk_by(|a, b| a.entry == b.entry) {
+        // Every access starts with its Decode; a program load, an add, a
+        // bnez and an error are entries of other kinds.
+        let accesses = events
+            .chunk_by(|a, b| a.entry == b.entry)
+            .filter(|entry| entry.first().map(|event| event.kind) == Some(EventKind::Decode));
+        for access in accesses {
             let case = case(&fixture, access);
             assert!(case.is_some(), "{}: {:?}", fixture.name, access);
             if let Some(case) = case {

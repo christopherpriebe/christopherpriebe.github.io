@@ -36,14 +36,16 @@ pub(crate) fn negative_setting(magnitude: u64) -> String {
 }
 
 /// `0x` and upper-case hex digits, zero-padded to at least `digits` digits.
-pub(crate) fn hex(value: u32, digits: usize) -> String {
+pub(crate) fn hex(value: impl Into<u64>, digits: usize) -> String {
+    let value = value.into();
     format!("0x{value:0digits$X}")
 }
 
 /// An address or a line address as the student reads it: hex padded to
 /// ⌈`address_bits` / 4⌉ digits, so `0x0A4` with 12-bit addresses and `0x00A4`
-/// with 16-bit ones. A value too wide for the width keeps all its digits.
-pub(crate) fn address(value: u32, address_bits: u8) -> String {
+/// with 16-bit ones. A value too wide for the width keeps all its digits, so
+/// an address the student wrote beyond it is quoted as written: `0x1000`.
+pub(crate) fn address(value: impl Into<u64>, address_bits: u8) -> String {
     hex(value, usize::from(address_bits).div_ceil(4))
 }
 
@@ -144,6 +146,13 @@ pub(crate) fn entry_number(entry: u32) -> String {
     format!("#{entry}")
 }
 
+/// A source line or column number, as a parse error or a fault names its
+/// place: `Line 3, column 5`. Plain digits, never grouped, since like an
+/// entry number it names a place rather than counting.
+pub(crate) fn position(n: u32) -> String {
+    n.to_string()
+}
+
 /// "a" or "an", whichever reads right before `n` spoken aloud: "an 8-line
 /// cache", "a 16-line cache".
 pub(crate) fn a_or_an(n: impl Into<u64>) -> &'static str {
@@ -240,21 +249,23 @@ mod tests {
 
     #[test]
     fn hex_is_upper_case_and_padded() {
-        assert_eq!(hex(0xA4, 3), "0x0A4");
-        assert_eq!(hex(0xA4, 2), "0xA4");
-        assert_eq!(hex(0x5, 2), "0x05");
-        assert_eq!(hex(0xABCD, 2), "0xABCD");
+        assert_eq!(hex(0xA4_u32, 3), "0x0A4");
+        assert_eq!(hex(0xA4_u32, 2), "0xA4");
+        assert_eq!(hex(0x5_u32, 2), "0x05");
+        assert_eq!(hex(0xABCD_u32, 2), "0xABCD");
         assert_eq!(hex(u32::MAX, 8), "0xFFFFFFFF");
     }
 
     #[test]
     fn addresses_are_padded_to_the_address_width() {
-        assert_eq!(address(0xA4, 8), "0xA4");
-        assert_eq!(address(0xA4, 12), "0x0A4");
-        assert_eq!(address(0xA4, 13), "0x00A4");
-        assert_eq!(address(0xA4, 16), "0x00A4");
-        assert_eq!(address(0xA4, 32), "0x000000A4");
-        assert_eq!(address(0x1000, 12), "0x1000");
+        assert_eq!(address(0xA4_u32, 8), "0xA4");
+        assert_eq!(address(0xA4_u32, 12), "0x0A4");
+        assert_eq!(address(0xA4_u32, 13), "0x00A4");
+        assert_eq!(address(0xA4_u32, 16), "0x00A4");
+        assert_eq!(address(0xA4_u32, 32), "0x000000A4");
+        assert_eq!(address(0x1000_u32, 12), "0x1000");
+        assert_eq!(address(0x1_0000_0000_u64, 32), "0x100000000");
+        assert_eq!(address(u64::MAX, 8), "0xFFFFFFFFFFFFFFFF");
     }
 
     #[test]
@@ -363,6 +374,12 @@ mod tests {
     fn labels_are_entry_dot_seq_in_plain_digits() {
         assert_eq!(label(5, 3), "5.3");
         assert_eq!(label(12_345, 10), "12345.10");
+    }
+
+    #[test]
+    fn line_and_column_numbers_are_plain_digits() {
+        assert_eq!(position(3), "3");
+        assert_eq!(position(16_385), "16385");
     }
 
     #[test]

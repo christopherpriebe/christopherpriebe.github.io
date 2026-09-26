@@ -1,0 +1,27 @@
+---
+source: crates/cache-explorer-core/tests/golden.rs
+description: "A bnez loop on direct-mapped-8 that counts r1 down from 3 with a negative immediate, storing each value from the register; the branch is taken twice, then falls through. An add and a load into r0 are dropped, and the last instruction finishes the program."
+---
+- | setup | - | - | - | Loaded a program of 6 instructions. Registers and the pc are reset; the cache and memory keep their contents.
+1.1 | complete | - | r1, pc | - | add: r1 ← 3. No memory access.
+2.1 | decode | lineSize | - | - | Store 0x0A4: tag 0x01, set 2, offset 4 (word 1).
+2.2 | miss | associativity | accesses, stores, misses, compulsory | - | Set 2 is invalid. Miss.
+2.3 | victim | associativity | - | - | Set 2 has one way; the line goes there.
+2.4 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills | - | Fill way 0 with line 0x0A0–0x0AF from memory.
+2.5 | write | writePolicy | dirty 2/0, word 2/0/1, pc | - | Write 3 into word 1 of way 0 and set its dirty bit. Memory at 0x0A4 is now stale.
+3.1 | complete | - | r1, pc | - | add: r1 ← 2. No memory access.
+4.1 | complete | - | pc | - | bnez: r1 is 2, branch taken to loop.
+5.1 | decode | lineSize | - | - | Store 0x0A4: tag 0x01, set 2, offset 4 (word 1).
+5.2 | hit | associativity | accesses, stores, hits | - | Set 2, way 0: valid, and tag 0x01 matches. Hit.
+5.3 | write | writePolicy | word 2/0/1, pc | - | Write 2 into word 1 of way 0; the line was already dirty. Memory at 0x0A4 is stale.
+6.1 | complete | - | r1, pc | - | add: r1 ← 1. No memory access.
+7.1 | complete | - | pc | - | bnez: r1 is 1, branch taken to loop.
+8.1 | decode | lineSize | - | - | Store 0x0A4: tag 0x01, set 2, offset 4 (word 1).
+8.2 | hit | associativity | accesses, stores, hits | - | Set 2, way 0: valid, and tag 0x01 matches. Hit.
+8.3 | write | writePolicy | word 2/0/1, pc | - | Write 1 into word 1 of way 0; the line was already dirty. Memory at 0x0A4 is stale.
+9.1 | complete | - | r1, pc | - | add: r1 ← 0. No memory access.
+10.1 | complete | - | pc | - | bnez: r1 is 0, branch not taken.
+11.1 | complete | - | pc | - | add: r0 always reads 0, so the result 5 is dropped.
+12.1 | decode | lineSize | - | - | Load 0x0A4: tag 0x01, set 2, offset 4 (word 1).
+12.2 | hit | associativity | accesses, loads, hits | - | Set 2, way 0: valid, and tag 0x01 matches. Hit.
+12.3 | complete | - | pc | - | Read word 1 of way 0 (1); r0 always reads 0, so the value is dropped.

@@ -1,0 +1,29 @@
+---
+source: crates/cache-explorer-core/tests/golden.rs
+description: "The design's sample trace on direct-mapped-8: each R loads into r1 and each W stores its value, and the log counts accesses, not instructions (cases 2, 1, 5, 4 and 3)."
+---
+- | setup | - | - | - | Loaded a trace of 5 accesses. Registers and the pc are reset; the cache and memory keep their contents.
+1.1 | decode | lineSize | - | - | Load 0x0A4: tag 0x01, set 2, offset 4 (word 1).
+1.2 | miss | associativity | accesses, loads, misses, compulsory | - | Set 2 is invalid. Miss.
+1.3 | victim | associativity | - | - | Set 2 has one way; the line goes there.
+1.4 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills | - | Fill way 0 with line 0x0A0–0x0AF from memory.
+1.5 | complete | - | r1, pc | - | Read word 1 of way 0 (53) into r1.
+2.1 | decode | lineSize | - | - | Load 0x0A8: tag 0x01, set 2, offset 8 (word 2).
+2.2 | hit | associativity | accesses, loads, hits | - | Set 2, way 0: valid, and tag 0x01 matches. Hit.
+2.3 | complete | - | r1, pc | - | Read word 2 of way 0 (66) into r1.
+3.1 | decode | lineSize | - | - | Store 0x0A4: tag 0x01, set 2, offset 4 (word 1).
+3.2 | hit | associativity | accesses, stores, hits | - | Set 2, way 0: valid, and tag 0x01 matches. Hit.
+3.3 | write | writePolicy | dirty 2/0, word 2/0/1, pc | - | Write 7 into word 1 of way 0 and set its dirty bit. Memory at 0x0A4 is now stale.
+4.1 | decode | lineSize | - | - | Load 0x1A4: tag 0x03, set 2, offset 4 (word 1).
+4.2 | miss | associativity | accesses, loads, misses, compulsory | - | Set 2 holds tag 0x01, not 0x03. Miss.
+4.3 | victim | associativity | - | - | Direct-mapped: way 0 is the only place for this line, so its current line must go.
+4.4 | writeBack | writePolicy | memory 0xA4, writebacks | - | Way 0 is dirty: write line 0x0A0 back to memory first.
+4.5 | evict | associativity | valid 2/0, tag 2/0, dirty 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, evictions | - | Evict line 0x0A0 (tag 0x01) from way 0.
+4.6 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills | - | Fill way 0 with line 0x1A0–0x1AF from memory.
+4.7 | complete | - | r1, pc | - | Read word 1 of way 0 (12) into r1.
+5.1 | decode | lineSize | - | - | Load 0x0A4: tag 0x01, set 2, offset 4 (word 1).
+5.2 | miss | associativity | accesses, loads, misses, conflict | - | Set 2 holds tag 0x03, not 0x01. Miss.
+5.3 | victim | associativity | - | - | Direct-mapped: way 0 is the only place for this line, so its current line must go.
+5.4 | evict | associativity | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, evictions | - | Evict line 0x1A0 (tag 0x03) from way 0.
+5.5 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills | - | Fill way 0 with line 0x0A0–0x0AF from memory.
+5.6 | complete | - | r1, pc | - | Read word 1 of way 0 (7) into r1.

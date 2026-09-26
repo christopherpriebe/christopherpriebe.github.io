@@ -35,6 +35,7 @@ mod geometry;
 #[cfg(feature = "golden")]
 pub mod golden;
 mod input;
+mod isa;
 mod machine;
 mod memory;
 mod op;
@@ -52,9 +53,10 @@ pub use geometry::{
     AccessError, AddressField, BitRange, BitRanges, Decoded, FieldKind, Geometry, Placement,
 };
 pub use input::{AddressInput, WordInput};
+pub use isa::{ParseError, ParseResult};
 pub use machine::{InvariantViolation, Machine};
 pub use memory::StaleInfo;
-pub use op::AccessKind;
+pub use op::{AccessKind, OpError, ProgramFormat};
 pub use stats::{Counters, Figure, Outcome, StatKey, StatRow, Stats, Traffic};
 pub use units::{
     Addr, Cycle, EventPos, LineAddr, OpIndex, Register, SetIndex, Tag, WayIndex, Word, WordIndex,

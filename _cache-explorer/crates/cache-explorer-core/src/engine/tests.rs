@@ -6,23 +6,30 @@
 //! against a fully associative LRU cache run beside the engine; the
 //! sparkline's outcomes and the stats of a run; staleness; event numbering;
 //! stopping mid-access; the invariant checks at entry ends; the internal
-//! error of a lookup that finds no way; and timed mode: where each case's
+//! error of a lookup that finds no way; timed mode: where each case's
 //! cycles are charged, the stall and its countdown, the cycle identity at
-//! entry ends, and AMAT and the measured cost of fixed traces.
+//! entry ends, and AMAT and the measured cost of fixed traces; and programs:
+//! loading one, each instruction retiring at its last event, the changed
+//! cells of every program event, stopping mid-instruction, faults, the
+//! budget, and hand-issued accesses beside a program.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
-use super::access::access;
+use super::access::{access, Origin};
+use super::exec::{load_program, ready, step};
 use super::*;
 use crate::cache::{Cache, Dirtiness, Slot};
 use crate::config::{
     AllocatePolicy, CacheConfig, Config, MemoryInit, Preset, Replacement, Timing, WordBytes,
     WritePolicy,
 };
+use crate::cpu::{Cpu, Halted, Registers};
 use crate::event::Counter;
-use crate::limits::{MAX_ADDRESS_BITS, MAX_EVENTS_PER_ENTRY, MAX_LINES};
+use crate::isa::Program;
+use crate::limits::{INSTRUCTION_BUDGET, MAX_ADDRESS_BITS, MAX_EVENTS_PER_ENTRY, MAX_LINES};
 use crate::machine::Stalled;
 use crate::memory::StaleInfo;
+use crate::op::{OpError, ProgramFormat};
 use crate::prng::Prng;
 use crate::replacement::VictimReason;
 use crate::units::{Cycle, LineAddr, Register, Tag, Word, WordIndex};
@@ -191,17 +198,22 @@ impl Run {
     }
 }
 
+/// A load of `at` into `into`, issued by hand.
 fn load(at: u32, into: Register) -> Request {
     Request::Load {
         addr: addr(at),
         into,
+        origin: Origin::Hand,
     }
 }
 
+/// A store of `value` to `at`, issued by hand.
 fn store(at: u32, value: u64) -> Request {
     Request::Store {
         addr: addr(at),
         value,
+        from: None,
+        origin: Origin::Hand,
     }
 }
 
@@ -1178,7 +1190,7 @@ fn a_load_into_r0_changes_no_register() {
         complete.explain,
         "Read word 1 of way 0 (53); r0 always reads 0, so the value is dropped."
     );
-    assert_eq!(run.machine.registers, crate::cpu::Registers::default());
+    assert_eq!(run.machine.registers, Registers::default());
 }
 
 // ---------------------------------------------------------------------------
@@ -2295,7 +2307,8 @@ fn request_stream(geometry: &crate::geometry::Geometry, seed: u64, count: usize)
 
 /// Every cell and counter that differs between two machines, by value, with
 /// the identity rule: a way whose valid bit or tag changed lists its tag and
-/// every word.
+/// every word. Memory is compared over the first three times as many lines
+/// as the cache has, where the request streams and the test programs stay.
 fn diff(before: &Machine, after: &Machine) -> Vec<ChangeRef> {
     let geometry = after.geometry;
     let mut changed = Vec::new();
@@ -2362,6 +2375,9 @@ fn diff(before: &Machine, after: &Machine) -> Vec<ChangeRef> {
         if before.registers.get(register) != after.registers.get(register) {
             changed.push(self::register(register));
         }
+    }
+    if before.cpu.pc != after.cpu.pc {
+        changed.push(ChangeRef::Pc);
     }
     let (old, new) = (before.counters, after.counters);
     let counts = [
@@ -3005,4 +3021,572 @@ fn amat_and_the_measured_cost_of_fixed_traces() {
         .amat(run.machine.config.timing.unwrap())
         .unwrap();
     assert!((amat.value - (1.0 + 20.0 / 3.0)).abs() < 1e-12);
+}
+
+// ---------------------------------------------------------------------------
+// Programs.
+// ---------------------------------------------------------------------------
+
+/// A run driven like a program: each load and each step is an op of its
+/// own, and every event is recorded with the machine after it.
+struct Driven {
+    run: Run,
+}
+
+impl Driven {
+    fn new(config: Config) -> Self {
+        Self {
+            run: Run::new(config),
+        }
+    }
+
+    /// Applies `op` as the next op and returns its flow and its events with
+    /// the machine after each. After every event the invariants that hold
+    /// mid-access hold, the counters add up, and the pc is never past the
+    /// program's end.
+    fn apply(
+        &mut self,
+        op: impl FnOnce(&mut Machine, &mut Emitter<'_>) -> Flow,
+    ) -> (Flow, Vec<(MicroEvent, Machine)>) {
+        let run = &mut self.run;
+        let mut recorder = Recorder::default();
+        let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(run.ops), run.next_id);
+        let flow = op(&mut run.machine, &mut out);
+        run.ops += 1;
+        run.next_id += recorder.events.len() as u64;
+        for (event, after) in recorder.events.iter().zip(&recorder.after) {
+            assert_eq!(after.check_invariants(), Ok(()), "after {}", event.label);
+            let counters = after.counters;
+            assert_eq!(counters.hits + counters.misses, counters.accesses);
+            let length = after.program.as_ref().map_or(0, Program::len);
+            assert!(after.cpu.pc <= length);
+        }
+        (
+            flow,
+            recorder.events.into_iter().zip(recorder.after).collect(),
+        )
+    }
+
+    /// Loads the assembly program `source`, which parses.
+    fn load(&mut self, source: &str) -> Vec<(MicroEvent, Machine)> {
+        self.load_as(source, ProgramFormat::Asm)
+    }
+
+    /// Loads `source` as `format`.
+    fn load_as(&mut self, source: &str, format: ProgramFormat) -> Vec<(MicroEvent, Machine)> {
+        let program = Program::parse(&self.run.machine.geometry, source, format).unwrap();
+        let (flow, trace) = self.apply(|machine, out| load_program(machine, program, out));
+        assert_eq!(flow, Flow::Continue);
+        trace
+    }
+
+    /// Executes the next instruction, which there is.
+    fn step(&mut self) -> Vec<(MicroEvent, Machine)> {
+        assert_eq!(ready(&self.run.machine), Ok(()));
+        self.apply(step).1
+    }
+
+    /// Steps until the program cannot go on, and returns every event.
+    fn finish(&mut self) -> Vec<(MicroEvent, Machine)> {
+        let mut trace = Vec::new();
+        while ready(&self.run.machine).is_ok() {
+            trace.extend(self.step());
+        }
+        trace
+    }
+
+    /// A load or store issued by hand.
+    fn issue(&mut self, request: Request) -> Vec<(MicroEvent, Machine)> {
+        let (flow, trace) = self.apply(|machine, out| access(machine, request, out));
+        assert_eq!(flow, Flow::Continue);
+        trace
+    }
+
+    fn machine(&self) -> &Machine {
+        &self.run.machine
+    }
+}
+
+/// Frame 3b's program, as the design writes it.
+const FRAME_3B: &str = concat!(
+    "  st  [0x0B0], #5\n",
+    "  ld  r1, [0x0A4]\n",
+    "  st  [0x1A4], #7\n",
+    "  ld  r2, [0x0A8]\n",
+    "  ld  r3, [0x2A4]\n",
+    "  ld  r4, [0x1A4]",
+);
+
+/// A loop over six words 0x44 apart, within the first 24 lines: each is
+/// loaded, incremented and stored back through a register, beside a store
+/// of an immediate and a load into r0.
+const STRIDED: &str = concat!(
+    "        add r1, r0, #0\n",
+    "        add r2, r0, #6\n",
+    "loop:   ld r3, [r1]\n",
+    "        add r3, r3, #1\n",
+    "        st [r1], r3\n",
+    "        st [0x040], #-1\n",
+    "        add r1, r1, #0x44\n",
+    "        add r2, r2, #-1\n",
+    "        bnez r2, loop\n",
+    "        ld r0, [0x040]",
+);
+
+#[test]
+fn a_program_load_resets_the_cpu_and_keeps_the_cache() {
+    let mut driven = Driven::new(preset(Preset::DirectMapped8));
+    let trace = driven.load("ld r1, [0x0A4]\nadd r2, r1, #1\nadd r3, r0, #7");
+    let (setup, after) = &trace[0];
+    assert_eq!(trace.len(), 1);
+    assert_eq!(
+        (setup.kind, setup.entry, setup.seq, setup.label.as_str()),
+        (EventKind::Setup, None, 1, "")
+    );
+    // Nothing held a value and the pc was 0: nothing changed.
+    assert!(setup.changed.is_empty());
+    assert_eq!(
+        setup.explain,
+        "Loaded a program of 3 instructions. Registers and the pc are reset; the cache and \
+         memory keep their contents."
+    );
+    assert_eq!(
+        (setup.cause, setup.addr, setup.set, setup.way),
+        (None, None, None, None)
+    );
+    assert_eq!(after.cpu, Cpu::default());
+    assert_eq!(after.entries_in_run, 0);
+
+    driven.step();
+    driven.step();
+    let before = driven.machine().clone();
+    assert_eq!(before.registers.get(Register::R2), 54);
+    assert_eq!(before.cpu.pc, 2);
+
+    let trace = driven.load("ld r4, [0x0A8]");
+    let (setup, after) = &trace[0];
+    assert_eq!(
+        setup.changed,
+        [
+            register(Register::R1),
+            register(Register::R2),
+            ChangeRef::Pc
+        ]
+    );
+    assert_eq!(after.registers, Registers::default());
+    assert_eq!(after.cpu, Cpu::default());
+    assert_eq!(after.access, None);
+    // The cache, memory, counters and entries are kept.
+    assert_eq!(after.cache, before.cache);
+    assert_eq!(after.memory, before.memory);
+    assert_eq!(after.counters, before.counters);
+    assert_eq!(after.entries_in_run, before.entries_in_run);
+    assert_eq!(after.program.as_ref().map(Program::len), Some(1));
+
+    // The new program's load hits the line the old one brought in.
+    let kinds = kinds(
+        &driven
+            .step()
+            .into_iter()
+            .map(|(event, _)| event)
+            .collect::<Vec<_>>(),
+    );
+    assert_eq!(kinds, [Decode, Hit, Complete]);
+}
+
+#[test]
+fn each_instruction_retires_at_its_last_event() {
+    for (config, source) in [
+        (preset(Preset::TwoWayLru), FRAME_3B),
+        (two_way(Replacement::Fifo), STRIDED),
+        (
+            direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteNoAllocate),
+            STRIDED,
+        ),
+        (timed(preset(Preset::TwoWayLru), 1, 20), FRAME_3B),
+    ] {
+        let mut driven = Driven::new(config);
+        driven.load(source);
+        let mut entries = 0;
+        while ready(driven.machine()).is_ok() {
+            let before = driven.machine().clone();
+            let trace = driven.step();
+            entries += 1;
+            let (last, after) = trace.last().unwrap();
+            // In flight, the instruction is the one at the pc.
+            for (event, during) in &trace[..trace.len() - 1] {
+                assert_eq!(during.cpu, before.cpu, "{}", event.label);
+                assert!(!event.changed.contains(&ChangeRef::Pc), "{}", event.label);
+            }
+            assert_eq!(after.cpu.executed, before.cpu.executed + 1);
+            assert_eq!(
+                last.changed.contains(&ChangeRef::Pc),
+                after.cpu.pc != before.cpu.pc
+            );
+            assert!(!after.in_flight());
+            assert_eq!(after.entries_in_run, entries);
+            assert!(trace.iter().all(|(event, _)| event.entry == Some(entries)));
+        }
+        let program = driven.machine().program.as_ref().unwrap();
+        assert_eq!(driven.machine().cpu.pc, program.len());
+        assert_eq!(ready(driven.machine()), Err(OpError::Finished));
+    }
+}
+
+#[test]
+fn every_program_event_lists_exactly_what_it_changed() {
+    let mut kinds_seen = std::collections::BTreeSet::new();
+    for replacement in [Replacement::Lru, Replacement::Fifo, Replacement::Random] {
+        for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
+            for allocate_policy in [
+                AllocatePolicy::WriteAllocate,
+                AllocatePolicy::WriteNoAllocate,
+            ] {
+                for timing in [None, Some(timing(2, 5))] {
+                    let config = Config {
+                        timing,
+                        ..config(128, 2, replacement, write_policy, allocate_policy)
+                    };
+                    let mut driven = Driven::new(config);
+                    let mut before = driven.machine().clone();
+                    let mut trace = driven.load(STRIDED);
+                    for _ in 0..7 {
+                        trace.extend(driven.step());
+                    }
+                    // A second load, midway, clears registers that hold values.
+                    trace.extend(driven.load(STRIDED));
+                    trace.extend(driven.finish());
+                    for (event, after) in &trace {
+                        kinds_seen.insert(format!("{:?}", event.kind));
+                        assert_eq!(
+                            event.changed,
+                            diff(&before, after),
+                            "{} {:?}",
+                            event.label,
+                            event.kind
+                        );
+                        before = after.clone();
+                    }
+                }
+            }
+        }
+    }
+    for kind in [
+        "Setup",
+        "Complete",
+        "Write",
+        "WriteThrough",
+        "MemWrite",
+        "Rank",
+    ] {
+        assert!(kinds_seen.contains(kind), "{kind} never came up");
+    }
+}
+
+#[test]
+fn stopping_after_any_event_of_an_instruction_leaves_the_machine_as_the_full_step_has_it() {
+    for timing in [None, Some(timing(1, 20))] {
+        let mut driven = Driven::new(Config {
+            timing,
+            ..preset(Preset::TwoWayLru)
+        });
+        driven.load(FRAME_3B);
+        for _ in 0..4 {
+            driven.step();
+        }
+        // Access #5, `ld r3, [0x2A4]`, with its dirty eviction and rank.
+        let base = driven.machine().clone();
+        let full = driven.step();
+        for stop in 1..=full.len() {
+            let mut machine = base.clone();
+            let mut recorder = Recorder {
+                stop_after: Some(stop),
+                ..Recorder::default()
+            };
+            let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(9), 0);
+            // The sink stops the step, even at its last event.
+            assert_eq!(step(&mut machine, &mut out), Flow::Stop);
+            assert_eq!(recorder.events.len(), stop);
+            assert_eq!(machine, full[stop - 1].1, "stopped after {stop}");
+
+            let mut quiet_machine = base.clone();
+            let mut quiet = Quiet {
+                stop_after: Some(stop),
+                ..Quiet::default()
+            };
+            let mut out = Emitter::new(&mut quiet, OpIndex::new_unchecked(9), 0);
+            step(&mut quiet_machine, &mut out);
+            assert_eq!(quiet.seen, stop);
+            assert_eq!(quiet_machine, machine, "quietly stopped after {stop}");
+        }
+    }
+}
+
+#[test]
+fn a_register_address_that_does_not_fit_faults_where_it_is() {
+    let cases = [
+        // r2 holds 4096, one past the last 12-bit address.
+        ("add r2, r0, #0xFFF\nadd r2, r2, #1\nld r1, [r2]", None),
+        // r2 holds 166, within the width but not a multiple of 4.
+        ("add r2, r0, #0x0A6\nst [r2], #1", Some(addr(0x0A6))),
+        // A register wider than every address width.
+        ("add r3, r0, #-1\nst [r3], r3", None),
+    ];
+    for (source, at) in cases {
+        let mut driven = Driven::new(preset(Preset::DirectMapped8));
+        driven.load(source);
+        let lines = source.lines().count();
+        for _ in 1..lines {
+            driven.step();
+        }
+        let before = driven.machine().clone();
+        let (flow, trace) = driven.apply(step);
+        assert_eq!(flow, Flow::Stop);
+        let [(error, after)] = trace.as_slice() else {
+            panic!("one event: {trace:?}");
+        };
+        assert_eq!(error.kind, EventKind::Error);
+        assert_eq!(error.entry, Some(before.entries_in_run + 1));
+        assert_eq!((error.addr, error.cause), (at, None));
+        assert!(error.changed.is_empty());
+        assert!(
+            error.explain.starts_with(&format!("Line {lines}: ")),
+            "{}",
+            error.explain
+        );
+        assert!(
+            error.explain.ends_with(" The program stopped."),
+            "{}",
+            error.explain
+        );
+        // Only the program's status and the entry count change: the pc stays
+        // at the instruction, which does not count against the budget.
+        let expected = Machine {
+            cpu: Cpu {
+                halted: Some(Halted::Faulted),
+                ..before.cpu
+            },
+            entries_in_run: before.entries_in_run + 1,
+            ..before.clone()
+        };
+        assert_eq!(after, &expected);
+        let line = u32::try_from(lines).unwrap();
+        assert_eq!(ready(after), Err(OpError::Stopped { line }));
+    }
+}
+
+#[test]
+fn the_budget_replaces_the_instruction_after_its_last() {
+    let mut driven = Driven::new(preset(Preset::DirectMapped8));
+    driven.load("add r1, r0, #1\nloop: bnez r1, loop");
+    driven.step();
+    // As if the loop had run until one instruction of the budget was left.
+    driven.run.machine.cpu.executed = INSTRUCTION_BUDGET - 1;
+    let trace = driven.step();
+    assert_eq!(trace.len(), 1);
+    assert_eq!(trace[0].0.kind, Complete);
+    assert_eq!(driven.machine().cpu.executed, INSTRUCTION_BUDGET);
+    let before = driven.machine().clone();
+
+    let (flow, trace) = driven.apply(step);
+    assert_eq!(flow, Flow::Stop);
+    let [(error, after)] = trace.as_slice() else {
+        panic!("one event: {trace:?}");
+    };
+    assert_eq!(error.kind, EventKind::Error);
+    assert_eq!(error.explain, explain::out_of_budget());
+    assert_eq!((error.addr, error.cause), (None, None));
+    assert_eq!(
+        after.cpu,
+        Cpu {
+            halted: Some(Halted::OutOfBudget),
+            ..before.cpu
+        }
+    );
+    assert_eq!(after.registers, before.registers);
+    assert_eq!(ready(after), Err(OpError::Stopped { line: 2 }));
+
+    // Loading the program again gives it a fresh budget.
+    driven.load("add r1, r0, #1\nloop: bnez r1, loop");
+    assert_eq!(driven.machine().cpu, Cpu::default());
+    assert_eq!(driven.step()[0].0.kind, Complete);
+}
+
+#[test]
+fn a_program_that_finishes_on_its_last_budgeted_instruction_does_not_run_out() {
+    let mut driven = Driven::new(preset(Preset::DirectMapped8));
+    driven.load("add r1, r0, #1\nadd r1, r1, #1");
+    driven.step();
+    driven.run.machine.cpu.executed = INSTRUCTION_BUDGET - 1;
+    let trace = driven.step();
+    assert_eq!(trace[0].0.kind, Complete);
+    assert_eq!(driven.machine().cpu.halted, None);
+    assert_eq!(ready(driven.machine()), Err(OpError::Finished));
+}
+
+#[test]
+fn ready_says_why_there_is_nothing_to_execute() {
+    let mut driven = Driven::new(preset(Preset::DirectMapped8));
+    assert_eq!(ready(driven.machine()), Err(OpError::NoProgram));
+    // With nothing to execute, a step does nothing.
+    let before = driven.machine().clone();
+    let (flow, trace) = driven.apply(step);
+    assert_eq!((flow, trace.len()), (Flow::Stop, 0));
+    assert_eq!(driven.machine(), &before);
+
+    driven.load("; one instruction\nadd r1, r0, #1\ndone:");
+    assert_eq!(ready(driven.machine()), Ok(()));
+    driven.step();
+    assert_eq!(ready(driven.machine()), Err(OpError::Finished));
+    let before = driven.machine().clone();
+    let (flow, trace) = driven.apply(step);
+    assert_eq!((flow, trace.len()), (Flow::Stop, 0));
+    assert_eq!(driven.machine(), &before);
+}
+
+#[test]
+fn a_branch_moves_the_pc_to_its_label_or_on() {
+    let mut driven = Driven::new(preset(Preset::DirectMapped8));
+    driven.load(
+        "add r1, r0, #2\nloop: add r1, r1, #-1\nbnez r1, loop\nbnez r0, loop\nbnez r1, end\nend:",
+    );
+    let pcs: Vec<(u32, String)> = driven
+        .finish()
+        .into_iter()
+        .map(|(event, after)| (after.cpu.pc, event.explain))
+        .collect();
+    assert_eq!(
+        pcs,
+        [
+            (1, "add: r1 \u{2190} 2. No memory access.".to_owned()),
+            (2, "add: r1 \u{2190} 1. No memory access.".to_owned()),
+            (1, "bnez: r1 is 1, branch taken to loop.".to_owned()),
+            (2, "add: r1 \u{2190} 0. No memory access.".to_owned()),
+            (3, "bnez: r1 is 0, branch not taken.".to_owned()),
+            (4, "bnez: r0 is 0, branch not taken.".to_owned()),
+            (5, "bnez: r1 is 0, branch not taken.".to_owned()),
+        ]
+    );
+    // A branch taken to the label after the last instruction finishes the
+    // program, and one to itself leaves the pc where it was.
+    let mut driven = Driven::new(preset(Preset::DirectMapped8));
+    driven.load("add r1, r0, #1\nbnez r1, end\nadd r2, r0, #5\nend:");
+    driven.finish();
+    assert_eq!(
+        driven.machine().cpu,
+        Cpu {
+            pc: 3,
+            executed: 2,
+            halted: None
+        }
+    );
+    assert_eq!(driven.machine().registers.get(Register::R2), 0);
+    let mut driven = Driven::new(preset(Preset::DirectMapped8));
+    driven.load("add r1, r0, #1\nloop: bnez r1, loop");
+    driven.step();
+    let trace = driven.step();
+    assert!(trace[0].0.changed.is_empty());
+    assert_eq!(driven.machine().cpu.pc, 1);
+}
+
+#[test]
+fn a_hand_issued_access_leaves_the_program_where_it_is() {
+    let mut driven = Driven::new(preset(Preset::DirectMapped8));
+    driven.load("add r1, r0, #5\nadd r2, r1, #0");
+    driven.step();
+    let cpu = driven.machine().cpu;
+    let trace = driven.issue(load(0x0A4, Register::R1));
+    assert_eq!(driven.machine().cpu, cpu);
+    assert!(trace
+        .iter()
+        .all(|(event, _)| !event.changed.contains(&ChangeRef::Pc)));
+    assert_eq!(
+        trace.last().unwrap().0.explain,
+        "Read word 1 of way 0 (53) into r1. A program is loaded, so its r1 now holds 53."
+    );
+    driven.issue(store(0x0A8, 9));
+    assert_eq!(driven.machine().cpu, cpu);
+    // The program reads the r1 the hand-issued load wrote.
+    driven.step();
+    assert_eq!(driven.machine().registers.get(Register::R2), 53);
+    // Once the program has finished, a hand-issued load says nothing of it.
+    let trace = driven.issue(load(0x0A4, Register::R1));
+    assert_eq!(
+        trace.last().unwrap().0.explain,
+        "Read word 1 of way 0 (53) into r1."
+    );
+}
+
+#[test]
+fn a_store_from_a_register_names_the_bits_it_keeps_on_its_result_line_only() {
+    let config = Config {
+        word_bytes: WordBytes::Two,
+        ..direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate)
+    };
+    let mut driven = Driven::new(config);
+    driven
+        .load("add r2, r0, #70000\nst [0x0A4], r2\nst [0x0A4], #7\nadd r2, r0, #7\nst [0x0A4], r2");
+    let explains = |trace: Vec<(MicroEvent, Machine)>| -> Vec<(EventKind, String)> {
+        trace
+            .into_iter()
+            .filter(|(event, _)| matches!(event.kind, Write | WriteThrough))
+            .map(|(event, _)| (event.kind, event.explain))
+            .collect()
+    };
+    driven.step();
+    assert_eq!(
+        explains(driven.step()),
+        [
+            (
+                Write,
+                "r2 = 70,000 does not fit a 2-byte word, so its low 16 bits, 4464, are stored. \
+                 Write 4464 into word 2 of way 0."
+                    .to_owned()
+            ),
+            (
+                WriteThrough,
+                "Write-through: 4464 also goes to memory at 0x0A4.".to_owned()
+            ),
+        ]
+    );
+    // An immediate, and a register that fits, say nothing more.
+    for _ in 0..2 {
+        let written = explains(driven.step());
+        assert!(
+            written
+                .iter()
+                .all(|(_, explain)| explain.starts_with("Write")),
+            "{written:?}"
+        );
+    }
+    let written = explains(driven.step());
+    assert!(
+        written
+            .iter()
+            .all(|(_, explain)| explain.starts_with("Write")),
+        "{written:?}"
+    );
+}
+
+#[test]
+fn a_trace_reads_into_r1_and_writes_its_values() {
+    let mut driven = Driven::new(preset(Preset::DirectMapped8));
+    let setup = driven.load_as("R 0x0A4\nW 0x0A8 9\nR 0x0A8", ProgramFormat::Trace);
+    assert_eq!(
+        setup[0].0.explain,
+        "Loaded a trace of 3 accesses. Registers and the pc are reset; the cache and memory \
+         keep their contents."
+    );
+    let last: Vec<String> = (0..3)
+        .map(|_| driven.step().pop().unwrap().0.explain)
+        .collect();
+    assert_eq!(
+        last,
+        [
+            "Read word 1 of way 0 (53) into r1.",
+            "Write 9 into word 2 of way 0 and set its dirty bit. Memory at 0x0A8 is now stale.",
+            "Read word 2 of way 0 (9) into r1.",
+        ]
+    );
+    assert_eq!(ready(driven.machine()), Err(OpError::Finished));
 }

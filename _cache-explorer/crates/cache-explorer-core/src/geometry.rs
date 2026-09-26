@@ -176,12 +176,14 @@ pub enum AccessError {
         format::address(*.addr, *.address_bits),
         format::a_or_an(*.address_bits),
         format::setting(*.address_bits),
-        format::address(0, *.address_bits),
+        format::address(0_u32, *.address_bits),
         format::address(last_address(*.address_bits), *.address_bits)
     )]
     OutOfRange {
-        /// The address given.
-        addr: u32,
+        /// The address given. As wide as a register, so an address a
+        /// program or trace writes beyond every address width still reads
+        /// as written.
+        addr: u64,
         /// The width it does not fit.
         address_bits: u8,
     },
@@ -320,7 +322,7 @@ impl Geometry {
     /// an address has no decoding.
     pub fn decode(&self, addr: u32) -> Result<Decoded, AccessError> {
         let addr = self.addr(addr).ok_or(AccessError::OutOfRange {
-            addr,
+            addr: u64::from(addr),
             address_bits: self.address_bits,
         })?;
         let value = addr.get();

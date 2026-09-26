@@ -31,10 +31,11 @@ use thiserror::Error;
 
 use crate::cache::{Cache, Dirtiness, Set, Slot, Way};
 use crate::config::{Config, ConfigError, Replacement, WritePolicy};
-use crate::cpu::Registers;
+use crate::cpu::{Cpu, Registers};
 use crate::engine::Request;
 use crate::format;
 use crate::geometry::{Geometry, Location};
+use crate::isa::{Placed, Program};
 use crate::memory::Memory;
 use crate::prng::Prng;
 use crate::replacement::VictimChoice;
@@ -42,9 +43,9 @@ use crate::stats::{Counters, Recent, Shadow};
 use crate::units::{Cycle, LineAddr, SetIndex, Tag, WayIndex};
 
 /// The state of a run at one point: its configuration and geometry, the
-/// cache, memory, registers and counters, what the classification of misses
-/// and the sparkline remember, the access in progress, and the run's
-/// generator.
+/// cache, memory, registers and counters, the loaded program and the CPU's
+/// place in it, what the classification of misses and the sparkline
+/// remember, the access in progress, and the run's generator.
 ///
 /// There is no way to obtain one from outside the core other than by replaying
 /// a run, so every machine is one a sequence of ops can reach. Not
@@ -62,6 +63,11 @@ pub struct Machine {
     pub(crate) memory: Memory,
     /// The CPU's registers.
     pub(crate) registers: Registers,
+    /// The loaded program or trace, if any.
+    pub(crate) program: Option<Program>,
+    /// The CPU's place in the program: the pc, the instructions executed
+    /// against the budget, and whether the program stopped early.
+    pub(crate) cpu: Cpu,
     /// The run's counters.
     pub(crate) counters: Counters,
     /// The fully associative LRU cache that tells capacity misses from
@@ -241,8 +247,9 @@ pub enum InvariantViolation {
 impl Machine {
     /// The machine at the start of a run of `config`: every way invalid and
     /// ranked by its way number, memory untouched, registers and counters at
-    /// 0, no line filled, an empty shadow cache and no outcome yet, no
-    /// access yet, and the generator seeded from `config.seed`.
+    /// 0, no program loaded, no line filled, an empty shadow cache and no
+    /// outcome yet, no access yet, and the generator seeded from
+    /// `config.seed`.
     ///
     /// # Errors
     ///
@@ -257,6 +264,8 @@ impl Machine {
             cache: Cache::new(&geometry),
             memory: Memory::new(&geometry, config.memory_init),
             registers: Registers::default(),
+            program: None,
+            cpu: Cpu::default(),
             counters: Counters::default(),
             shadow: Shadow::new(geometry.lines()),
             filled: BTreeSet::new(),
@@ -273,6 +282,15 @@ impl Machine {
     /// True while an access has started and not yet had its last event.
     pub(crate) fn in_flight(&self) -> bool {
         self.access.as_ref().is_some_and(|access| !access.done)
+    }
+
+    /// The instruction the program executes next: the one at the pc, while
+    /// a program is loaded, has not stopped and has not finished.
+    pub(crate) fn next_instruction(&self) -> Option<&Placed> {
+        if self.cpu.halted.is_some() {
+            return None;
+        }
+        self.program.as_ref()?.get(self.cpu.pc)
     }
 
     /// The stall countdown the CPU shows: from a miss's `Stall` event until
@@ -835,6 +853,7 @@ mod tests {
             request: Request::Load {
                 addr,
                 into: crate::units::Register::R1,
+                origin: crate::engine::Origin::Hand,
             },
             location: geometry.locate(addr),
             lookup: None,

@@ -7,11 +7,14 @@
 //! WebAssembly, so a change of wording or behaviour is always a reviewed
 //! snapshot diff and the two builds are known to agree.
 //!
-//! Each fixture is a configuration and the loads and stores a student could
-//! issue on it by hand, in order. Together they cover the ten access cases,
-//! the design's flows A and B, the dirty eviction of frame 3b, untimed and
-//! timed, every kind of stall, and the widths that change how numbers are
-//! written.
+//! Each fixture is a configuration and what a student could do on it, in
+//! order: loads and stores issued by hand, program and trace loads, and
+//! single steps of the loaded program. Together they cover the ten access
+//! cases, the design's flows A and B, the dirty eviction of frame 3b, untimed
+//! and timed and as a program, every kind of stall, the widths that change
+//! how numbers are written, and programs: loops, branches, `r0`, a store that
+//! truncates a register, a fault, a trace, and a load issued by hand beside a
+//! program.
 
 use serde::Serialize;
 use thiserror::Error;
@@ -20,14 +23,16 @@ use crate::config::{
     AllocatePolicy, CacheConfig, Config, ConfigError, Preset, Replacement, Timing, WordBytes,
     WritePolicy,
 };
-use crate::engine::{access, Emitter, EventSink, Flow, Request};
+use crate::engine::{access, load_program, ready, step, Emitter, EventSink, Flow, Origin, Request};
 use crate::event::{ChangeRef, MicroEvent};
 use crate::format;
 use crate::geometry::{highest_word, AccessError, Geometry};
+use crate::isa::Program;
 use crate::machine::Machine;
+use crate::op::{OpError, ProgramFormat};
 use crate::units::{Addr, OpIndex, Register, Word};
 
-/// A run the snapshots pin: a configuration and the accesses issued on it.
+/// A run the snapshots pin: a configuration and what is done on it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Fixture {
     /// The fixture's name, which is also its snapshot's name.
@@ -36,13 +41,15 @@ pub struct Fixture {
     pub description: &'static str,
     /// The run's configuration.
     pub config: Config,
-    /// The loads and stores, issued one after another from the run's start.
+    /// What is done, one op after another from the run's start.
     pub issues: Vec<Issue>,
 }
 
-/// A load or store issued by hand, one op of its own. A load writes `r1`, as
-/// a hand-issued load does.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// One op a student could apply by hand: a load or store issued by hand, a
+/// program or trace loaded, or one instruction of the loaded program
+/// executed, as Space executes it at the end of the log. A hand-issued load
+/// writes `r1`.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Issue {
     /// A load of the word at `addr`.
     Load {
@@ -57,6 +64,27 @@ pub enum Issue {
         /// store's value must, or the fixture is refused.
         value: Word,
     },
+    /// A program or trace loaded in place of the current one. It must parse
+    /// under the configuration, or the fixture is refused.
+    Program {
+        /// Its source.
+        source: String,
+        /// Whether the source is assembly or a trace.
+        format: ProgramFormat,
+    },
+    /// The loaded program's next instruction executed. There must be one,
+    /// or the fixture is refused.
+    Step,
+}
+
+/// An issue checked against the machine, ready to execute.
+enum Checked {
+    /// A load or store.
+    Access(Request),
+    /// A program that parsed.
+    Load(Program),
+    /// A step there is an instruction for.
+    Step,
 }
 
 /// Why a fixture's events cannot be produced.
@@ -86,76 +114,99 @@ pub enum FixtureError {
         /// The word size, in bytes.
         word_bytes: u32,
     },
+    /// One of its programs does not parse, or one of its steps has no
+    /// instruction to execute: no program is loaded, or it has finished or
+    /// stopped.
+    #[error(transparent)]
+    Op(#[from] OpError),
 }
 
 impl Fixture {
     /// The fixture's events, numbered as a session numbers them when each
-    /// access is an op of its own: ids from 0, one op index per access, and
-    /// one entry per access within run 1.
+    /// issue is an op of its own: ids from 0, one op index per issue, and
+    /// within run 1 one entry per access and per instruction, a program load
+    /// being an unnumbered setup.
+    ///
+    /// An `Error` event, a fault or the end of the budget, ends its op; the
+    /// fixture goes on with its next issue, as a session would.
     ///
     /// # Errors
     ///
     /// [`FixtureError::Config`] if the configuration is invalid. Otherwise,
-    /// for the first access an issue would refuse: [`FixtureError::Access`]
-    /// if its address does not fit the address width or is not a multiple of
-    /// the word size, or [`FixtureError::Value`] if it is a store whose value
-    /// does not fit the word.
+    /// for the first issue an op would refuse: [`FixtureError::Access`] if
+    /// its address does not fit the address width or is not a multiple of
+    /// the word size, [`FixtureError::Value`] if it is a store whose value
+    /// does not fit the word, or [`FixtureError::Op`] if it is a program that
+    /// does not parse, or a step with no instruction to execute.
     pub fn events(&self) -> Result<Vec<MicroEvent>, FixtureError> {
         let mut machine = Machine::start(self.config.clone())?;
         let mut sink = Recorder::default();
         for (op, issue) in (0_u32..).zip(&self.issues) {
-            let request = issue.request(&machine.geometry)?;
+            let checked = issue.check(&machine)?;
             let first_id = u64::try_from(sink.events.len()).unwrap_or(u64::MAX);
             let mut out = Emitter::new(&mut sink, OpIndex::new_unchecked(op), first_id);
-            // The recorder never stops an access, so only an internal error
-            // ends one early. The events end with that error, which the
-            // snapshot then shows.
-            if access(&mut machine, request, &mut out) == Flow::Stop {
-                break;
-            }
+            match checked {
+                Checked::Access(request) => access(&mut machine, request, &mut out),
+                Checked::Load(program) => load_program(&mut machine, program, &mut out),
+                Checked::Step => step(&mut machine, &mut out),
+            };
         }
         Ok(sink.events)
     }
 }
 
 impl Issue {
-    /// The address the access reads or writes.
-    fn addr(self) -> Addr {
-        match self {
-            Issue::Load { addr } | Issue::Store { addr, .. } => addr,
-        }
-    }
-
-    /// The engine's request for this access, once its address, and a store's
-    /// value, are checked against `geometry`.
-    fn request(self, geometry: &Geometry) -> Result<Request, FixtureError> {
-        let addr = self.addr();
-        if !geometry.decode(addr.get())?.aligned {
-            return Err(FixtureError::Access(AccessError::Misaligned {
-                addr,
-                address_bits: geometry.address_bits(),
-                word_bytes: geometry.word_bytes(),
-            }));
-        }
-        Ok(match self {
-            Issue::Load { .. } => Request::Load {
-                addr,
-                into: Register::R1,
-            },
-            Issue::Store { value, .. } => {
-                if geometry.fit_word(value.get()) != value {
-                    return Err(FixtureError::Value {
-                        value,
-                        word_bytes: geometry.word_bytes(),
-                    });
-                }
-                Request::Store {
-                    addr,
-                    value: value.get(),
-                }
+    /// The issue checked against `machine`, as an op is before it executes.
+    fn check(&self, machine: &Machine) -> Result<Checked, FixtureError> {
+        let geometry = &machine.geometry;
+        let (addr, value) = match self {
+            Issue::Load { addr } => (*addr, None),
+            Issue::Store { addr, value } => (*addr, Some(*value)),
+            Issue::Program { source, format } => {
+                return Program::parse(geometry, source, *format)
+                    .map(Checked::Load)
+                    .map_err(|failure| FixtureError::Op(failure.into_op_error()));
             }
-        })
+            Issue::Step => {
+                return ready(machine)
+                    .map(|()| Checked::Step)
+                    .map_err(FixtureError::Op)
+            }
+        };
+        Ok(Checked::Access(request(geometry, addr, value)?))
     }
+}
+
+/// The engine's request for a hand-issued load of `addr`, or store of
+/// `value` to it, once the address, and a store's value, are checked against
+/// `geometry`.
+fn request(geometry: &Geometry, addr: Addr, value: Option<Word>) -> Result<Request, FixtureError> {
+    if !geometry.decode(addr.get())?.aligned {
+        return Err(FixtureError::Access(AccessError::Misaligned {
+            addr,
+            address_bits: geometry.address_bits(),
+            word_bytes: geometry.word_bytes(),
+        }));
+    }
+    let Some(value) = value else {
+        return Ok(Request::Load {
+            addr,
+            into: Register::R1,
+            origin: Origin::Hand,
+        });
+    };
+    if geometry.fit_word(value.get()) != value {
+        return Err(FixtureError::Value {
+            value,
+            word_bytes: geometry.word_bytes(),
+        });
+    }
+    Ok(Request::Store {
+        addr,
+        value: value.get(),
+        from: None,
+        origin: Origin::Hand,
+    })
 }
 
 /// Keeps every event the engine hands it.
@@ -251,6 +302,7 @@ pub fn fixtures() -> Vec<Fixture> {
     fixtures.extend(stores());
     fixtures.extend(widths());
     fixtures.extend(timed());
+    fixtures.extend(programs());
     fixtures
 }
 
@@ -545,6 +597,128 @@ fn timed() -> Vec<Fixture> {
     ]
 }
 
+/// Frame 3b's program, as the design writes it.
+const FRAME_3B: &str = concat!(
+    "  st  [0x0B0], #5\n",
+    "  ld  r1, [0x0A4]\n",
+    "  st  [0x1A4], #7\n",
+    "  ld  r2, [0x0A8]\n",
+    "  ld  r3, [0x2A4]\n",
+    "  ld  r4, [0x1A4]",
+);
+
+/// The trace the design's drawer shows when switched to Trace.
+const SAMPLE_TRACE: &str = "R 0x0A4\nR 0x0A8\nW 0x0A4 7\nR 0x1A4\nR 0x0A4";
+
+/// A loop that counts `r1` down from 3, storing each value, then writes to
+/// `r0`, which drops what it is given.
+const COUNT_DOWN: &str = concat!(
+    "; Count r1 down from 3, storing each value; then write r0.\n",
+    "        add r1, r0, #3\n",
+    "loop:   st [0x0A4], r1\n",
+    "        add r1, r1, #-1\n",
+    "        bnez r1, loop\n",
+    "        add r0, r1, #5\n",
+    "        ld r0, [0x0A4]",
+);
+
+/// A loop that walks memory a line at a time until the address it holds in
+/// `r2` leaves the 12-bit address space.
+const WALK_OFF_THE_END: &str = concat!(
+    "; Walk memory a line at a time until r2 leaves it.\n",
+    "        add r2, r0, #0xFE0\n",
+    "loop:   ld r1, [r2]\n",
+    "        add r2, r2, #16\n",
+    "        bnez r2, loop",
+);
+
+/// Stores of a register that holds more than a 1-byte word: once around
+/// the cache, once into it.
+const TRUNCATION: &str = concat!(
+    "        add r2, r0, #300\n",
+    "        st [0x0A4], r2   ; misses: around the cache\n",
+    "        ld r3, [0x0A4]\n",
+    "        st [0x0A4], r2   ; hits",
+);
+
+/// Programs and traces: frame 3b's program, untimed and timed; the design's
+/// sample trace; a loop that finishes and one that faults; a store that
+/// truncates a register; and loads issued by hand beside a program.
+fn programs() -> Vec<Fixture> {
+    vec![
+        Fixture {
+            name: "frame-3b-program",
+            description: "Frame 3b's program on two-way-lru, untimed, loaded and stepped to its \
+                          end one instruction per op, as Space steps it. The load is a setup \
+                          without a number or a label; each instruction's last event moves the \
+                          pc, after the rank update when there is one; and access #5 reads as \
+                          the design's table, into r3 (cases 7, 2, 7, 1, 4 and 3).",
+            config: Preset::TwoWayLru.config(),
+            issues: [vec![program(FRAME_3B)], steps(6)].concat(),
+        },
+        Fixture {
+            name: "frame-3b-program-timed",
+            description: "Frame 3b's program as in frame-3b-program, timed 1/20: the dirty \
+                          eviction of access #5 stalls for 40 cycles, and a program load, like \
+                          every event, is stamped with the run's cycle count.",
+            config: timed_config(Preset::TwoWayLru.config(), 1, 20),
+            issues: [vec![program(FRAME_3B)], steps(6)].concat(),
+        },
+        Fixture {
+            name: "sample-trace",
+            description: "The design's sample trace on direct-mapped-8: each R loads into r1 and \
+                          each W stores its value, and the log counts accesses, not \
+                          instructions (cases 2, 1, 5, 4 and 3).",
+            config: Preset::DirectMapped8.config(),
+            issues: [vec![trace(SAMPLE_TRACE)], steps(5)].concat(),
+        },
+        Fixture {
+            name: "count-down-loop",
+            description: "A bnez loop on direct-mapped-8 that counts r1 down from 3 with a \
+                          negative immediate, storing each value from the register; the branch \
+                          is taken twice, then falls through. An add and a load into r0 are \
+                          dropped, and the last instruction finishes the program.",
+            config: Preset::DirectMapped8.config(),
+            issues: [vec![program(COUNT_DOWN)], steps(12)].concat(),
+        },
+        Fixture {
+            name: "register-address-fault",
+            description: "A bnez loop on direct-mapped-8 that loads through r2, a line at a \
+                          time, until r2 holds 4096, which does not fit a 12-bit address: the \
+                          load faults with an error entry of its own, and the pc stays at it.",
+            config: Preset::DirectMapped8.config(),
+            issues: [vec![program(WALK_OFF_THE_END)], steps(8)].concat(),
+        },
+        Fixture {
+            name: "store-truncation",
+            description: "1-byte words under write-no-allocate: r2 holds 300, so a store of it \
+                          keeps its low 8 bits, 44, and its result line says so, whether the \
+                          store goes around the cache or hits it (cases 9, 2 and 5).",
+            config: Config {
+                word_bytes: WordBytes::One,
+                ..direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteNoAllocate)
+            },
+            issues: [vec![program(TRUNCATION)], steps(4)].concat(),
+        },
+        Fixture {
+            name: "issue-beside-program",
+            description: "A load issued by hand writes r1 even while a program is loaded, and \
+                          its line says the program's r1 changed; once the program has \
+                          finished, it does not. A hand-issued access moves neither the pc nor \
+                          the budget.",
+            config: Preset::DirectMapped8.config(),
+            issues: vec![
+                program("ld r1, [0x0A4]\nld r2, [0x0A8]"),
+                Issue::Step,
+                load(0x1A4),
+                store(0x0B0, 9),
+                Issue::Step,
+                load(0x0A4),
+            ],
+        },
+    ]
+}
+
 /// A load of the word at `addr`.
 fn load(addr: u32) -> Issue {
     Issue::Load {
@@ -558,6 +732,27 @@ fn store(addr: u32, value: u64) -> Issue {
         addr: Addr::new_unchecked(addr),
         value: Word::new_unchecked(value),
     }
+}
+
+/// A load of the assembly program `source`.
+fn program(source: &str) -> Issue {
+    Issue::Program {
+        source: source.to_owned(),
+        format: ProgramFormat::Asm,
+    }
+}
+
+/// A load of the trace `source`.
+fn trace(source: &str) -> Issue {
+    Issue::Program {
+        source: source.to_owned(),
+        format: ProgramFormat::Trace,
+    }
+}
+
+/// `count` steps, one op each.
+fn steps(count: usize) -> Vec<Issue> {
+    vec![Issue::Step; count]
 }
 
 /// `direct-mapped-8` under the given write and allocate policies.
@@ -689,12 +884,75 @@ mod tests {
             );
             let events = fixture.events().unwrap();
             assert!(!events.is_empty(), "{}", fixture.name);
-            assert!(
-                events.iter().all(|event| event.kind != EventKind::Error),
-                "{}",
-                fixture.name
-            );
+            // Only a program's fault or budget ends an op early, and then as
+            // the last event of the fixture's last op.
+            for (at, event) in events.iter().enumerate() {
+                if event.kind == EventKind::Error {
+                    assert!(event.explain.starts_with("Line "), "{}", event.explain);
+                    assert_eq!(at, events.len() - 1, "{}", fixture.name);
+                }
+            }
         }
+    }
+
+    #[test]
+    fn a_fixture_applies_program_loads_and_steps_as_ops() {
+        let fixture = |issues| Fixture {
+            name: "programs",
+            description: "",
+            config: Preset::DirectMapped8.config(),
+            issues,
+        };
+        let events = fixture(vec![program("ld r1, [0x0A4]"), Issue::Step])
+            .events()
+            .unwrap();
+        let numbers: Vec<(u64, u32, Option<u32>, u32, &str)> = events
+            .iter()
+            .map(|event| {
+                (
+                    event.id,
+                    event.op_index.get(),
+                    event.entry,
+                    event.seq,
+                    event.label.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            numbers,
+            [
+                (0, 0, None, 1, ""),
+                (1, 1, Some(1), 1, "1.1"),
+                (2, 1, Some(1), 2, "1.2"),
+                (3, 1, Some(1), 3, "1.3"),
+                (4, 1, Some(1), 4, "1.4"),
+                (5, 1, Some(1), 5, "1.5"),
+            ]
+        );
+        assert_eq!(
+            fixture(vec![Issue::Step]).events(),
+            Err(FixtureError::Op(OpError::NoProgram))
+        );
+        assert_eq!(
+            fixture(vec![program("ld r1, [0x0A4]"), Issue::Step, Issue::Step]).events(),
+            Err(FixtureError::Op(OpError::Finished))
+        );
+        let refused = fixture(vec![program("lw r1, [0x0A4]")]).events();
+        assert!(
+            matches!(
+                &refused,
+                Err(FixtureError::Op(OpError::Program { errors: 1, .. }))
+            ),
+            "{refused:?}"
+        );
+        assert_eq!(
+            refused.map_err(|error| error.to_string()),
+            Err(
+                "The program has an error on line 1: unknown instruction `lw`; use ld, st, add \
+                 or bnez."
+                    .to_owned()
+            )
+        );
     }
 
     #[test]
@@ -754,7 +1012,7 @@ mod tests {
         assert_eq!(
             fixture(vec![load(0x0A4), store(beyond, 1)]).events(),
             Err(FixtureError::Access(AccessError::OutOfRange {
-                addr: beyond,
+                addr: u64::from(beyond),
                 address_bits: config.address_bits,
             }))
         );

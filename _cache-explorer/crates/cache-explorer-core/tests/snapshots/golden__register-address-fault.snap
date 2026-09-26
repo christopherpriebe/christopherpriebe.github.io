@@ -1,0 +1,21 @@
+---
+source: crates/cache-explorer-core/tests/golden.rs
+description: "A bnez loop on direct-mapped-8 that loads through r2, a line at a time, until r2 holds 4096, which does not fit a 12-bit address: the load faults with an error entry of its own, and the pc stays at it."
+---
+- | setup | - | - | - | Loaded a program of 4 instructions. Registers and the pc are reset; the cache and memory keep their contents.
+1.1 | complete | - | r2, pc | - | add: r2 ← 4064. No memory access.
+2.1 | decode | lineSize | - | - | Load 0xFE0: tag 0x1F, set 6, offset 0 (word 0).
+2.2 | miss | associativity | accesses, loads, misses, compulsory | - | Set 6 is invalid. Miss.
+2.3 | victim | associativity | - | - | Set 6 has one way; the line goes there.
+2.4 | fill | lineSize | valid 6/0, tag 6/0, word 6/0/0, word 6/0/1, word 6/0/2, word 6/0/3, fills | - | Fill way 0 with line 0xFE0–0xFEF from memory.
+2.5 | complete | - | r1, pc | - | Read word 0 of way 0 (21) into r1.
+3.1 | complete | - | r2, pc | - | add: r2 ← 4080. No memory access.
+4.1 | complete | - | pc | - | bnez: r2 is 4080, branch taken to loop.
+5.1 | decode | lineSize | - | - | Load 0xFF0: tag 0x1F, set 7, offset 0 (word 0).
+5.2 | miss | associativity | accesses, loads, misses, compulsory | - | Set 7 is invalid. Miss.
+5.3 | victim | associativity | - | - | Set 7 has one way; the line goes there.
+5.4 | fill | lineSize | valid 7/0, tag 7/0, word 7/0/0, word 7/0/1, word 7/0/2, word 7/0/3, fills | - | Fill way 0 with line 0xFF0–0xFFF from memory.
+5.5 | complete | - | r1, pc | - | Read word 0 of way 0 (73) into r1.
+6.1 | complete | - | r2, pc | - | add: r2 ← 4096. No memory access.
+7.1 | complete | - | pc | - | bnez: r2 is 4096, branch taken to loop.
+8.1 | error | - | - | - | Line 3: r2 holds 4096, which does not fit a 12-bit address. The program stopped.

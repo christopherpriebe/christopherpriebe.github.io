@@ -213,6 +213,26 @@ mod tests {
             MAX_CYCLES >= 20,
             "the fallback timing, module 09 and the timed golden fixture charge 20-cycle misses"
         );
+        assert!(
+            MAX_PROGRAM_INSTRUCTIONS >= 6,
+            "frame 3b's program and the count-down-loop golden fixture have six instructions"
+        );
+        assert!(
+            MAX_PROGRAM_LINES >= 7,
+            "the count-down-loop golden fixture has seven lines"
+        );
+        assert!(
+            MAX_PROGRAM_BYTES >= 196,
+            "the count-down-loop golden fixture is 196 bytes"
+        );
+        assert!(
+            INSTRUCTION_BUDGET >= 12,
+            "the count-down-loop golden fixture executes 12 instructions"
+        );
+        assert!(
+            MAX_LABEL_CHARS >= 5,
+            "the design's first-visit program labels its first line `start`"
+        );
     }
 
     #[test]
@@ -222,6 +242,23 @@ mod tests {
         assert!(
             RECENT_OUTCOMES >= 5,
             "the engine's stats test shows all five accesses of its run, with no suffix"
+        );
+        assert!(
+            MAX_PROGRAM_INSTRUCTIONS >= 10 && MAX_PROGRAM_LINES >= 10 && MAX_PROGRAM_BYTES >= 227,
+            "the engine's strided-loop program has ten instructions on ten lines, 227 bytes"
+        );
+        assert!(
+            INSTRUCTION_BUDGET >= 45,
+            "the engine's strided-loop program executes 45 instructions"
+        );
+        assert!(MAX_LABEL_CHARS >= 7, "tests/isa.rs branches to `nowhere`");
+        assert!(
+            MAX_PARSE_ERRORS >= 4,
+            "tests/isa.rs lists the four errors of one program"
+        );
+        assert!(
+            MAX_PARSE_ERRORS + 3 <= MAX_PROGRAM_LINES,
+            "the parse tests write one error a line, past the errors a result lists"
         );
     }
 }

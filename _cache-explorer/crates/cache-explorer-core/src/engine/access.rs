@@ -39,12 +39,17 @@
 //! after `Miss` for a write-around. Every event is stamped with the run's
 //! cycle count, so the stamps count the stall down.
 //!
+//! An access either is issued by hand or is the program's `ld` or `st` at
+//! the pc. The program's instruction retires at the access's last event,
+//! which moves the pc on; a hand-issued access touches neither the pc nor
+//! the budget.
+//!
 //! Each event hands the emitter its log line as a closure, which the
 //! `explain` module words and which is built only when the sink records.
 
 use crate::cache::{Dirtiness, Slot, Way};
 use crate::config::{AllocatePolicy, WritePolicy};
-use crate::engine::{Draft, Emitter, Flow, Halt};
+use crate::engine::{end_entry, Draft, Emitter, Flow, Halt};
 use crate::event::{Cause, ChangeRef, Counter, EventKind};
 use crate::explain::{self, StallFor, WriteNote};
 use crate::geometry::Location;
@@ -65,6 +70,8 @@ pub(crate) enum Request {
         addr: Addr,
         /// The register the word goes into.
         into: Register,
+        /// Who made the request.
+        origin: Origin,
     },
     /// A store of `value` to the word at `addr`. Only the value's low
     /// `8 × word_bytes` bits are stored.
@@ -73,7 +80,24 @@ pub(crate) enum Request {
         addr: Addr,
         /// The value, as wide as a register.
         value: u64,
+        /// The register the value came from, if it came from one: the store's
+        /// result line names it when the word cannot hold the value.
+        from: Option<Register>,
+        /// Who made the request.
+        origin: Origin,
     },
+}
+
+/// Who made a request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Origin {
+    /// The student, by hand. The access touches neither the pc nor the
+    /// budget; a load into a register the loaded program may be using says
+    /// so.
+    Hand,
+    /// The program's instruction at the pc, which retires at the access's
+    /// last event.
+    Program,
 }
 
 impl Request {
@@ -81,6 +105,13 @@ impl Request {
     pub(crate) fn addr(self) -> Addr {
         match self {
             Request::Load { addr, .. } | Request::Store { addr, .. } => addr,
+        }
+    }
+
+    /// Who made the request.
+    pub(crate) fn origin(self) -> Origin {
+        match self {
+            Request::Load { origin, .. } | Request::Store { origin, .. } => origin,
         }
     }
 
@@ -99,16 +130,8 @@ impl Request {
 /// Returns [`Flow::Stop`] when the sink stopped the access, or when an
 /// invariant no longer holds; the op then ends with an `Error` event.
 pub(crate) fn access(machine: &mut Machine, request: Request, out: &mut Emitter<'_>) -> Flow {
-    let result =
-        run(machine, request, out).and_then(|()| machine.check_invariants().map_err(Halt::Broken));
-    match result {
-        Ok(()) => Flow::Continue,
-        Err(Halt::Stopped) => Flow::Stop,
-        Err(Halt::Broken(violation)) => {
-            out.internal_error(machine, violation);
-            Flow::Stop
-        }
-    }
+    let result = run(machine, request, out);
+    end_entry(machine, result, out)
 }
 
 /// The access's events, from `Decode` to its last.
@@ -462,8 +485,11 @@ fn complete(
         changed.push(ChangeRef::Register { register: into });
     }
     if !ranked {
-        finish(machine);
+        changed.extend(finish(machine));
     }
+    // A load issued by hand writes a register the program may be using.
+    let beside_program =
+        origin(machine) == Some(Origin::Hand) && machine.next_instruction().is_some();
     let draft = Draft {
         addr: Some(addr),
         set: Some(location.set),
@@ -472,7 +498,7 @@ fn complete(
         ..Draft::new(EventKind::Complete, None)
     };
     out.emit(machine, draft, || {
-        explain::load(location.word, way, value, into)
+        explain::load(location.word, way, value, into, beside_program)
     })
 }
 
@@ -515,7 +541,7 @@ fn write(
         _ => return Err(lost(machine, set)),
     };
     if write_back && !ranked {
-        finish(machine);
+        changed.extend(finish(machine));
     }
     let draft = Draft {
         addr: Some(addr),
@@ -533,7 +559,8 @@ fn write(
         } else {
             WriteNote::Through
         };
-        explain::write(&machine.geometry, addr, location.word, way, word, note)
+        let wrote = explain::write(&machine.geometry, addr, location.word, way, word, note);
+        format!("{}{wrote}", truncation(machine, value, word))
     })?;
     if write_back {
         return Ok(());
@@ -545,7 +572,7 @@ fn write(
         counter: Counter::Writethroughs,
     });
     if !ranked {
-        finish(machine);
+        changed.extend(finish(machine));
     }
     let draft = Draft {
         addr: Some(addr),
@@ -578,7 +605,7 @@ fn write_around(
         counter: Counter::Writearounds,
     });
     changed.extend(charge(machine, Cost::Miss));
-    finish(machine);
+    changed.extend(finish(machine));
     let draft = Draft {
         addr: Some(addr),
         set: Some(location.set),
@@ -586,7 +613,8 @@ fn write_around(
         ..Draft::new(EventKind::MemWrite, Some(Cause::AllocatePolicy))
     };
     out.emit(machine, draft, || {
-        explain::write_around(&machine.geometry, addr, word)
+        let wrote = explain::write_around(&machine.geometry, addr, word);
+        format!("{}{wrote}", truncation(machine, value, word))
     })
 }
 
@@ -626,17 +654,18 @@ fn rank(
         return Err(lost(machine, set));
     };
     set_ranks(target.ways_mut(), moves, |moved| moved.to);
-    finish(machine);
+    let mut changed: Vec<ChangeRef> = moves
+        .iter()
+        .map(|moved| ChangeRef::Rank {
+            set,
+            way: moved.way,
+        })
+        .collect();
+    changed.extend(finish(machine));
     let draft = Draft {
         set: Some(set),
         way: Some(way),
-        changed: moves
-            .iter()
-            .map(|moved| ChangeRef::Rank {
-                set,
-                way: moved.way,
-            })
-            .collect(),
+        changed,
         ..Draft::new(EventKind::Rank, Some(Cause::Replacement))
     };
     out.emit(machine, draft, || {
@@ -698,10 +727,41 @@ fn to_memory(machine: &mut Machine, addr: Addr, word: Word) -> Vec<ChangeRef> {
 }
 
 /// Marks the access as done: the event about to be emitted is its last, so
-/// the machine it leaves is between entries.
-fn finish(machine: &mut Machine) {
-    if let Some(access) = &mut machine.access {
-        access.done = true;
+/// the machine it leaves is between entries. The program's instruction
+/// retires here and the pc moves to the next one, which the event lists.
+fn finish(machine: &mut Machine) -> Option<ChangeRef> {
+    let access = machine.access.as_mut()?;
+    access.done = true;
+    match access.request.origin() {
+        Origin::Hand => None,
+        Origin::Program => {
+            let next = machine.cpu.pc.saturating_add(1);
+            machine.cpu.retire(next).then_some(ChangeRef::Pc)
+        }
+    }
+}
+
+/// Who made the access in progress.
+fn origin(machine: &Machine) -> Option<Origin> {
+    machine
+        .access
+        .as_ref()
+        .map(|access| access.request.origin())
+}
+
+/// The sentence a store's result line starts with when the register it
+/// stores, `value`, is wider than the word it stored, `word`; empty
+/// otherwise. A hand-issued value and an immediate always fit.
+fn truncation(machine: &Machine, value: u64, word: Word) -> String {
+    let from = match machine.access.as_ref().map(|access| access.request) {
+        Some(Request::Store { from, .. }) => from,
+        _ => None,
+    };
+    match from {
+        Some(register) if value != word.get() => {
+            explain::truncated(register, value, machine.geometry.word_bytes(), word)
+        }
+        _ => String::new(),
     }
 }
 

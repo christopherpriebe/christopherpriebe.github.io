@@ -1,0 +1,45 @@
+---
+source: crates/cache-explorer-core/tests/golden.rs
+description: "Frame 3b's program as in frame-3b-program, timed 1/20: the dirty eviction of access #5 stalls for 40 cycles, and a program load, like every event, is stamped with the run's cycle count."
+---
+- | setup | - | - | 0 | Loaded a program of 6 instructions. Registers and the pc are reset; the cache and memory keep their contents.
+1.1 | decode | lineSize | - | 0 | Store 0x0B0: tag 0x02, set 3, offset 0 (word 0).
+1.2 | miss | associativity | accesses, stores, misses, cycles, compulsory | 1 | Set 3: no valid way holds tag 0x02. Miss.
+1.3 | victim | associativity | - | 1 | Way 0 chosen: it is invalid (empty).
+1.4 | stall | timing | - | 1 | The CPU stalls for 20 cycles while memory supplies line 0x0B0.
+1.5 | fill | lineSize | valid 3/0, tag 3/0, word 3/0/0, word 3/0/1, word 3/0/2, word 3/0/3, fills, cycles | 21 | Fill way 0 with line 0x0B0–0x0BF from memory.
+1.6 | write | writePolicy | dirty 3/0, word 3/0/0, pc | 21 | Write 5 into word 0 of way 0 and set its dirty bit. Memory at 0x0B0 is now stale.
+2.1 | decode | lineSize | - | 21 | Load 0x0A4: tag 0x02, set 2, offset 4 (word 1).
+2.2 | miss | associativity | accesses, loads, misses, cycles, compulsory | 22 | Set 2: no valid way holds tag 0x02. Miss.
+2.3 | victim | associativity | - | 22 | Way 0 chosen: it is invalid (empty).
+2.4 | stall | timing | - | 22 | The CPU stalls for 20 cycles while memory supplies line 0x0A0.
+2.5 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills, cycles | 42 | Fill way 0 with line 0x0A0–0x0AF from memory.
+2.6 | complete | - | r1, pc | 42 | Read word 1 of way 0 (53) into r1.
+3.1 | decode | lineSize | - | 42 | Store 0x1A4: tag 0x06, set 2, offset 4 (word 1).
+3.2 | miss | associativity | accesses, stores, misses, cycles, compulsory | 43 | Set 2: no valid way holds tag 0x06. Miss.
+3.3 | victim | associativity | - | 43 | Way 1 chosen: it is invalid (empty).
+3.4 | stall | timing | - | 43 | The CPU stalls for 20 cycles while memory supplies line 0x1A0.
+3.5 | fill | lineSize | valid 2/1, tag 2/1, word 2/1/0, word 2/1/1, word 2/1/2, word 2/1/3, fills, cycles | 63 | Fill way 1 with line 0x1A0–0x1AF from memory.
+3.6 | write | writePolicy | dirty 2/1, word 2/1/1 | 63 | Write 7 into word 1 of way 1 and set its dirty bit. Memory at 0x1A4 is now stale.
+3.7 | rank | replacement | rank 2/0, rank 2/1, pc | 63 | LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.
+4.1 | decode | lineSize | - | 63 | Load 0x0A8: tag 0x02, set 2, offset 8 (word 2).
+4.2 | hit | associativity | accesses, loads, hits, cycles | 64 | Set 2, way 0: valid, and tag 0x02 matches. Hit.
+4.3 | complete | - | r2 | 64 | Read word 2 of way 0 (66) into r2.
+4.4 | rank | replacement | rank 2/0, rank 2/1, pc | 64 | LRU ranks in set 2: way 0 becomes 0 (most recent); way 1 is 1.
+5.1 | decode | lineSize | - | 64 | Load 0x2A4: tag 0x0A, set 2, offset 4 (word 1).
+5.2 | miss | associativity | accesses, loads, misses, cycles, compulsory | 65 | Set 2: no valid way holds tag 0x0A. Miss.
+5.3 | victim | replacement | - | 65 | Way 1 chosen: least recently used (rank 1).
+5.4 | stall | timing | - | 65 | The CPU stalls for 40 cycles: 20 to write line 0x1A0 back, then 20 to fetch line 0x2A0.
+5.5 | writeBack | writePolicy | memory 0x1A4, writebacks, cycles | 85 | Way 1 is dirty: write line 0x1A0 back to memory first.
+5.6 | evict | replacement | valid 2/1, tag 2/1, dirty 2/1, word 2/1/0, word 2/1/1, word 2/1/2, word 2/1/3, evictions | 85 | Evict line 0x1A0 (tag 0x06) from way 1.
+5.7 | fill | lineSize | valid 2/1, tag 2/1, word 2/1/0, word 2/1/1, word 2/1/2, word 2/1/3, fills, cycles | 105 | Fill way 1 with line 0x2A0–0x2AF from memory.
+5.8 | complete | - | r3 | 105 | Read word 1 of way 1 (68) into r3.
+5.9 | rank | replacement | rank 2/0, rank 2/1, pc | 105 | LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.
+6.1 | decode | lineSize | - | 105 | Load 0x1A4: tag 0x06, set 2, offset 4 (word 1).
+6.2 | miss | associativity | accesses, loads, misses, cycles, conflict | 106 | Set 2: no valid way holds tag 0x06. Miss.
+6.3 | victim | replacement | - | 106 | Way 0 chosen: least recently used (rank 1).
+6.4 | stall | timing | - | 106 | The CPU stalls for 20 cycles while memory supplies line 0x1A0.
+6.5 | evict | replacement | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, evictions | 106 | Evict line 0x0A0 (tag 0x02) from way 0.
+6.6 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills, cycles | 126 | Fill way 0 with line 0x1A0–0x1AF from memory.
+6.7 | complete | - | r4 | 126 | Read word 1 of way 0 (7) into r4.
+6.8 | rank | replacement | rank 2/0, rank 2/1, pc | 126 | LRU ranks in set 2: way 0 becomes 0 (most recent); way 1 is 1.

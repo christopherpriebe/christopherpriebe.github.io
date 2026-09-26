@@ -1500,7 +1500,13 @@ fn addresses_beyond_the_width_do_not_decode() {
             .validate()
             .unwrap();
         let error = geometry.decode(addr).unwrap_err();
-        assert_eq!(error, AccessError::OutOfRange { addr, address_bits });
+        assert_eq!(
+            error,
+            AccessError::OutOfRange {
+                addr: u64::from(addr),
+                address_bits
+            }
+        );
         assert_eq!(error.to_string(), message);
         let last = u32::try_from((1_u64 << address_bits) - 1).unwrap();
         assert!(geometry.decode(last).is_ok(), "{address_bits} bits");
