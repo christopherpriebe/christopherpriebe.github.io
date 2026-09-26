@@ -1115,7 +1115,8 @@ fn associativities(shown: &Config) -> Vec<ConfigOption> {
         .map(|ways| {
             let pressed = !full && ways == cache.associativity;
             let option = option(shown, explain::ways_option(ways), pressed, with_ways(ways));
-            if ways == lines {
+            // A cache without lines has no Full for an option to equal.
+            if lines > 0 && ways == lines {
                 ConfigOption {
                     disabled: true,
                     title: Some(explain::same_as_full(lines)),

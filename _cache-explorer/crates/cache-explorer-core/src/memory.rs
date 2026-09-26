@@ -98,6 +98,12 @@ impl Memory {
         u32::try_from(self.lines.len()).unwrap_or(u32::MAX)
     }
 
+    /// How many lines below `line` the run has touched, counted without
+    /// copying them.
+    pub(crate) fn touched_before(&self, line: LineAddr) -> u32 {
+        u32::try_from(self.lines.range(..line).count()).unwrap_or(u32::MAX)
+    }
+
     /// Records `line` as touched, with the contents it has now.
     pub(crate) fn touch(&mut self, line: LineAddr) {
         self.touched_line(line);

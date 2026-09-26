@@ -1,6 +1,7 @@
 //! The machine's behaviour as the page sees it, through the session's
-//! snapshot and stats: the ten access cases with their events in order, the
-//! counters each moves, and the cache and memory they leave; victims under
+//! snapshot and stats: the ten access cases with their events in order and
+//! the cells and counters each event lists as changed, the counters each
+//! case moves, and the cache and memory they leave; victims under
 //! LRU, FIFO and seeded random replacement; a dirty victim still dirty at
 //! its write-back and gone at its eviction; write-through and write-around
 //! counts kept apart; allocating against not allocating; and the classes of
@@ -13,7 +14,7 @@ use cache_explorer_core::{
     AllocatePolicy, CacheConfig, Config, EventKind, Preset, Replacement, WritePolicy,
 };
 
-use support::{cases, cells, load, memory, moved, pos, session, store, two_way, victims};
+use support::{cases, cells, load, memory, moved, pos, session, short, store, two_way, victims};
 use EventKind::{Evict, Miss, WriteBack};
 
 /// The tests' helpers. They sit in a module compiled for tests only, where a
@@ -21,8 +22,8 @@ use EventKind::{Evict, Miss, WriteBack};
 #[cfg(test)]
 mod support {
     use cache_explorer_core::{
-        AccessKind, Addr, AllocatePolicy, CacheConfig, Config, EventKind, EventPos, Op, Preset,
-        Session, State, Word, WritePolicy,
+        AccessKind, Addr, AllocatePolicy, CacheConfig, ChangeRef, Config, EventKind, EventPos, Op,
+        Preset, Session, State, Word, WritePolicy,
     };
 
     use EventKind::{
@@ -109,8 +110,9 @@ mod support {
             .collect()
     }
 
-    /// One access case: the configuration, what comes before, the access, the
-    /// kinds of its events, the counters it moves, and the state it leaves.
+    /// One access case: the configuration, what comes before, the access, its
+    /// events with what each changed, the counters it moves, and the state it
+    /// leaves.
     pub(crate) struct Case {
         /// The case's number, 1 to 10.
         pub(crate) number: u8,
@@ -120,8 +122,9 @@ mod support {
         pub(crate) setup: Vec<Op>,
         /// The access.
         pub(crate) access: Op,
-        /// Its events' kinds, in order.
-        pub(crate) kinds: Vec<EventKind>,
+        /// Its events' kinds, in order, each with the cells and counters it
+        /// lists as changed, in short (see [`short`]).
+        pub(crate) events: Vec<(EventKind, &'static [&'static str])>,
         /// The counters it moves.
         pub(crate) counters: &'static [&'static str],
         /// A check of the state it leaves.
@@ -152,16 +155,75 @@ mod support {
         (word.text.clone(), word.stale.is_some())
     }
 
+    /// What a fill of way 0 of set 2 changes: the way's valid bit, its tag and
+    /// every word, as a different line now occupies it, and the fill count.
+    const FILL_WAY_0: &[&str] = &[
+        "valid 2.0",
+        "tag 2.0",
+        "word 2.0.0",
+        "word 2.0.1",
+        "word 2.0.2",
+        "word 2.0.3",
+        "fills",
+    ];
+
+    /// What a fill of way 1 of set 2 changes.
+    const FILL_WAY_1: &[&str] = &[
+        "valid 2.1",
+        "tag 2.1",
+        "word 2.1.0",
+        "word 2.1.1",
+        "word 2.1.2",
+        "word 2.1.3",
+        "fills",
+    ];
+
+    /// What the eviction of a clean line from way 0 of set 2 changes: valid,
+    /// tag and every word go together.
+    const EVICT_WAY_0: &[&str] = &[
+        "valid 2.0",
+        "tag 2.0",
+        "word 2.0.0",
+        "word 2.0.1",
+        "word 2.0.2",
+        "word 2.0.3",
+        "evictions",
+    ];
+
+    /// What the eviction of a dirty line from way 1 of set 2 changes: its
+    /// dirty bit too.
+    const EVICT_DIRTY_WAY_1: &[&str] = &[
+        "valid 2.1",
+        "tag 2.1",
+        "dirty 2.1",
+        "word 2.1.0",
+        "word 2.1.1",
+        "word 2.1.2",
+        "word 2.1.3",
+        "evictions",
+    ];
+
+    /// What a rank event changes in set 2 when its two ways trade places.
+    const RANKS: &[&str] = &["rank 2.0", "rank 2.1"];
+
+    /// What a load's tag compare changes when it misses a line never filled.
+    const LOAD_MISS: &[&str] = &["accesses", "loads", "misses", "compulsory"];
+
+    /// What a store's tag compare changes when it misses a line never filled.
+    const STORE_MISS: &[&str] = &["accesses", "stores", "misses", "compulsory"];
+
     /// The ten access cases, loads first.
     pub(crate) fn cases() -> Vec<Case> {
-        let mut cases = load_cases();
-        cases.extend(store_cases());
+        let mut cases = loads_without_eviction();
+        cases.extend(loads_with_eviction());
+        cases.extend(store_hits());
+        cases.extend(store_misses());
         cases
     }
 
-    /// Cases 1 to 4: a load that hits, and loads that miss into an invalid way,
-    /// over a clean victim and over a dirty one.
-    fn load_cases() -> Vec<Case> {
+    /// Cases 1 and 2: a load that hits, and one that misses into an invalid
+    /// way.
+    fn loads_without_eviction() -> Vec<Case> {
         let write_back = two_way(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate);
         vec![
             Case {
@@ -169,7 +231,12 @@ mod support {
                 config: write_back.clone(),
                 setup: vec![load(0x0A4), load(0x1A4)],
                 access: load(0x0A8),
-                kinds: vec![Decode, Hit, Complete, Rank],
+                events: vec![
+                    (Decode, &[]),
+                    (Hit, &["accesses", "loads", "hits"]),
+                    (Complete, &["r1"]),
+                    (Rank, RANKS),
+                ],
                 counters: &["accesses", "loads", "hits"],
                 check: |state| {
                     assert_eq!(state.cpu.registers[1].text, "66");
@@ -183,10 +250,16 @@ mod support {
             },
             Case {
                 number: 2,
-                config: write_back.clone(),
+                config: write_back,
                 setup: vec![],
                 access: load(0x0A4),
-                kinds: vec![Decode, Miss, Victim, Fill, Complete],
+                events: vec![
+                    (Decode, &[]),
+                    (Miss, LOAD_MISS),
+                    (Victim, &[]),
+                    (Fill, FILL_WAY_0),
+                    (Complete, &["r1"]),
+                ],
                 counters: &["accesses", "loads", "misses", "fills", "compulsory"],
                 check: |state| {
                     assert_eq!(
@@ -196,12 +269,28 @@ mod support {
                     assert_eq!(state.cpu.registers[1].text, "53");
                 },
             },
+        ]
+    }
+
+    /// Cases 3 and 4: loads that miss over a clean victim and over a dirty
+    /// one.
+    fn loads_with_eviction() -> Vec<Case> {
+        let write_back = two_way(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate);
+        vec![
             Case {
                 number: 3,
                 config: write_back.clone(),
                 setup: vec![load(0x0A4), load(0x1A4)],
                 access: load(0x2A4),
-                kinds: vec![Decode, Miss, Victim, Evict, Fill, Complete, Rank],
+                events: vec![
+                    (Decode, &[]),
+                    (Miss, LOAD_MISS),
+                    (Victim, &[]),
+                    (Evict, EVICT_WAY_0),
+                    (Fill, FILL_WAY_0),
+                    (Complete, &["r1"]),
+                    (Rank, RANKS),
+                ],
                 counters: &[
                     "accesses",
                     "loads",
@@ -218,10 +307,20 @@ mod support {
             },
             Case {
                 number: 4,
-                config: write_back.clone(),
+                config: write_back,
                 setup: vec![store(0x0B0, 5), load(0x0A4), store(0x1A4, 7), load(0x0A8)],
                 access: load(0x2A4),
-                kinds: vec![Decode, Miss, Victim, WriteBack, Evict, Fill, Complete, Rank],
+                events: vec![
+                    (Decode, &[]),
+                    (Miss, LOAD_MISS),
+                    (Victim, &[]),
+                    // Only the word the store made newer differs in memory.
+                    (WriteBack, &["memory 0x1A4", "writebacks"]),
+                    (Evict, EVICT_DIRTY_WAY_1),
+                    (Fill, FILL_WAY_1),
+                    (Complete, &["r1"]),
+                    (Rank, RANKS),
+                ],
                 counters: &[
                     "accesses",
                     "loads",
@@ -242,20 +341,19 @@ mod support {
         ]
     }
 
-    /// Cases 5 to 10: stores that hit and miss under each write and allocate
-    /// policy.
-    fn store_cases() -> Vec<Case> {
-        let write_back = two_way(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate);
-        let write_through = two_way(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate);
-        let around_back = two_way(WritePolicy::WriteBack, AllocatePolicy::WriteNoAllocate);
-        let around_through = two_way(WritePolicy::WriteThrough, AllocatePolicy::WriteNoAllocate);
+    /// Cases 5 and 6: stores that hit, under each write policy.
+    fn store_hits() -> Vec<Case> {
         vec![
             Case {
                 number: 5,
-                config: write_back.clone(),
+                config: two_way(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate),
                 setup: vec![load(0x0A4)],
                 access: store(0x0A4, 9),
-                kinds: vec![Decode, Hit, Write],
+                events: vec![
+                    (Decode, &[]),
+                    (Hit, &["accesses", "stores", "hits"]),
+                    (Write, &["dirty 2.0", "word 2.0.1"]),
+                ],
                 counters: &["accesses", "stores", "hits"],
                 check: |state| {
                     assert_eq!(
@@ -266,10 +364,15 @@ mod support {
             },
             Case {
                 number: 6,
-                config: write_through.clone(),
+                config: two_way(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate),
                 setup: vec![load(0x0A4)],
                 access: store(0x0A4, 9),
-                kinds: vec![Decode, Hit, Write, WriteThrough],
+                events: vec![
+                    (Decode, &[]),
+                    (Hit, &["accesses", "stores", "hits"]),
+                    (Write, &["word 2.0.1"]),
+                    (WriteThrough, &["memory 0x0A4", "writethroughs"]),
+                ],
                 counters: &["accesses", "stores", "hits", "writethroughs"],
                 check: |state| {
                     assert_eq!(
@@ -278,12 +381,24 @@ mod support {
                     );
                 },
             },
+        ]
+    }
+
+    /// Cases 7 to 10: stores that miss, under each write and allocate policy.
+    fn store_misses() -> Vec<Case> {
+        vec![
             Case {
                 number: 7,
-                config: write_back,
+                config: two_way(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate),
                 setup: vec![],
                 access: store(0x0A4, 9),
-                kinds: vec![Decode, Miss, Victim, Fill, Write],
+                events: vec![
+                    (Decode, &[]),
+                    (Miss, STORE_MISS),
+                    (Victim, &[]),
+                    (Fill, FILL_WAY_0),
+                    (Write, &["dirty 2.0", "word 2.0.1"]),
+                ],
                 counters: &["accesses", "stores", "misses", "fills", "compulsory"],
                 check: |state| {
                     assert_eq!(
@@ -294,10 +409,17 @@ mod support {
             },
             Case {
                 number: 8,
-                config: write_through,
+                config: two_way(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate),
                 setup: vec![],
                 access: store(0x0A4, 9),
-                kinds: vec![Decode, Miss, Victim, Fill, Write, WriteThrough],
+                events: vec![
+                    (Decode, &[]),
+                    (Miss, STORE_MISS),
+                    (Victim, &[]),
+                    (Fill, FILL_WAY_0),
+                    (Write, &["word 2.0.1"]),
+                    (WriteThrough, &["memory 0x0A4", "writethroughs"]),
+                ],
                 counters: &[
                     "accesses",
                     "stores",
@@ -315,10 +437,14 @@ mod support {
             },
             Case {
                 number: 9,
-                config: around_back,
+                config: two_way(WritePolicy::WriteBack, AllocatePolicy::WriteNoAllocate),
                 setup: vec![],
                 access: store(0x0A4, 9),
-                kinds: vec![Decode, Miss, MemWrite],
+                events: vec![
+                    (Decode, &[]),
+                    (Miss, STORE_MISS),
+                    (MemWrite, &["memory 0x0A4", "writearounds"]),
+                ],
                 counters: &["accesses", "stores", "misses", "writearounds", "compulsory"],
                 check: |state| {
                     assert!(!cells(state, 2, 0).0 && !cells(state, 2, 1).0);
@@ -326,16 +452,42 @@ mod support {
             },
             Case {
                 number: 10,
-                config: around_through,
+                config: two_way(WritePolicy::WriteThrough, AllocatePolicy::WriteNoAllocate),
                 setup: vec![],
                 access: store(0x0A4, 9),
-                kinds: vec![Decode, Miss, MemWrite],
+                events: vec![
+                    (Decode, &[]),
+                    (Miss, STORE_MISS),
+                    (MemWrite, &["memory 0x0A4", "writearounds"]),
+                ],
                 counters: &["accesses", "stores", "misses", "writearounds", "compulsory"],
                 check: |state| {
                     assert!(!cells(state, 2, 0).0 && !cells(state, 2, 1).0);
                 },
             },
         ]
+    }
+
+    /// The cells and counters of `changed` in short, in its order: `valid
+    /// 2.0` for set 2, way 0, `word 2.0.1` for its word 1, `memory 0x0A4`,
+    /// `r1`, `pc`, or a counter's name.
+    pub(crate) fn short(changed: &[ChangeRef]) -> Vec<String> {
+        changed
+            .iter()
+            .map(|cell| {
+                let value = serde_json::to_value(cell).unwrap();
+                let at = |key: &str| value[key].as_u64().unwrap();
+                let name = |key: &str| value[key].as_str().unwrap().to_owned();
+                match name("cell").as_str() {
+                    "word" => format!("word {}.{}.{}", at("set"), at("way"), at("word")),
+                    "memory" => format!("memory 0x{:03X}", at("addr")),
+                    "register" => name("register"),
+                    "pc" => "pc".to_owned(),
+                    "counter" => name("counter"),
+                    field => format!("{field} {}.{}", at("set"), at("way")),
+                }
+            })
+            .collect()
     }
 
     /// The ways the victims of `session`'s run went to, in order.
@@ -350,13 +502,21 @@ mod support {
 }
 
 #[test]
-fn each_access_case_has_its_events_counters_and_result() {
+fn each_access_case_has_its_events_what_each_changed_its_counters_and_result() {
     for case in cases() {
         let mut session = session(case.config, case.setup);
         let before = session.state();
         let events = session.apply(case.access).unwrap();
-        let kinds: Vec<EventKind> = events.iter().map(|event| event.kind).collect();
-        assert_eq!(kinds, case.kinds, "case {}", case.number);
+        let listed: Vec<(EventKind, Vec<String>)> = events
+            .iter()
+            .map(|event| (event.kind, short(&event.changed)))
+            .collect();
+        let expected: Vec<(EventKind, Vec<String>)> = case
+            .events
+            .iter()
+            .map(|(kind, changed)| (*kind, changed.iter().map(|&cell| cell.to_owned()).collect()))
+            .collect();
+        assert_eq!(listed, expected, "case {}", case.number);
         let after = session.state();
         assert_eq!(
             moved(&before, &after),

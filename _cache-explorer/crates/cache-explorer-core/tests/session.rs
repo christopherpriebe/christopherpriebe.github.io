@@ -698,7 +698,8 @@ fn a_configuration_equal_to_the_displayed_runs_changes_nothing() {
 #[test]
 fn a_change_on_an_empty_run_at_the_end_of_the_log_is_appended_at_once() {
     let mut session = session();
-    let sizes = [256, 64, 512, 32, 128];
+    // Sizes of at most 16 lines, the floor `MAX_LINES` may be lowered to.
+    let sizes = [256, 64, 16, 32, 128];
     for size in sizes {
         let config = Config {
             cache: CacheConfig {

@@ -654,7 +654,7 @@ pub(crate) fn needs_reset(kept: u32, dropped: u32) -> String {
 }
 
 /// The program drawer's line: how many instructions, and the next one, or
-/// `end` past the last: "5 instructions · next: ld r1, [0x0A4]". A trace
+/// `end` past the last: `5 instructions · next: ld r1, [0x0A4]`. A trace
 /// counts accesses: "5 accesses · next: R 0x0A4".
 pub(crate) fn program_summary(
     format: ProgramFormat,
@@ -1229,8 +1229,8 @@ pub(crate) fn request_source(entry: u32) -> String {
 }
 
 /// An access issued by hand, written as the instruction it stands for, as
-/// the log's entry and the CPU box name it: "ld r1, [0x0A4]", and for a
-/// store of `value`, "st [0x0A4], #7".
+/// the log's entry and the CPU box name it: `ld r1, [0x0A4]`, and for a
+/// store of `value`, `st [0x0A4], #7`.
 pub(crate) fn issued(
     geometry: &Geometry,
     addr: Addr,
@@ -1306,8 +1306,8 @@ pub(crate) fn entry_outcome(
 /// The sentence the page's live region reads after the cursor moves: the
 /// log line of the event at the cursor. After a move across more than one
 /// event, `entry` gives the entry's number, label and outcome, which open
-/// the sentence: "#5 ld r3, [0x2A4]: miss · evict · write-back. Read word 1
-/// of way 1 (68) into r3."
+/// the sentence: `#5 ld r3, [0x2A4]: miss · evict · write-back. Read word 1
+/// of way 1 (68) into r3.`
 pub(crate) fn live(entry: Option<(u32, &str, &str)>, explain: &str) -> String {
     match entry {
         Some((number, label, outcome)) => format!(
@@ -1341,8 +1341,8 @@ pub(crate) fn status_line(advanced: bool, steps: u32, timed: bool) -> String {
     )
 }
 
-/// The CPU's status between entries, whether or not a program is loaded:
-/// it can take the next step or access.
+/// The CPU's status where the cursor is on no entry's step, whether or not
+/// a program is loaded: it can take the next step or access.
 pub(crate) fn ready() -> String {
     "Ready".to_owned()
 }
@@ -1508,6 +1508,7 @@ mod tests {
 
     use super::*;
     use crate::config::{CacheConfig, Config, Preset, WordBytes};
+    use crate::limits::MAX_LINES;
 
     /// The tests' address width: 12 bits, as in every design frame. The lines
     /// these tests expect are written for it, so the width is set here rather
@@ -2351,15 +2352,22 @@ mod tests {
             repair_label(&first, &repaired, &geometry(&repaired)),
             "Open with 2-way instead"
         );
+        // Twice as many lines as the limit, repaired to the limit, which
+        // holds whatever the limit is tuned to.
+        let size = MAX_LINES * 16;
         let too_many = ConfigError::TooManyLines {
-            lines: 128,
-            size: 2_048,
+            lines: 2 * MAX_LINES,
+            size: 2 * size,
             line: 16,
         };
-        let smaller = config(1_024, 1, Replacement::Lru);
+        let smaller = config(size, 1, Replacement::Lru);
         assert_eq!(
             repair_label(&too_many, &smaller, &geometry(&smaller)),
-            "Open as a 1,024 B cache instead"
+            format!(
+                "Open as {} {} B cache instead",
+                format::a_or_an(size),
+                format::setting(size)
+            )
         );
     }
 

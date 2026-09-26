@@ -2622,6 +2622,23 @@ fn associativities_beyond_the_line_count_are_disabled_with_their_message() {
 }
 
 #[test]
+fn a_cache_without_lines_has_no_way_option_equal_to_full() {
+    // 8 B of 16 B lines with no ways, as a malformed link or module can hold
+    // it: there is no line, so no option is the same as Full, and the
+    // pressed "0-way" carries the first rule the configuration breaks.
+    let shown = with_cache(8, 16, 0);
+    let error = shown.validate().unwrap_err();
+    assert!(
+        matches!(error, ConfigError::LineLargerThanCache { .. }),
+        "{error:?}"
+    );
+    let controls = bar(&shown);
+    let zero = option(&controls, ConfigGroupKind::Associativity, "0-way");
+    assert!(zero.pressed && zero.disabled);
+    assert_eq!(zero.title, Some(error.to_string()));
+}
+
+#[test]
 fn a_value_off_the_lists_is_an_extra_pressed_option() {
     // 16-way in 512 B of 16 B lines: 32 lines.
     let sixteen = bar(&with_cache(512, 16, 16));
@@ -2710,12 +2727,14 @@ fn every_option_is_disabled_exactly_when_its_configuration_is_invalid() {
             }
         }
     }
-    // At 8-bit addresses a larger cache would cover all of memory.
+    // At 8-bit addresses a larger cache would cover all of memory: 256 B of
+    // 16 B lines, direct-mapped, is 16 lines, within every `MAX_LINES` down
+    // to its floor, and leaves no tag bit.
     let narrow = bar(&Config {
         address_bits: MIN_ADDRESS_BITS,
         ..with_cache(128, 16, 1)
     });
-    let big = option(&narrow, ConfigGroupKind::CacheSize, "512 B");
+    let big = option(&narrow, ConfigGroupKind::CacheSize, "256 B");
     assert!(big.disabled);
     assert_eq!(
         big.title,

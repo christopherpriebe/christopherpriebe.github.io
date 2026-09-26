@@ -10,7 +10,7 @@
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
-use cache_explorer_core::limits::MAX_RUN_STEPS;
+use cache_explorer_core::limits::{MAX_RUN_STEPS, MIN_ADDRESS_BITS};
 use cache_explorer_core::{
     AccessKind, AddressInput, AllocatePolicy, CacheConfig, ChangeRef, Config, ControlAction,
     Counter, CpuStatus, EntryKind, EntryOutcome, EventKind, HitMarker, Op, Preset, RankHeader,
@@ -205,8 +205,33 @@ fn golden(name: &str, description: &str, text: &str) {
 
 #[test]
 fn frame_3b_paused_on_its_write_back_reads_as_the_design_draws_it() {
-    let mut session = frame_3b();
-    session.seek(pos(24));
+    // The frame as its caption gives it: Advanced, two-way-lru, write-back,
+    // timed, paused on the write-back of a dirty victim.
+    let config = Config {
+        timing: Some(Timing {
+            hit_cycles: 1,
+            miss_cycles: 20,
+        }),
+        advanced: true,
+        ..Preset::TwoWayLru.config()
+    };
+    let mut session = session(
+        config,
+        [
+            store(0x0B0, 5),
+            load(0x0A4),
+            store(0x1A4, 7),
+            load(0x0A8),
+            load(0x2A4),
+        ],
+    );
+    let write_back = session
+        .events()
+        .iter()
+        .find(|event| event.entry == Some(5) && event.kind == EventKind::WriteBack)
+        .map(|event| pos(u32::try_from(event.id).unwrap() + 1))
+        .unwrap();
+    session.seek(write_back);
     let state = session.state();
     let text = format!(
         "state = {}\ntimeline = {}\nentries = {}\nticks = {:?}\nmemory = {}\n",
@@ -218,14 +243,18 @@ fn frame_3b_paused_on_its_write_back_reads_as_the_design_draws_it() {
     );
     golden(
         "frame-3b-write-back",
-        "Frame 3b's first five accesses issued by hand on two-way-lru, paused on access #5's \
-         write-back, event 5.4: the victim, way 1 of set 2, is still valid and dirty and its word 7 \
-         has reached memory, so nothing is stale there; the store to 0x0B0 is still stale. The \
-         lane shows the write-back, the CPU step 4 of 8, the comparators a miss, and the \
-         changed line the design's `memory 0x1A4 · misses, write-backs`.",
+        "Frame 3b: Advanced, two-way-lru with write-back, timed at 1 and 20 cycles, its first \
+         five accesses issued by hand, paused on access #5's write-back, event 5.5 (a timed run's \
+         stall is 5.4): the victim, way 1 of set 2, is still valid and dirty and its word 7 has \
+         reached memory, so nothing is stale there; the store to 0x0B0 is still stale. The CPU \
+         is stalled with 20 of 40 cycles to go, the lane shows the write-back with its 20-cycle \
+         chip, the status line ends in `timed`, the summary and the stats are Advanced's, the \
+         comparators show a miss, and the changed line is the design's `memory 0x1A4 \u{b7} \
+         misses, write-backs`.",
         &text,
     );
     // The frame's pause, as the design draws it.
+    assert_eq!(state.position.label, "5.5");
     let victim = way(&state, 2, 1);
     assert!(victim.valid && victim.dirty && victim.victim);
     assert_eq!(victim.words, ["96", "7", "25", "38"]);
@@ -234,15 +263,24 @@ fn frame_3b_paused_on_its_write_back_reads_as_the_design_draws_it() {
         "memory 0x1A4 \u{b7} misses, write-backs"
     );
     assert_eq!(state.bus.transfer, Transfer::WriteBack);
+    assert_eq!(state.bus.cycles_text.as_deref(), Some("20 cycles"));
     assert_eq!(
         state.cpu.status,
-        CpuStatus::Busy {
-            entry: 5,
-            seq: 4,
-            of: 8
+        CpuStatus::Stalled {
+            remaining: 20,
+            total: 40
         }
     );
-    assert_eq!(state.cpu.status_text, "Access #5 \u{b7} step 4 of 8");
+    assert_eq!(state.cpu.status_text, "Stalled: 20 cycles");
+    assert!(state.advanced);
+    assert_eq!(
+        state.labels.status_text,
+        "Advanced \u{b7} 32 steps in this run \u{b7} timed"
+    );
+    assert_eq!(
+        state.labels.config_summary,
+        "128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU \u{b7} write-back \u{b7} allocate"
+    );
     assert_eq!(
         state.cache.compare,
         Some(vec![WayCompare::Mismatch, WayCompare::Mismatch])
@@ -435,7 +473,7 @@ fn the_comparators_wait_for_the_compare_then_show_what_each_way_held() {
 }
 
 #[test]
-fn the_rank_and_dirty_columns_are_shown_only_where_they_can_change() {
+fn the_rank_column_is_shown_only_where_ranks_can_change_and_the_dirty_column_always() {
     let config = |replacement, ways, write_policy| Config {
         cache: CacheConfig {
             size_bytes: 128,
@@ -456,7 +494,8 @@ fn the_rank_and_dirty_columns_are_shown_only_where_they_can_change() {
         .map(|rank| (rank.value, rank.role))
         .collect();
     assert_eq!(ranks, [(0, Some(RankRole::Mru)), (1, Some(RankRole::Lru))]);
-    assert!(lru.cache.show_dirty && !lru.cache.wrap);
+    // Basics shows the dirty column too.
+    assert!(!lru.advanced && lru.cache.show_dirty && !lru.cache.wrap);
     let fifo = session(config(Replacement::Fifo, 8, WritePolicy::WriteBack), []).state();
     assert_eq!(fifo.cache.rank_header, Some(RankHeader::Age));
     let roles: Vec<_> = fifo.cache.sets[0]
@@ -476,8 +515,9 @@ fn the_rank_and_dirty_columns_are_shown_only_where_they_can_change() {
     .state();
     assert!(!random.cache.show_rank && random.cache.rank_header.is_none());
     assert!(way(&random, 0, 0).rank.is_none());
-    // Write-through lines are never dirty.
-    assert!(!random.cache.show_dirty);
+    // No write-through line is ever dirty, but the column stays: the mode
+    // and the policies change only which controls are shown.
+    assert!(random.advanced && random.cache.show_dirty);
     let direct = session(config(Replacement::Lru, 1, WritePolicy::WriteBack), []).state();
     assert!(!direct.cache.show_rank);
     assert_eq!(direct.cache.word_heads, ["+0", "+4", "+8", "+C"]);
@@ -611,7 +651,7 @@ fn the_request_lane_follows_the_access_at_the_cursor() {
 }
 
 #[test]
-fn the_cpu_names_its_entry_inside_one_and_the_programs_state_between_entries() {
+fn the_cpu_names_its_entry_on_every_step_and_the_programs_state_where_it_ended() {
     let mut session = session(Preset::TwoWayLru.config(), [program(FRAME_3B)]);
     let state = session.state();
     assert_eq!(state.cpu.status, CpuStatus::Ready);
@@ -624,22 +664,29 @@ fn the_cpu_names_its_entry_inside_one_and_the_programs_state_between_entries() {
     );
     assert_eq!(listing.lines.len(), 6);
     assert_eq!(listing.lines[1].text, "  ld  r1, [0x0A4]");
+    // On the access's last step, as on every other, its steps are counted.
     session.apply(Op::Step).unwrap();
     let state = session.state();
     assert_eq!(
         (state.cpu.status, state.cpu.status_text.as_str()),
-        (CpuStatus::Ready, "Ready")
+        (
+            CpuStatus::Busy {
+                entry: 1,
+                seq: 5,
+                of: 5
+            },
+            "Access #1 \u{b7} step 5 of 5"
+        )
     );
     assert_eq!(state.cpu.instruction, "st [0x0B0], #5");
-    // Inside the access, its steps are counted; the program's line is the
-    // one in flight.
+    // Inside the access, the program's line is the one in flight.
     session.seek(pos(2));
     let state = session.state();
     assert_eq!(state.cpu.status_text, "Access #1 \u{b7} step 1 of 5");
     let listing = state.program.unwrap();
     assert!(listing.executing);
     assert_eq!((listing.current_line, listing.executed), (Some(1), 0));
-    // Run to the end: finished.
+    // Run to the end: finished, at once, on the last instruction's last step.
     session.seek(pos(6));
     session.apply(Op::Run { n: 5 }).unwrap();
     let state = session.state();
@@ -650,14 +697,23 @@ fn the_cpu_names_its_entry_inside_one_and_the_programs_state_between_entries() {
     let listing = state.program.unwrap();
     assert!(listing.finished && !listing.executing && listing.current_line.is_none());
     assert_eq!(listing.summary, "6 instructions \u{b7} next: end");
-    // Without a program the CPU is ready for an access issued by hand.
-    let hand = self::session(Config::first_visit(), [load(0x0A4)]).state();
+    // Without a program the CPU is ready for an access issued by hand, which
+    // it then names to its last step.
+    let mut hand = self::session(Config::first_visit(), [load(0x0A4)]);
+    let state = hand.state();
     assert_eq!(
-        (hand.cpu.status, hand.cpu.status_text.as_str()),
-        (CpuStatus::NoProgram, "Ready")
+        (state.cpu.status, state.cpu.status_text.as_str()),
+        (
+            CpuStatus::Busy {
+                entry: 1,
+                seq: 5,
+                of: 5
+            },
+            "Access #1 \u{b7} step 5 of 5"
+        )
     );
-    assert!(hand.program.is_none());
-    let registers: Vec<(Register, &str)> = hand
+    assert!(state.program.is_none());
+    let registers: Vec<(Register, &str)> = state
         .cpu
         .registers
         .iter()
@@ -665,6 +721,76 @@ fn the_cpu_names_its_entry_inside_one_and_the_programs_state_between_entries() {
         .take(2)
         .collect();
     assert_eq!(registers, [(Register::R0, "0"), (Register::R1, "53")]);
+    hand.seek(pos(0));
+    let origin = hand.state();
+    assert_eq!(
+        (origin.cpu.status, origin.cpu.status_text.as_str()),
+        (CpuStatus::NoProgram, "Ready")
+    );
+}
+
+#[test]
+fn an_entry_of_one_step_is_named_unless_it_ended_the_program() {
+    let status = |session: &Session| {
+        let cpu = session.state().cpu;
+        (cpu.status, cpu.status_text)
+    };
+    let busy = |entry, noun: &str| {
+        (
+            CpuStatus::Busy {
+                entry,
+                seq: 1,
+                of: 1,
+            },
+            format!("{noun} #{entry} \u{b7} step 1 of 1"),
+        )
+    };
+    let mut session = session(
+        Config::first_visit(),
+        [program("add r1, r0, #1\nld r2, [0x1A4]")],
+    );
+    // The `add` is an instruction of one step, named on it.
+    session.apply(Op::Step).unwrap();
+    assert_eq!(status(&session), busy(1, "Instruction"));
+    // The load was the program's last instruction: finished at once.
+    session.apply(Op::Step).unwrap();
+    let finished = session.position().pos;
+    assert_eq!(
+        status(&session),
+        (CpuStatus::Finished, "Finished".to_owned())
+    );
+    // An access issued by hand afterwards is none of the program's, and is
+    // named to its last step.
+    session.apply(load(0x1A8)).unwrap();
+    assert_eq!(
+        status(&session),
+        (
+            CpuStatus::Busy {
+                entry: 3,
+                seq: 3,
+                of: 3
+            },
+            "Access #3 \u{b7} step 3 of 3".to_owned()
+        )
+    );
+    session.seek(finished);
+    assert_eq!(status(&session).0, CpuStatus::Finished);
+    // A new run keeps the program and starts it over: ready at its origin.
+    let narrow = Config {
+        address_bits: MIN_ADDRESS_BITS,
+        ..Config::first_visit()
+    };
+    session
+        .apply(Op::Config {
+            config: Config::first_visit(),
+        })
+        .unwrap();
+    assert_eq!(status(&session), (CpuStatus::Ready, "Ready".to_owned()));
+    // A run whose addresses the program no longer fits unloads it with an
+    // error, which stops no program and is named like any other entry.
+    session.apply(Op::Config { config: narrow }).unwrap();
+    assert_eq!(status(&session), busy(1, "Error"));
+    assert!(session.state().program.is_none());
 }
 
 #[test]

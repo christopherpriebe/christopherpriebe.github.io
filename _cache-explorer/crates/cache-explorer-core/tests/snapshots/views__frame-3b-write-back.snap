@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/views.rs
-description: "Frame 3b's first five accesses issued by hand on two-way-lru, paused on access #5's write-back, event 5.4: the victim, way 1 of set 2, is still valid and dirty and its word 7 has reached memory, so nothing is stale there; the store to 0x0B0 is still stale. The lane shows the write-back, the CPU step 4 of 8, the comparators a miss, and the changed line the design's `memory 0x1A4 · misses, write-backs`."
+description: "Frame 3b: Advanced, two-way-lru with write-back, timed at 1 and 20 cycles, its first five accesses issued by hand, paused on access #5's write-back, event 5.5 (a timed run's stall is 5.4): the victim, way 1 of set 2, is still valid and dirty and its word 7 has reached memory, so nothing is stale there; the store to 0x0B0 is still stale. The CPU is stalled with 20 of 40 cycles to go, the lane shows the write-back with its 20-cycle chip, the status line ends in `timed`, the summary and the stats are Advanced's, the comparators show a miss, and the changed line is the design's `memory 0x1A4 · misses, write-backs`."
 ---
 state = {
   "config": {
@@ -14,11 +14,15 @@ state = {
       "writePolicy": "writeBack",
       "allocatePolicy": "writeAllocate"
     },
+    "timing": {
+      "hitCycles": 1,
+      "missCycles": 20
+    },
     "seed": 12345,
-    "advanced": false,
+    "advanced": true,
     "memoryInit": "pattern"
   },
-  "advanced": false,
+  "advanced": true,
   "geometry": {
     "addressBits": 12,
     "wordBytes": 4,
@@ -33,24 +37,25 @@ state = {
     "placement": "setAssociative"
   },
   "position": {
-    "pos": 24,
+    "pos": 28,
     "opsDone": 4,
     "op": 4,
     "run": 1,
     "entry": 5,
-    "seq": 4,
-    "entryLength": 8,
-    "label": "5.4",
+    "seq": 5,
+    "entryLength": 9,
+    "label": "5.5",
     "boundary": "midEntry",
     "atRunOrigin": false
   },
   "event": {
-    "id": 23,
+    "id": 27,
     "opIndex": 4,
     "run": 1,
     "entry": 5,
-    "seq": 4,
-    "label": "5.4",
+    "seq": 5,
+    "label": "5.5",
+    "cycle": 85,
     "kind": "writeBack",
     "addr": 416,
     "set": 2,
@@ -63,6 +68,10 @@ state = {
       {
         "cell": "counter",
         "counter": "writebacks"
+      },
+      {
+        "cell": "counter",
+        "counter": "cycles"
       }
     ],
     "explain": "Way 1 is dirty: write line 0x1A0 back to memory first.",
@@ -231,6 +240,7 @@ state = {
   "bus": {
     "transfer": "writeBack",
     "text": "Write-back · set 2, way 1 → memory line 0x1A0",
+    "cyclesText": "20 cycles",
     "line": 416
   },
   "request": {
@@ -309,12 +319,11 @@ state = {
   "cpu": {
     "instruction": "ld r1, [0x2A4]",
     "status": {
-      "state": "busy",
-      "entry": 5,
-      "seq": 4,
-      "of": 8
+      "state": "stalled",
+      "remaining": 20,
+      "total": 40
     },
-    "statusText": "Access #5 · step 4 of 8",
+    "statusText": "Stalled: 20 cycles",
     "hitMarker": "miss",
     "registers": [
       {
@@ -363,7 +372,7 @@ state = {
       "writethroughs": 0,
       "writearounds": 0,
       "fills": 3,
-      "cycles": 0,
+      "cycles": 85,
       "compulsory": 4,
       "capacity": 0,
       "conflict": 0
@@ -402,14 +411,52 @@ state = {
         "changed": false
       },
       {
-        "key": "memoryWrites",
+        "key": "writebacks",
         "text": "1",
         "changed": true
+      },
+      {
+        "key": "writethroughs",
+        "text": "0",
+        "changed": false
+      },
+      {
+        "key": "writearounds",
+        "text": "0",
+        "changed": false
+      },
+      {
+        "key": "cycles",
+        "text": "85",
+        "changed": true
+      },
+      {
+        "key": "compulsory",
+        "text": "4",
+        "changed": true
+      },
+      {
+        "key": "capacity",
+        "text": "0",
+        "changed": false
+      },
+      {
+        "key": "conflict",
+        "text": "0",
+        "changed": false
       }
     ],
     "hitRate": {
       "value": 0.2,
       "text": "20%"
+    },
+    "amat": {
+      "value": 17.0,
+      "text": "AMAT = 1 + 0.80 × 20 = 17.0 cycles"
+    },
+    "measured": {
+      "value": 17.0,
+      "text": "Measured: 17.0 cycles per access (AMAT plus 4.0 for 1 write-back)."
     },
     "recent": [
       "miss",
@@ -443,6 +490,10 @@ state = {
     },
     {
       "cell": "counter",
+      "counter": "cycles"
+    },
+    {
+      "cell": "counter",
       "counter": "compulsory"
     }
   ],
@@ -463,19 +514,19 @@ state = {
     ]
   },
   "labels": {
-    "statusText": "Basics · 28 steps in this run",
-    "configSummary": "128 B · 16 B lines · 2-way · LRU"
+    "statusText": "Advanced · 32 steps in this run · timed",
+    "configSummary": "128 B · 16 B lines · 2-way · LRU · write-back · allocate"
   }
 }
 timeline = {
   "run": 1,
   "runs": 1,
   "origin": 0,
-  "end": 28,
-  "cursor": 24,
-  "step": 24,
-  "stepCount": 28,
-  "headerText": "step 24 of 28",
+  "end": 32,
+  "cursor": 28,
+  "step": 28,
+  "stepCount": 32,
+  "headerText": "step 28 of 32",
   "liveText": "#5 ld r1, [0x2A4]: miss · evict · write-back. Way 1 is dirty: write line 0x1A0 back to memory first.",
   "entryCount": 5,
   "current": {
@@ -485,13 +536,13 @@ timeline = {
     "kind": "access",
     "outcome": "miss",
     "outcomeText": "miss · evict · write-back",
-    "first": 21,
-    "last": 28,
+    "first": 24,
+    "last": 32,
     "tense": "current",
     "changedSummary": "memory 0x1A4 · misses, write-backs",
     "events": [
       {
-        "pos": 21,
+        "pos": 24,
         "label": "5.1",
         "kind": "decode",
         "text": "Load 0x2A4: tag 0x0A, set 2, offset 4 (word 1).",
@@ -499,7 +550,7 @@ timeline = {
         "tense": "past"
       },
       {
-        "pos": 22,
+        "pos": 25,
         "label": "5.2",
         "kind": "miss",
         "text": "Set 2: no valid way holds tag 0x0A. Miss.",
@@ -507,7 +558,7 @@ timeline = {
         "tense": "past"
       },
       {
-        "pos": 23,
+        "pos": 26,
         "label": "5.3",
         "kind": "victim",
         "text": "Way 1 chosen: least recently used (rank 1).",
@@ -515,39 +566,47 @@ timeline = {
         "tense": "past"
       },
       {
-        "pos": 24,
+        "pos": 27,
         "label": "5.4",
+        "kind": "stall",
+        "text": "The CPU stalls for 40 cycles: 20 to write line 0x1A0 back, then 20 to fetch line 0x2A0.",
+        "cause": "timing",
+        "tense": "past"
+      },
+      {
+        "pos": 28,
+        "label": "5.5",
         "kind": "writeBack",
         "text": "Way 1 is dirty: write line 0x1A0 back to memory first.",
         "cause": "writePolicy",
         "tense": "current"
       },
       {
-        "pos": 25,
-        "label": "5.5",
+        "pos": 29,
+        "label": "5.6",
         "kind": "evict",
         "text": "Evict line 0x1A0 (tag 0x06) from way 1.",
         "cause": "replacement",
         "tense": "future"
       },
       {
-        "pos": 26,
-        "label": "5.6",
+        "pos": 30,
+        "label": "5.7",
         "kind": "fill",
         "text": "Fill way 1 with line 0x2A0–0x2AF from memory.",
         "cause": "lineSize",
         "tense": "future"
       },
       {
-        "pos": 27,
-        "label": "5.7",
+        "pos": 31,
+        "label": "5.8",
         "kind": "complete",
         "text": "Read word 1 of way 1 (68) into r1.",
         "tense": "future"
       },
       {
-        "pos": 28,
-        "label": "5.8",
+        "pos": 32,
+        "label": "5.9",
         "kind": "rank",
         "text": "LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.",
         "cause": "replacement",
@@ -565,7 +624,7 @@ entries = [
     "outcome": "miss",
     "outcomeText": "miss",
     "first": 1,
-    "last": 5,
+    "last": 6,
     "tense": "past",
     "changedSummary": "set 3 way 0 valid, tag, data, dirty · misses",
     "events": []
@@ -577,8 +636,8 @@ entries = [
     "kind": "access",
     "outcome": "miss",
     "outcomeText": "miss",
-    "first": 6,
-    "last": 10,
+    "first": 7,
+    "last": 12,
     "tense": "past",
     "changedSummary": "set 2 way 0 valid, tag, data · r1 · misses",
     "events": []
@@ -590,8 +649,8 @@ entries = [
     "kind": "access",
     "outcome": "miss",
     "outcomeText": "miss",
-    "first": 11,
-    "last": 16,
+    "first": 13,
+    "last": 19,
     "tense": "past",
     "changedSummary": "set 2 way 0 rank · set 2 way 1 valid, tag, data, dirty, rank · misses",
     "events": []
@@ -603,8 +662,8 @@ entries = [
     "kind": "access",
     "outcome": "hit",
     "outcomeText": "hit",
-    "first": 17,
-    "last": 20,
+    "first": 20,
+    "last": 23,
     "tense": "past",
     "changedSummary": "set 2 way 0 rank · set 2 way 1 rank · r1 · hits",
     "events": []
@@ -616,13 +675,13 @@ entries = [
     "kind": "access",
     "outcome": "miss",
     "outcomeText": "miss · evict · write-back",
-    "first": 21,
-    "last": 28,
+    "first": 24,
+    "last": 32,
     "tense": "current",
     "changedSummary": "memory 0x1A4 · misses, write-backs",
     "events": [
       {
-        "pos": 21,
+        "pos": 24,
         "label": "5.1",
         "kind": "decode",
         "text": "Load 0x2A4: tag 0x0A, set 2, offset 4 (word 1).",
@@ -630,7 +689,7 @@ entries = [
         "tense": "past"
       },
       {
-        "pos": 22,
+        "pos": 25,
         "label": "5.2",
         "kind": "miss",
         "text": "Set 2: no valid way holds tag 0x0A. Miss.",
@@ -638,7 +697,7 @@ entries = [
         "tense": "past"
       },
       {
-        "pos": 23,
+        "pos": 26,
         "label": "5.3",
         "kind": "victim",
         "text": "Way 1 chosen: least recently used (rank 1).",
@@ -646,39 +705,47 @@ entries = [
         "tense": "past"
       },
       {
-        "pos": 24,
+        "pos": 27,
         "label": "5.4",
+        "kind": "stall",
+        "text": "The CPU stalls for 40 cycles: 20 to write line 0x1A0 back, then 20 to fetch line 0x2A0.",
+        "cause": "timing",
+        "tense": "past"
+      },
+      {
+        "pos": 28,
+        "label": "5.5",
         "kind": "writeBack",
         "text": "Way 1 is dirty: write line 0x1A0 back to memory first.",
         "cause": "writePolicy",
         "tense": "current"
       },
       {
-        "pos": 25,
-        "label": "5.5",
+        "pos": 29,
+        "label": "5.6",
         "kind": "evict",
         "text": "Evict line 0x1A0 (tag 0x06) from way 1.",
         "cause": "replacement",
         "tense": "future"
       },
       {
-        "pos": 26,
-        "label": "5.6",
+        "pos": 30,
+        "label": "5.7",
         "kind": "fill",
         "text": "Fill way 1 with line 0x2A0–0x2AF from memory.",
         "cause": "lineSize",
         "tense": "future"
       },
       {
-        "pos": 27,
-        "label": "5.7",
+        "pos": 31,
+        "label": "5.8",
         "kind": "complete",
         "text": "Read word 1 of way 1 (68) into r1.",
         "tense": "future"
       },
       {
-        "pos": 28,
-        "label": "5.8",
+        "pos": 32,
+        "label": "5.9",
         "kind": "rank",
         "text": "LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.",
         "cause": "replacement",
@@ -687,7 +754,7 @@ entries = [
     ]
   }
 ]
-ticks = [3, 2, 2, 2, 2, 3, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 1, 0, 0, 0, 3, 2, 2, 2, 2, 2, 2, 2]
+ticks = [3, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 1, 0, 0, 0, 3, 2, 2, 2, 2, 2, 2, 2, 2]
 memory = [
   {
     "line": 160,

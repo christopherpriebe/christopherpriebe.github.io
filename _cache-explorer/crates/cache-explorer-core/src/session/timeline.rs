@@ -57,8 +57,8 @@ pub struct Timeline {
     pub header_text: String,
     /// What the page's live region reads: the log line at the cursor, after
     /// a move across more than one event opened by the entry's outcome, as
-    /// in "#5 ld r3, [0x2A4]: miss · evict · write-back. Read word 1 of way 1
-    /// (68) into r3." Empty at position 0.
+    /// in `#5 ld r3, [0x2A4]: miss · evict · write-back. Read word 1 of way 1
+    /// (68) into r3.` Empty at position 0.
     pub live_text: String,
     /// The run's entries.
     pub entry_count: u32,
@@ -128,7 +128,7 @@ pub struct EntryView {
     /// Its number within the run, from 1; absent for a program load.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub number: Option<u32>,
-    /// What it is, in a few words: the instruction, as in "ld r3, [0x2A4]";
+    /// What it is, in a few words: the instruction, as in `ld r3, [0x2A4]`;
     /// "edit set 2 way 0"; "Loaded a program of 5 instructions" for a load;
     /// for an error, the instruction the program stopped at, or "—".
     pub label: String,

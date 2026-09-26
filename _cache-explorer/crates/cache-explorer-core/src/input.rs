@@ -373,9 +373,11 @@ impl Session {
     /// A typed hit time or miss penalty, applied to `shown`, the pending
     /// configuration or the displayed run's: the configuration with that
     /// number in its timing, which is then on, and the other number as the
-    /// timing fields show it; or C12's message for a number out of range,
-    /// and a prompt for anything else, so nothing the student types reaches
-    /// a configuration as a malformed timing.
+    /// timing fields show it; or, for a number out of range, the timing's
+    /// range message (`Hit time must be between 1 and 1,000 cycles; got
+    /// 0.`), and for anything else a prompt to type a whole number of
+    /// cycles, so nothing the student types reaches a configuration as a
+    /// malformed timing.
     pub fn read_config_number(
         &self,
         field: ConfigNumberField,

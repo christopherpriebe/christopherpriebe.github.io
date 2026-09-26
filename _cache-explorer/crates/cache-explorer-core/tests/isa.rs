@@ -3,7 +3,8 @@
 //! executed through the golden harness: labels, branches and loops, `r0`,
 //! faults on addresses held in registers, the instruction budget, and loads
 //! issued by hand beside a program; and, through the session, the session's
-//! event limit reached inside a loop.
+//! event limit reached inside a loop, and each instruction retiring at its
+//! last event, with a cursor stopped inside one showing it in flight.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -1120,4 +1121,74 @@ fn the_session_limit_stops_a_loop_with_an_error() {
     assert!(stored + MAX_EVENTS_PER_ENTRY > SESSION_EVENT_LIMIT);
     assert_eq!(session.apply(Op::Step), Err(OpError::SessionFull));
     assert_eq!(session.apply(endless), Err(OpError::SessionFull));
+}
+
+// ---------------------------------------------------------------------------
+// Execution, through the session's snapshot.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn an_instruction_retires_at_its_last_event_and_a_cursor_inside_it_shows_it_in_flight() {
+    let ops = [
+        Op::Program {
+            source: "ld r1, [0x0A4]\nadd r2, r1, #1".to_owned(),
+            format: Asm,
+        },
+        Op::Run { n: 2 },
+    ];
+    let mut session = Session::with_config(config()).unwrap();
+    for op in ops.clone() {
+        session.apply(op).unwrap();
+    }
+    let events = session.events().to_vec();
+    let kinds: Vec<EventKind> = events.iter().map(|event| event.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            EventKind::Setup,
+            EventKind::Decode,
+            EventKind::Miss,
+            EventKind::Victim,
+            EventKind::Fill,
+            EventKind::Complete,
+            EventKind::Complete,
+        ]
+    );
+    // At every event, the drawer's line, whether it is in flight, and how
+    // many instructions have retired; the machine is the one the fold
+    // stopped after that event gives, inside the `Run` op as at its end.
+    let mut shown = Vec::new();
+    for at in 1..=u32::try_from(events.len()).unwrap() {
+        let pos = serde_json::from_value(at.into()).unwrap();
+        session.seek(pos);
+        assert_eq!(
+            session.machine(),
+            &Session::replay_to(&config(), &ops, pos).unwrap(),
+            "at {at}"
+        );
+        let program = session.state().program.unwrap();
+        shown.push((program.current_line, program.executing, program.executed));
+    }
+    assert_eq!(
+        shown,
+        [
+            // Loaded: the first line is next.
+            (Some(1), false, 0),
+            // The `ld` in flight: its line stays until it retires.
+            (Some(1), true, 0),
+            (Some(1), true, 0),
+            (Some(1), true, 0),
+            (Some(1), true, 0),
+            // Its last event retires it.
+            (Some(2), false, 1),
+            // The `add` retires at its one event, and the program is done.
+            (None, false, 2),
+        ]
+    );
+    // Only an instruction's last event lists the pc.
+    let pc: Vec<bool> = events
+        .iter()
+        .map(|event| event.changed.contains(&ChangeRef::Pc))
+        .collect();
+    assert_eq!(pc, [false, false, false, false, false, true, true]);
 }

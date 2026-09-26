@@ -474,7 +474,7 @@ fn the_cpu_counts_the_stall_down_until_the_last_transfer() -> Result<(), String>
         status(&mut session, Evict)?,
         stalled(20, "Stalled: 20 cycles")
     );
-    // From the fill on, the access's steps; after its last, ready.
+    // From the fill on, the access's steps, to its last.
     assert_eq!(
         status(&mut session, Fill)?,
         (
@@ -488,7 +488,14 @@ fn the_cpu_counts_the_stall_down_until_the_last_transfer() -> Result<(), String>
     );
     assert_eq!(
         status(&mut session, Rank)?,
-        (CpuStatus::NoProgram, "Ready".to_owned())
+        (
+            CpuStatus::Busy {
+                entry: 5,
+                seq: 9,
+                of: 9
+            },
+            "Access #5 \u{b7} step 9 of 9".to_owned()
+        )
     );
     // Before the stall, the access's steps too.
     assert_eq!(
@@ -526,7 +533,14 @@ fn a_write_around_stalls_for_the_store_alone() -> Result<(), String> {
     );
     session.seek(position_of(&session, 1, MemWrite)?);
     let state = session.state();
-    assert_eq!(state.cpu.status, CpuStatus::NoProgram);
+    assert_eq!(
+        state.cpu.status,
+        CpuStatus::Busy {
+            entry: 1,
+            seq: 4,
+            of: 4
+        }
+    );
     assert_eq!(state.bus.cycles_text.as_deref(), Some("1 cycle"));
     Ok(())
 }

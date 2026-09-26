@@ -10,15 +10,16 @@
 //! [`Session::memory_lines`](crate::Session::memory_lines). The lanes show
 //! the transfer of the event at the cursor, lit only on the event that
 //! makes it, and the access in the cache. The CPU names the cursor's entry
-//! and counts its steps, or a stall's cycles, and between entries says what
-//! the loaded program can do.
+//! and counts its steps, or a stall's cycles; where the cursor is on no
+//! entry's step, and on the last step of the entry that ended the program,
+//! it says what the loaded program can do.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use serde::Serialize;
 
 use crate::cache::{Set, Slot, Way};
-use crate::config::{Config, WritePolicy};
+use crate::config::Config;
 use crate::cpu::Halted;
 use crate::engine::Origin;
 use crate::event::{ChangeRef, EventKind, MicroEvent};
@@ -26,7 +27,7 @@ use crate::explain::{self, EntryNoun};
 use crate::format;
 use crate::geometry::{Decoded, Geometry};
 use crate::machine::{AccessContext, Machine};
-use crate::memory::word_at;
+use crate::memory::{word_at, Memory};
 use crate::op::{AccessKind, ProgramFormat};
 use crate::session::{Boundary, EntryKind, EntryRecord, Position};
 use crate::stats::Stats;
@@ -189,8 +190,9 @@ pub struct CacheView {
     /// The rank column's head, when it is shown.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rank_header: Option<RankHeader>,
-    /// Whether the dirty column is shown: under write-back, the only policy
-    /// with dirty lines.
+    /// Whether the dirty column is shown: always, in Basics as in Advanced
+    /// and under either write policy, since the mode changes only which
+    /// controls the page shows.
     pub show_dirty: bool,
     /// Whether a set's ways wrap onto rows, and the comparators become a
     /// badge in each way: with more than four ways.
@@ -344,7 +346,7 @@ pub struct RequestView {
     pub kind: Option<AccessKind>,
     /// The lane's label: "Load 0x0A4 → cache", or "No request".
     pub text: String,
-    /// The instruction the access stands for: "ld r1, [0x0A4]".
+    /// The instruction the access stands for: `ld r1, [0x0A4]`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
     /// The address strip's footer while it shows the access: "from access
@@ -364,12 +366,13 @@ pub struct RequestView {
     rename_all_fields = "camelCase"
 )]
 pub enum CpuStatus {
-    /// Between entries with no program loaded; accesses can be issued.
+    /// On no entry's step, at position 0 or a run's origin, with no program
+    /// loaded; accesses can be issued.
     NoProgram,
-    /// Between entries, with an instruction of the loaded program to
-    /// execute.
+    /// On no entry's step, at a run's origin or a program load, with an
+    /// instruction of the loaded program to execute.
     Ready,
-    /// Inside an entry.
+    /// On a step of a numbered entry, its last included.
     Busy {
         /// The entry's number.
         entry: u32,
@@ -385,14 +388,14 @@ pub enum CpuStatus {
         /// The stall's length in all.
         total: u32,
     },
-    /// Between entries, the loaded program having executed its last
-    /// instruction.
+    /// On the last step of the instruction after which the loaded program
+    /// has none left to execute.
     Finished,
-    /// Between entries, the loaded program having stopped on an address it
-    /// could not access.
+    /// On the error that stopped the loaded program on an address it could
+    /// not access.
     Faulted,
-    /// Between entries, the loaded program having used its budget, or the
-    /// session its room.
+    /// On the error that stopped the loaded program at the end of its
+    /// budget, or of the session's room.
     OutOfBudget,
 }
 
@@ -425,7 +428,7 @@ pub struct RegisterView {
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub struct CpuView {
-    /// The instruction of the cursor's entry: "ld r1, [0x0A4]"; "—" when
+    /// The instruction of the cursor's entry: `ld r1, [0x0A4]`; "—" when
     /// there is none.
     pub instruction: String,
     /// What the CPU is doing.
@@ -475,7 +478,7 @@ pub struct ProgramView {
     pub executed: u32,
     /// Whether it has executed its last instruction.
     pub finished: bool,
-    /// The drawer's line: "5 instructions · next: ld r2, [0x0A8]".
+    /// The drawer's line: `5 instructions · next: ld r2, [0x0A8]`.
     pub summary: String,
 }
 
@@ -577,7 +580,7 @@ impl CacheView {
             word_heads: word_heads(geometry),
             show_rank: rank_header.is_some(),
             rank_header,
-            show_dirty: machine.config.cache.write_policy == WritePolicy::WriteBack,
+            show_dirty: true,
             wrap: geometry.ways() > WAYS_IN_A_ROW,
             selected_set: access.map(|access| access.location.set),
             compare: access.map(|access| compare(geometry, access)),
@@ -681,32 +684,100 @@ fn word_heads(geometry: &Geometry) -> Vec<String> {
         .collect()
 }
 
-/// The rows of the memory table: every line `machine`'s run has touched and
-/// every line of `watch` that fits its addresses, taken to the start of its
-/// line, in ascending order and each once, with whether it is watched.
-pub(crate) fn memory_rows(machine: &Machine, watch: &BTreeSet<LineAddr>) -> Vec<(LineAddr, bool)> {
-    let geometry = &machine.geometry;
-    let mut rows: BTreeMap<LineAddr, bool> =
-        machine.memory.touched().map(|line| (line, false)).collect();
-    for line in watch {
-        if let Some(addr) = geometry.addr(line.get()) {
-            rows.insert(geometry.locate(addr).line, true);
+/// The rows of the memory table: every line a run has touched and every
+/// watched line that fits its addresses, taken to the start of its line, in
+/// ascending order and each once, with whether it is watched. The touched
+/// lines are walked where the memory keeps them, never copied, so a run that
+/// has touched many lines costs a render no more than a walk along them.
+pub(crate) struct MemoryRows<'m> {
+    /// The run's memory, whose touched lines are rows.
+    memory: &'m Memory,
+    /// The watched lines that fit the run's addresses, each at the start of
+    /// its line.
+    watched: BTreeSet<LineAddr>,
+}
+
+impl<'m> MemoryRows<'m> {
+    /// The rows of `machine`'s memory table with the lines of `watch`.
+    pub(crate) fn new(machine: &'m Machine, watch: &BTreeSet<LineAddr>) -> Self {
+        let geometry = &machine.geometry;
+        Self {
+            memory: &machine.memory,
+            watched: watch
+                .iter()
+                .filter_map(|line| geometry.addr(line.get()))
+                .map(|addr| geometry.locate(addr).line)
+                .collect(),
         }
     }
-    rows.into_iter().collect()
+
+    /// The watched lines the run has not touched, which are rows of their
+    /// own.
+    fn untouched(&self) -> impl Iterator<Item = LineAddr> + '_ {
+        self.watched
+            .iter()
+            .copied()
+            .filter(|line| !self.memory.is_touched(*line))
+    }
+
+    /// How many rows there are.
+    pub(crate) fn count(&self) -> u32 {
+        let untouched = u32::try_from(self.untouched().count()).unwrap_or(u32::MAX);
+        self.memory.touched_count().saturating_add(untouched)
+    }
+
+    /// The row of `line`, when it is one.
+    pub(crate) fn row_of(&self, line: LineAddr) -> Option<u32> {
+        let listed = self.memory.is_touched(line) || self.watched.contains(&line);
+        listed.then(|| {
+            let untouched = self
+                .untouched()
+                .take_while(|watched| *watched < line)
+                .count();
+            self.memory
+                .touched_before(line)
+                .saturating_add(u32::try_from(untouched).unwrap_or(u32::MAX))
+        })
+    }
+
+    /// The rows in order, each with whether it is watched.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (LineAddr, bool)> + '_ {
+        let mut touched = self.memory.touched().peekable();
+        let mut watched = self.watched.iter().copied().peekable();
+        std::iter::from_fn(
+            move || match (touched.peek().copied(), watched.peek().copied()) {
+                (Some(both), Some(line)) if both == line => {
+                    touched.next();
+                    watched.next();
+                    Some((both, true))
+                }
+                (Some(line), Some(next)) if line < next => {
+                    touched.next();
+                    Some((line, false))
+                }
+                (_, Some(line)) => {
+                    watched.next();
+                    Some((line, true))
+                }
+                (Some(line), None) => {
+                    touched.next();
+                    Some((line, false))
+                }
+                (None, None) => None,
+            },
+        )
+    }
 }
 
 impl MemoryView {
     /// The memory table's heading for `machine`, whose table has `rows`, with
     /// `bus` the line on the bus.
-    pub(crate) fn new(machine: &Machine, rows: &[(LineAddr, bool)], bus: Option<LineAddr>) -> Self {
+    pub(crate) fn new(machine: &Machine, rows: &MemoryRows<'_>, bus: Option<LineAddr>) -> Self {
         Self {
             caption: explain::memory_caption(machine.memory.touched_count()),
             word_heads: word_heads(&machine.geometry),
-            line_count: u32::try_from(rows.len()).unwrap_or(u32::MAX),
-            bus_row: bus
-                .and_then(|bus| rows.iter().position(|(line, _)| *line == bus))
-                .and_then(|row| u32::try_from(row).ok()),
+            line_count: rows.count(),
+            bus_row: bus.and_then(|bus| rows.row_of(bus)),
         }
     }
 }
@@ -870,8 +941,13 @@ impl CpuView {
         let instruction = entry
             .filter(|entry| entry.kind != EntryKind::Program)
             .map_or_else(explain::no_instruction, |entry| entry.label.clone());
+        // Every event of a numbered entry names it, its last included,
+        // except the last event of the entry that finished or stopped the
+        // program, where the program's state takes over at once.
         let busy = entry
-            .filter(|_| position.boundary == Boundary::MidEntry)
+            .filter(|entry| {
+                position.boundary == Boundary::MidEntry || !ends_program(machine, entry)
+            })
             .and_then(|entry| Some((entry.number?, noun(entry.kind))));
         let (status, status_text) = if let Some(stall) = machine.stall() {
             (
@@ -918,7 +994,30 @@ impl CpuView {
     }
 }
 
-/// What the CPU says of the loaded program between entries.
+/// Whether `entry`, complete on `machine`, is the one that ended the loaded
+/// program: the error that stopped it, or the instruction after which it
+/// had none left to execute.
+fn ends_program(machine: &Machine, entry: &EntryRecord) -> bool {
+    let Some(program) = &machine.program else {
+        return false;
+    };
+    match entry.kind {
+        EntryKind::Error => machine.cpu.halted.is_some(),
+        EntryKind::Instruction | EntryKind::Access => {
+            // An access issued by hand is none of the program's.
+            let executed = entry.kind == EntryKind::Instruction
+                || machine
+                    .access
+                    .as_ref()
+                    .is_some_and(|access| access.request.origin() == Origin::Program);
+            executed && machine.cpu.halted.is_none() && program.get(machine.cpu.pc).is_none()
+        }
+        EntryKind::Edit | EntryKind::Program => false,
+    }
+}
+
+/// What the CPU says of the loaded program where the cursor is on no
+/// entry's step, and on the last step of the entry that ended it.
 fn between_entries(machine: &Machine) -> (CpuStatus, String) {
     let Some(program) = &machine.program else {
         return (CpuStatus::NoProgram, explain::ready());
@@ -974,5 +1073,56 @@ impl ProgramView {
             finished: at.is_none(),
             summary: program.summary(pc),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use crate::config::Preset;
+
+    fn line(value: u32) -> LineAddr {
+        LineAddr::new_unchecked(value)
+    }
+
+    #[test]
+    fn memory_rows_walk_the_touched_and_watched_lines_as_one_ordered_list() {
+        let mut machine = Machine::start(Preset::TwoWayLru.config()).unwrap();
+        for touched in [0x0A0, 0x0B0, 0x1A0, 0x2A0] {
+            machine.memory.touch(line(touched));
+        }
+        let watches: [&[u32]; 5] = [
+            &[],
+            // Below, between, above and on touched lines, one of them given
+            // by a byte inside its line.
+            &[0x000, 0x124, 0x0A0, 0x2A4, 0xFF0],
+            // Beyond the 12-bit addresses: left out.
+            &[0x1000, 0x0B0],
+            &[0x300, 0x310],
+            &[0x010],
+        ];
+        for watch in watches {
+            let watch: BTreeSet<LineAddr> = watch.iter().copied().map(line).collect();
+            let rows = MemoryRows::new(&machine, &watch);
+            // The list as a copy would build it.
+            let mut expected: BTreeMap<LineAddr, bool> =
+                machine.memory.touched().map(|line| (line, false)).collect();
+            for watched in &watch {
+                if let Some(addr) = machine.geometry.addr(watched.get()) {
+                    expected.insert(machine.geometry.locate(addr).line, true);
+                }
+            }
+            let expected: Vec<(LineAddr, bool)> = expected.into_iter().collect();
+            assert_eq!(rows.iter().collect::<Vec<_>>(), expected, "{watch:?}");
+            assert_eq!(usize::try_from(rows.count()).unwrap(), expected.len());
+            for ((at, _), row) in expected.iter().zip(0_u32..) {
+                assert_eq!(rows.row_of(*at), Some(row), "{at:?} in {watch:?}");
+            }
+            assert_eq!(rows.row_of(line(0x0C0)), None);
+        }
     }
 }

@@ -55,8 +55,8 @@ use crate::isa::ParseResult;
 use crate::machine::Machine;
 use crate::op::{Op, OpError, ProgramFormat};
 use crate::snapshot::{
-    self, BusView, CacheView, ControlAction, Controls, CpuView, Labels, MemoryLineView, MemoryView,
-    ProgramView, RequestView, State,
+    self, BusView, CacheView, ControlAction, Controls, CpuView, Labels, MemoryLineView, MemoryRows,
+    MemoryView, ProgramView, RequestView, State,
 };
 use crate::stats::Stats;
 use crate::units::{EventPos, LineAddr, OpIndex};
@@ -282,7 +282,7 @@ impl Session {
         let event = self.event_at(self.cursor);
         let entry = self.record_at(self.cursor).map(|(_, record)| record);
         let highlight = self.highlight();
-        let rows = snapshot::memory_rows(machine, &self.watch);
+        let rows = MemoryRows::new(machine, &self.watch);
         let bus = snapshot::bus_line(machine, event);
         let (origin, end) = self.run_bounds(machine.run);
         let steps = self
@@ -323,8 +323,8 @@ impl Session {
     pub fn memory_lines(&self, first: u32, count: u32) -> Vec<MemoryLineView> {
         let machine = &self.current;
         let bus = snapshot::bus_line(machine, self.event_at(self.cursor));
-        snapshot::memory_rows(machine, &self.watch)
-            .into_iter()
+        MemoryRows::new(machine, &self.watch)
+            .iter()
             .skip(usize::try_from(first).unwrap_or(usize::MAX))
             .take(usize::try_from(count).unwrap_or(usize::MAX))
             .map(|(line, watched)| MemoryLineView::new(machine, line, watched, bus))
