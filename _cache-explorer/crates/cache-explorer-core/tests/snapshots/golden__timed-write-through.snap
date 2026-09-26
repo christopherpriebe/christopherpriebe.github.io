@@ -3,7 +3,7 @@ source: crates/cache-explorer-core/tests/golden.rs
 description: "Write-through on direct-mapped-8, timed 1/20: a store miss stalls for the fill, a store hit costs the hit time alone although it writes memory too, and a load that evicts a clean line stalls for the fill only (cases 8, 6 and 3)."
 ---
 1.1 | decode | lineSize | - | 0 | Store 0x0A4: tag 0x01, set 2, offset 4 (word 1).
-1.2 | miss | associativity | accesses, stores, misses, cycles | 1 | Set 2 is invalid. Miss.
+1.2 | miss | associativity | accesses, stores, misses, cycles, compulsory | 1 | Set 2 is invalid. Miss.
 1.3 | victim | associativity | - | 1 | Set 2 has one way; the line goes there.
 1.4 | stall | timing | - | 1 | The CPU stalls for 20 cycles while memory supplies line 0x0A0.
 1.5 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills, cycles | 21 | Fill way 0 with line 0x0A0–0x0AF from memory.
@@ -14,7 +14,7 @@ description: "Write-through on direct-mapped-8, timed 1/20: a store miss stalls 
 2.3 | write | writePolicy | word 2/0/2 | 22 | Write 9 into word 2 of way 0.
 2.4 | writeThrough | writePolicy | memory 0xA8, writethroughs | 22 | Write-through: 9 also goes to memory at 0x0A8.
 3.1 | decode | lineSize | - | 22 | Load 0x1A4: tag 0x03, set 2, offset 4 (word 1).
-3.2 | miss | associativity | accesses, loads, misses, cycles | 23 | Set 2 holds tag 0x01, not 0x03. Miss.
+3.2 | miss | associativity | accesses, loads, misses, cycles, compulsory | 23 | Set 2 holds tag 0x01, not 0x03. Miss.
 3.3 | victim | associativity | - | 23 | Direct-mapped: way 0 is the only place for this line, so its current line must go.
 3.4 | stall | timing | - | 23 | The CPU stalls for 20 cycles while memory supplies line 0x1A0.
 3.5 | evict | associativity | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, evictions | 23 | Evict line 0x0A0 (tag 0x01) from way 0.

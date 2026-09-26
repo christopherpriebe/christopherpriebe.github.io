@@ -1,8 +1,10 @@
 //! The access engine: the ten access cases with their events, order,
 //! counters and changed cells, and frame 3b's dirty eviction with its log
 //! lines; hit and miss sequences; victims under each replacement policy;
-//! write-backs, write-throughs and write-arounds; miss counts for
-//! compulsory, conflict and capacity examples; staleness; event numbering;
+//! write-backs, write-throughs and write-arounds; miss counts and the class
+//! of each miss, compulsory, capacity or conflict, in known examples and
+//! against a fully associative LRU cache run beside the engine; the
+//! sparkline's outcomes and the stats of a run; staleness; event numbering;
 //! stopping mid-access; the invariant checks at entry ends; the internal
 //! error of a lookup that finds no way; and timed mode: where each case's
 //! cycles are charged, the stall and its countdown, the cycle identity at
@@ -98,7 +100,10 @@ impl Run {
 
     /// Executes `request` as the next op and returns its events with the
     /// machine after each. Every invariant that must hold mid-access holds
-    /// after every event, the counters add up, and no event is an error.
+    /// after every event, the counters add up, and no event is an error:
+    /// hits and misses make up the accesses, the three classes of miss make
+    /// up the misses, and no write-through happens under write-back nor any
+    /// write-around under write-allocate.
     /// In timed mode every event is stamped with the machine's cycle count,
     /// each miss stalls once, and the access costs the hit time, plus the
     /// miss penalty for a miss and again for a write-back; untimed, nothing
@@ -121,6 +126,17 @@ impl Run {
             let counters = after.counters;
             assert_eq!(counters.hits + counters.misses, counters.accesses);
             assert_eq!(counters.loads + counters.stores, counters.accesses);
+            assert_eq!(
+                counters.compulsory + counters.capacity + counters.conflict,
+                counters.misses
+            );
+            let cache = &after.config.cache;
+            if cache.write_policy == WritePolicy::WriteBack {
+                assert_eq!(counters.writethroughs, 0);
+            }
+            if cache.allocate_policy == AllocatePolicy::WriteAllocate {
+                assert_eq!(counters.writearounds, 0);
+            }
             let stamp = after.config.timing.map(|_| counters.cycles);
             assert_eq!(event.cycle, stamp, "{}", event.label);
         }
@@ -460,6 +476,7 @@ fn case_2_a_load_miss_fills_an_invalid_way() {
     let events = run.load(0x0A4);
     // Way 0 already ranks first, so the fill moves no rank.
     assert_eq!(kinds(&events), [Decode, Miss, Victim, Fill, Complete]);
+    // The line was never filled in this run: a compulsory miss.
     assert_eq!(
         shape(&events[1]),
         (
@@ -469,7 +486,8 @@ fn case_2_a_load_miss_fills_an_invalid_way() {
             &[
                 counter(Counter::Accesses),
                 counter(Counter::Loads),
-                counter(Counter::Misses)
+                counter(Counter::Misses),
+                counter(Counter::Compulsory)
             ][..],
             Some(Cause::Associativity)
         )
@@ -888,7 +906,8 @@ fn case_7_a_store_miss_under_write_allocate_and_write_back_fills_then_writes() {
         [
             counter(Counter::Accesses),
             counter(Counter::Stores),
-            counter(Counter::Misses)
+            counter(Counter::Misses),
+            counter(Counter::Compulsory)
         ]
     );
     assert_eq!(event(&events, Write).changed, [dirty(2, 0), word(2, 0, 1)]);
@@ -1094,6 +1113,8 @@ fn a_no_allocate_store_then_a_load_of_its_line_both_miss() {
     assert_eq!(kinds(&events), [Decode, Miss, Victim, Fill, Complete]);
     assert_eq!(run.machine.registers.get(Register::R1), 7);
     assert_eq!(run.machine.counters.misses, 2);
+    // The store filled no line, so both misses are compulsory.
+    assert_eq!(three_c(&run), (2, 0, 0));
 }
 
 #[test]
@@ -1305,6 +1326,9 @@ fn a_direct_mapped_sequence_hits_within_a_line_and_misses_across_conflicts() {
     // The dirty 0x000 was written back when 0x080 replaced it.
     assert_eq!(counters.writebacks, 1);
     assert_eq!(run.memory(0x000), 1);
+    // Three lines are new; 0x000 came back while a cache of eight lines
+    // would still hold it.
+    assert_eq!(three_c(&run), (3, 0, 1));
 }
 
 #[test]
@@ -1321,12 +1345,14 @@ fn an_alternation_that_conflicts_direct_mapped_hits_in_two_ways() {
         (run.machine.counters.misses, run.machine.counters.hits),
         (8, 0)
     );
+    assert_eq!(three_c(&run), (2, 0, 6));
     let mut run = Run::new(preset(Preset::TwoWayLru));
     outcomes(&mut run, &requests);
     assert_eq!(
         (run.machine.counters.misses, run.machine.counters.hits),
         (2, 6)
     );
+    assert_eq!(three_c(&run), (2, 0, 0));
 }
 
 #[test]
@@ -1352,6 +1378,7 @@ fn a_loop_one_line_larger_than_a_fully_associative_lru_cache_always_misses() {
         (run.machine.counters.misses, run.machine.counters.hits),
         (4, 8)
     );
+    assert_eq!(three_c(&run), (4, 0, 0));
     let mut run = Run::new(config);
     outcomes(&mut run, &rounds(5));
     assert_eq!(
@@ -1359,6 +1386,476 @@ fn a_loop_one_line_larger_than_a_fully_associative_lru_cache_always_misses() {
         (15, 0)
     );
     assert_eq!(run.machine.counters.evictions, 11);
+    // After the first round every miss is one the cache's size causes.
+    assert_eq!(three_c(&run), (5, 10, 0));
+}
+
+// ---------------------------------------------------------------------------
+// The classes of misses.
+// ---------------------------------------------------------------------------
+
+/// The run's compulsory, capacity and conflict misses.
+fn three_c(run: &Run) -> (u32, u32, u32) {
+    let counters = run.machine.counters;
+    (counters.compulsory, counters.capacity, counters.conflict)
+}
+
+/// The counters of the three classes of miss, in the order they are
+/// declared.
+const CLASSES: [Counter; 3] = [Counter::Compulsory, Counter::Capacity, Counter::Conflict];
+
+/// The class of each access of `requests`, as the counter its `Miss` event
+/// moved; `None` for a hit.
+fn classes(run: &mut Run, requests: &[Request]) -> Vec<Option<Counter>> {
+    requests
+        .iter()
+        .map(|&request| {
+            let events = run.events(request);
+            let moved: Vec<Counter> = events
+                .iter()
+                .flat_map(|event| &event.changed)
+                .filter_map(|change| match change {
+                    ChangeRef::Counter { counter } if CLASSES.contains(counter) => Some(*counter),
+                    _ => None,
+                })
+                .collect();
+            match events[1].kind {
+                Hit => assert!(moved.is_empty(), "a hit has no class"),
+                _ => assert_eq!(moved.len(), 1, "a miss has one class"),
+            }
+            moved.first().copied()
+        })
+        .collect()
+}
+
+const COMPULSORY: Option<Counter> = Some(Counter::Compulsory);
+const CAPACITY: Option<Counter> = Some(Counter::Capacity);
+const CONFLICT: Option<Counter> = Some(Counter::Conflict);
+
+#[test]
+fn a_class_moves_at_the_miss_alone() {
+    // The class is known at the tag compare and moves there, with the miss;
+    // no other event of the access changes it.
+    let mut run = Run::new(preset(Preset::DirectMapped8));
+    run.load(0x000);
+    run.load(0x080);
+    let trace = run.trace(load(0x000, Register::R1));
+    let conflicts: Vec<(EventKind, u32)> = trace
+        .iter()
+        .map(|(event, after)| (event.kind, after.counters.conflict))
+        .collect();
+    assert_eq!(
+        conflicts,
+        [
+            (Decode, 0),
+            (Miss, 1),
+            (Victim, 1),
+            (Evict, 1),
+            (Fill, 1),
+            (Complete, 1)
+        ]
+    );
+    assert!(trace[1].0.changed.contains(&counter(Counter::Conflict)));
+}
+
+#[test]
+fn a_direct_mapped_sweep_of_twice_its_lines_misses_for_capacity() {
+    // Sixteen lines through an eight-line cache, twice: the first round is
+    // compulsory, and in the second each line has been out of a fully
+    // associative cache of eight lines for eight other lines.
+    let mut run = Run::new(preset(Preset::DirectMapped8));
+    let sweep: Vec<Request> = (0..2)
+        .flat_map(|_| (0..16).map(|line| load(line * 0x10, Register::R1)))
+        .collect();
+    let classes = classes(&mut run, &sweep);
+    assert_eq!(classes[..16], [COMPULSORY; 16]);
+    assert_eq!(classes[16..], [CAPACITY; 16]);
+    assert_eq!(three_c(&run), (16, 16, 0));
+}
+
+#[test]
+fn one_run_can_have_all_three_classes() {
+    // 0x000 and 0x080 share set 0 of direct-mapped-8, so 0x000's return is
+    // a conflict. Eight new lines then push it out of a cache of eight
+    // lines of any shape, so its next return is for capacity.
+    let mut run = Run::new(preset(Preset::DirectMapped8));
+    let mut requests = vec![
+        load(0x000, Register::R1),
+        load(0x080, Register::R1),
+        load(0x000, Register::R1),
+    ];
+    requests.extend((0..8).map(|line| load(0x100 + line * 0x10, Register::R1)));
+    requests.push(load(0x000, Register::R1));
+    let mut expected = vec![COMPULSORY, COMPULSORY, CONFLICT];
+    expected.extend([COMPULSORY; 8]);
+    expected.push(CAPACITY);
+    assert_eq!(classes(&mut run, &requests), expected);
+    assert_eq!(three_c(&run), (10, 1, 1));
+}
+
+#[test]
+fn a_store_miss_under_write_no_allocate_fills_nothing_so_the_next_miss_on_its_line_is_compulsory() {
+    // The same three accesses under each allocate policy. A store that
+    // allocates fills its line, so when a conflict has pushed it out, the
+    // load's miss is a conflict; a store that does not allocate fills
+    // nothing, not even the shadow, so the load is the line's first fill.
+    let requests = [
+        store(0x0A4, 7),
+        load(0x1A4, Register::R1),
+        load(0x0A4, Register::R1),
+    ];
+    let mut run = Run::new(direct_mapped(
+        WritePolicy::WriteBack,
+        AllocatePolicy::WriteAllocate,
+    ));
+    assert_eq!(
+        classes(&mut run, &requests),
+        [COMPULSORY, COMPULSORY, CONFLICT]
+    );
+    for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
+        let mut run = Run::new(direct_mapped(write_policy, AllocatePolicy::WriteNoAllocate));
+        assert_eq!(classes(&mut run, &requests[..1]), [COMPULSORY]);
+        assert!(run.machine.filled.is_empty(), "{write_policy:?}");
+        assert!(run.machine.shadow.lines().is_empty(), "{write_policy:?}");
+        assert_eq!(
+            classes(&mut run, &requests[1..]),
+            [COMPULSORY, COMPULSORY],
+            "{write_policy:?}"
+        );
+    }
+}
+
+#[test]
+fn a_store_miss_under_write_no_allocate_is_classed_like_any_other_miss() {
+    // On a line filled before, it is a conflict if a fully associative
+    // cache would still hold the line...
+    let mut run = Run::new(direct_mapped(
+        WritePolicy::WriteBack,
+        AllocatePolicy::WriteNoAllocate,
+    ));
+    let requests = [
+        load(0x0A4, Register::R1),
+        load(0x1A4, Register::R1),
+        store(0x0A4, 7),
+    ];
+    assert_eq!(
+        classes(&mut run, &requests),
+        [COMPULSORY, COMPULSORY, CONFLICT]
+    );
+    // ...and for capacity if it would not. Five lines through a fully
+    // associative cache of four push out the first; the store to it misses
+    // for capacity and allocates nowhere, so the load after it misses for
+    // capacity too.
+    let mut run = Run::new(config(
+        64,
+        4,
+        Replacement::Lru,
+        WritePolicy::WriteBack,
+        AllocatePolicy::WriteNoAllocate,
+    ));
+    let mut requests: Vec<Request> = (0..5).map(|line| load(line * 0x10, Register::R1)).collect();
+    requests.extend([store(0x000, 7), load(0x000, Register::R1)]);
+    let mut expected = vec![COMPULSORY; 5];
+    expected.extend([CAPACITY, CAPACITY]);
+    assert_eq!(classes(&mut run, &requests), expected);
+}
+
+#[test]
+fn the_shadow_brings_in_a_line_the_cache_hit_on() {
+    // A direct-mapped cache of four lines keeps 0x000 in set 0 while four
+    // lines of other sets pass, and a fully associative LRU cache of four
+    // lines loses it. The load of 0x000 then hits in the cache and misses
+    // in the shadow, which brings the line in as its own miss would. So
+    // when 0x040 has evicted it from set 0, its return is a conflict: a
+    // fully associative cache of four lines would have held it.
+    let mut run = Run::new(config(
+        64,
+        1,
+        Replacement::Lru,
+        WritePolicy::WriteBack,
+        AllocatePolicy::WriteAllocate,
+    ));
+    let requests: Vec<Request> = [0x000, 0x010, 0x020, 0x030, 0x050, 0x000, 0x040, 0x000]
+        .into_iter()
+        .map(|at| load(at, Register::R1))
+        .collect();
+    assert_eq!(
+        classes(&mut run, &requests[..6]),
+        [COMPULSORY, COMPULSORY, COMPULSORY, COMPULSORY, COMPULSORY, None]
+    );
+    assert_eq!(
+        run.machine.shadow.lines(),
+        [
+            line_addr(0x000),
+            line_addr(0x050),
+            line_addr(0x030),
+            line_addr(0x020)
+        ]
+    );
+    assert_eq!(classes(&mut run, &requests[6..]), [COMPULSORY, CONFLICT]);
+}
+
+#[test]
+fn a_fifo_miss_that_lru_would_have_avoided_is_a_conflict() {
+    // In a fully associative cache of two lines under FIFO, a hit on 0x000
+    // does not save it: 0x020 evicts it, filled earliest, where LRU would
+    // have evicted 0x010. Its return is therefore a conflict, a miss the
+    // policy caused rather than the cache's size.
+    let requests: Vec<Request> = [0x000, 0x010, 0x000, 0x020, 0x000]
+        .into_iter()
+        .map(|at| load(at, Register::R1))
+        .collect();
+    let two_lines = |replacement| {
+        config(
+            32,
+            2,
+            replacement,
+            WritePolicy::WriteBack,
+            AllocatePolicy::WriteAllocate,
+        )
+    };
+    let mut run = Run::new(two_lines(Replacement::Fifo));
+    assert_eq!(
+        classes(&mut run, &requests),
+        [COMPULSORY, COMPULSORY, None, COMPULSORY, CONFLICT]
+    );
+    let mut run = Run::new(two_lines(Replacement::Lru));
+    assert_eq!(
+        classes(&mut run, &requests),
+        [COMPULSORY, COMPULSORY, None, COMPULSORY, None]
+    );
+}
+
+/// A fully associative LRU cache of `capacity` lines kept beside a run, by
+/// last use, to check the shadow against: `line` → the access that last
+/// used it.
+struct Beside {
+    capacity: usize,
+    lines: std::collections::BTreeMap<u32, usize>,
+}
+
+impl Beside {
+    /// Whether it holds `line`; either way the access uses the line, and a
+    /// miss that `allocate`s brings it in, evicting the line used least
+    /// recently when it is full.
+    fn access(&mut self, line: u32, allocate: bool, now: usize) -> bool {
+        let held = self.lines.contains_key(&line);
+        if held || allocate {
+            if !held && self.lines.len() == self.capacity {
+                let oldest = self
+                    .lines
+                    .iter()
+                    .min_by_key(|(_, used)| **used)
+                    .map(|(line, _)| *line)
+                    .unwrap();
+                self.lines.remove(&oldest);
+            }
+            self.lines.insert(line, now);
+        }
+        held
+    }
+}
+
+#[test]
+fn every_miss_is_classed_by_the_lines_filled_and_a_fully_associative_cache_beside_the_run() {
+    // Every placement, policy and allocate policy, over streams with hits,
+    // conflicts and evictions: a miss is compulsory exactly when no `Fill`
+    // has brought its line in before, and otherwise a conflict exactly when
+    // a fully associative LRU cache of as many lines, fed the same accesses
+    // and allocating as the cache does, holds the line.
+    let mut ways = 1;
+    while ways <= 8 {
+        for replacement in [Replacement::Lru, Replacement::Fifo, Replacement::Random] {
+            for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
+                for allocate_policy in [
+                    AllocatePolicy::WriteAllocate,
+                    AllocatePolicy::WriteNoAllocate,
+                ] {
+                    let config = config(128, ways, replacement, write_policy, allocate_policy);
+                    let geometry = config.validate().unwrap();
+                    let mut run = Run::new(config);
+                    let mut filled = std::collections::BTreeSet::new();
+                    let mut beside = Beside {
+                        capacity: geometry.lines() as usize,
+                        lines: std::collections::BTreeMap::new(),
+                    };
+                    let mut seen = [0; 3];
+                    for (now, request) in request_stream(&geometry, u64::from(ways) + 7, 200)
+                        .into_iter()
+                        .enumerate()
+                    {
+                        let line = geometry.locate(request.addr()).line.get();
+                        let allocate = matches!(request, Request::Load { .. })
+                            || allocate_policy == AllocatePolicy::WriteAllocate;
+                        let held = beside.access(line, allocate, now);
+                        let events = run.events(request);
+                        let class = events
+                            .iter()
+                            .filter(|event| event.kind == Miss)
+                            .flat_map(|event| &event.changed)
+                            .find_map(|change| match change {
+                                ChangeRef::Counter { counter } if CLASSES.contains(counter) => {
+                                    Some(*counter)
+                                }
+                                _ => None,
+                            });
+                        let expected = (events[1].kind == Miss).then(|| {
+                            if !filled.contains(&line) {
+                                Counter::Compulsory
+                            } else if held {
+                                Counter::Conflict
+                            } else {
+                                Counter::Capacity
+                            }
+                        });
+                        assert_eq!(class, expected, "{request:?}");
+                        if let Some(class) = class {
+                            seen[CLASSES.iter().position(|c| *c == class).unwrap()] += 1;
+                        }
+                        if events.iter().any(|event| event.kind == Fill) {
+                            filled.insert(line);
+                        }
+                    }
+                    let shadow: Vec<u32> = run
+                        .machine
+                        .shadow
+                        .lines()
+                        .iter()
+                        .map(|line| line.get())
+                        .collect();
+                    let mut by_use: Vec<(usize, u32)> = beside
+                        .lines
+                        .iter()
+                        .map(|(line, used)| (*used, *line))
+                        .collect();
+                    by_use.sort_unstable_by(|a, b| b.cmp(a));
+                    let expected: Vec<u32> = by_use.into_iter().map(|(_, line)| line).collect();
+                    assert_eq!(shadow, expected);
+                    // Each stream has misses of the first two classes; the
+                    // direct-mapped and two-way caches have conflicts too.
+                    assert!(seen[0] > 0 && seen[1] > 0, "{seen:?}");
+                    if ways <= 2 {
+                        assert!(seen[2] > 0, "{ways}-way: {seen:?}");
+                    }
+                }
+            }
+        }
+        ways *= 2;
+    }
+}
+
+#[test]
+fn a_line_an_edit_takes_out_is_compulsory_again() {
+    // What an edit that invalidates a line does to the classification,
+    // done by hand until edits exist: the line leaves the filled lines and
+    // the shadow, so its next miss is compulsory rather than a conflict the
+    // cache did not cause.
+    let mut run = Run::new(preset(Preset::DirectMapped8));
+    run.load(0x0A4);
+    let line = line_addr(0x0A0);
+    run.machine.cache.way_mut(set(2), way(0)).unwrap().slot = Slot::Invalid;
+    run.machine.filled.remove(&line);
+    run.machine.shadow.forget(line);
+    assert_eq!(
+        classes(&mut run, &[load(0x0A4, Register::R1)]),
+        [COMPULSORY]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The sparkline's outcomes.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn an_outcome_joins_the_sparkline_at_the_tag_compare() {
+    use crate::stats::Outcome;
+    let mut run = Run::new(preset(Preset::DirectMapped8));
+    let outcomes = |machine: &Machine| -> Vec<Outcome> { machine.recent.outcomes().collect() };
+    let trace = run.trace(load(0x0A4, Register::R1));
+    // Not yet at the decode, as the access is not yet counted.
+    assert!(outcomes(&trace[0].1).is_empty());
+    for (_, after) in &trace[1..] {
+        assert_eq!(outcomes(after), [Outcome::Miss]);
+    }
+    run.load(0x0A8);
+    assert_eq!(outcomes(&run.machine), [Outcome::Miss, Outcome::Hit]);
+    // The sparkline keeps the latest RECENT_OUTCOMES, oldest first.
+    for _ in 0..crate::limits::RECENT_OUTCOMES {
+        run.load(0x0AC);
+    }
+    let latest = outcomes(&run.machine);
+    assert_eq!(latest.len(), crate::limits::RECENT_OUTCOMES as usize);
+    assert!(latest.iter().all(|outcome| *outcome == Outcome::Hit));
+}
+
+#[test]
+fn the_stats_of_a_run_add_up_its_counters() {
+    use crate::stats::{Outcome, StatKey, Stats, Traffic};
+    // Write-through and write-no-allocate: a write-around, a fill, a
+    // write-through, a clean eviction and a conflict.
+    let mut run = Run::new(direct_mapped(
+        WritePolicy::WriteThrough,
+        AllocatePolicy::WriteNoAllocate,
+    ));
+    run.store(0x0A4, 1);
+    run.load(0x0A4);
+    run.store(0x0A8, 2);
+    run.load(0x1A4);
+    let last = run.load(0x0A4);
+    let mut highlight: Vec<ChangeRef> = last.iter().flat_map(|e| e.changed.clone()).collect();
+    highlight.sort_unstable();
+    highlight.dedup();
+
+    let stats = Stats::new(&run.machine, true, &highlight);
+    let counters = stats.counters;
+    assert_eq!(
+        (counters.accesses, counters.hits, counters.misses),
+        (5, 1, 4)
+    );
+    assert_eq!(three_c(&run), (3, 0, 1));
+    assert_eq!(
+        stats.traffic,
+        Traffic {
+            line_reads: 3,
+            line_writes: 0,
+            word_writes: 2,
+            bytes_read: 3 * 16,
+            bytes_written: 2 * 4,
+        }
+    );
+    let rows: Vec<(StatKey, &str, bool)> = stats
+        .rows
+        .iter()
+        .map(|row| (row.key, row.text.as_str(), row.changed))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (StatKey::Accesses, "5", true),
+            (StatKey::Hits, "1", false),
+            (StatKey::Misses, "4", true),
+            (StatKey::HitRate, "20%", false),
+            (StatKey::Evictions, "2", true),
+            (StatKey::Writebacks, "0", false),
+            (StatKey::Writethroughs, "1", false),
+            (StatKey::Writearounds, "1", false),
+            (StatKey::Compulsory, "3", false),
+            (StatKey::Capacity, "0", false),
+            (StatKey::Conflict, "1", true),
+        ]
+    );
+    assert_eq!(
+        stats.recent,
+        [
+            Outcome::Miss,
+            Outcome::Miss,
+            Outcome::Hit,
+            Outcome::Miss,
+            Outcome::Miss
+        ]
+    );
+    assert_eq!(stats.recent_text.as_deref(), Some("1 hit, 4 misses"));
+    assert_eq!(stats.amat, None);
 }
 
 // ---------------------------------------------------------------------------
@@ -1875,6 +2372,9 @@ fn diff(before: &Machine, after: &Machine) -> Vec<ChangeRef> {
         (Counter::Writethroughs, old.writethroughs, new.writethroughs),
         (Counter::Writearounds, old.writearounds, new.writearounds),
         (Counter::Fills, old.fills, new.fills),
+        (Counter::Compulsory, old.compulsory, new.compulsory),
+        (Counter::Capacity, old.capacity, new.capacity),
+        (Counter::Conflict, old.conflict, new.conflict),
     ];
     for (name, a, b) in counts {
         if a != b {

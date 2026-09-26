@@ -25,6 +25,8 @@
 //! - I8: every line the cache holds is among the lines memory has recorded
 //!   as touched.
 
+use std::collections::BTreeSet;
+
 use thiserror::Error;
 
 use crate::cache::{Cache, Dirtiness, Set, Slot, Way};
@@ -36,12 +38,13 @@ use crate::geometry::{Geometry, Location};
 use crate::memory::Memory;
 use crate::prng::Prng;
 use crate::replacement::VictimChoice;
-use crate::stats::Counters;
-use crate::units::{Cycle, SetIndex, Tag, WayIndex};
+use crate::stats::{Counters, Recent, Shadow};
+use crate::units::{Cycle, LineAddr, SetIndex, Tag, WayIndex};
 
 /// The state of a run at one point: its configuration and geometry, the
-/// cache, memory, registers and counters, the access in progress, and the
-/// run's generator.
+/// cache, memory, registers and counters, what the classification of misses
+/// and the sparkline remember, the access in progress, and the run's
+/// generator.
 ///
 /// There is no way to obtain one from outside the core other than by replaying
 /// a run, so every machine is one a sequence of ops can reach. Not
@@ -61,6 +64,15 @@ pub struct Machine {
     pub(crate) registers: Registers,
     /// The run's counters.
     pub(crate) counters: Counters,
+    /// The fully associative LRU cache that tells capacity misses from
+    /// conflict misses, which sees every access of the run.
+    pub(crate) shadow: Shadow,
+    /// Every line the run has filled, so a miss on any other line is
+    /// compulsory. It grows with the distinct lines filled, which the
+    /// session's event limit bounds.
+    pub(crate) filled: BTreeSet<LineAddr>,
+    /// The outcomes of the run's latest accesses, for the sparkline.
+    pub(crate) recent: Recent,
     /// The generator random replacement draws its victims from, seeded from
     /// `config.seed` when the run starts.
     pub(crate) prng: Prng,
@@ -229,7 +241,8 @@ pub enum InvariantViolation {
 impl Machine {
     /// The machine at the start of a run of `config`: every way invalid and
     /// ranked by its way number, memory untouched, registers and counters at
-    /// 0, no access yet, and the generator seeded from `config.seed`.
+    /// 0, no line filled, an empty shadow cache and no outcome yet, no
+    /// access yet, and the generator seeded from `config.seed`.
     ///
     /// # Errors
     ///
@@ -245,6 +258,9 @@ impl Machine {
             memory: Memory::new(&geometry, config.memory_init),
             registers: Registers::default(),
             counters: Counters::default(),
+            shadow: Shadow::new(geometry.lines()),
+            filled: BTreeSet::new(),
+            recent: Recent::default(),
             prng: Prng::new(config.seed),
             access: None,
             run: 1,
@@ -548,6 +564,10 @@ mod tests {
         );
         assert_eq!(machine.registers, Registers::default());
         assert_eq!(machine.counters, Counters::default());
+        assert_eq!(machine.shadow, Shadow::new(machine.geometry.lines()));
+        assert!(machine.shadow.lines().is_empty());
+        assert!(machine.filled.is_empty());
+        assert_eq!(machine.recent, Recent::default());
         assert_eq!(machine.prng, Prng::new(config.seed));
         assert_eq!(machine.access, None);
         assert_eq!((machine.run, machine.entries_in_run), (1, 0));

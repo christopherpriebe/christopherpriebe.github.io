@@ -315,7 +315,9 @@ fn flows() -> Vec<Fixture> {
         Fixture {
             name: "direct-mapped-conflict",
             description: "Direct-mapped-8: 0x000 and 0x080 share set 0, its only way, so each \
-                          load evicts the other (cases 2 and 3).",
+                          load evicts the other (cases 2 and 3). The first two misses are \
+                          compulsory; the return of 0x000 is a conflict, since a fully \
+                          associative cache of eight lines would still hold it.",
             config: Preset::DirectMapped8.config(),
             issues: vec![load(0x000), load(0x080), load(0x000)],
         },
@@ -389,7 +391,7 @@ fn stores() -> Vec<Fixture> {
             name: "no-allocate-store-then-load",
             description: "A store miss under write-no-allocate leaves the cache empty, so a load \
                           of the same line misses too and reads the stored value from memory \
-                          (cases 9 and 2).",
+                          (cases 9 and 2). Both misses are compulsory: the store filled nothing.",
             config: direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteNoAllocate),
             issues: vec![store(0x0A4, 7), load(0x0A4)],
         },

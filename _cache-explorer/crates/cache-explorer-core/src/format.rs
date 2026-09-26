@@ -120,6 +120,17 @@ pub(crate) fn half_up(numerator: u64, denominator: u64, places: u32) -> Option<u
     u64::try_from(rounded).ok()
 }
 
+/// A rate as a whole percent, rounded half up: `67%` for 2 in 3, and `13%`
+/// for 1 in 8, since 12.5 rounds up. `None` when the denominator is 0.
+pub(crate) fn percent(numerator: u64, denominator: u64) -> Option<String> {
+    // A ratio in hundredths is a percent.
+    half_up(numerator, denominator, 2).map(|percent| format!("{}%", data(percent)))
+}
+
+/// What the place of a figure shows while there is nothing to compute it
+/// from, such as the hit rate before the run's first access: an em dash.
+pub(crate) const NO_FIGURE: &str = "\u{2014}";
+
 /// An event's label, `{entry}.{seq}` as in `5.3`. Plain digits, never
 /// grouped: a label names an event rather than counting anything, and a
 /// comma would read as a third number.
@@ -332,6 +343,20 @@ mod tests {
         assert_eq!(half_up(0, 0, 1), None);
         assert_eq!(half_up(u64::MAX, 1, 1), None);
         assert_eq!(half_up(1, 1, 40), None);
+    }
+
+    #[test]
+    fn percents_are_whole_and_round_half_up() {
+        assert_eq!(percent(2, 3).as_deref(), Some("67%"));
+        assert_eq!(percent(1, 3).as_deref(), Some("33%"));
+        // 12.5 % and 37.5 % round up.
+        assert_eq!(percent(1, 8).as_deref(), Some("13%"));
+        assert_eq!(percent(3, 8).as_deref(), Some("38%"));
+        assert_eq!(percent(0, 5).as_deref(), Some("0%"));
+        assert_eq!(percent(5, 5).as_deref(), Some("100%"));
+        assert_eq!(percent(1, 201).as_deref(), Some("0%"));
+        assert_eq!(percent(1, 200).as_deref(), Some("1%"));
+        assert_eq!(percent(1, 0), None);
     }
 
     #[test]

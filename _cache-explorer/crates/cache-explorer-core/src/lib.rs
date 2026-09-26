@@ -55,7 +55,7 @@ pub use input::{AddressInput, WordInput};
 pub use machine::{InvariantViolation, Machine};
 pub use memory::StaleInfo;
 pub use op::AccessKind;
-pub use stats::{Counters, Figure};
+pub use stats::{Counters, Figure, Outcome, StatKey, StatRow, Stats, Traffic};
 pub use units::{
     Addr, Cycle, EventPos, LineAddr, OpIndex, Register, SetIndex, Tag, WayIndex, Word, WordIndex,
 };

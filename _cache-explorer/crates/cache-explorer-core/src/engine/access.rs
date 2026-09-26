@@ -1,7 +1,8 @@
 //! One load or store, as the ordered micro-events of its case.
 //!
 //! Every access starts with `Decode`, then the tag compare, `Hit` or `Miss`,
-//! which moves the access counters. A miss that allocates chooses a
+//! which moves the access counters and, on a miss, the counter of its class:
+//! compulsory, capacity or conflict. A miss that allocates chooses a
 //! `Victim`, writes it back if it is dirty (`WriteBack`), evicts it if it
 //! holds a line (`Evict`) and brings the new line in (`Fill`). Then comes the
 //! result: a load's `Complete`; a store's `Write`, followed under
@@ -51,6 +52,7 @@ use crate::machine::{AccessContext, InvariantViolation, Lookup, Machine, StallWi
 use crate::memory::{set_word_at, word_at};
 use crate::op::AccessKind;
 use crate::replacement::{RankMove, VictimReason};
+use crate::stats::{self, Outcome};
 use crate::units::{Addr, Cycle, LineAddr, Register, SetIndex, Tag, WayIndex, Word, WordIndex};
 
 /// A load or store the engine executes. Its address has been checked: it
@@ -135,9 +137,7 @@ fn run(machine: &mut Machine, request: Request, out: &mut Emitter<'_>) -> Result
     let hit = lookup(machine, request, location, out)?;
     let way = match (hit, request) {
         (Some(way), _) => way,
-        (None, Request::Store { value, .. })
-            if machine.config.cache.allocate_policy == AllocatePolicy::WriteNoAllocate =>
-        {
+        (None, Request::Store { value, .. }) if !allocates(machine, request) => {
             stall(machine, location.set, StallFor::WriteAround, out)?;
             return write_around(machine, addr, value, location, out);
         }
@@ -157,7 +157,8 @@ fn run(machine: &mut Machine, request: Request, out: &mut Emitter<'_>) -> Result
 
 /// The tag compare: `Hit` or `Miss`, which moves `accesses`, `loads` or
 /// `stores`, and `hits` or `misses`, and in timed mode charges the hit time.
-/// Returns the way that hit.
+/// A miss also moves its class, compulsory, capacity or conflict. The
+/// access's outcome joins the sparkline here. Returns the way that hit.
 fn lookup(
     machine: &mut Machine,
     request: Request,
@@ -176,14 +177,19 @@ fn lookup(
         AccessKind::Read => Counter::Loads,
         AccessKind::Write => Counter::Stores,
     };
-    let (event, outcome) = match hit {
-        Some(_) => (EventKind::Hit, Counter::Hits),
-        None => (EventKind::Miss, Counter::Misses),
+    let (event, outcome, mark) = match hit {
+        Some(_) => (EventKind::Hit, Counter::Hits, Outcome::Hit),
+        None => (EventKind::Miss, Counter::Misses, Outcome::Miss),
     };
     // A one-way set's miss names the tag its way held.
     let held = tags.first().copied().flatten();
-    let counters = [Counter::Accesses, kind, outcome];
-    for counter in counters {
+    let class = classify(machine, request, location.line, hit.is_some());
+    machine.recent.push(mark);
+    let counters: Vec<Counter> = [Counter::Accesses, kind, outcome]
+        .into_iter()
+        .chain(class)
+        .collect();
+    for &counter in &counters {
         machine.counters.add(counter, 1);
     }
     let mut changed: Vec<ChangeRef> = counters
@@ -207,6 +213,26 @@ fn lookup(
         None => explain::miss(&machine.geometry, location.set, location.tag, held),
     })?;
     Ok(hit)
+}
+
+/// Whether a miss of `request` brings its line into the cache: a load's
+/// always, and a store's only under write-allocate.
+fn allocates(machine: &Machine, request: Request) -> bool {
+    match request.kind() {
+        AccessKind::Read => true,
+        AccessKind::Write => machine.config.cache.allocate_policy == AllocatePolicy::WriteAllocate,
+    }
+}
+
+/// The miss classification's part in the tag compare. The shadow cache sees
+/// the access to `line`, and on a miss of its own brings the line in as the
+/// cache would, whether or not the cache hit; this keeps it the fully
+/// associative LRU cache of the same accesses. A miss is then classed, as
+/// the counter it moves; a hit has no class.
+fn classify(machine: &mut Machine, request: Request, line: LineAddr, hit: bool) -> Option<Counter> {
+    let allocate = allocates(machine, request);
+    let in_shadow = machine.shadow.access(line, allocate);
+    (!hit).then(|| stats::miss_class(machine.filled.contains(&line), in_shadow))
 }
 
 /// The allocation path of a miss: `Victim`, then in timed mode `Stall`,
@@ -372,7 +398,8 @@ fn evict(
 }
 
 /// `Fill`: the line comes in from memory, clean, and memory records it as
-/// touched. In timed mode it costs the miss penalty.
+/// touched; the run records it as filled, so later misses on it are not
+/// compulsory. In timed mode it costs the miss penalty.
 fn fill(
     machine: &mut Machine,
     location: Location,
@@ -381,6 +408,7 @@ fn fill(
 ) -> Result<(), Halt> {
     let set = location.set;
     machine.memory.touch(location.line);
+    machine.filled.insert(location.line);
     let data = machine.memory.line(location.line);
     let Some(target) = machine.cache.way_mut(set, way) else {
         return Err(lost(machine, set));

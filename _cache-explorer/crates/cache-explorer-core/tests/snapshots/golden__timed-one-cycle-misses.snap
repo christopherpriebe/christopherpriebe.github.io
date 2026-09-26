@@ -3,13 +3,13 @@ source: crates/cache-explorer-core/tests/golden.rs
 description: "Direct-mapped-8 timed with 3-cycle hits and 1-cycle misses: the stall of a single cycle is singular, a dirty eviction stalls for 2, and a hit costs more than a transfer (cases 7, 4 and 1)."
 ---
 1.1 | decode | lineSize | - | 0 | Store 0x0A4: tag 0x01, set 2, offset 4 (word 1).
-1.2 | miss | associativity | accesses, stores, misses, cycles | 3 | Set 2 is invalid. Miss.
+1.2 | miss | associativity | accesses, stores, misses, cycles, compulsory | 3 | Set 2 is invalid. Miss.
 1.3 | victim | associativity | - | 3 | Set 2 has one way; the line goes there.
 1.4 | stall | timing | - | 3 | The CPU stalls for 1 cycle while memory supplies line 0x0A0.
 1.5 | fill | lineSize | valid 2/0, tag 2/0, word 2/0/0, word 2/0/1, word 2/0/2, word 2/0/3, fills, cycles | 4 | Fill way 0 with line 0x0A0–0x0AF from memory.
 1.6 | write | writePolicy | dirty 2/0, word 2/0/1 | 4 | Write 7 into word 1 of way 0 and set its dirty bit. Memory at 0x0A4 is now stale.
 2.1 | decode | lineSize | - | 4 | Load 0x1A4: tag 0x03, set 2, offset 4 (word 1).
-2.2 | miss | associativity | accesses, loads, misses, cycles | 7 | Set 2 holds tag 0x01, not 0x03. Miss.
+2.2 | miss | associativity | accesses, loads, misses, cycles, compulsory | 7 | Set 2 holds tag 0x01, not 0x03. Miss.
 2.3 | victim | associativity | - | 7 | Direct-mapped: way 0 is the only place for this line, so its current line must go.
 2.4 | stall | timing | - | 7 | The CPU stalls for 2 cycles: 1 to write line 0x0A0 back, then 1 to fetch line 0x1A0.
 2.5 | writeBack | writePolicy | memory 0xA4, writebacks, cycles | 8 | Way 0 is dirty: write line 0x0A0 back to memory first.

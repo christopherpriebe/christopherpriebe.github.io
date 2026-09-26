@@ -1,6 +1,7 @@
 //! The wording of the log: every line built from machine state is written
 //! here, so the tool's voice has one source. That includes the CPU's status
-//! and the timed Stats lines, AMAT and the measured cost. Error messages are
+//! and the Stats lines: AMAT and the measured cost in timed mode, and the
+//! count beside the hit and miss sparkline. Error messages are
 //! the exception; each is the `Display` of its error type, next to that type.
 //!
 //! An access's lines keep the design's wording where it has one, as in "Way 1
@@ -395,6 +396,23 @@ pub(crate) fn measured(measured: u64, plus: u64, writebacks: u32) -> String {
         format::decimal(plus, 1),
         format::data(writebacks),
         format::plural(writebacks, "write-back", "write-backs")
+    )
+}
+
+/// The line beside the hit and miss sparkline: how many of the accesses it
+/// shows hit and missed, "1 hit, 2 misses". Once the run has had more
+/// accesses than the sparkline shows, `shown` is how many it shows, and the
+/// line says the counts are of those: "15 hits, 9 misses (last 24)".
+pub(crate) fn recent(hits: u32, misses: u32, shown: Option<u32>) -> String {
+    let last = shown
+        .map(|shown| format!(" (last {})", format::setting(shown)))
+        .unwrap_or_default();
+    format!(
+        "{} {}, {} {}{last}",
+        format::data(hits),
+        format::plural(hits, "hit", "hits"),
+        format::data(misses),
+        format::plural(misses, "miss", "misses")
     )
 }
 
@@ -876,6 +894,20 @@ mod tests {
         for (noun, number, step, steps, line) in lines {
             assert_eq!(entry_status(noun, number, step, steps), line);
         }
+    }
+
+    #[test]
+    fn the_sparkline_line_counts_hits_and_misses_in_the_singular_and_plural() {
+        assert_eq!(recent(1, 2, None), "1 hit, 2 misses");
+        assert_eq!(recent(2, 1, None), "2 hits, 1 miss");
+        assert_eq!(recent(0, 1, None), "0 hits, 1 miss");
+        assert_eq!(recent(1, 0, None), "1 hit, 0 misses");
+        assert_eq!(recent(15, 9, Some(24)), "15 hits, 9 misses (last 24)");
+        // The number shown is a limit, grouped like a setting.
+        assert_eq!(
+            recent(1_000, 200, Some(1_200)),
+            "1000 hits, 200 misses (last 1,200)"
+        );
     }
 
     #[test]
