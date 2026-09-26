@@ -29,10 +29,15 @@
 //! summary of what it changed; and the cursor keeps the values its entry
 //! started from, so the highlight of the net change so far costs nothing to
 //! draw.
+//!
+//! A session is written out as a share document, keeping each op's JSON as
+//! the op is appended, and is built again from one a slice of events at a
+//! time, each op checked as it was when it was appended.
 
 mod checkpoints;
 mod cursor;
 mod edit;
+mod load;
 mod timeline;
 
 use std::collections::BTreeSet;
@@ -43,6 +48,7 @@ use thiserror::Error;
 pub use cursor::{Boundary, Position, StepOutcome};
 pub use timeline::{EntryKind, EntryOutcome, EntryView, EventRow, Tense, Timeline};
 
+pub(crate) use load::{position_in_op, Loader};
 pub(crate) use timeline::EntryRecord;
 
 use checkpoints::{due, Checkpoint, Checkpoints};
@@ -56,6 +62,7 @@ use crate::geometry::{AccessError, Decoded};
 use crate::isa::ParseResult;
 use crate::machine::Machine;
 use crate::op::{Op, OpError, ProgramFormat};
+use crate::share;
 use crate::snapshot::{
     self, BusView, CacheView, ControlAction, Controls, CpuView, Labels, MemoryLineView, MemoryRows,
     MemoryView, ProgramView, RequestView, State,
@@ -77,6 +84,10 @@ pub struct Session {
     watch: BTreeSet<LineAddr>,
     /// Every op, the undone ones after the cursor included.
     ops: Vec<Op>,
+    /// Each op as a share document writes it, kept as ops are appended and
+    /// dropped, so a share string written after a cursor move serializes
+    /// only the cursor.
+    ops_json: Vec<String>,
     /// Every event of every op, in order; at most
     /// [`SESSION_EVENT_LIMIT`](crate::limits::SESSION_EVENT_LIMIT).
     events: Vec<MicroEvent>,
@@ -167,6 +178,7 @@ impl Session {
             initial,
             watch: BTreeSet::new(),
             ops: Vec::new(),
+            ops_json: Vec::new(),
             events: Vec::new(),
             op_ends: Vec::new(),
             entries: Vec::new(),
@@ -577,6 +589,7 @@ impl Session {
         let from = self.cursor;
         let kept = usize::try_from(plan.kept).unwrap_or(usize::MAX);
         self.ops.truncate(kept);
+        self.ops_json.truncate(kept);
         self.op_ends.truncate(kept);
         self.events.truncate(slot(plan.base));
         let entries = self
@@ -584,6 +597,7 @@ impl Session {
             .partition_point(|record| record.last <= plan.base);
         self.entries.truncate(entries);
         self.checkpoints.truncate_after(plan.base);
+        self.ops_json.extend(plan.ops.iter().map(share::op_json));
         self.ops.extend(plan.ops);
         self.op_ends.extend(plan.op_ends);
         self.events.extend(plan.events);
@@ -903,6 +917,7 @@ impl EventSink for Recorder {
 
 /// Builds a stretch of the log from a base: keeps every event, and a
 /// checkpoint wherever one is due.
+#[derive(Debug)]
 struct Builder {
     /// The events before the stretch.
     base: u64,
@@ -958,8 +973,9 @@ impl EventSink for Builder {
         Flow::Continue
     }
 
-    fn boundary(&mut self, machine: &Machine, progress: OpProgress) {
+    fn boundary(&mut self, machine: &Machine, progress: OpProgress) -> Flow {
         self.keep(self.pos(), machine, self.op, progress);
+        Flow::Continue
     }
 }
 

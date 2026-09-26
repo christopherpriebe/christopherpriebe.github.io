@@ -3,7 +3,9 @@
 //! A [`Config`] is fixed for a run; a new configuration starts a new run.
 //! [`Config::validate`] checks the rules in a fixed order and computes the
 //! [`Geometry`] of a valid configuration; the first rule that fails is the
-//! [`ConfigError`], whose `Display` is the message the student reads.
+//! [`ConfigError`], whose `Display` is the message the student reads, and
+//! whose segments open with the offending field in mono for a link or file
+//! that cannot be opened.
 //! [`Config::repair`] finds the nearest valid configuration for the "Open
 //! with … instead" action, and [`Config::summary`] is the configuration's
 //! one-line description. The named configurations, the design's three
@@ -21,6 +23,7 @@ use crate::limits::{
     MAX_ADDRESS_BITS, MAX_CYCLES, MAX_LINES, MAX_SEED, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS,
     MIN_CYCLES,
 };
+use crate::module::{Segments, TextSegment};
 use crate::session::Session;
 
 /// A cache and machine configuration. Fixed for a run; a new configuration
@@ -896,6 +899,113 @@ impl ConfigError {
             | ConfigError::AssociativityTooLarge { .. } => ConfigField::Associativity,
             ConfigError::Timing { .. } => ConfigField::Timing,
             ConfigError::SeedTooLarge { .. } => ConfigField::Seed,
+        }
+    }
+
+    /// The message as segments: the offending field and its value in mono,
+    /// as the document spells them, then the rule, as in `associativity: 3`
+    /// followed by "is not a power of two. It must be 1, 2, 4 or 8 (fully
+    /// associative) for an 8-line cache." The rule is the one `Display`
+    /// states, with the value the field now gives. A tag too narrow is
+    /// reported on the address width, the value the rule names.
+    pub fn segments(&self) -> Vec<TextSegment> {
+        Segments::new()
+            .code(&self.offending())
+            .plain(&format!(" {}", self.rule()))
+            .into_vec()
+    }
+
+    /// The field [`ConfigError::segments`] names, with its value as the
+    /// document writes it: `associativity: 3`.
+    fn offending(&self) -> String {
+        let (field, value) = match *self {
+            ConfigError::AddressBits { got: bits } | ConfigError::NoTagBits { bits } => {
+                ("addressBits", u64::from(bits))
+            }
+            ConfigError::SizeNotPowerOfTwo { got: size }
+            | ConfigError::LineLargerThanCache { size, .. }
+            | ConfigError::TooManyLines { size, .. } => ("sizeBytes", u64::from(size)),
+            ConfigError::LineNotPowerOfTwo { got: line }
+            | ConfigError::LineSmallerThanWord { line, .. }
+            | ConfigError::TooManyWords { line, .. } => ("lineBytes", u64::from(line)),
+            ConfigError::AssociativityZero => ("associativity", 0),
+            ConfigError::AssociativityNotPowerOfTwo { got, .. }
+            | ConfigError::AssociativityTooLarge { got, .. } => ("associativity", u64::from(got)),
+            ConfigError::Timing { field, got } => (
+                match field {
+                    ConfigNumberField::HitCycles => "hitCycles",
+                    ConfigNumberField::MissCycles => "missCycles",
+                },
+                u64::from(got),
+            ),
+            ConfigError::SeedTooLarge { got } => ("seed", got),
+        };
+        format!("{field}: {}", format::plain(value))
+    }
+
+    /// The rule [`ConfigError::segments`] states after the field: what is
+    /// wrong with its value, as `Display` says it.
+    fn rule(&self) -> String {
+        match *self {
+            ConfigError::AddressBits { .. } => format!(
+                "must be between {} and {} bits.",
+                format::setting(MIN_ADDRESS_BITS),
+                format::setting(MAX_ADDRESS_BITS)
+            ),
+            ConfigError::SizeNotPowerOfTwo { .. } => {
+                "must be a power of two, such as 64, 128 or 256 bytes.".to_owned()
+            }
+            ConfigError::LineNotPowerOfTwo { .. } => {
+                "must be a power of two, such as 8, 16 or 32 bytes.".to_owned()
+            }
+            ConfigError::LineSmallerThanWord { word, .. } => format!(
+                "is smaller than one {} B word. A line must hold at least one word.",
+                format::setting(word)
+            ),
+            ConfigError::LineLargerThanCache { line, .. } => format!(
+                "cannot hold one {} B line. The cache must hold at least one line.",
+                format::setting(line)
+            ),
+            ConfigError::TooManyLines { lines, line, .. } => format!(
+                "makes {} lines of {} B. Keep the cache to at most {} lines so every set fits \
+                 on screen.",
+                format::setting(lines),
+                format::setting(line),
+                format::setting(MAX_LINES)
+            ),
+            ConfigError::TooManyWords { words, word, .. } => format!(
+                "holds {} words of {} B. A line can hold at most {} words.",
+                format::setting(words),
+                format::setting(word),
+                format::setting(MAX_WORDS_PER_LINE)
+            ),
+            ConfigError::AssociativityZero => "must be at least 1.".to_owned(),
+            ConfigError::AssociativityNotPowerOfTwo { lines, .. } => format!(
+                "is not a power of two. It must be {} for {} {}-line cache.",
+                associativity_choices(lines),
+                format::a_or_an(lines),
+                format::setting(lines)
+            ),
+            ConfigError::AssociativityTooLarge { lines, .. } => format!(
+                "is too many: {} {}-line cache can have at most {} {}.",
+                format::a_or_an(lines),
+                format::setting(lines),
+                format::setting(lines),
+                format::plural(lines, "way", "ways")
+            ),
+            ConfigError::NoTagBits { .. } => {
+                "leaves no tag bits: one way of this cache would cover all of memory. Use wider \
+                 addresses or a smaller cache."
+                    .to_owned()
+            }
+            ConfigError::Timing { .. } => format!(
+                "must be between {} and {} cycles.",
+                format::setting(MIN_CYCLES),
+                format::setting(MAX_CYCLES)
+            ),
+            ConfigError::SeedTooLarge { .. } => {
+                format!("must be at most {}.", format::setting(MAX_SEED))
+            }
         }
     }
 }

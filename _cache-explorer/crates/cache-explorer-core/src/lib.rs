@@ -34,10 +34,12 @@ mod input;
 mod isa;
 mod machine;
 mod memory;
+mod module;
 mod op;
 mod prng;
 mod replacement;
 mod session;
+mod share;
 mod snapshot;
 mod stats;
 mod units;
@@ -60,12 +62,17 @@ pub use input::{AddressInput, ConfigNumberInput, IssueDraft, WordInput};
 pub use isa::{ParseError, ParseResult};
 pub use machine::{InvariantViolation, Machine};
 pub use memory::StaleInfo;
+pub use module::{TextSegment, TextStyle};
 pub use op::{
     AccessKind, EditPatch, EditTarget, Op, OpError, ProgramFormat, ProgramSource, WayPatch,
 };
 pub use session::{
     Boundary, ConfigChange, EntryKind, EntryOutcome, EntryView, EventRow, Position, Replay,
     ReplayError, Session, StepOutcome, Tense, Timeline,
+};
+pub use share::{
+    EncodingError, LoadError, LoadFailure, LoadOption, LoadProgress, ShareAt, ShareDoc, ShareLoad,
+    ShareSummary, TooLarge, SCHEMA_VERSION,
 };
 pub use snapshot::{
     BusView, CacheView, ControlAction, Controls, CpuStatus, CpuView, HitMarker, Labels,

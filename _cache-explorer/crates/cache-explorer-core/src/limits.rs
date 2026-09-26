@@ -276,6 +276,20 @@ mod tests {
             "tests/isa.rs writes `add r1, r1, #1`, then `; more` lines of 7 bytes until one \
              past the line limit"
         );
+        // tests/share.rs fills the session from a link of MAX_SHARE_OPS / 2
+        // pairs: a loop without an exit loaded, then a StepAccess that runs
+        // it to the end of its budget, one event per instruction and the
+        // budget's error, in fewer than 120 bytes of JSON a pair.
+        assert!(
+            u64::from(MAX_SHARE_OPS / 2) * u64::from(INSTRUCTION_BUDGET + 2)
+                > u64::from(SESSION_EVENT_LIMIT),
+            "tests/share.rs fills the session with MAX_SHARE_OPS / 2 program loads, each run \
+             to the end of its budget"
+        );
+        assert!(
+            u64::from(MAX_SHARE_OPS / 2) * 120 <= u64::from(MAX_SHARE_JSON_BYTES),
+            "tests/share.rs writes MAX_SHARE_OPS / 2 pairs of ops in under 120 bytes each"
+        );
         assert!(
             u64::from(MAX_LABEL_CHARS) * 2 + 11 <= u64::from(MAX_PROGRAM_BYTES),
             "tests/isa.rs defines a label at the limit and branches to it on one line, \

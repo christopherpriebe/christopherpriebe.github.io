@@ -3630,9 +3630,10 @@ impl EventSink for Boundaries {
         Flow::Continue
     }
 
-    fn boundary(&mut self, machine: &Machine, progress: OpProgress) {
+    fn boundary(&mut self, machine: &Machine, progress: OpProgress) -> Flow {
         let next_id = self.events.len() as u64;
         self.boundaries.push((machine.clone(), progress, next_id));
+        Flow::Continue
     }
 }
 
@@ -3788,6 +3789,81 @@ fn an_op_resumed_from_a_boundary_inside_it_goes_on_as_it_would_have() {
         let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(1), 0);
         assert_eq!(resume(&mut again, &op, OpProgress::START, &mut out), Ok(()));
         assert_eq!(again, whole);
+    }
+}
+
+/// Keeps every event, and stops the op at its `stop_at`-th boundary,
+/// counting from 0, noting the progress there.
+struct StopAtBoundary {
+    events: Vec<MicroEvent>,
+    stop_at: usize,
+    seen: usize,
+    stopped: Option<OpProgress>,
+}
+
+impl EventSink for StopAtBoundary {
+    fn records(&self) -> bool {
+        true
+    }
+
+    fn event(&mut self, event: Option<MicroEvent>, _after: &Machine) -> Flow {
+        self.events.extend(event);
+        Flow::Continue
+    }
+
+    fn boundary(&mut self, _machine: &Machine, progress: OpProgress) -> Flow {
+        self.seen += 1;
+        if self.seen == self.stop_at + 1 {
+            self.stopped = Some(progress);
+            Flow::Stop
+        } else {
+            Flow::Continue
+        }
+    }
+}
+
+#[test]
+fn an_op_stopped_at_a_boundary_goes_on_from_there_when_resumed() {
+    let source = concat!(
+        "        add r3, r0, #3\n",
+        "loop:   ld r1, [0x0A4]\n",
+        "        add r3, r3, #-1\n",
+        "        bnez r3, loop\n",
+        "        st [0x1A4], r3",
+    );
+    let op = Op::Run { n: 11 };
+    let mut whole = loaded(source);
+    let start = whole.clone();
+    let (result, events) = apply_op(&mut whole, &op, 0);
+    assert_eq!(result, Ok(()));
+    let entries = events.iter().filter(|event| event.seq == 1).count();
+    assert_eq!(entries, 11);
+    // A boundary lies between every two of the op's entries.
+    for stop_at in 0..entries - 1 {
+        let mut machine = start.clone();
+        let mut sink = StopAtBoundary {
+            events: Vec::new(),
+            stop_at,
+            seen: 0,
+            stopped: None,
+        };
+        let mut out = Emitter::new(&mut sink, OpIndex::new_unchecked(1), 0);
+        assert_eq!(apply(&mut machine, &op, &mut out), Ok(()));
+        let progress = sink.stopped.unwrap();
+        assert_eq!(progress.get() as usize, stop_at + 1);
+        // Stopped at an entry boundary: its last event ends an entry.
+        let next = events.get(sink.events.len()).unwrap();
+        assert_eq!(next.seq, 1, "stopped at boundary {stop_at}");
+        let mut recorder = Recorder::default();
+        let first = sink.events.len() as u64;
+        let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(1), first);
+        assert_eq!(resume(&mut machine, &op, progress, &mut out), Ok(()));
+        assert_eq!(machine, whole, "stopped at boundary {stop_at}");
+        assert_eq!(
+            [sink.events, recorder.events].concat(),
+            events,
+            "stopped at boundary {stop_at}"
+        );
     }
 }
 

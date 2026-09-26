@@ -216,9 +216,12 @@ pub(crate) fn step(machine: &mut Machine, out: &mut Emitter<'_>) -> Flow {
 /// op's start.
 ///
 /// At each entry boundary where the op goes on, the sink is told of it with
-/// the op's progress there, and the session's limit is checked: without room
-/// for one more entry, an `Error` event stops the program as its budget
-/// would, and the op ends.
+/// the op's progress there, and may stop the op, which [`resume`] then
+/// continues from the same boundary. Then the session's limit is checked:
+/// without room for one more entry, an `Error` event stops the program as
+/// its budget would, and the op ends.
+///
+/// [`resume`]: crate::engine::resume
 pub(crate) fn execute(
     machine: &mut Machine,
     until: Until,
@@ -231,7 +234,9 @@ pub(crate) fn execute(
             if counted || machine.next_instruction().is_none() {
                 return;
             }
-            out.boundary(machine, progress);
+            if out.boundary(machine, progress) == Flow::Stop {
+                return;
+            }
             if !out.has_room() {
                 stop(
                     machine,

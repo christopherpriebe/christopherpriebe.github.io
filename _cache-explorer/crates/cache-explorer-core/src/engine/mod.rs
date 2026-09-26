@@ -68,8 +68,12 @@ pub(crate) trait EventSink {
     /// goes on to execute another instruction: the machine there, and the
     /// instructions the op has executed so far. Replay can resume the op from
     /// that point with [`resume`], so a sink that keeps checkpoints may keep
-    /// one here. Nothing by default.
-    fn boundary(&mut self, _machine: &Machine, _progress: OpProgress) {}
+    /// one here, and a sink that replays a log in slices may stop the op
+    /// here with [`Flow::Stop`], to resume it later from this progress. By
+    /// default the op goes on.
+    fn boundary(&mut self, _machine: &Machine, _progress: OpProgress) -> Flow {
+        Flow::Continue
+    }
 }
 
 /// How far an op that executes several instructions has got: the
@@ -181,9 +185,10 @@ impl<'s> Emitter<'s> {
     }
 
     /// Tells the sink that the op, which has executed `progress`
-    /// instructions, goes on from an entry boundary here.
-    fn boundary(&mut self, machine: &Machine, progress: OpProgress) {
-        self.sink.boundary(machine, progress);
+    /// instructions, goes on from an entry boundary here, unless the sink
+    /// stops it.
+    fn boundary(&mut self, machine: &Machine, progress: OpProgress) -> Flow {
+        self.sink.boundary(machine, progress)
     }
 
     /// Starts the run's next entry: the events that follow are numbered from
