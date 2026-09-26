@@ -23,15 +23,12 @@ use crate::config::{
     AllocatePolicy, CacheConfig, Config, ConfigError, Preset, Replacement, Timing, WordBytes,
     WritePolicy,
 };
-use crate::engine::{access, load_program, ready, step, Emitter, EventSink, Flow, Origin, Request};
 use crate::event::{ChangeRef, MicroEvent};
-use crate::format;
-use crate::geometry::{highest_word, AccessError, Geometry};
-use crate::isa::Program;
+use crate::geometry::AccessError;
 use crate::limits::INSTRUCTION_BUDGET;
-use crate::machine::Machine;
-use crate::op::{OpError, ProgramFormat};
-use crate::units::{Addr, OpIndex, Register, Word};
+use crate::op::{self, AccessKind, Op, OpError, ProgramFormat};
+use crate::session::Session;
+use crate::units::{Addr, Word};
 
 /// A run the snapshots pin: a configuration and what is done on it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,16 +75,6 @@ pub enum Issue {
     Step,
 }
 
-/// An issue checked against the machine, ready to execute.
-enum Checked {
-    /// A load or store.
-    Access(Request),
-    /// A program that parsed.
-    Load(Program),
-    /// A step there is an instruction for.
-    Step,
-}
-
 /// Why a fixture's events cannot be produced.
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum FixtureError {
@@ -102,13 +89,7 @@ pub enum FixtureError {
     /// keep only the value's low bits and say nothing, so the fixture is
     /// refused, as an issued store would be:
     /// `300 does not fit a 1-byte word (0–255).`
-    #[error(
-        "{} does not fit {} {}-byte word (0\u{2013}{}).",
-        format::data(.value.get()),
-        format::a_or_an(*.word_bytes),
-        format::setting(*.word_bytes),
-        format::setting(highest_word(*.word_bytes))
-    )]
+    #[error("{}", op::value_too_wide(*.value, *.word_bytes))]
     Value {
         /// The store's value.
         value: Word,
@@ -119,14 +100,29 @@ pub enum FixtureError {
     /// instruction to execute: no program is loaded, or it has finished or
     /// stopped.
     #[error(transparent)]
-    Op(#[from] OpError),
+    Op(OpError),
+}
+
+impl From<OpError> for FixtureError {
+    /// The fixture's error for an op the session refused: an access's bad
+    /// address or a store's value too wide as their own variants, and every
+    /// other refusal as it is.
+    fn from(error: OpError) -> Self {
+        match error {
+            OpError::Access(error) => FixtureError::Access(error),
+            OpError::ValueTooWide { value, word_bytes } => {
+                FixtureError::Value { value, word_bytes }
+            }
+            error => FixtureError::Op(error),
+        }
+    }
 }
 
 impl Fixture {
-    /// The fixture's events, numbered as a session numbers them when each
-    /// issue is an op of its own: ids from 0, one op index per issue, and
-    /// within run 1 one entry per access and per instruction, a program load
-    /// being an unnumbered setup.
+    /// The fixture's events, as a session records them when each issue is
+    /// applied as an op of its own at the end of the log: ids from 0, one op
+    /// index per issue, and within run 1 one entry per access and per
+    /// instruction, a program load being an unnumbered setup.
     ///
     /// An `Error` event, a fault or the end of the budget, ends its op; the
     /// fixture goes on with its next issue, as a session would.
@@ -134,97 +130,40 @@ impl Fixture {
     /// # Errors
     ///
     /// [`FixtureError::Config`] if the configuration is invalid. Otherwise,
-    /// for the first issue an op would refuse: [`FixtureError::Access`] if
+    /// for the first issue the session refuses: [`FixtureError::Access`] if
     /// its address does not fit the address width or is not a multiple of
     /// the word size, [`FixtureError::Value`] if it is a store whose value
     /// does not fit the word, or [`FixtureError::Op`] if it is a program that
     /// does not parse, or a step with no instruction to execute.
     pub fn events(&self) -> Result<Vec<MicroEvent>, FixtureError> {
-        let mut machine = Machine::start(self.config.clone())?;
-        let mut sink = Recorder::default();
-        for (op, issue) in (0_u32..).zip(&self.issues) {
-            let checked = issue.check(&machine)?;
-            let first_id = u64::try_from(sink.events.len()).unwrap_or(u64::MAX);
-            let mut out = Emitter::new(&mut sink, OpIndex::new_unchecked(op), first_id);
-            match checked {
-                Checked::Access(request) => access(&mut machine, request, &mut out),
-                Checked::Load(program) => load_program(&mut machine, program, &mut out),
-                Checked::Step => step(&mut machine, &mut out),
-            };
+        let mut session = Session::with_config(self.config.clone())?;
+        for issue in &self.issues {
+            session.apply(issue.op())?;
         }
-        Ok(sink.events)
+        Ok(session.events().to_vec())
     }
 }
 
 impl Issue {
-    /// The issue checked against `machine`, as an op is before it executes.
-    fn check(&self, machine: &Machine) -> Result<Checked, FixtureError> {
-        let geometry = &machine.geometry;
-        let (addr, value) = match self {
-            Issue::Load { addr } => (*addr, None),
-            Issue::Store { addr, value } => (*addr, Some(*value)),
-            Issue::Program { source, format } => {
-                return Program::parse(geometry, source, *format)
-                    .map(Checked::Load)
-                    .map_err(|failure| FixtureError::Op(failure.into_op_error()));
-            }
-            Issue::Step => {
-                return ready(machine)
-                    .map(|()| Checked::Step)
-                    .map_err(FixtureError::Op)
-            }
-        };
-        Ok(Checked::Access(request(geometry, addr, value)?))
-    }
-}
-
-/// The engine's request for a hand-issued load of `addr`, or store of
-/// `value` to it, once the address, and a store's value, are checked against
-/// `geometry`.
-fn request(geometry: &Geometry, addr: Addr, value: Option<Word>) -> Result<Request, FixtureError> {
-    if !geometry.decode(addr.get())?.aligned {
-        return Err(FixtureError::Access(AccessError::Misaligned {
-            addr,
-            address_bits: geometry.address_bits(),
-            word_bytes: geometry.word_bytes(),
-        }));
-    }
-    let Some(value) = value else {
-        return Ok(Request::Load {
-            addr,
-            into: Register::R1,
-            origin: Origin::Hand,
-        });
-    };
-    if geometry.fit_word(value.get()) != value {
-        return Err(FixtureError::Value {
-            value,
-            word_bytes: geometry.word_bytes(),
-        });
-    }
-    Ok(Request::Store {
-        addr,
-        value: value.get(),
-        from: None,
-        origin: Origin::Hand,
-    })
-}
-
-/// Keeps every event the engine hands it.
-#[derive(Default)]
-struct Recorder {
-    /// The events so far, in order.
-    events: Vec<MicroEvent>,
-}
-
-impl EventSink for Recorder {
-    fn records(&self) -> bool {
-        true
-    }
-
-    fn event(&mut self, event: Option<MicroEvent>, _after: &Machine) -> Flow {
-        self.events.extend(event);
-        Flow::Continue
+    /// The op that applies the issue.
+    fn op(&self) -> Op {
+        match self {
+            Issue::Load { addr } => Op::Issue {
+                kind: AccessKind::Read,
+                addr: *addr,
+                value: None,
+            },
+            Issue::Store { addr, value } => Op::Issue {
+                kind: AccessKind::Write,
+                addr: *addr,
+                value: Some(*value),
+            },
+            Issue::Program { source, format } => Op::Program {
+                source: source.clone(),
+                format: *format,
+            },
+            Issue::Step => Op::Step,
+        }
     }
 }
 
@@ -826,7 +765,7 @@ mod tests {
 
     use super::*;
     use crate::event::{Cause, Counter, EventKind};
-    use crate::units::{Cycle, SetIndex, WayIndex, WordIndex};
+    use crate::units::{Cycle, OpIndex, Register, SetIndex, WayIndex, WordIndex};
 
     fn event(label: &str, kind: EventKind) -> MicroEvent {
         MicroEvent {

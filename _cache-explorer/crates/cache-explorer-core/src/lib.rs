@@ -23,10 +23,6 @@ pub mod limits;
 mod cache;
 mod config;
 mod cpu;
-#[cfg_attr(
-    not(any(test, feature = "golden")),
-    expect(dead_code, reason = "the session applies ops through the engine")
-)]
 mod engine;
 mod event;
 mod explain;
@@ -41,6 +37,7 @@ mod memory;
 mod op;
 mod prng;
 mod replacement;
+mod session;
 mod stats;
 mod units;
 
@@ -56,7 +53,8 @@ pub use input::{AddressInput, WordInput};
 pub use isa::{ParseError, ParseResult};
 pub use machine::{InvariantViolation, Machine};
 pub use memory::StaleInfo;
-pub use op::{AccessKind, OpError, ProgramFormat};
+pub use op::{AccessKind, Op, OpError, ProgramFormat, ProgramSource};
+pub use session::{Boundary, ConfigChange, Position, Replay, ReplayError, Session, StepOutcome};
 pub use stats::{Counters, Figure, Outcome, StatKey, StatRow, Stats, Traffic};
 pub use units::{
     Addr, Cycle, EventPos, LineAddr, OpIndex, Register, SetIndex, Tag, WayIndex, Word, WordIndex,

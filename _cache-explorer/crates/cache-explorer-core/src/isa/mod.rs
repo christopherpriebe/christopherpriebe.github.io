@@ -256,13 +256,6 @@ impl Program {
     }
 
     /// The source as the student wrote it.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "a new run parses the loaded program again, and the drawer lists it"
-        )
-    )]
     pub(crate) fn source(&self) -> &str {
         &self.source
     }
@@ -304,6 +297,16 @@ impl ParseFailure {
         }
     }
 
+    /// Whether the source was read as assembly or as a trace.
+    pub(crate) fn format(&self) -> ProgramFormat {
+        self.format
+    }
+
+    /// The first error in source order.
+    pub(crate) fn first(&self) -> &ParseError {
+        &self.first
+    }
+
     /// The errors the drawer lists: the first [`MAX_PARSE_ERRORS`].
     pub(crate) fn listed(self) -> Vec<ParseError> {
         std::iter::once(self.first)
@@ -314,13 +317,6 @@ impl ParseFailure {
 
     /// The error that refuses a `Program` op with this source, which counts
     /// every error and quotes the first.
-    #[cfg_attr(
-        not(any(test, feature = "golden")),
-        expect(
-            dead_code,
-            reason = "the session refuses a Program op that does not parse"
-        )
-    )]
     pub(crate) fn into_op_error(self) -> OpError {
         OpError::Program {
             format: self.format,

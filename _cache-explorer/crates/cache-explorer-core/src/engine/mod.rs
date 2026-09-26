@@ -10,23 +10,33 @@
 //! The engine checks the machine's invariants at the end of every entry. A
 //! broken one ends the op with an `Error` event that names it, rather than a
 //! panic, so the run stops with a message and a share link reproduces it.
+//!
+//! The session stores at most [`SESSION_EVENT_LIMIT`] events. An entry never
+//! has more than [`MAX_EVENTS_PER_ENTRY`], so the limit is checked once per
+//! entry rather than per event: an op is refused unless the log before it
+//! leaves room for one more entry, and an op that executes several
+//! instructions stops with an `Error` event at the first entry boundary
+//! without that room.
 
 mod access;
 mod exec;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use access::Request;
-#[cfg(feature = "golden")]
-pub(crate) use access::{access, Origin};
-#[cfg(feature = "golden")]
-pub(crate) use exec::{load_program, ready, step};
+pub(crate) use access::{Origin, Request};
+
+use access::access;
+use exec::{execute, load_program, ready, step, Until};
 
 use crate::event::{Cause, ChangeRef, EventKind, MicroEvent};
 use crate::explain;
 use crate::format;
+use crate::geometry::{AccessError, Geometry};
+use crate::isa::{ParseFailure, Program};
+use crate::limits::{MAX_EVENTS_PER_ENTRY, MAX_RUN_STEPS, SESSION_EVENT_LIMIT};
 use crate::machine::{InvariantViolation, Machine};
-use crate::units::{Addr, OpIndex, SetIndex, WayIndex};
+use crate::op::{AccessKind, Op, OpError};
+use crate::units::{Addr, OpIndex, Register, SetIndex, WayIndex, Word};
 
 /// Whether the engine goes on after an event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,6 +57,35 @@ pub(crate) trait EventSink {
     /// One event, `None` unless the sink records, and the machine after it.
     /// Returning [`Flow::Stop`] ends the op there.
     fn event(&mut self, event: Option<MicroEvent>, after: &Machine) -> Flow;
+
+    /// An entry boundary inside a `Run` or `StepAccess` op, where the op
+    /// goes on to execute another instruction: the machine there, and the
+    /// instructions the op has executed so far. Replay can resume the op from
+    /// that point with [`resume`], so a sink that keeps checkpoints may keep
+    /// one here. Nothing by default.
+    fn boundary(&mut self, _machine: &Machine, _progress: OpProgress) {}
+}
+
+/// How far an op that executes several instructions has got: the
+/// instructions it has executed so far. [`OpProgress::START`] is the start
+/// of any op.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct OpProgress(u32);
+
+impl OpProgress {
+    /// The start of an op, before it has executed anything.
+    pub(crate) const START: OpProgress = OpProgress(0);
+
+    /// The instructions executed so far.
+    pub(crate) fn get(self) -> u32 {
+        self.0
+    }
+
+    /// One instruction further.
+    #[must_use]
+    fn next(self) -> OpProgress {
+        OpProgress(self.0.saturating_add(1))
+    }
 }
 
 /// Why the engine left an op before its end.
@@ -121,6 +160,24 @@ impl<'s> Emitter<'s> {
             seq: 0,
             setup: false,
         }
+    }
+
+    /// The id the next event gets, which is also the number of events in the
+    /// log before it.
+    pub(crate) fn next_id(&self) -> u64 {
+        self.next_id
+    }
+
+    /// Whether the log so far leaves room for one more entry under the
+    /// session's limit.
+    pub(crate) fn has_room(&self) -> bool {
+        has_room(self.next_id)
+    }
+
+    /// Tells the sink that the op, which has executed `progress`
+    /// instructions, goes on from an entry boundary here.
+    fn boundary(&mut self, machine: &Machine, progress: OpProgress) {
+        self.sink.boundary(machine, progress);
     }
 
     /// Starts the run's next entry: the events that follow are numbered from
@@ -214,5 +271,202 @@ pub(crate) fn end_entry(
             out.internal_error(machine, violation);
             Flow::Stop
         }
+    }
+}
+
+/// Whether a log of `events` events leaves room for one more entry under
+/// [`SESSION_EVENT_LIMIT`]. An entry has fewer than [`MAX_EVENTS_PER_ENTRY`]
+/// events, even with the `Error` that may follow it, so an op that starts
+/// with room, or an `Error` that ends one for want of it, never takes the log
+/// past the limit.
+pub(crate) fn has_room(events: u64) -> bool {
+    events.saturating_add(u64::from(MAX_EVENTS_PER_ENTRY)) <= u64::from(SESSION_EVENT_LIMIT)
+}
+
+/// An op checked against the machine it applies to, with what execution
+/// needs from the check.
+enum Checked {
+    /// A new run, on this machine at the run's start.
+    NewRun(Box<Machine>),
+    /// A load or store issued by hand.
+    Access(Request),
+    /// A program that parsed.
+    Load(Program),
+    /// One instruction, which there is.
+    Step,
+    /// Instructions until the condition, the first of which there is.
+    Execute(Until),
+}
+
+/// Applies `op` to `machine`, handing its events to `out`: checks the op
+/// against the machine and against the session's limit, which changes
+/// nothing, then executes it, which cannot fail. Whatever goes wrong while
+/// executing becomes an `Error` event.
+///
+/// # Errors
+///
+/// The [`OpError`] refusing the op, with the machine unchanged and no event
+/// emitted: no room left in the log for one more entry, an invalid
+/// configuration, an issued access with a bad address or value, a program
+/// that does not parse, a `Run` of no instructions or of too many, or
+/// nothing to execute.
+pub(crate) fn apply(machine: &mut Machine, op: &Op, out: &mut Emitter<'_>) -> Result<(), OpError> {
+    let checked = check(machine, op, out.next_id())?;
+    match checked {
+        Checked::NewRun(start) => new_run(machine, *start, out),
+        Checked::Access(request) => {
+            access(machine, request, out);
+        }
+        Checked::Load(program) => {
+            load_program(machine, program, out);
+        }
+        Checked::Step => {
+            step(machine, out);
+        }
+        Checked::Execute(until) => execute(machine, until, OpProgress::START, out),
+    }
+    Ok(())
+}
+
+/// Goes on with `op` from where it had got to on `machine`: from its start,
+/// as [`apply`] does, or, inside a `Run` or `StepAccess` op, from the entry
+/// boundary its sink was told of with `progress`, the instructions it had
+/// executed there. The op was checked when it started, so it is not checked
+/// again inside it.
+///
+/// # Errors
+///
+/// From the start of the op, the [`OpError`] refusing it, as for [`apply`].
+pub(crate) fn resume(
+    machine: &mut Machine,
+    op: &Op,
+    progress: OpProgress,
+    out: &mut Emitter<'_>,
+) -> Result<(), OpError> {
+    if progress == OpProgress::START {
+        return apply(machine, op, out);
+    }
+    match op {
+        Op::StepAccess => execute(machine, Until::Access, progress, out),
+        Op::Run { n } => execute(machine, Until::Count(*n), progress, out),
+        // Every other op is one entry, or a setup and the error after it, so
+        // no boundary inside it is ever handed to a sink.
+        Op::Config { .. } | Op::Issue { .. } | Op::Program { .. } | Op::Step => {}
+    }
+    Ok(())
+}
+
+/// Checks `op` against `machine`, in a log of `events` events so far.
+fn check(machine: &Machine, op: &Op, events: u64) -> Result<Checked, OpError> {
+    if !has_room(events) {
+        return Err(OpError::SessionFull);
+    }
+    match op {
+        Op::Config { config } => Machine::start(config.clone())
+            .map(|start| Checked::NewRun(Box::new(start)))
+            .map_err(OpError::Config),
+        Op::Issue { kind, addr, value } => {
+            request(&machine.geometry, *kind, *addr, *value).map(Checked::Access)
+        }
+        Op::Program { source, format } => Program::parse(&machine.geometry, source, *format)
+            .map(Checked::Load)
+            .map_err(ParseFailure::into_op_error),
+        Op::Step => ready(machine).map(|()| Checked::Step),
+        Op::StepAccess => ready(machine).map(|()| Checked::Execute(Until::Access)),
+        Op::Run { n } => {
+            if !(1..=MAX_RUN_STEPS).contains(n) {
+                return Err(OpError::RunSteps);
+            }
+            ready(machine).map(|()| Checked::Execute(Until::Count(*n)))
+        }
+    }
+}
+
+/// The request of an access issued by hand, once its address and value are
+/// checked against `geometry`: the address must fit the width and be a
+/// multiple of the word size, and a store's value must fit the word. A load
+/// writes `r1`.
+fn request(
+    geometry: &Geometry,
+    kind: AccessKind,
+    addr: Addr,
+    value: Option<Word>,
+) -> Result<Request, OpError> {
+    let Some(addr) = geometry.addr(addr.get()) else {
+        return Err(OpError::Access(AccessError::OutOfRange {
+            addr: u64::from(addr.get()),
+            address_bits: geometry.address_bits(),
+        }));
+    };
+    if addr.get() % geometry.word_bytes() != 0 {
+        return Err(OpError::Access(AccessError::Misaligned {
+            addr,
+            address_bits: geometry.address_bits(),
+            word_bytes: geometry.word_bytes(),
+        }));
+    }
+    match (kind, value) {
+        (AccessKind::Read, None) => Ok(Request::Load {
+            addr,
+            into: Register::R1,
+            origin: Origin::Hand,
+        }),
+        (AccessKind::Read, Some(_)) => Err(OpError::UnexpectedValue),
+        (AccessKind::Write, None) => Err(OpError::MissingValue),
+        (AccessKind::Write, Some(value)) if geometry.fit_word(value.get()) != value => {
+            Err(OpError::ValueTooWide {
+                value,
+                word_bytes: geometry.word_bytes(),
+            })
+        }
+        (AccessKind::Write, Some(value)) => Ok(Request::Store {
+            addr,
+            value: value.get(),
+            from: None,
+            origin: Origin::Hand,
+        }),
+    }
+}
+
+/// Starts a new run on `start`, the machine at the start of a run of the new
+/// configuration, as one `Setup` event: the run's origin, an entry the run
+/// does not number. The run is numbered after the one before it. The loaded
+/// program is kept and parsed again under the new configuration, and
+/// restarts at its first instruction; if it no longer parses, an `Error`
+/// entry after the `Setup` says so, and it is unloaded.
+fn new_run(machine: &mut Machine, start: Machine, out: &mut Emitter<'_>) {
+    let run = machine.run.saturating_add(1);
+    let program = machine.program.take();
+    *machine = start;
+    machine.run = run;
+    let failure = match program
+        .map(|program| Program::parse(&machine.geometry, program.source(), program.format()))
+    {
+        Some(Ok(program)) => {
+            machine.program = Some(program);
+            None
+        }
+        Some(Err(failure)) => Some(failure),
+        None => None,
+    };
+    out.begin_setup();
+    let restart = machine
+        .program
+        .as_ref()
+        .and_then(|program| program.get(0))
+        .map(|placed| placed.line);
+    let draft = Draft::new(EventKind::Setup, None);
+    let config = &machine.config;
+    let result = out.emit(machine, draft, || explain::new_run(config, restart));
+    if end_entry(machine, result, out) == Flow::Stop {
+        return;
+    }
+    if let Some(failure) = failure {
+        out.begin_entry(machine);
+        let draft = Draft::new(EventKind::Error, None);
+        // The op ends here whatever the sink answers.
+        let _ = out.emit(machine, draft, || {
+            explain::program_unloaded(failure.format(), failure.first())
+        });
     }
 }

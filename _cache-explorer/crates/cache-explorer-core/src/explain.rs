@@ -15,13 +15,13 @@
 //! on Basics and Advanced, so the same event always reads the same.
 
 use crate::cache::Dirtiness;
-use crate::config::Replacement;
+use crate::config::{Config, Replacement};
 use crate::format;
 use crate::geometry::{highest_word, Geometry, Location, Placement};
-use crate::isa::Mnemonic;
+use crate::isa::{Mnemonic, ParseError};
 use crate::limits::{
     INSTRUCTION_BUDGET, MAX_LABEL_CHARS, MAX_PROGRAM_BYTES, MAX_PROGRAM_INSTRUCTIONS,
-    MAX_PROGRAM_LINES,
+    MAX_PROGRAM_LINES, SESSION_EVENT_LIMIT,
 };
 use crate::machine::InvariantViolation;
 use crate::op::{AccessKind, ProgramFormat};
@@ -559,6 +559,90 @@ pub(crate) fn program_loaded(format: ProgramFormat, instructions: u32) -> String
         },
         count_of(format, instructions)
     )
+}
+
+/// The `Setup` line of a new run: "New run: 128 B · 16 B lines · 2-way · LRU.
+/// The cache is empty and memory, registers and counters are reset." With a
+/// program kept, restarting at its first instruction, on line `restart`: "…
+/// The program is kept and restarts at line 1."
+///
+/// The summary names the write and allocate policies when the configuration
+/// needs Advanced, as a write-through, no-allocate or timed one does, so the
+/// line depends on the configuration alone, never on the mode the student is
+/// in.
+pub(crate) fn new_run(config: &Config, restart: Option<u32>) -> String {
+    let kept = restart
+        .map(|line| {
+            format!(
+                " The program is kept and restarts at line {}.",
+                format::position(line)
+            )
+        })
+        .unwrap_or_default();
+    format!(
+        "New run: {}. The cache is empty and memory, registers and counters are reset.{kept}",
+        config.summary(!config.fits_basics())
+    )
+}
+
+/// The `Error` line after a new run's `Setup` when the program it would keep
+/// does not parse under the new configuration, quoting the first error: "The
+/// program no longer fits this configuration (line 3: 0x1000 does not fit a
+/// 12-bit address (0x000–0xFFF)); it was unloaded." A trace is "The trace".
+pub(crate) fn program_unloaded(format: ProgramFormat, first: &ParseError) -> String {
+    let source = match format {
+        ProgramFormat::Asm => "program",
+        ProgramFormat::Trace => "trace",
+    };
+    let message = first.message.strip_suffix('.').unwrap_or(&first.message);
+    format!(
+        "The {source} no longer fits this configuration (line {}: {message}); it was unloaded.",
+        format::position(first.line)
+    )
+}
+
+/// The `Error` line that stops a program when the log has no room for
+/// another entry: "The session reached its limit of 100,000 steps, so the
+/// program stopped here."
+pub(crate) fn session_limit() -> String {
+    format!(
+        "The session reached its limit of {} steps, so the program stopped here.",
+        format::setting(SESSION_EVENT_LIMIT)
+    )
+}
+
+/// Why Space executes nothing once the program has executed its last
+/// instruction.
+pub(crate) fn end_of_program() -> String {
+    "End of program.".to_owned()
+}
+
+/// The question "Reset to apply?" asks before a configuration change starts
+/// a new run. `kept` counts the steps of the displayed run that stay in the
+/// log, and `dropped` the undone steps after them that the new run would
+/// drop: "Configuration is fixed for a run. Applying starts a new, empty run;
+/// this one has 14 steps and stays reachable with Undo." or, with steps to
+/// drop, "Configuration is fixed for a run. Applying starts a new, empty run
+/// here and drops the 6 undone steps after this point; this run's 3 steps
+/// stay reachable with Undo."
+pub(crate) fn needs_reset(kept: u32, dropped: u32) -> String {
+    let steps = |n: u32| format!("{} {}", format::data(n), format::plural(n, "step", "steps"));
+    if dropped == 0 {
+        format!(
+            "Configuration is fixed for a run. Applying starts a new, empty run; this one has {} \
+             and stays reachable with Undo.",
+            steps(kept)
+        )
+    } else {
+        format!(
+            "Configuration is fixed for a run. Applying starts a new, empty run here and drops \
+             the {} undone {} after this point; this run's {} {} reachable with Undo.",
+            format::data(dropped),
+            format::plural(dropped, "step", "steps"),
+            steps(kept),
+            format::plural(kept, "stays", "stay")
+        )
+    }
 }
 
 /// The program drawer's line: how many instructions, and the next one, or
@@ -1504,5 +1588,99 @@ mod tests {
             "Internal error: invariant I3 (no two valid ways in set 2 hold the same tag) no \
              longer holds. The run stopped here; please report it with a share link."
         );
+    }
+
+    #[test]
+    fn a_new_run_names_its_configuration_and_the_program_it_keeps() {
+        let two_way = Preset::TwoWayLru.config();
+        assert_eq!(
+            new_run(&two_way, None),
+            "New run: 128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU. The cache is empty and \
+             memory, registers and counters are reset."
+        );
+        assert_eq!(
+            new_run(&Preset::DirectMapped8.config(), Some(3)),
+            "New run: 128 B \u{b7} 16 B lines \u{b7} direct-mapped. The cache is empty and \
+             memory, registers and counters are reset. The program is kept and restarts at line \
+             3."
+        );
+        // A configuration that needs Advanced names its policies, whatever
+        // mode the student is in, and the presentation flag changes nothing.
+        let timed = Config {
+            timing: Some(crate::config::Timing {
+                hit_cycles: 1,
+                miss_cycles: 20,
+            }),
+            ..two_way.clone()
+        };
+        let line = "New run: 128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU \u{b7} write-back \
+                    \u{b7} allocate. The cache is empty and memory, registers and counters are \
+                    reset.";
+        assert_eq!(new_run(&timed, None), line);
+        let advanced = Config {
+            advanced: true,
+            ..timed
+        };
+        assert_eq!(new_run(&advanced, None), line);
+        assert_eq!(
+            new_run(
+                &Config {
+                    advanced: true,
+                    ..two_way.clone()
+                },
+                None
+            ),
+            new_run(&two_way, None)
+        );
+    }
+
+    #[test]
+    fn a_program_unloaded_by_a_new_run_quotes_its_first_error() {
+        let first = ParseError {
+            line: 3,
+            column: 8,
+            length: 7,
+            message: "0x0A4 is not aligned to an 8-byte word; use 0x0A0 or 0x0A8.".to_owned(),
+            text: String::new(),
+        };
+        assert_eq!(
+            program_unloaded(ProgramFormat::Asm, &first),
+            "The program no longer fits this configuration (line 3: 0x0A4 is not aligned to an \
+             8-byte word; use 0x0A0 or 0x0A8); it was unloaded."
+        );
+        assert!(program_unloaded(ProgramFormat::Trace, &first).starts_with("The trace no longer"));
+    }
+
+    #[test]
+    fn the_session_limit_line_and_the_end_of_a_program_say_why_nothing_runs() {
+        assert_eq!(
+            session_limit(),
+            format!(
+                "The session reached its limit of {} steps, so the program stopped here.",
+                format::setting(SESSION_EVENT_LIMIT)
+            )
+        );
+        assert_eq!(end_of_program(), "End of program.");
+    }
+
+    #[test]
+    fn the_reset_question_counts_the_steps_kept_and_dropped() {
+        assert_eq!(
+            needs_reset(14, 0),
+            "Configuration is fixed for a run. Applying starts a new, empty run; this one has 14 \
+             steps and stays reachable with Undo."
+        );
+        assert!(needs_reset(1, 0).contains("this one has 1 step and stays"));
+        assert_eq!(
+            needs_reset(3, 6),
+            "Configuration is fixed for a run. Applying starts a new, empty run here and drops \
+             the 6 undone steps after this point; this run's 3 steps stay reachable with Undo."
+        );
+        assert!(needs_reset(1, 1).ends_with(
+            "drops the 1 undone step after this point; this run's 1 step stays reachable with \
+             Undo."
+        ));
+        // Counts are data, grouped from 10,000.
+        assert!(needs_reset(12_000, 0).contains("this one has 12,000 steps"));
     }
 }

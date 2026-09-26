@@ -21,10 +21,16 @@
 //! not executed, and an `Error` event takes its place. Either way the pc
 //! stays at the instruction that did not execute. Literal addresses and
 //! immediates were checked when the program was parsed, so they never fault.
+//!
+//! `StepAccess` and `Run` execute one instruction after another, each its own
+//! entry, until an access has completed or until they have executed as many
+//! as asked; the program finishing or stopping ends them too. Between two
+//! instructions they check the session's limit, and stop with an `Error`
+//! event, as the budget does, when the log has no room for another entry.
 
 use crate::cpu::{Cpu, Halted};
 use crate::engine::access::{access, Origin, Request};
-use crate::engine::{end_entry, Draft, Emitter, Flow, Halt};
+use crate::engine::{end_entry, Draft, Emitter, Flow, Halt, OpProgress};
 use crate::event::{ChangeRef, EventKind};
 use crate::explain;
 use crate::isa::{Address, Instruction, Operand, Program};
@@ -32,6 +38,16 @@ use crate::limits::INSTRUCTION_BUDGET;
 use crate::machine::Machine;
 use crate::op::OpError;
 use crate::units::{Addr, Register};
+
+/// When an op that executes several instructions stops, if the program has
+/// not finished or stopped first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Until {
+    /// Once an instruction has made a memory access: `StepAccess`.
+    Access,
+    /// Once this many instructions have executed: `Run`.
+    Count(u32),
+}
 
 /// Why an address held in a register cannot be accessed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -189,6 +205,56 @@ pub(crate) fn step(machine: &mut Machine, out: &mut Emitter<'_>) -> Flow {
                     explain::fault_misaligned(&geometry, line, register, addr)
                 }
             })
+        }
+    }
+}
+
+/// Executes instructions as entries of one op until `until` says to stop,
+/// the program finishes, or an `Error` event ends the op, starting after the
+/// `progress` instructions the op has already executed. The caller has
+/// checked with [`ready`] that there is an instruction to execute at the
+/// op's start.
+///
+/// At each entry boundary where the op goes on, the sink is told of it with
+/// the op's progress there, and the session's limit is checked: without room
+/// for one more entry, an `Error` event stops the program as its budget
+/// would, and the op ends.
+pub(crate) fn execute(
+    machine: &mut Machine,
+    until: Until,
+    mut progress: OpProgress,
+    out: &mut Emitter<'_>,
+) {
+    loop {
+        if progress != OpProgress::START {
+            let counted = matches!(until, Until::Count(n) if progress.get() >= n);
+            if counted || machine.next_instruction().is_none() {
+                return;
+            }
+            out.boundary(machine, progress);
+            if !out.has_room() {
+                stop(
+                    machine,
+                    Halted::OutOfBudget,
+                    None,
+                    out,
+                    explain::session_limit,
+                );
+                return;
+            }
+        }
+        let accesses = machine.next_instruction().is_some_and(|placed| {
+            matches!(
+                placed.instruction,
+                Instruction::Load { .. } | Instruction::Store { .. }
+            )
+        });
+        if step(machine, out) == Flow::Stop {
+            return;
+        }
+        progress = progress.next();
+        if accesses && until == Until::Access {
+            return;
         }
     }
 }

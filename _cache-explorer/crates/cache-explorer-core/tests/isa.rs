@@ -2,21 +2,19 @@
 //! parser limit one over its constant, the trace format, and programs
 //! executed through the golden harness: labels, branches and loops, `r0`,
 //! faults on addresses held in registers, the instruction budget, and loads
-//! issued by hand beside a program.
-//!
-//! The session limit reached inside a loop needs the session, and is tested
-//! with it.
+//! issued by hand beside a program; and, through the session, the session's
+//! event limit reached inside a loop.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
 use cache_explorer_core::golden::{Fixture, FixtureError, Issue};
 use cache_explorer_core::limits::{
-    INSTRUCTION_BUDGET, MAX_LABEL_CHARS, MAX_PARSE_ERRORS, MAX_PROGRAM_BYTES,
-    MAX_PROGRAM_INSTRUCTIONS, MAX_PROGRAM_LINES,
+    INSTRUCTION_BUDGET, MAX_EVENTS_PER_ENTRY, MAX_LABEL_CHARS, MAX_PARSE_ERRORS, MAX_PROGRAM_BYTES,
+    MAX_PROGRAM_INSTRUCTIONS, MAX_PROGRAM_LINES, SESSION_EVENT_LIMIT,
 };
 use cache_explorer_core::{
-    ChangeRef, Config, EventKind, MicroEvent, OpError, ParseError, ParseResult, Preset,
-    ProgramFormat, WordBytes,
+    AccessKind, ChangeRef, Config, EventKind, MicroEvent, Op, OpError, ParseError, ParseResult,
+    Preset, ProgramFormat, Session, WordBytes,
 };
 
 use ProgramFormat::{Asm, Trace};
@@ -1056,4 +1054,70 @@ fn a_program_that_does_not_parse_or_a_step_with_nothing_to_run_is_refused() {
             "The trace has an error on line 1: addresses are hex: write 0x0A4, not 164.".to_owned()
         )
     );
+}
+
+#[test]
+fn the_session_limit_stops_a_loop_with_an_error() {
+    let mut session = Session::with_config(config()).unwrap();
+    let endless = Op::Program {
+        source: "        add r1, r0, #1\nloop:   bnez r1, loop".to_owned(),
+        format: Asm,
+    };
+    let budget_error = format!(
+        "The program used its budget of {} instructions and stopped. Is a loop missing its exit?",
+        grouped(INSTRUCTION_BUDGET)
+    );
+    // Each pair of ops loads the loop and runs it to its budget: the load's
+    // setup, the budget's instructions and its error. The last pair must
+    // still find room for its load; a load by hand first shifts the pairs off
+    // the one alignment where it would not.
+    let pair = INSTRUCTION_BUDGET + 2;
+    if (SESSION_EVENT_LIMIT - MAX_EVENTS_PER_ENTRY + 1) % pair == 0 {
+        let geometry = config().validate().unwrap();
+        session
+            .apply(Op::Issue {
+                kind: AccessKind::Read,
+                addr: geometry.addr(0x0A4).unwrap(),
+                value: None,
+            })
+            .unwrap();
+    }
+    let mut last_op = Vec::new();
+    for _ in 0..=SESSION_EVENT_LIMIT / pair {
+        session.apply(endless.clone()).unwrap();
+        last_op = session.apply(Op::StepAccess).unwrap();
+        if last_op.last().map(|event| &event.explain) != Some(&budget_error) {
+            break;
+        }
+    }
+    let (error, executed) = last_op.split_last().unwrap();
+    assert!(!executed.is_empty());
+    assert!(executed
+        .iter()
+        .all(|event| event.kind == EventKind::Complete));
+    assert_eq!(error.kind, EventKind::Error);
+    assert_eq!(
+        error.explain,
+        format!(
+            "The session reached its limit of {} steps, so the program stopped here.",
+            grouped(SESSION_EVENT_LIMIT)
+        )
+    );
+    assert!(error.changed.is_empty());
+    assert_eq!(error.addr, None);
+    // The error is an entry of its own, after the last instruction.
+    assert_eq!(
+        error.entry,
+        executed
+            .last()
+            .and_then(|event| event.entry)
+            .map(|entry| entry + 1)
+    );
+    assert_eq!(error.seq, 1);
+    // The log stays within the limit, and has no room for another entry.
+    let stored = u32::try_from(error.id + 1).unwrap();
+    assert!(stored <= SESSION_EVENT_LIMIT);
+    assert!(stored + MAX_EVENTS_PER_ENTRY > SESSION_EVENT_LIMIT);
+    assert_eq!(session.apply(Op::Step), Err(OpError::SessionFull));
+    assert_eq!(session.apply(endless), Err(OpError::SessionFull));
 }

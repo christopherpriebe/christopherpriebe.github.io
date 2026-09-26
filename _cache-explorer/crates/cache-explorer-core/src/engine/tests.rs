@@ -2285,7 +2285,7 @@ fn a_lookup_that_finds_no_way_abandons_the_access_with_an_error() {
 /// A pseudo-random stream of `count` loads and stores over three times as
 /// many lines as the cache holds, so hits, conflicts and dirty evictions all
 /// happen.
-fn request_stream(geometry: &crate::geometry::Geometry, seed: u64, count: usize) -> Vec<Request> {
+fn request_stream(geometry: &Geometry, seed: u64, count: usize) -> Vec<Request> {
     let mut stream = Prng::new(seed);
     let lines = geometry.lines() * 3;
     let registers = [Register::R0, Register::R1, Register::R2, Register::R7];
@@ -3589,4 +3589,236 @@ fn a_trace_reads_into_r1_and_writes_its_values() {
         ]
     );
     assert_eq!(ready(driven.machine()), Err(OpError::Finished));
+}
+
+/// Keeps every event, and every boundary inside an op with the machine
+/// there, its progress and the id of the next event.
+#[derive(Default)]
+struct Boundaries {
+    events: Vec<MicroEvent>,
+    boundaries: Vec<(Machine, OpProgress, u64)>,
+}
+
+impl EventSink for Boundaries {
+    fn records(&self) -> bool {
+        true
+    }
+
+    fn event(&mut self, event: Option<MicroEvent>, _after: &Machine) -> Flow {
+        self.events.extend(event);
+        Flow::Continue
+    }
+
+    fn boundary(&mut self, machine: &Machine, progress: OpProgress) {
+        let next_id = self.events.len() as u64;
+        self.boundaries.push((machine.clone(), progress, next_id));
+    }
+}
+
+/// `op` applied to `machine` as op 1, whose first event gets id `first_id`:
+/// the result, and the events.
+fn apply_op(
+    machine: &mut Machine,
+    op: &Op,
+    first_id: u64,
+) -> (Result<(), OpError>, Vec<MicroEvent>) {
+    let mut recorder = Recorder::default();
+    let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(1), first_id);
+    let result = apply(machine, op, &mut out);
+    (result, recorder.events)
+}
+
+/// A machine on `direct-mapped-8` with the assembly program `source` loaded.
+fn loaded(source: &str) -> Machine {
+    let mut machine = Machine::start(preset(Preset::DirectMapped8)).unwrap();
+    let op = Op::Program {
+        source: source.to_owned(),
+        format: ProgramFormat::Asm,
+    };
+    assert_eq!(apply_op(&mut machine, &op, 0).0, Ok(()));
+    machine
+}
+
+/// A loop without an exit or a memory access.
+const ENDLESS: &str = "        add r1, r0, #1\nloop:   bnez r1, loop";
+
+#[test]
+fn an_op_needs_room_for_one_more_entry_in_the_log() {
+    let limit = u64::from(SESSION_EVENT_LIMIT);
+    let room = u64::from(MAX_EVENTS_PER_ENTRY);
+    let issue = Op::Issue {
+        kind: AccessKind::Read,
+        addr: addr(0x0A4),
+        value: None,
+    };
+    let mut machine = Machine::start(preset(Preset::DirectMapped8)).unwrap();
+    let before = machine.clone();
+    for op in [issue.clone(), Op::Step, Op::Run { n: 0 }] {
+        let (result, events) = apply_op(&mut machine, &op, limit - room + 1);
+        assert_eq!(result, Err(OpError::SessionFull), "{op:?}");
+        assert!(events.is_empty());
+        assert_eq!(machine, before);
+    }
+    let (result, events) = apply_op(&mut machine, &issue, limit - room);
+    assert_eq!(result, Ok(()));
+    assert_eq!(events.first().map(|event| event.id), Some(limit - room));
+    assert!(events.len() < MAX_EVENTS_PER_ENTRY as usize);
+}
+
+#[test]
+fn a_loop_that_runs_out_of_room_stops_with_an_error() {
+    let limit = u64::from(SESSION_EVENT_LIMIT);
+    let room = u64::from(MAX_EVENTS_PER_ENTRY);
+    for op in [Op::StepAccess, Op::Run { n: 5 }] {
+        let mut machine = loaded(ENDLESS);
+        // Room for the first instruction's entry, and no more.
+        let (result, events) = apply_op(&mut machine, &op, limit - room);
+        assert_eq!(result, Ok(()));
+        let kinds: Vec<EventKind> = events.iter().map(|event| event.kind).collect();
+        assert_eq!(kinds, [Complete, EventKind::Error], "{op:?}");
+        let error = events.last().unwrap();
+        assert_eq!(error.explain, explain::session_limit());
+        assert_eq!((error.entry, error.seq), (Some(2), 1));
+        assert!(error.changed.is_empty());
+        assert_eq!(machine.cpu.halted, Some(Halted::OutOfBudget));
+        assert_eq!(
+            machine.cpu.pc, 1,
+            "the pc stays at the instruction not executed"
+        );
+        assert_eq!(ready(&machine), Err(OpError::Stopped { line: 2 }));
+    }
+}
+
+#[test]
+fn a_run_stops_at_its_count_and_a_step_access_after_an_access() {
+    let source = "add r1, r0, #1\nadd r1, r1, #1\nld r2, [0x0A4]\nld r3, [0x0A8]";
+    let mut machine = loaded(source);
+    let (result, events) = apply_op(&mut machine, &Op::StepAccess, 1);
+    assert_eq!(result, Ok(()));
+    let labels: Vec<&str> = events.iter().map(|event| event.label.as_str()).collect();
+    assert_eq!(labels, ["1.1", "2.1", "3.1", "3.2", "3.3", "3.4", "3.5"]);
+    assert_eq!(machine.cpu.pc, 3);
+    let (result, events) = apply_op(&mut machine, &Op::Run { n: 1 }, 8);
+    assert_eq!(result, Ok(()));
+    assert_eq!(events.last().map(|event| event.label.as_str()), Some("4.3"));
+    // A run of more than is left stops when the program finishes.
+    let mut machine = loaded(source);
+    let (result, events) = apply_op(&mut machine, &Op::Run { n: 10 }, 1);
+    assert_eq!(result, Ok(()));
+    assert!(events.iter().all(|event| event.kind != EventKind::Error));
+    assert_eq!(ready(&machine), Err(OpError::Finished));
+    // A run's count is checked before anything else about the program.
+    let mut empty = Machine::start(preset(Preset::DirectMapped8)).unwrap();
+    for n in [0, MAX_RUN_STEPS + 1] {
+        assert_eq!(
+            apply_op(&mut empty, &Op::Run { n }, 0).0,
+            Err(OpError::RunSteps)
+        );
+    }
+    assert_eq!(
+        apply_op(&mut empty, &Op::Run { n: MAX_RUN_STEPS }, 0).0,
+        Err(OpError::NoProgram)
+    );
+}
+
+#[test]
+fn an_op_resumed_from_a_boundary_inside_it_goes_on_as_it_would_have() {
+    let source = concat!(
+        "        add r3, r0, #3\n",
+        "loop:   ld r1, [0x0A4]\n",
+        "        add r3, r3, #-1\n",
+        "        bnez r3, loop\n",
+        "        add r1, r0, #1\n",
+        "        add r1, r1, #1\n",
+        "        st [0x1A4], r1",
+    );
+    for op in [Op::Run { n: 9 }, Op::StepAccess] {
+        let mut whole = loaded(source);
+        if op == Op::StepAccess {
+            // Past the loop, to the two adds before the store.
+            let (result, _) = apply_op(&mut whole, &Op::Run { n: 10 }, 1);
+            assert_eq!(result, Ok(()));
+        }
+        let start = whole.clone();
+        let mut sink = Boundaries::default();
+        let mut out = Emitter::new(&mut sink, OpIndex::new_unchecked(1), 0);
+        assert_eq!(apply(&mut whole, &op, &mut out), Ok(()));
+        assert!(sink.boundaries.len() >= 2, "{op:?}");
+        for (machine, progress, next_id) in &sink.boundaries {
+            let mut resumed = machine.clone();
+            let mut recorder = Recorder::default();
+            let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(1), *next_id);
+            assert_eq!(resume(&mut resumed, &op, *progress, &mut out), Ok(()));
+            assert_eq!(resumed, whole, "{op:?} from {}", progress.get());
+            let before = sink
+                .events
+                .get(..usize::try_from(*next_id).unwrap())
+                .unwrap();
+            assert_eq!(
+                [before, recorder.events.as_slice()].concat(),
+                sink.events,
+                "{op:?} from {}",
+                progress.get()
+            );
+        }
+        // From the op's start, resuming is applying.
+        let mut again = start.clone();
+        let mut recorder = Recorder::default();
+        let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(1), 0);
+        assert_eq!(resume(&mut again, &op, OpProgress::START, &mut out), Ok(()));
+        assert_eq!(again, whole);
+    }
+}
+
+#[test]
+fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
+    let mut machine = loaded("ld r1, [0x0A4]\nst [0x0A8], #7");
+    for op in [Op::Step, Op::Step] {
+        assert_eq!(apply_op(&mut machine, &op, 0).0, Ok(()));
+    }
+    assert_eq!(machine.entries_in_run, 2);
+    let config = preset(Preset::TwoWayLru);
+    let (result, events) = apply_op(
+        &mut machine,
+        &Op::Config {
+            config: config.clone(),
+        },
+        0,
+    );
+    assert_eq!(result, Ok(()));
+    let [setup] = events.as_slice() else {
+        panic!("one setup: {events:?}");
+    };
+    assert_eq!(
+        (setup.kind, setup.run, setup.entry),
+        (EventKind::Setup, 2, None)
+    );
+    assert!(setup.changed.is_empty());
+    let mut expected = Machine::start(config.clone()).unwrap();
+    expected.run = 2;
+    expected.program = Program::parse(
+        &expected.geometry,
+        "ld r1, [0x0A4]\nst [0x0A8], #7",
+        ProgramFormat::Asm,
+    )
+    .ok();
+    assert_eq!(machine, expected);
+    // An invalid configuration is refused and changes nothing.
+    let invalid = Config {
+        address_bits: 0,
+        ..config
+    };
+    let (result, events) = apply_op(
+        &mut machine,
+        &Op::Config {
+            config: invalid.clone(),
+        },
+        0,
+    );
+    assert_eq!(
+        result,
+        Err(OpError::Config(invalid.validate().unwrap_err()))
+    );
+    assert!(events.is_empty());
+    assert_eq!(machine, expected);
 }
