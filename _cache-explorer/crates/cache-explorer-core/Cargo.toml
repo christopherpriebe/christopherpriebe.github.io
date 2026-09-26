@@ -33,3 +33,4 @@ wasm-bindgen = { workspace = true, optional = true }
 # --all-targets does, so CI also lints the library alone with --lib.
 cache-explorer-core = { path = ".", features = ["golden"] }
 insta = { workspace = true }
+proptest = { workspace = true }
