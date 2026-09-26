@@ -25,7 +25,7 @@ mod exec;
 mod tests;
 
 pub(crate) use access::{Origin, Request};
-pub(crate) use edit::{draft_memory, draft_way, plan_edit, unfinished};
+pub(crate) use edit::{draft_memory, draft_way, plan_edit, Blocked};
 pub use edit::{
     Consequence, EditDraft, EditOutcome, EditPlan, EditRefusal, FieldChange, FieldInput,
     MemoryEditDraft, RefusalReason, Suggestion, Tone, WayForm, WordMark,

@@ -5,32 +5,34 @@
 //! the cursor is at the end of an op: the machine the editor shows is then
 //! the one the edit applies to, and a plan shown is the plan applied. The
 //! refusal names what to finish first; Shift+Space goes to the op's end.
-//! There the machine's own rules decide.
+//! Before that, as for every op, the session refuses an edit while its log
+//! has no room for another entry there. Then the machine's own rules decide.
 
-use super::{EntryRecord, Session};
-use crate::engine::{self, EditDraft, EditPlan, EditRefusal, MemoryEditDraft, WayForm};
+use super::{EntryKind, EntryRecord, Session};
+use crate::engine::{self, Blocked, EditDraft, EditPlan, EditRefusal, MemoryEditDraft, WayForm};
 use crate::explain::Unfinished;
 use crate::op::{EditPatch, EditTarget};
 use crate::snapshot;
 use crate::units::{Addr, EventPos, OpIndex, SetIndex, WayIndex};
 
 impl Session {
-    /// Plans `patch` on `target` at the cursor: refused while the cursor is
-    /// inside an op, and otherwise planned by the rules on the machine at
+    /// Plans `patch` on `target` at the cursor: refused while the log has no
+    /// room for another entry where the edit would go, or while the cursor
+    /// is inside an op, and otherwise planned by the rules on the machine at
     /// the cursor, which is the machine [`Session::apply`] checks the edit
     /// against.
     ///
     /// # Errors
     ///
-    /// The [`EditRefusal`] of the cursor's place, or of the first rule that
-    /// refuses the edit.
+    /// The [`EditRefusal`] of the session's limit, of the cursor's place, or
+    /// of the first rule that refuses the edit.
     pub fn plan_edit(
         &self,
         target: &EditTarget,
         patch: &EditPatch,
     ) -> Result<EditPlan, EditRefusal> {
-        match self.unfinished() {
-            Some(unfinished) => Err(engine::unfinished(&self.current, target, patch, unfinished)),
+        match self.blocked() {
+            Some(blocked) => Err(blocked.refusal(&self.current, target, patch)),
             None => engine::plan_edit(&self.current, target, patch),
         }
     }
@@ -39,20 +41,32 @@ impl Session {
     /// cursor: every field read, the patch Apply sends, its plan or refusal,
     /// and the way as it would be.
     pub fn draft_edit(&self, set: SetIndex, way: WayIndex, form: &WayForm) -> EditDraft {
-        engine::draft_way(&self.current, set, way, form, self.unfinished())
+        engine::draft_way(&self.current, set, way, form, self.blocked())
     }
 
     /// The memory editor's draft of `value_text` for the word at `addr` at
     /// the cursor: the value read, the patch Apply sends, and its plan or
     /// refusal.
     pub fn draft_memory_edit(&self, addr: Addr, value_text: &str) -> MemoryEditDraft {
-        engine::draft_memory(&self.current, addr, value_text, self.unfinished())
+        engine::draft_memory(&self.current, addr, value_text, self.blocked())
+    }
+
+    /// Why the session refuses any edit at the cursor before the rules see
+    /// it, if it does: the log up to where the edit would go, the end of the
+    /// op holding the cursor, leaves no room for another entry, which
+    /// [`Session::apply`] checks first; or the cursor is inside that op.
+    fn blocked(&self) -> Option<Blocked> {
+        if !engine::has_room(u64::from(self.base().0.get())) {
+            return Some(Blocked::Full);
+        }
+        self.unfinished().map(Blocked::Unfinished)
     }
 
     /// What the cursor must finish before an edit, when it is inside an op:
     /// the entry it is in, when that is the op's last numbered entry or its
-    /// only one, and otherwise every entry of the op. None at the end of an
-    /// op, position 0 included.
+    /// only one, and otherwise every entry of the op, since Shift+Space goes
+    /// to the op's end, not to the end of the access the cursor may be in.
+    /// None at the end of an op, position 0 included.
     fn unfinished(&self) -> Option<Unfinished> {
         if self.is_op_end(self.cursor) {
             return None;
@@ -80,7 +94,11 @@ impl Session {
                 number: last,
             })
         } else {
-            Some(Unfinished::Entries { first, last })
+            Some(Unfinished::Entries {
+                first,
+                last,
+                error: record.kind == EntryKind::Error,
+            })
         }
     }
 }

@@ -1,11 +1,13 @@
 //! Edits: every rule that plans or refuses an edit of a way or a memory
 //! word, in order, with its wording and its offer, each offer planning and
 //! applying; the session's refusal while the cursor is inside an op, an
-//! access or several instructions; ranks under each policy and in one-way
+//! access, several instructions, an op that ended in an error, or a new
+//! run's setup before its error; ranks under each policy and in one-way
 //! sets; the editors' drafts, with their minimal patches, fields read, word
 //! prefill and the way they would leave; applied edits as ops, events and
 //! log entries, refused ops and replay; and the design's editor states 4a to
-//! 4e, staged at the end of access #4 of frame 3b's program.
+//! 4e, staged at the end of access #4 of frame 3b's program. The session's
+//! refusal at its event limit is tested with that limit, in session.rs.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -555,7 +557,7 @@ fn state_4e_warns_that_a_word_behind_a_dirty_line_stays_stale() {
     assert_eq!((stale.cached, stale.memory), (word(5), word(12)));
 }
 
-// ── E0: the cursor inside an op ─────────────────────────────────────────
+// ── The cursor inside an op ─────────────────────────────────────────────
 
 #[test]
 fn an_edit_waits_for_the_end_of_the_access_the_cursor_is_in() {
@@ -628,7 +630,103 @@ fn an_edit_waits_for_the_end_of_several_instructions_executed_together() {
     assert!(session.plan_edit(&memory(0x0A4), &patch).is_ok());
 }
 
-// ── E1, E2: the target and the patch's shape ────────────────────────────
+#[test]
+fn inside_an_access_before_the_ops_last_entry_an_edit_waits_for_the_ops_end() {
+    // Shift+Space goes to the end of the op, not of the access the cursor
+    // is in, so the refusal names every instruction the op executed.
+    let source = "ld r1, [0x0A4]\nld r2, [0x0A8]";
+    let mut session = session(
+        Preset::DirectMapped8.config(),
+        [program(source), Op::Run { n: 2 }],
+    );
+    session.seek(serde_json::from_value(3.into()).unwrap());
+    assert_eq!(session.position().label, "1.2");
+    let patch = value(9);
+    let refused = refusal(&session, memory(0x0A4), &patch);
+    assert_eq!(refused.reason, RefusalReason::MidAccess);
+    assert_eq!(
+        said(&refused),
+        (
+            "Finish these instructions first",
+            "Instructions #1 to #2 were executed together and undo together. Go to the end of \
+             #2 (Shift+Space), then edit."
+        )
+    );
+    session.step_access(None);
+    assert_eq!(session.position().label, "2.3");
+    assert!(session.plan_edit(&memory(0x0A4), &patch).is_ok());
+}
+
+#[test]
+fn an_op_that_ended_in_an_error_names_the_error_among_what_to_finish() {
+    let patch = value(9);
+    // Two instructions, then the error of the third, whose address does
+    // not fit.
+    let walk = "; walk\nadd r2, r0, #0xFF0\nadd r2, r2, #16\nld r1, [r2]";
+    let mut session = session(
+        Preset::TwoWayLru.config(),
+        [program(walk), Op::Run { n: 5 }],
+    );
+    let last = session.events().last().unwrap();
+    assert_eq!((last.kind, last.label.as_str()), (EventKind::Error, "3.1"));
+    for at in [2_u32, 3] {
+        session.seek(serde_json::from_value(at.into()).unwrap());
+        assert_eq!(
+            said(&refusal(&session, memory(0x0A4), &patch)),
+            (
+                "Finish these instructions first",
+                "Instructions #1 to #2 and error #3 were executed together and undo together. \
+                 Go to the end of #3 (Shift+Space), then edit."
+            ),
+            "at {at}"
+        );
+    }
+    // One instruction, then the error of a misaligned load.
+    let misaligned = "add r2, r0, #2\nld r1, [r2]";
+    let mut session = self::session(
+        Preset::TwoWayLru.config(),
+        [program(misaligned), Op::Run { n: 5 }],
+    );
+    let last = session.events().last().unwrap();
+    assert_eq!((last.kind, last.label.as_str()), (EventKind::Error, "2.1"));
+    session.seek(serde_json::from_value(2.into()).unwrap());
+    assert_eq!(
+        said(&refusal(&session, memory(0x0A4), &patch)),
+        (
+            "Finish these instructions first",
+            "Instruction #1 and error #2 were executed together and undo together. Go to the \
+             end of #2 (Shift+Space), then edit."
+        )
+    );
+}
+
+#[test]
+fn a_new_run_whose_program_no_longer_fits_waits_for_the_error_that_unloads_it() {
+    let mut session = session(Preset::DirectMapped8.config(), [program("ld r1, [0xFFC]")]);
+    let narrow = Config {
+        address_bits: 10,
+        ..Preset::DirectMapped8.config()
+    };
+    session.apply(Op::Config { config: narrow }).unwrap();
+    let kinds: Vec<EventKind> = session.events().iter().map(|event| event.kind).collect();
+    assert_eq!(
+        kinds,
+        [EventKind::Setup, EventKind::Setup, EventKind::Error]
+    );
+    // On the new run's setup, before the error.
+    session.seek(serde_json::from_value(2.into()).unwrap());
+    let refused = refusal(&session, memory(0x0A4), &value(9));
+    assert_eq!(refused.reason, RefusalReason::MidAccess);
+    assert_eq!(
+        said(&refused),
+        (
+            "Finish this error first",
+            "Step to the end of error #1 (Shift+Space), then edit."
+        )
+    );
+}
+
+// ── The target and the patch's shape ────────────────────────────────────
 
 #[test]
 fn an_edit_of_a_way_or_word_that_does_not_exist_is_refused() {
@@ -729,7 +827,7 @@ fn a_patch_of_the_wrong_shape_or_a_value_too_wide_is_refused() {
     );
 }
 
-// ── W1–W15: ways ────────────────────────────────────────────────────────
+// ── Ways ────────────────────────────────────────────────────────────────
 
 #[test]
 fn an_edit_that_changes_nothing_is_idle() {
@@ -747,13 +845,29 @@ fn an_edit_that_changes_nothing_is_idle() {
             ("No changes", "Edit a field to preview what will change.")
         );
     }
-    // An empty way kept empty changes nothing either, even with its rank.
-    let refused = refusal(
-        &session,
-        way(0, 1),
-        &way_patch(serde_json::json!({"valid": false, "rank": 1})),
-    );
-    assert_eq!(refused.reason, RefusalReason::NoChange);
+    // An empty way kept empty changes nothing either, whatever rank comes
+    // with it: an empty way has none to change.
+    for (index, rank) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
+        for patch in [
+            serde_json::json!({"rank": rank}),
+            serde_json::json!({"valid": false, "rank": rank}),
+        ] {
+            let refused = refusal(&session, way(0, index), &way_patch(patch.clone()));
+            assert_eq!(
+                (refused.reason, refused.tone),
+                (RefusalReason::NoChange, Tone::Idle),
+                "way {index}: {patch}"
+            );
+        }
+        let chosen = form(false, "", &["", "", "", ""], false, Some(rank));
+        let drafted = draft(&session, 0, index, &chosen);
+        assert!(
+            matches!(&drafted.outcome, EditOutcome::Refusal(refusal) if refusal.reason == RefusalReason::NoChange),
+            "way {index}: {:?}",
+            drafted.outcome
+        );
+        assert!(!drafted.result.valid);
+    }
 }
 
 #[test]
@@ -777,6 +891,20 @@ fn an_empty_way_takes_no_fields_and_invalidating_alone_is_offered() {
     assert_eq!(
         refused.suggestion.as_ref().unwrap().patch,
         way_patch(serde_json::json!({"valid": false}))
+    );
+    // A rank sent with the invalidation is a field too.
+    let ranked = refusal(
+        &session,
+        way(2, 0),
+        &way_patch(serde_json::json!({"valid": false, "rank": 0})),
+    );
+    assert_eq!(
+        (ranked.reason, ranked.tone, offer(&ranked)),
+        (
+            RefusalReason::FieldsOnInvalidWay,
+            Tone::Caution,
+            Some("Just invalidate it")
+        )
     );
     // A way that is empty and stays empty changes nothing, whatever fields
     // come with it: that rule comes first.
@@ -1281,7 +1409,7 @@ fn validating_a_way_fills_it_from_memory_clean_and_first() {
     assert_eq!(ranks(&after, 3), [1, 0]);
 }
 
-// ── M1–M6: memory words ─────────────────────────────────────────────────
+// ── Memory words ────────────────────────────────────────────────────────
 
 #[test]
 fn memory_edits_follow_the_line_that_holds_the_word() {
@@ -1363,6 +1491,49 @@ fn memory_edits_follow_the_line_that_holds_the_word() {
     let after = applied(&session, edit(memory(0x0A8), value(12)));
     assert_eq!(after.state().cache.sets[2].ways[0].words[2], "12");
     assert!(!after.state().cache.sets[2].ways[0].dirty);
+}
+
+#[test]
+fn a_memory_edit_under_a_dirty_line_that_agreed_with_memory_makes_the_word_stale() {
+    // 0x0B4 sits in the dirty line of set 3, way 0, which holds memory's
+    // value for it: only 0x0B0 is stale there.
+    let session = frame_3b_at_access_4();
+    assert_eq!(session.machine().stale(addr(0x0B4)), None);
+    let plan = plan(&session, memory(0x0B4), &value(77));
+    assert_eq!(
+        (
+            plan.tone,
+            plan.title.as_str(),
+            plan.text.as_str(),
+            plan.action.as_str()
+        ),
+        (
+            Tone::Caution,
+            "Set 3, way 0 holds a newer value",
+            "The dirty line there has 8 for this word. Editing memory does not change that; the \
+             word becomes stale until the line is written back.",
+            "Apply to memory"
+        )
+    );
+    assert_eq!(
+        plan.consequences,
+        [
+            Consequence::MemoryWrite {
+                addr: addr(0x0B4),
+                from: word(8),
+                to: word(77)
+            },
+            Consequence::BecomesStale { addr: addr(0x0B4) },
+        ]
+    );
+    let after = applied(&session, edit(memory(0x0B4), value(77)));
+    assert_eq!(
+        after.events().last().unwrap().explain,
+        "Edited memory 0x0B4: 8 \u{2192} 77. Set 3, way 0 holds this line dirty, so the word \
+         becomes stale."
+    );
+    let stale = after.machine().stale(addr(0x0B4)).unwrap();
+    assert_eq!((stale.cached, stale.memory), (word(8), word(77)));
 }
 
 // ── Drafts ──────────────────────────────────────────────────────────────

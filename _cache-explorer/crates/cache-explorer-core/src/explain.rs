@@ -1273,13 +1273,18 @@ pub(crate) enum Unfinished {
         /// Its number within the run.
         number: u32,
     },
-    /// The op executed several instructions, `first` to `last`, and the
-    /// cursor is before the end of the last.
+    /// The op executed several instructions, entries `first` to `last`, the
+    /// last of which may be the error that ended it, and the cursor is
+    /// before the end of the last, inside an access or not: the op ends only
+    /// there.
     Entries {
         /// The number of the op's first entry.
         first: u32,
         /// The number of its last.
         last: u32,
+        /// Whether the last is the error that ended the op rather than an
+        /// instruction.
+        error: bool,
     },
 }
 
@@ -1295,7 +1300,8 @@ pub(crate) fn unfinished_title(unfinished: Unfinished) -> String {
 /// The text of an edit refused while an op is unfinished: "Step to the end
 /// of access #5 (Shift+Space), then edit.", or "Instructions #3 to #5 were
 /// executed together and undo together. Go to the end of #5 (Shift+Space),
-/// then edit."
+/// then edit." An op that ended in an error names it apart: "Instructions #3
+/// to #4 and error #5 were …", or "Instruction #4 and error #5 were …".
 pub(crate) fn unfinished_text(unfinished: Unfinished) -> String {
     match unfinished {
         Unfinished::Entry { noun, number } => format!(
@@ -1303,13 +1309,26 @@ pub(crate) fn unfinished_text(unfinished: Unfinished) -> String {
             noun_name(noun),
             format::entry_number(number)
         ),
-        Unfinished::Entries { first, last } => format!(
-            "Instructions {} to {} were executed together and undo together. Go to the end of \
-             {} (Shift+Space), then edit.",
-            format::entry_number(first),
-            format::entry_number(last),
-            format::entry_number(last)
-        ),
+        Unfinished::Entries { first, last, error } => {
+            let number = format::entry_number;
+            let together = match (error, last.saturating_sub(1)) {
+                (false, _) => format!("Instructions {} to {}", number(first), number(last)),
+                (true, before) if before == first => {
+                    format!("Instruction {} and error {}", number(first), number(last))
+                }
+                (true, before) => format!(
+                    "Instructions {} to {} and error {}",
+                    number(first),
+                    number(before),
+                    number(last)
+                ),
+            };
+            format!(
+                "{together} were executed together and undo together. Go to the end of {} \
+                 (Shift+Space), then edit.",
+                number(last)
+            )
+        }
     }
 }
 
@@ -1683,12 +1702,14 @@ pub(crate) fn newer_value_title(set: SetIndex, way: WayIndex) -> String {
 /// Why a memory edit of a word a dirty line holds with the value `cached`
 /// leaves it stale: "The dirty line there has 5 for this word. Editing
 /// memory does not change that; the word stays stale until the line is
-/// written back."
-pub(crate) fn newer_value(cached: Word) -> String {
+/// written back." Unless `was_stale`, the line held memory's value until the
+/// edit, and the word "becomes stale" instead.
+pub(crate) fn newer_value(cached: Word, was_stale: bool) -> String {
     format!(
         "The dirty line there has {} for this word. Editing memory does not change that; the \
-         word stays stale until the line is written back.",
-        format::data(cached.get())
+         word {} stale until the line is written back.",
+        format::data(cached.get()),
+        if was_stale { "stays" } else { "becomes" }
     )
 }
 
@@ -1962,8 +1983,17 @@ pub(crate) enum MemoryNote {
         /// The way.
         way: WayIndex,
     },
-    /// The dirty line in way `way` of set `set` keeps another value.
+    /// The dirty line in way `way` of set `set` keeps another value, as it
+    /// did before the edit.
     StaysStale {
+        /// The set.
+        set: SetIndex,
+        /// The way.
+        way: WayIndex,
+    },
+    /// The dirty line in way `way` of set `set` held memory's value until
+    /// the edit, and keeps it.
+    BecomesStale {
         /// The set.
         set: SetIndex,
         /// The way.
@@ -1981,7 +2011,7 @@ pub(crate) enum MemoryNote {
 /// The `Edit` line of a memory edit: "Edited memory 0x0B0: 92 → 12.", then
 /// what happened to the line that holds the word: " The clean copy in set
 /// 3, way 0 was updated too." or " Set 3, way 0 holds this line dirty, so
-/// the word stays stale."
+/// the word stays stale." ("becomes stale" when it was not)
 pub(crate) fn edited_memory(
     geometry: &Geometry,
     addr: Addr,
@@ -2012,6 +2042,11 @@ pub(crate) fn edited_memory(
         }
         MemoryNote::StaysStale { set, way } => format!(
             "{edited} Set {}, way {} holds this line dirty, so the word stays stale.",
+            format::data(set.get()),
+            format::data(way.get())
+        ),
+        MemoryNote::BecomesStale { set, way } => format!(
+            "{edited} Set {}, way {} holds this line dirty, so the word becomes stale.",
             format::data(set.get()),
             format::data(way.get())
         ),
@@ -3425,12 +3460,46 @@ mod tests {
             unfinished_text(access),
             "Step to the end of access #5 (Shift+Space), then edit."
         );
-        let several = Unfinished::Entries { first: 3, last: 5 };
+        let several = Unfinished::Entries {
+            first: 3,
+            last: 5,
+            error: false,
+        };
         assert_eq!(unfinished_title(several), "Finish these instructions first");
         assert_eq!(
             unfinished_text(several),
             "Instructions #3 to #5 were executed together and undo together. Go to the end of \
              #5 (Shift+Space), then edit."
+        );
+        let stopped = Unfinished::Entries {
+            first: 3,
+            last: 5,
+            error: true,
+        };
+        assert_eq!(unfinished_title(stopped), "Finish these instructions first");
+        assert_eq!(
+            unfinished_text(stopped),
+            "Instructions #3 to #4 and error #5 were executed together and undo together. Go to \
+             the end of #5 (Shift+Space), then edit."
+        );
+        let faulted = Unfinished::Entries {
+            first: 4,
+            last: 5,
+            error: true,
+        };
+        assert_eq!(
+            unfinished_text(faulted),
+            "Instruction #4 and error #5 were executed together and undo together. Go to the end \
+             of #5 (Shift+Space), then edit."
+        );
+        let error = Unfinished::Entry {
+            noun: EntryNoun::Error,
+            number: 1,
+        };
+        assert_eq!(unfinished_title(error), "Finish this error first");
+        assert_eq!(
+            unfinished_text(error),
+            "Step to the end of error #1 (Shift+Space), then edit."
         );
     }
 
@@ -3594,6 +3663,14 @@ mod tests {
             }),
             "Edited memory 0x0B0: 92 \u{2192} 12. Set 3, way 0 holds this line dirty, so the \
              word stays stale."
+        );
+        assert_eq!(
+            line(MemoryNote::BecomesStale {
+                set: set(3),
+                way: way(0)
+            }),
+            "Edited memory 0x0B0: 92 \u{2192} 12. Set 3, way 0 holds this line dirty, so the \
+             word becomes stale."
         );
         assert_eq!(
             line(MemoryNote::MatchesDirty {

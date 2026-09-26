@@ -186,6 +186,9 @@ pub enum Consequence {
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum RefusalReason {
+    /// The session's log has no room for another entry where the edit would
+    /// go, so the edit would be refused as an op.
+    SessionFull,
     /// The cursor is inside an op, which undoes as a whole.
     MidAccess,
     /// The set, way or address does not exist.
@@ -629,7 +632,8 @@ impl From<Malformed> for Refused {
 
 /// Plans `patch` on `target` against `machine`: the rules for ways and
 /// memory words, in order, the first match deciding. The session's own
-/// check, that its cursor is at the end of an op, is not among them.
+/// checks, that its log has room and its cursor is at the end of an op, are
+/// not among them.
 ///
 /// # Errors
 ///
@@ -661,23 +665,49 @@ pub(crate) fn check(
         .map_err(|refused| OpError::Edit(Box::new(refusal(machine, target, patch, &refused))))
 }
 
-/// The refusal of an edit while the cursor is inside an op, which the
-/// session gives before any rule of the machine's: the op undoes as a
-/// whole, so an edit would apply after the op's end, not where the editor
-/// shows the machine.
-pub(crate) fn unfinished(
-    machine: &Machine,
-    target: &EditTarget,
-    patch: &EditPatch,
-    unfinished: Unfinished,
-) -> EditRefusal {
-    EditRefusal {
-        reason: RefusalReason::MidAccess,
-        tone: Tone::Caution,
-        title: explain::unfinished_title(unfinished),
-        text: explain::unfinished_text(unfinished),
-        suggestion: None,
-        word_marks: word_marks(machine, target, patch),
+/// Why the session refuses any edit at its cursor before the rules see it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Blocked {
+    /// The log has no room for another entry where the edit would go, so
+    /// the edit would be refused as an op, as any op would.
+    Full,
+    /// The cursor is inside an op, which undoes as a whole, so an edit would
+    /// apply after the op's end, not where the editor shows the machine.
+    Unfinished(Unfinished),
+}
+
+impl Blocked {
+    /// The refusal of `patch` on `target`, `machine` being the machine at
+    /// the cursor: the session's limit, refused, or what to finish first,
+    /// with caution; neither offers another edit.
+    pub(crate) fn refusal(
+        self,
+        machine: &Machine,
+        target: &EditTarget,
+        patch: &EditPatch,
+    ) -> EditRefusal {
+        let (reason, tone, title, text) = match self {
+            Blocked::Full => (
+                RefusalReason::SessionFull,
+                Tone::Refused,
+                explain::edit_refused(),
+                OpError::SessionFull.to_string(),
+            ),
+            Blocked::Unfinished(unfinished) => (
+                RefusalReason::MidAccess,
+                Tone::Caution,
+                explain::unfinished_title(unfinished),
+                explain::unfinished_text(unfinished),
+            ),
+        };
+        EditRefusal {
+            reason,
+            tone,
+            title,
+            text,
+            suggestion: None,
+            word_marks: word_marks(machine, target, patch),
+        }
     }
 }
 
@@ -958,17 +988,18 @@ fn fields_of(machine: &Machine, set: SetIndex, way: &Way) -> Fields {
 /// patch leaves out keeps its value, or takes the one the edit implies: a
 /// way that takes a line holds memory's copy of it, clean, and ranks first,
 /// as a fill would; a way made empty ranks last; ranks that never change do
-/// not.
+/// not. An empty way has no rank to give, so a way left empty takes none
+/// from the patch: one kept empty changes nothing, and a rank sent with an
+/// invalidation is refused as a field of an empty way.
 fn propose(machine: &Machine, before: &Fields, patch: &WayPatch) -> Proposal {
     let was_valid = before.line.is_some();
     let valid = patch.valid.unwrap_or(was_valid);
-    let rank = if editable(machine) {
-        match patch.rank {
-            Some(rank) => rank,
-            None if valid && !was_valid => 0,
-            None if !valid && was_valid => machine.geometry.ways().saturating_sub(1),
-            None => before.rank,
-        }
+    let rank = if editable(machine) && valid {
+        patch
+            .rank
+            .unwrap_or(if was_valid { before.rank } else { 0 })
+    } else if editable(machine) && was_valid {
+        machine.geometry.ways().saturating_sub(1)
     } else {
         before.rank
     };
@@ -1151,20 +1182,26 @@ fn memory_plan(machine: &Machine, target: EditTarget, change: MemoryChange) -> E
                 vec![written, copy],
             )
         }
-        Some(holder) if holder.cached != to => (
-            Tone::Caution,
-            explain::newer_value_title(holder.set, holder.way),
-            explain::newer_value(holder.cached),
-            EditAction::ApplyToMemory,
-            vec![
-                written,
-                Consequence::StaysStale {
-                    addr,
-                    set: holder.set,
-                    way: holder.way,
-                },
-            ],
-        ),
+        Some(holder) if holder.cached != to => {
+            let Holder {
+                set, way, cached, ..
+            } = holder;
+            // The word was stale unless the line agreed with memory until
+            // now; either way it is stale after the edit.
+            let was_stale = cached != from;
+            let stale = if was_stale {
+                Consequence::StaysStale { addr, set, way }
+            } else {
+                Consequence::BecomesStale { addr }
+            };
+            (
+                Tone::Caution,
+                explain::newer_value_title(set, way),
+                explain::newer_value(cached, was_stale),
+                EditAction::ApplyToMemory,
+                vec![written, stale],
+            )
+        }
         Some(holder) => (
             Tone::Ready,
             explain::matches_dirty_title(holder.set, holder.way),
@@ -1367,7 +1404,7 @@ fn unchanged_memory(stale: Option<Holder>) -> Wording {
             RefusalReason::NoChange,
             Tone::Caution,
             explain::newer_value_title(holder.set, holder.way),
-            explain::newer_value(holder.cached),
+            explain::newer_value(holder.cached, true),
         ),
         None => Wording::firm(
             RefusalReason::NoChange,
@@ -1886,14 +1923,13 @@ fn edit_memory(
             }
             MemoryNote::CleanCopy { set, way }
         }
-        Some(holder) if holder.cached != to => MemoryNote::StaysStale {
-            set: holder.set,
-            way: holder.way,
-        },
-        Some(holder) => MemoryNote::MatchesDirty {
-            set: holder.set,
-            way: holder.way,
-        },
+        Some(Holder {
+            set, way, cached, ..
+        }) if cached == to => MemoryNote::MatchesDirty { set, way },
+        Some(Holder {
+            set, way, cached, ..
+        }) if cached == from => MemoryNote::BecomesStale { set, way },
+        Some(Holder { set, way, .. }) => MemoryNote::StaysStale { set, way },
     };
     changed.sort_unstable();
     let draft = Draft {
@@ -1908,8 +1944,8 @@ fn edit_memory(
 
 /// The way editor's draft for `form` on way `way` of set `set`: each field
 /// read, the smallest patch that makes the way what the form shows, and
-/// its plan, or the refusal of a field that does not read, or `unfinished`'s
-/// refusal while the cursor is inside an op.
+/// its plan, or the refusal of a field that does not read, or the session's
+/// refusal while it is `blocked`.
 ///
 /// A field that leaves the way as the edit would anyway is left out of the
 /// patch: the valid bit and the line as the way has them; the data inputs as
@@ -1924,7 +1960,7 @@ pub(crate) fn draft_way(
     set: SetIndex,
     way: WayIndex,
     form: &WayForm,
-    unfinished: Option<Unfinished>,
+    blocked: Option<Blocked>,
 ) -> EditDraft {
     let geometry = &machine.geometry;
     let target = EditTarget::Way { set, way };
@@ -1942,7 +1978,7 @@ pub(crate) fn draft_way(
             tag_text: typed.tag_text,
             index_text: typed.index_text,
             word_texts: Vec::new(),
-            outcome: outcome(machine, &target, &patch, unfinished, None),
+            outcome: outcome(machine, &target, &patch, blocked, None),
             patch: Some(patch),
             result: snapshot::lone_way_view(machine, set, way, &empty),
         };
@@ -2022,7 +2058,7 @@ pub(crate) fn draft_way(
                     .map_or_else(String::new, |value| format::plain(*value))
             })
             .collect(),
-        outcome: outcome(machine, &target, &patch, unfinished, invalid),
+        outcome: outcome(machine, &target, &patch, blocked, invalid),
         result: result_view(machine, set, way, current, &patch),
         patch: reads.then_some(patch),
     }
@@ -2030,13 +2066,13 @@ pub(crate) fn draft_way(
 
 /// The memory editor's draft for `value_text` on the word at `addr`: the
 /// value read, its patch and its plan, or the refusal of a value that does
-/// not read, or `unfinished`'s refusal while the cursor is inside an op. An
-/// empty value is the word's own, which changes nothing.
+/// not read, or the session's refusal while it is `blocked`. An empty value
+/// is the word's own, which changes nothing.
 pub(crate) fn draft_memory(
     machine: &Machine,
     addr: Addr,
     value_text: &str,
-    unfinished: Option<Unfinished>,
+    blocked: Option<Blocked>,
 ) -> MemoryEditDraft {
     let target = EditTarget::Memory { addr };
     let current = EditPatch::Memory {
@@ -2060,24 +2096,23 @@ pub(crate) fn draft_memory(
     let reads = invalid.is_none();
     MemoryEditDraft {
         value,
-        outcome: outcome(machine, &target, &patch, unfinished, invalid),
+        outcome: outcome(machine, &target, &patch, blocked, invalid),
         patch: reads.then_some(patch),
     }
 }
 
-/// An editor's outcome for `patch` on `target`: `unfinished`'s refusal
-/// while the cursor is inside an op; the refusal of a field that does not
-/// read, `invalid`, with its reason, title and message; or the patch's plan
-/// or refusal.
+/// An editor's outcome for `patch` on `target`: the session's refusal while
+/// it is `blocked`; the refusal of a field that does not read, `invalid`,
+/// with its reason, title and message; or the patch's plan or refusal.
 fn outcome(
     machine: &Machine,
     target: &EditTarget,
     patch: &EditPatch,
-    unfinished: Option<Unfinished>,
+    blocked: Option<Blocked>,
     invalid: Option<(RefusalReason, String, String)>,
 ) -> EditOutcome {
-    if let Some(unfinished) = unfinished {
-        return EditOutcome::Refusal(self::unfinished(machine, target, patch, unfinished));
+    if let Some(blocked) = blocked {
+        return EditOutcome::Refusal(blocked.refusal(machine, target, patch));
     }
     if let Some((reason, title, text)) = invalid {
         return EditOutcome::Refusal(EditRefusal {

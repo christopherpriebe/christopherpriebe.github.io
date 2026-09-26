@@ -6,9 +6,9 @@
 //! accepted; a refused op of each kind leaving the log, the undone ops and
 //! the cursor as they were; configuration changes, applied at once as ops
 //! of their own or asked about first, and Reset; switching between Basics
-//! and Advanced; new runs keeping the program; the session's event limit;
-//! and every state the cursor reaches equal to the fold's, from checkpoints
-//! or not.
+//! and Advanced; new runs keeping the program; the session's event limit,
+//! which the editors report before planning; and every state the cursor
+//! reaches equal to the fold's, from checkpoints or not.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -17,14 +17,14 @@ use cache_explorer_core::limits::{
     SESSION_EVENT_LIMIT,
 };
 use cache_explorer_core::{
-    AccessKind, Boundary, CacheConfig, Config, ConfigChange, ConfigError, EventKind, MicroEvent,
-    Op, OpError, OpIndex, Preset, ProgramFormat, ProgramSource, Replacement, ReplayError, Session,
-    StepOutcome, WordBytes, WritePolicy,
+    AccessKind, Boundary, CacheConfig, Config, ConfigChange, ConfigError, EditOutcome, EventKind,
+    MicroEvent, Op, OpError, OpIndex, Preset, ProgramFormat, ProgramSource, Replacement,
+    ReplayError, Session, StepOutcome, WordBytes, WritePolicy,
 };
 
 use support::{
-    addr, apply_all, config, drawer, grouped, load, log, log_end, pos, program, refused, session,
-    store, table, varied, word,
+    addr, apply_all, config, drawer, edit, edit_word, editors_refuse_for_room, grouped, load, log,
+    log_end, pos, program, refused, session, store, table, varied, word,
 };
 
 /// An `add` then a load: two entries, the second an access.
@@ -51,8 +51,8 @@ const WALK: &str = concat!(
 #[cfg(test)]
 mod support {
     use cache_explorer_core::{
-        AccessKind, Addr, Config, EventPos, MicroEvent, Op, OpError, Preset, ProgramFormat,
-        ProgramSource, Session, Word,
+        AccessKind, Addr, Config, EditOutcome, EventPos, MicroEvent, Op, OpError, Preset,
+        ProgramFormat, ProgramSource, RefusalReason, Session, Tone, WayForm, Word,
     };
 
     use super::{ADD_THEN_LOAD, WALK};
@@ -99,6 +99,63 @@ mod support {
             kind: AccessKind::Write,
             addr: addr(at),
             value: Some(word(value)),
+        }
+    }
+
+    /// An edit of `target` with `patch`, each as the UI sends it.
+    pub(crate) fn edit(target: &serde_json::Value, patch: &serde_json::Value) -> Op {
+        serde_json::from_value(serde_json::json!({"op": "edit", "target": target, "patch": patch}))
+            .unwrap()
+    }
+
+    /// An edit of the memory word at 0x0A4 to 1.
+    pub(crate) fn edit_word() -> Op {
+        edit(
+            &serde_json::json!({"kind": "memory", "addr": 0x0A4}),
+            &serde_json::json!({"kind": "memory", "value": 1}),
+        )
+    }
+
+    /// Checks that the editors refuse every edit on `session` for want of
+    /// room in its log, saying `message` and offering nothing: the plan of
+    /// [`edit_word`], and the drafts of that word and of way 0 of set 0 made
+    /// valid.
+    pub(crate) fn editors_refuse_for_room(session: &Session, message: &str) {
+        let Op::Edit { target, patch } = edit_word() else {
+            panic!("an edit op");
+        };
+        let validate = WayForm {
+            valid: true,
+            line_text: "0x000".to_owned(),
+            word_texts: Vec::new(),
+            dirty: false,
+            rank: None,
+        };
+        let set = serde_json::from_value(0.into()).unwrap();
+        let way = serde_json::from_value(0.into()).unwrap();
+        for outcome in [
+            session.plan_edit(&target, &patch).into(),
+            session.draft_memory_edit(addr(0x0A4), "1").outcome,
+            session.draft_edit(set, way, &validate).outcome,
+        ] {
+            let EditOutcome::Refusal(refusal) = outcome else {
+                panic!("a full session plans no edit: {outcome:?}");
+            };
+            assert_eq!(
+                (
+                    refusal.reason,
+                    refusal.tone,
+                    refusal.title.as_str(),
+                    refusal.text.as_str()
+                ),
+                (
+                    RefusalReason::SessionFull,
+                    Tone::Refused,
+                    "Refused",
+                    message
+                )
+            );
+            assert_eq!(refusal.suggestion, None);
         }
     }
 
@@ -1172,6 +1229,41 @@ fn a_seek_across_checkpoints_reaches_the_folds_state() {
 }
 
 #[test]
+fn a_refused_edit_leaves_the_log_the_undone_ops_and_the_cursor_as_they_were() {
+    let edits = [
+        (
+            edit(
+                &serde_json::json!({"kind": "memory", "addr": 0x0A6}),
+                &serde_json::json!({"kind": "memory", "value": 1}),
+            ),
+            "Refused. 0x0A6 is not aligned to a 4-byte word; use 0x0A4 or 0x0A8.",
+        ),
+        (
+            edit(
+                &serde_json::json!({"kind": "way", "set": 9, "way": 0}),
+                &serde_json::json!({"kind": "way", "valid": false}),
+            ),
+            "Refused. This cache has no set 9; its sets are 0\u{2013}7.",
+        ),
+    ];
+    // With undone ops after the cursor, and with the cursor inside an op:
+    // an edit is planned on the machine at the base, as every op is checked
+    // there, wherever the cursor is.
+    for at in [pos(5), pos(12)] {
+        let mut session = table();
+        session.seek(at);
+        for (op, message) in &edits {
+            let error = session.apply(op.clone()).unwrap_err();
+            assert!(matches!(error, OpError::Edit(_)), "{error:?}");
+            assert_eq!(error.to_string(), *message);
+            refused(&mut session, op, &error);
+        }
+        while session.redo() {}
+        assert_eq!(session.position().pos, pos(15));
+    }
+}
+
+#[test]
 fn a_full_session_refuses_every_op_until_undo_makes_room() {
     let mut session = session();
     // Each pair loads a loop without an exit and steps it to its budget: the
@@ -1201,6 +1293,7 @@ fn a_full_session_refuses_every_op_until_undo_makes_room() {
         program(ENDLESS),
         Op::Config { config: config() },
         Op::Run { n: 1 },
+        edit_word(),
     ] {
         refused(&mut session, &op, &OpError::SessionFull);
     }
@@ -1209,6 +1302,9 @@ fn a_full_session_refuses_every_op_until_undo_makes_room() {
          fresh.",
         grouped(SESSION_EVENT_LIMIT)
     );
+    // So do the editors, before any rule of their own, rather than plan an
+    // edit that would then be refused.
+    editors_refuse_for_room(&session, &message);
     assert_eq!(
         session.step_event(Some(&drawer("add r1, r0, #1"))),
         StepOutcome::Idle {
@@ -1226,6 +1322,9 @@ fn a_full_session_refuses_every_op_until_undo_makes_room() {
     session.seek(pos(full - 1));
     refused(&mut session, &load(0x0A4), &OpError::SessionFull);
     assert_eq!(session.position().pos, pos(full - 1));
+    // The editors say so there too, not that the op should be finished
+    // first, which would not make room.
+    editors_refuse_for_room(&session, &message);
     session.seek(pos(full));
     // The fold refuses the same op at the same place.
     let initial = session.initial().clone();
@@ -1243,9 +1342,14 @@ fn a_full_session_refuses_every_op_until_undo_makes_room() {
     };
     assert_eq!((index.get(), refusal), (last, &OpError::SessionFull));
     assert_eq!(error.to_string(), message);
-    // Undo makes room: an op applied there drops what came after.
+    // Undo makes room: an edit plans there, and an op applied there drops
+    // what came after.
     assert!(session.undo());
     assert!(session.position().pos.get() < full);
+    assert!(matches!(
+        session.draft_memory_edit(addr(0x0A4), "1").outcome,
+        EditOutcome::Plan(_)
+    ));
     session.apply(load(0x0A4)).unwrap();
     assert!(!session.redo());
 }
