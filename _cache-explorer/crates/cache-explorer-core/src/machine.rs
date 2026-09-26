@@ -37,7 +37,7 @@ use crate::memory::Memory;
 use crate::prng::Prng;
 use crate::replacement::VictimChoice;
 use crate::stats::Counters;
-use crate::units::{SetIndex, Tag, WayIndex};
+use crate::units::{Cycle, SetIndex, Tag, WayIndex};
 
 /// The state of a run at one point: its configuration and geometry, the
 /// cache, memory, registers and counters, the access in progress, and the
@@ -91,9 +91,36 @@ pub(crate) struct AccessContext {
     /// The way the access reads or writes, once the lookup has found it or
     /// the fill has brought its line in.
     pub(crate) way: Option<WayIndex>,
+    /// The miss's stall, from the `Stall` event on; only in timed mode.
+    pub(crate) stall: Option<StallWindow>,
     /// False until the access's last event: while false, the access is in
     /// flight and the machine is not between entries.
     pub(crate) done: bool,
+}
+
+/// How long a miss stalls the CPU in timed mode, and when the stall is over.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct StallWindow {
+    /// The cycles the CPU waits in all: the miss penalty, or twice it when a
+    /// dirty victim goes back to memory before the fill.
+    pub(crate) total: u32,
+    /// The run's cycle count once the last transfer, the fill or the store's
+    /// write to memory, is over.
+    pub(crate) end: Cycle,
+}
+
+/// The CPU's stall countdown at one point of an access: "Stalled: 20
+/// cycles".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the CPU status counts a stall down")
+)]
+pub(crate) struct Stalled {
+    /// The cycles left until memory is done.
+    pub(crate) remaining: u32,
+    /// The stall's length in all.
+    pub(crate) total: u32,
 }
 
 /// What an access's tag compare found.
@@ -230,6 +257,24 @@ impl Machine {
     /// True while an access has started and not yet had its last event.
     pub(crate) fn in_flight(&self) -> bool {
         self.access.as_ref().is_some_and(|access| !access.done)
+    }
+
+    /// The stall countdown the CPU shows: from a miss's `Stall` event until
+    /// the event that ends its last transfer, the cycles left and the stall's
+    /// length in all. With a dirty victim and 20-cycle misses it reads 40,
+    /// then 20 once the write-back is done. `None` at every other point, and
+    /// always when untimed.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the CPU status counts a stall down")
+    )]
+    pub(crate) fn stall(&self) -> Option<Stalled> {
+        let window = self.access.as_ref()?.stall?;
+        let left = window.end.get().saturating_sub(self.counters.cycles.get());
+        (left > 0).then(|| Stalled {
+            remaining: u32::try_from(left).unwrap_or(u32::MAX),
+            total: window.total,
+        })
     }
 
     /// Checks the machine's invariants, set by set. I2 and I6 hold only
@@ -775,6 +820,7 @@ mod tests {
             lookup: None,
             victim: None,
             way: None,
+            stall: None,
             done: false,
         });
         assert!(machine.in_flight());

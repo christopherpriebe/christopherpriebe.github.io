@@ -123,7 +123,8 @@ impl<'s> Emitter<'s> {
     }
 
     /// Numbers `draft` as the next event of the current entry and hands it to
-    /// the sink with `machine`, which it has already changed. `explain` gives
+    /// the sink with `machine`, which it has already changed. In timed mode
+    /// the event is stamped with the machine's cycle count. `explain` gives
     /// the event's log line, and is called only when the sink records.
     ///
     /// # Errors
@@ -150,7 +151,8 @@ impl<'s> Emitter<'s> {
                 entry: Some(entry),
                 seq: self.seq,
                 label: format::label(entry, self.seq),
-                cycle: None,
+                // The run's cycle count once the event's effect is complete.
+                cycle: machine.config.timing.map(|_| machine.counters.cycles),
                 kind: draft.kind,
                 addr: draft.addr,
                 set: draft.set,

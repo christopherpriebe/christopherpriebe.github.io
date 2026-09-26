@@ -80,6 +80,46 @@ pub(crate) fn bits(value: u32, width: u8) -> String {
         .collect()
 }
 
+/// A number of cycles, as a stall and the bus's cycle chip give it: `20
+/// cycles`, `1 cycle`, `2,000 cycles`. Grouped like a setting, since every
+/// such figure is a multiple of the configured miss penalty.
+pub(crate) fn cycles(n: impl Into<u64>) -> String {
+    let n = n.into();
+    format!("{} {}", setting(n), plural(n, "cycle", "cycles"))
+}
+
+/// A fixed-point number, `units` of 10^−`places`, written with exactly
+/// `places` decimals and its whole part grouped like a setting: `0.40` for 40
+/// hundredths, `7.6` for 76 tenths, `2,000.5` for 20,005 tenths.
+pub(crate) fn decimal(units: u64, places: u32) -> String {
+    let (whole, fraction) = match 10_u64.checked_pow(places) {
+        Some(scale) => (units / scale, units % scale),
+        // More places than a u64 has digits: every digit is a decimal.
+        None => (0, units),
+    };
+    let width = usize::try_from(places).unwrap_or(0);
+    if width == 0 {
+        setting(whole)
+    } else {
+        format!("{}.{fraction:0width$}", setting(whole))
+    }
+}
+
+/// `numerator / denominator` rounded half up to `places` decimals, as a
+/// whole number of 10^−`places` units for [`decimal`]: 33 for 1 / 3 to two
+/// places, and 13 for 1 / 8, since 0.125 rounds up to 0.13. `None` when the
+/// denominator is 0, or the result is too large for a `u64`.
+pub(crate) fn half_up(numerator: u64, denominator: u64, places: u32) -> Option<u64> {
+    // In u128, where no u64 count times a scale of a u64 can overflow.
+    let scaled = u128::from(numerator).checked_mul(10_u128.checked_pow(places)?)?;
+    let twice = u128::from(denominator).checked_mul(2)?;
+    let rounded = scaled
+        .checked_mul(2)?
+        .checked_add(u128::from(denominator))?
+        .checked_div(twice)?;
+    u64::try_from(rounded).ok()
+}
+
 /// An event's label, `{entry}.{seq}` as in `5.3`. Plain digits, never
 /// grouped: a label names an event rather than counting anything, and a
 /// comma would read as a third number.
@@ -242,6 +282,56 @@ mod tests {
         for n in [0_u32, 2, 8, 1_000] {
             assert_eq!(plural(n, "way", "ways"), "ways", "{n}");
         }
+    }
+
+    #[test]
+    fn cycles_are_grouped_like_settings_and_singular_for_one() {
+        assert_eq!(cycles(1_u32), "1 cycle");
+        assert_eq!(cycles(20_u32), "20 cycles");
+        assert_eq!(cycles(999_u32), "999 cycles");
+        assert_eq!(cycles(2_000_u32), "2,000 cycles");
+        assert_eq!(cycles(0_u64), "0 cycles");
+    }
+
+    #[test]
+    fn decimals_keep_every_place_and_group_the_whole_part() {
+        assert_eq!(decimal(40, 2), "0.40");
+        assert_eq!(decimal(33, 2), "0.33");
+        assert_eq!(decimal(100, 2), "1.00");
+        assert_eq!(decimal(7, 2), "0.07");
+        assert_eq!(decimal(76, 1), "7.6");
+        assert_eq!(decimal(90, 1), "9.0");
+        assert_eq!(decimal(0, 1), "0.0");
+        assert_eq!(decimal(20_005, 1), "2,000.5");
+        assert_eq!(decimal(99_999, 1), "9,999.9");
+        assert_eq!(decimal(1_234, 0), "1,234");
+        assert_eq!(decimal(u64::MAX, 1), "1,844,674,407,370,955,161.5");
+        assert_eq!(decimal(5, 20), "0.00000000000000000005");
+    }
+
+    #[test]
+    fn half_up_rounds_halves_away_from_zero() {
+        assert_eq!(half_up(1, 3, 2), Some(33));
+        assert_eq!(half_up(2, 3, 2), Some(67));
+        assert_eq!(half_up(4, 10, 2), Some(40));
+        assert_eq!(half_up(1, 8, 2), Some(13));
+        assert_eq!(half_up(3, 8, 2), Some(38));
+        assert_eq!(half_up(1, 16, 2), Some(6));
+        assert_eq!(half_up(175, 100, 1), Some(18));
+        assert_eq!(half_up(174, 100, 1), Some(17));
+        assert_eq!(half_up(23, 3, 1), Some(77));
+        assert_eq!(half_up(0, 3, 2), Some(0));
+        assert_eq!(half_up(3, 3, 2), Some(100));
+        assert_eq!(half_up(7, 2, 0), Some(4));
+        assert_eq!(half_up(u64::MAX, 1, 0), Some(u64::MAX));
+    }
+
+    #[test]
+    fn half_up_has_no_result_without_a_denominator_or_room() {
+        assert_eq!(half_up(1, 0, 2), None);
+        assert_eq!(half_up(0, 0, 1), None);
+        assert_eq!(half_up(u64::MAX, 1, 1), None);
+        assert_eq!(half_up(1, 1, 40), None);
     }
 
     #[test]

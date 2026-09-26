@@ -28,6 +28,16 @@
 //! A write-back only writes memory: the victim keeps its line and its dirty
 //! bit until `Evict` clears valid, tag, dirty and data together.
 //!
+//! In timed mode each access is charged where its time goes: the hit time at
+//! the tag compare, and the miss penalty at each transfer to or from memory,
+//! so at `WriteBack`, at `Fill` and at `MemWrite`. A hit therefore costs the
+//! hit time, a miss the hit time plus the miss penalty, and a dirty victim's
+//! write-back the miss penalty again. Every miss also has a `Stall` event,
+//! once it is known what the CPU waits for: after `Victim` when the miss
+//! allocates, since by then it is known whether the victim is dirty, and
+//! after `Miss` for a write-around. Every event is stamped with the run's
+//! cycle count, so the stamps count the stall down.
+//!
 //! Each event hands the emitter its log line as a closure, which the
 //! `explain` module words and which is built only when the sink records.
 
@@ -35,13 +45,13 @@ use crate::cache::{Dirtiness, Slot, Way};
 use crate::config::{AllocatePolicy, WritePolicy};
 use crate::engine::{Draft, Emitter, Flow, Halt};
 use crate::event::{Cause, ChangeRef, Counter, EventKind};
-use crate::explain::{self, WriteNote};
+use crate::explain::{self, StallFor, WriteNote};
 use crate::geometry::Location;
-use crate::machine::{AccessContext, InvariantViolation, Lookup, Machine};
+use crate::machine::{AccessContext, InvariantViolation, Lookup, Machine, StallWindow};
 use crate::memory::{set_word_at, word_at};
 use crate::op::AccessKind;
 use crate::replacement::{RankMove, VictimReason};
-use crate::units::{Addr, LineAddr, Register, SetIndex, Tag, WayIndex, Word, WordIndex};
+use crate::units::{Addr, Cycle, LineAddr, Register, SetIndex, Tag, WayIndex, Word, WordIndex};
 
 /// A load or store the engine executes. Its address has been checked: it
 /// fits the address width and is a multiple of the word size.
@@ -110,6 +120,7 @@ fn run(machine: &mut Machine, request: Request, out: &mut Emitter<'_>) -> Result
         lookup: None,
         victim: None,
         way: None,
+        stall: None,
         done: false,
     });
     let decode = Draft {
@@ -127,6 +138,7 @@ fn run(machine: &mut Machine, request: Request, out: &mut Emitter<'_>) -> Result
         (None, Request::Store { value, .. })
             if machine.config.cache.allocate_policy == AllocatePolicy::WriteNoAllocate =>
         {
+            stall(machine, location.set, StallFor::WriteAround, out)?;
             return write_around(machine, addr, value, location, out);
         }
         (None, _) => allocate(machine, location, out)?,
@@ -144,7 +156,8 @@ fn run(machine: &mut Machine, request: Request, out: &mut Emitter<'_>) -> Result
 }
 
 /// The tag compare: `Hit` or `Miss`, which moves `accesses`, `loads` or
-/// `stores`, and `hits` or `misses`. Returns the way that hit.
+/// `stores`, and `hits` or `misses`, and in timed mode charges the hit time.
+/// Returns the way that hit.
 fn lookup(
     machine: &mut Machine,
     request: Request,
@@ -173,6 +186,11 @@ fn lookup(
     for counter in counters {
         machine.counters.add(counter, 1);
     }
+    let mut changed: Vec<ChangeRef> = counters
+        .into_iter()
+        .map(|counter| ChangeRef::Counter { counter })
+        .collect();
+    changed.extend(charge(machine, Cost::Hit));
     if let Some(access) = &mut machine.access {
         access.lookup = Some(Lookup { hit, tags });
         access.way = hit;
@@ -181,10 +199,7 @@ fn lookup(
         addr: Some(request.addr()),
         set: Some(location.set),
         way: hit,
-        changed: counters
-            .into_iter()
-            .map(|counter| ChangeRef::Counter { counter })
-            .collect(),
+        changed,
         ..Draft::new(event, Some(Cause::Associativity))
     };
     out.emit(machine, draft, || match hit {
@@ -194,9 +209,9 @@ fn lookup(
     Ok(hit)
 }
 
-/// The allocation path of a miss: `Victim`, then `WriteBack` if the victim
-/// is dirty and `Evict` if it holds a line, then `Fill`. Returns the way
-/// filled.
+/// The allocation path of a miss: `Victim`, then in timed mode `Stall`,
+/// then `WriteBack` if the victim is dirty and `Evict` if it holds a line,
+/// then `Fill`. Returns the way filled.
 fn allocate(
     machine: &mut Machine,
     location: Location,
@@ -225,11 +240,19 @@ fn allocate(
     let Some(held) = machine.cache.way(set, way) else {
         return Err(lost(machine, set));
     };
-    if let Some(tag) = held.tag() {
-        let dirty = held.is_dirty();
-        if dirty {
-            let line = machine.geometry.line_addr(tag, set);
-            write_back(machine, line, set, way, out)?;
+    let old = held.tag().map(|tag| (tag, held.is_dirty()));
+    let dirty_line = old
+        .filter(|(_, dirty)| *dirty)
+        .map(|(tag, _)| machine.geometry.line_addr(tag, set));
+    let line = location.line;
+    let wait = match dirty_line {
+        Some(victim) => StallFor::WriteBackThenFill { victim, line },
+        None => StallFor::Fill { line },
+    };
+    stall(machine, set, wait, out)?;
+    if let Some((tag, dirty)) = old {
+        if let Some(victim) = dirty_line {
+            write_back(machine, victim, set, way, out)?;
         }
         evict(machine, tag, set, way, dirty, cause, out)?;
     }
@@ -237,8 +260,44 @@ fn allocate(
     Ok(way)
 }
 
+/// `Stall`, in timed mode only: the CPU waits while memory does what `wait`
+/// names, one miss penalty per transfer. The stall's length, and the cycle
+/// count at which it is over, go into the access context for the CPU's
+/// countdown. The stall itself charges nothing: the transfers that follow
+/// do. Untimed, there is no stall and nothing happens.
+fn stall(
+    machine: &mut Machine,
+    set: SetIndex,
+    wait: StallFor,
+    out: &mut Emitter<'_>,
+) -> Result<(), Halt> {
+    let Some(timing) = machine.config.timing else {
+        return Ok(());
+    };
+    let total = timing.miss_cycles.saturating_mul(wait.transfers());
+    let end = machine
+        .counters
+        .cycles
+        .get()
+        .saturating_add(u64::from(total));
+    if let Some(access) = &mut machine.access {
+        access.stall = Some(StallWindow {
+            total,
+            end: Cycle::new_unchecked(end),
+        });
+    }
+    let draft = Draft {
+        set: Some(set),
+        ..Draft::new(EventKind::Stall, Some(Cause::Timing))
+    };
+    out.emit(machine, draft, || {
+        explain::stall(&machine.geometry, timing.miss_cycles, wait)
+    })
+}
+
 /// `WriteBack`: the dirty victim's line goes to memory. The way keeps its
 /// line and its dirty bit; only memory changes, and its stale words with it.
+/// In timed mode it costs the miss penalty.
 fn write_back(
     machine: &mut Machine,
     line: LineAddr,
@@ -263,6 +322,7 @@ fn write_back(
         _ => return Err(lost(machine, set)),
     }
     machine.counters.add(Counter::Writebacks, 1);
+    changed.extend(charge(machine, Cost::Miss));
     let draft = Draft {
         addr: Some(Addr::new_unchecked(line.get())),
         set: Some(set),
@@ -312,7 +372,7 @@ fn evict(
 }
 
 /// `Fill`: the line comes in from memory, clean, and memory records it as
-/// touched.
+/// touched. In timed mode it costs the miss penalty.
 fn fill(
     machine: &mut Machine,
     location: Location,
@@ -339,6 +399,7 @@ fn fill(
     changed.push(ChangeRef::Counter {
         counter: Counter::Fills,
     });
+    changed.extend(charge(machine, Cost::Miss));
     let draft = Draft {
         addr: Some(Addr::new_unchecked(location.line.get())),
         set: Some(set),
@@ -471,7 +532,8 @@ fn write(
 }
 
 /// A store that missed under write-no-allocate: `MemWrite` writes the word
-/// to memory only, a write-around, and the access ends there.
+/// to memory only, a write-around, and the access ends there. In timed mode
+/// it costs the miss penalty.
 fn write_around(
     machine: &mut Machine,
     addr: Addr,
@@ -487,6 +549,7 @@ fn write_around(
     changed.push(ChangeRef::Counter {
         counter: Counter::Writearounds,
     });
+    changed.extend(charge(machine, Cost::Miss));
     finish(machine);
     let draft = Draft {
         addr: Some(addr),
@@ -568,6 +631,30 @@ fn set_ranks(ways: &mut [Way], moves: &[RankMove], rank: impl Fn(&RankMove) -> u
             target.rank = rank(moved);
         }
     }
+}
+
+/// Which of timed mode's costs an event charges.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Cost {
+    /// The hit time, which every access's tag compare costs.
+    Hit,
+    /// The miss penalty, which each transfer to or from memory costs.
+    Miss,
+}
+
+/// Charges `cost` to the run's cycle counter in timed mode, and returns the
+/// counter for the event's changed list; untimed, charges nothing and
+/// returns `None`.
+fn charge(machine: &mut Machine, cost: Cost) -> Option<ChangeRef> {
+    let timing = machine.config.timing?;
+    let cycles = match cost {
+        Cost::Hit => timing.hit_cycles,
+        Cost::Miss => timing.miss_cycles,
+    };
+    machine.counters.add(Counter::Cycles, cycles);
+    Some(ChangeRef::Counter {
+        counter: Counter::Cycles,
+    })
 }
 
 /// Writes `word` to memory at `addr`, and returns the memory cell if its

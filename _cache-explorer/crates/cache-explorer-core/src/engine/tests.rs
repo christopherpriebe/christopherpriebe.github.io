@@ -3,8 +3,10 @@
 //! lines; hit and miss sequences; victims under each replacement policy;
 //! write-backs, write-throughs and write-arounds; miss counts for
 //! compulsory, conflict and capacity examples; staleness; event numbering;
-//! stopping mid-access; the invariant checks at entry ends; and the internal
-//! error of a lookup that finds no way.
+//! stopping mid-access; the invariant checks at entry ends; the internal
+//! error of a lookup that finds no way; and timed mode: where each case's
+//! cycles are charged, the stall and its countdown, the cycle identity at
+//! entry ends, and AMAT and the measured cost of fixed traces.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -12,17 +14,19 @@ use super::access::access;
 use super::*;
 use crate::cache::{Cache, Dirtiness, Slot};
 use crate::config::{
-    AllocatePolicy, CacheConfig, Config, MemoryInit, Preset, Replacement, WordBytes, WritePolicy,
+    AllocatePolicy, CacheConfig, Config, MemoryInit, Preset, Replacement, Timing, WordBytes,
+    WritePolicy,
 };
 use crate::event::Counter;
 use crate::limits::{MAX_ADDRESS_BITS, MAX_EVENTS_PER_ENTRY, MAX_LINES};
+use crate::machine::Stalled;
 use crate::memory::StaleInfo;
 use crate::prng::Prng;
 use crate::replacement::VictimReason;
-use crate::units::{LineAddr, Register, Tag, Word, WordIndex};
+use crate::units::{Cycle, LineAddr, Register, Tag, Word, WordIndex};
 
 use EventKind::{
-    Complete, Decode, Evict, Fill, Hit, MemWrite, Miss, Rank, Victim, Write, WriteBack,
+    Complete, Decode, Evict, Fill, Hit, MemWrite, Miss, Rank, Stall, Victim, Write, WriteBack,
     WriteThrough,
 };
 
@@ -95,7 +99,12 @@ impl Run {
     /// Executes `request` as the next op and returns its events with the
     /// machine after each. Every invariant that must hold mid-access holds
     /// after every event, the counters add up, and no event is an error.
+    /// In timed mode every event is stamped with the machine's cycle count,
+    /// each miss stalls once, and the access costs the hit time, plus the
+    /// miss penalty for a miss and again for a write-back; untimed, nothing
+    /// is stamped, nothing stalls and no cycle is counted.
     fn trace(&mut self, request: Request) -> Vec<(MicroEvent, Machine)> {
+        let before = self.machine.counters;
         let mut recorder = Recorder::default();
         let mut out = Emitter::new(
             &mut recorder,
@@ -112,6 +121,27 @@ impl Run {
             let counters = after.counters;
             assert_eq!(counters.hits + counters.misses, counters.accesses);
             assert_eq!(counters.loads + counters.stores, counters.accesses);
+            let stamp = after.config.timing.map(|_| counters.cycles);
+            assert_eq!(event.cycle, stamp, "{}", event.label);
+        }
+        let after = self.machine.counters;
+        let stalls = recorder
+            .events
+            .iter()
+            .filter(|event| event.kind == Stall)
+            .count();
+        let (misses, writebacks) = (
+            after.misses - before.misses,
+            after.writebacks - before.writebacks,
+        );
+        if let Some(timing) = self.machine.config.timing {
+            assert_eq!(stalls, misses as usize);
+            let cost = u64::from(timing.hit_cycles)
+                + u64::from(misses + writebacks) * u64::from(timing.miss_cycles);
+            assert_eq!(after.cycles.get() - before.cycles.get(), cost);
+        } else {
+            assert_eq!(stalls, 0);
+            assert_eq!(after.cycles.get(), 0);
         }
         assert!(!self.machine.in_flight());
         recorder.events.into_iter().zip(recorder.after).collect()
@@ -201,6 +231,22 @@ fn preset(preset: Preset) -> Config {
 /// `direct-mapped-8` under the given write and allocate policies.
 fn direct_mapped(write_policy: WritePolicy, allocate_policy: AllocatePolicy) -> Config {
     config(128, 1, Replacement::Lru, write_policy, allocate_policy)
+}
+
+/// Timed mode with `hit`-cycle hits and `miss`-cycle misses.
+fn timing(hit: u32, miss: u32) -> Timing {
+    Timing {
+        hit_cycles: hit,
+        miss_cycles: miss,
+    }
+}
+
+/// `config` in timed mode, with `hit`-cycle hits and `miss`-cycle misses.
+fn timed(config: Config, hit: u32, miss: u32) -> Config {
+    Config {
+        timing: Some(timing(hit, miss)),
+        ..config
+    }
 }
 
 /// `two-way-lru` under the given replacement policy: 4 sets of 2 ways,
@@ -1481,7 +1527,18 @@ fn the_last_event_ends_the_access_whichever_it_is() {
 
 #[test]
 fn stopping_after_any_event_leaves_the_machine_as_the_full_run_has_it_there() {
-    let mut run = Run::new(preset(Preset::TwoWayLru));
+    for timing in [None, Some(timing(1, 20))] {
+        stop_after_each_event_of_frame_3b_access_5(Config {
+            timing,
+            ..preset(Preset::TwoWayLru)
+        });
+    }
+}
+
+/// Stops frame 3b's access #5 after each of its events in turn, with a
+/// recording and a quiet sink, on `config`.
+fn stop_after_each_event_of_frame_3b_access_5(config: Config) {
+    let mut run = Run::new(config);
     run.load(0x0A4);
     run.store(0x1A4, 5);
     run.load(0x0A4);
@@ -1515,26 +1572,31 @@ fn stopping_after_any_event_leaves_the_machine_as_the_full_run_has_it_there() {
 
 #[test]
 fn quiet_and_recording_runs_reach_equal_machines() {
-    let config = config(
-        128,
-        2,
-        Replacement::Random,
-        WritePolicy::WriteBack,
-        AllocatePolicy::WriteAllocate,
-    );
-    let requests = request_stream(&config.validate().unwrap(), 7, 200);
-    let mut recording = Machine::start(config.clone()).unwrap();
-    let mut quiet_machine = Machine::start(config).unwrap();
-    let mut quiet = Quiet::default();
-    let mut recorder = Recorder::default();
-    for request in requests {
-        let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(0), 0);
-        access(&mut recording, request, &mut out);
-        let mut out = Emitter::new(&mut quiet, OpIndex::new_unchecked(0), 0);
-        access(&mut quiet_machine, request, &mut out);
+    for timing in [None, Some(timing(1, 20))] {
+        let config = Config {
+            timing,
+            ..config(
+                128,
+                2,
+                Replacement::Random,
+                WritePolicy::WriteBack,
+                AllocatePolicy::WriteAllocate,
+            )
+        };
+        let requests = request_stream(&config.validate().unwrap(), 7, 200);
+        let mut recording = Machine::start(config.clone()).unwrap();
+        let mut quiet_machine = Machine::start(config).unwrap();
+        let mut quiet = Quiet::default();
+        let mut recorder = Recorder::default();
+        for request in requests {
+            let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(0), 0);
+            access(&mut recording, request, &mut out);
+            let mut out = Emitter::new(&mut quiet, OpIndex::new_unchecked(0), 0);
+            access(&mut quiet_machine, request, &mut out);
+        }
+        assert_eq!(quiet_machine, recording);
+        assert_eq!(quiet.seen, recorder.events.len());
     }
-    assert_eq!(quiet_machine, recording);
-    assert_eq!(quiet.seen, recorder.events.len());
 }
 
 // ---------------------------------------------------------------------------
@@ -1809,49 +1871,17 @@ fn diff(before: &Machine, after: &Machine) -> Vec<ChangeRef> {
             changed.push(counter(name));
         }
     }
+    if old.cycles != new.cycles {
+        changed.push(counter(Counter::Cycles));
+    }
     changed.sort_unstable();
     changed
 }
 
-#[test]
-fn every_event_lists_exactly_the_cells_and_counters_it_changed() {
-    let mut checked = std::collections::BTreeSet::new();
-    let mut ways = 1;
-    while ways <= 4 {
-        for replacement in [Replacement::Lru, Replacement::Fifo, Replacement::Random] {
-            for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
-                for allocate_policy in [
-                    AllocatePolicy::WriteAllocate,
-                    AllocatePolicy::WriteNoAllocate,
-                ] {
-                    let config = config(64, ways, replacement, write_policy, allocate_policy);
-                    let geometry = config.validate().unwrap();
-                    let mut run = Run::new(config);
-                    for request in request_stream(&geometry, u64::from(ways), 150) {
-                        let mut before = run.machine.clone();
-                        let trace = run.trace(request);
-                        let sequence: Vec<EventKind> =
-                            trace.iter().map(|(event, _)| event.kind).collect();
-                        checked.insert(format!("{sequence:?}"));
-                        for (event, after) in &trace {
-                            assert_eq!(
-                                event.changed,
-                                diff(&before, after),
-                                "{} {:?}",
-                                event.label,
-                                event.kind
-                            );
-                            before = after.clone();
-                        }
-                    }
-                }
-            }
-        }
-        ways *= 2;
-    }
-    // The ten cases have 23 sequences once each optional event is counted,
-    // and the streams produced every one of them and nothing else.
-    let expected: std::collections::BTreeSet<String> = [
+/// The 23 event sequences of the ten access cases, untimed, once each
+/// optional event is counted.
+fn case_sequences() -> Vec<Vec<EventKind>> {
+    vec![
         // 1: load hit.
         vec![Decode, Hit, Complete],
         vec![Decode, Hit, Complete, Rank],
@@ -1887,16 +1917,100 @@ fn every_event_lists_exactly_the_cells_and_counters_it_changed() {
         // 9 and 10: store miss, write-no-allocate.
         vec![Decode, Miss, MemWrite],
     ]
-    .iter()
-    .map(|sequence| format!("{sequence:?}"))
-    .collect();
-    assert_eq!(expected.len(), 23);
-    let missing: Vec<&String> = expected.difference(&checked).collect();
-    let unexpected: Vec<&String> = checked.difference(&expected).collect();
-    assert!(
-        missing.is_empty() && unexpected.is_empty(),
-        "never came up: {missing:?}; not a case's sequence: {unexpected:?}"
+}
+
+/// `sequences` in timed mode: each of the 17 that miss has a `Stall`, after
+/// `Victim` when the miss allocates and after `Miss` when it writes around
+/// the cache.
+fn with_stalls(sequences: &[Vec<EventKind>]) -> Vec<Vec<EventKind>> {
+    let timed: Vec<Vec<EventKind>> = sequences
+        .iter()
+        .map(|sequence| {
+            let after = if sequence.contains(&Victim) {
+                Victim
+            } else {
+                Miss
+            };
+            let mut timed = sequence.clone();
+            if let Some(at) = sequence.iter().position(|kind| *kind == after) {
+                timed.insert(at + 1, Stall);
+            }
+            timed
+        })
+        .collect();
+    assert_eq!(
+        timed
+            .iter()
+            .filter(|sequence| sequence.contains(&Stall))
+            .count(),
+        17
     );
+    timed
+}
+
+#[test]
+fn every_event_lists_exactly_the_cells_and_counters_it_changed() {
+    // The sequences seen, untimed and timed.
+    let mut checked = [
+        std::collections::BTreeSet::new(),
+        std::collections::BTreeSet::new(),
+    ];
+    let mut ways = 1;
+    while ways <= 4 {
+        for replacement in [Replacement::Lru, Replacement::Fifo, Replacement::Random] {
+            for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
+                for allocate_policy in [
+                    AllocatePolicy::WriteAllocate,
+                    AllocatePolicy::WriteNoAllocate,
+                ] {
+                    for (timed, timing) in [(0, None), (1, Some(timing(2, 5)))] {
+                        let config = Config {
+                            timing,
+                            ..config(64, ways, replacement, write_policy, allocate_policy)
+                        };
+                        let geometry = config.validate().unwrap();
+                        let mut run = Run::new(config);
+                        for request in request_stream(&geometry, u64::from(ways), 150) {
+                            let mut before = run.machine.clone();
+                            let trace = run.trace(request);
+                            let sequence: Vec<EventKind> =
+                                trace.iter().map(|(event, _)| event.kind).collect();
+                            checked[timed].insert(format!("{sequence:?}"));
+                            for (event, after) in &trace {
+                                assert_eq!(
+                                    event.changed,
+                                    diff(&before, after),
+                                    "{} {:?}",
+                                    event.label,
+                                    event.kind
+                                );
+                                before = after.clone();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ways *= 2;
+    }
+    // The ten cases have 23 sequences once each optional event is counted,
+    // and the untimed streams produced every one of them and nothing else;
+    // so did the timed streams, with their stalls.
+    let untimed = case_sequences();
+    let timed = with_stalls(&untimed);
+    for (index, expected) in [untimed, timed].iter().enumerate() {
+        let expected: std::collections::BTreeSet<String> = expected
+            .iter()
+            .map(|sequence| format!("{sequence:?}"))
+            .collect();
+        assert_eq!(expected.len(), 23);
+        let missing: Vec<&String> = expected.difference(&checked[index]).collect();
+        let unexpected: Vec<&String> = checked[index].difference(&expected).collect();
+        assert!(
+            missing.is_empty() && unexpected.is_empty(),
+            "never came up: {missing:?}; not a case's sequence: {unexpected:?}"
+        );
+    }
 }
 
 #[test]
@@ -1931,4 +2045,451 @@ fn every_placement_up_to_the_largest_keeps_its_invariants() {
         }
         ways *= 2;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Timed mode.
+// ---------------------------------------------------------------------------
+
+/// An event's kind, its cycle stamp less the stamp of the access's `Decode`,
+/// and the stall countdown after it, `(remaining, total)`.
+type Timed = (EventKind, u64, Option<(u32, u32)>);
+
+/// The kind, relative stamp and countdown of each event of `trace`.
+fn timed_trace(trace: &[(MicroEvent, Machine)]) -> Vec<Timed> {
+    let start = trace[0].0.cycle.unwrap().get();
+    trace
+        .iter()
+        .map(|(event, after)| {
+            let countdown = after
+                .stall()
+                .map(|Stalled { remaining, total }| (remaining, total));
+            (event.kind, event.cycle.unwrap().get() - start, countdown)
+        })
+        .collect()
+}
+
+#[test]
+fn case_4_timed_is_stamped_as_the_design_example_reads() {
+    // Two-way LRU at 1/20, with the run's count at 100 when access #5
+    // starts: Decode@100 · Miss@101 · Victim@101 · Stall@101 (total 40) ·
+    // WriteBack@121 · Evict@121 · Fill@141 · Complete@141 · Rank@141.
+    let mut run = Run::new(timed(two_way(Replacement::Lru), 1, 20));
+    run.load(0x0A4);
+    run.store(0x1A4, 5);
+    run.load(0x0A4);
+    run.machine.counters.cycles = Cycle::new_unchecked(100);
+    let trace = run.trace(load(0x2A4, Register::R3));
+    let stamps: Vec<(EventKind, u64)> = trace
+        .iter()
+        .map(|(event, _)| (event.kind, event.cycle.unwrap().get()))
+        .collect();
+    assert_eq!(
+        stamps,
+        [
+            (Decode, 100),
+            (Miss, 101),
+            (Victim, 101),
+            (Stall, 101),
+            (WriteBack, 121),
+            (Evict, 121),
+            (Fill, 141),
+            (Complete, 141),
+            (Rank, 141),
+        ]
+    );
+    // The stall is row 4.4, and the rest move down by one.
+    let labels: Vec<&str> = trace
+        .iter()
+        .map(|(event, _)| event.label.as_str())
+        .collect();
+    assert_eq!(
+        labels,
+        ["4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "4.8", "4.9"]
+    );
+    let events: Vec<MicroEvent> = trace.iter().map(|(event, _)| event.clone()).collect();
+    let stall = event(&events, Stall);
+    assert_eq!(
+        shape(stall),
+        (None, Some(set(2)), None, &[][..], Some(Cause::Timing))
+    );
+    assert_eq!(
+        stall.explain,
+        "The CPU stalls for 40 cycles: 20 to write line 0x1A0 back, then 20 to fetch line 0x2A0."
+    );
+    // The access costs 1 + 20 + 20 = 41.
+    assert_eq!(run.machine.counters.cycles.get(), 141);
+}
+
+/// The countdown of a stall for one transfer, and for two, at 30-cycle
+/// misses: `(remaining, total)` right after the `Stall` event.
+const ONE_TRANSFER: Option<(u32, u32)> = Some((30, 30));
+const TWO_TRANSFERS: Option<(u32, u32)> = Some((60, 60));
+
+/// Runs `setup`, then `request` as access case `case`, on `config` timed with
+/// 2-cycle hits and 30-cycle misses, and checks the request's events against
+/// `expected`: kinds, stamps from the access's first, and the countdown
+/// after each. The events that move the cycle counter, and only those, list
+/// it among their changes: the compare, the write-back, the fill and the
+/// write-around.
+fn check_timed(case: u8, config: Config, setup: &[Request], request: Request, expected: &[Timed]) {
+    let mut run = Run::new(timed(config, 2, 30));
+    for earlier in setup {
+        run.events(*earlier);
+    }
+    let trace = run.trace(request);
+    assert_eq!(timed_trace(&trace), expected, "case {case}");
+    for (event, _) in &trace {
+        let charges = matches!(event.kind, Hit | Miss | WriteBack | Fill | MemWrite);
+        assert_eq!(
+            event.changed.contains(&counter(Counter::Cycles)),
+            charges,
+            "case {case}: {:?}",
+            event.kind
+        );
+    }
+}
+
+#[test]
+fn timed_hits_cost_the_hit_time_alone() {
+    // Cases 1, 5 and 6: the compare is the only charge and nothing stalls,
+    // though a write-through store writes memory too.
+    let back = direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate);
+    let through = direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate);
+    let warm = [load(0x0A4, Register::R1)];
+    check_timed(
+        1,
+        back.clone(),
+        &warm,
+        load(0x0A8, Register::R2),
+        &[(Decode, 0, None), (Hit, 2, None), (Complete, 2, None)],
+    );
+    check_timed(
+        5,
+        back,
+        &warm,
+        store(0x0A4, 7),
+        &[(Decode, 0, None), (Hit, 2, None), (Write, 2, None)],
+    );
+    check_timed(
+        6,
+        through,
+        &warm,
+        store(0x0A4, 7),
+        &[
+            (Decode, 0, None),
+            (Hit, 2, None),
+            (Write, 2, None),
+            (WriteThrough, 2, None),
+        ],
+    );
+}
+
+#[test]
+fn timed_misses_stall_for_the_fill() {
+    // Cases 2, 3 and 8: the compare, then one miss penalty at the fill; the
+    // stall counts it down from the Stall event until the Fill.
+    let back = direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate);
+    let through = direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate);
+    check_timed(
+        2,
+        back.clone(),
+        &[],
+        load(0x0A4, Register::R1),
+        &[
+            (Decode, 0, None),
+            (Miss, 2, None),
+            (Victim, 2, None),
+            (Stall, 2, ONE_TRANSFER),
+            (Fill, 32, None),
+            (Complete, 32, None),
+        ],
+    );
+    check_timed(
+        3,
+        back,
+        &[load(0x0A4, Register::R1)],
+        load(0x1A4, Register::R1),
+        &[
+            (Decode, 0, None),
+            (Miss, 2, None),
+            (Victim, 2, None),
+            (Stall, 2, ONE_TRANSFER),
+            (Evict, 2, ONE_TRANSFER),
+            (Fill, 32, None),
+            (Complete, 32, None),
+        ],
+    );
+    check_timed(
+        8,
+        through,
+        &[],
+        store(0x0A4, 7),
+        &[
+            (Decode, 0, None),
+            (Miss, 2, None),
+            (Victim, 2, None),
+            (Stall, 2, ONE_TRANSFER),
+            (Fill, 32, None),
+            (Write, 32, None),
+            (WriteThrough, 32, None),
+        ],
+    );
+}
+
+#[test]
+fn timed_dirty_victims_stall_for_the_write_back_and_the_fill() {
+    // Cases 4 and 7: two miss penalties, the write-back's first, so the
+    // countdown reads 60, then 30 once the line is back in memory.
+    let back = direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate);
+    let dirty = [store(0x0A4, 7)];
+    let written_back = Some((30, 60));
+    for (case, request, result) in [
+        (4, load(0x1A4, Register::R1), Complete),
+        (7, store(0x1A4, 3), Write),
+    ] {
+        check_timed(
+            case,
+            back.clone(),
+            &dirty,
+            request,
+            &[
+                (Decode, 0, None),
+                (Miss, 2, None),
+                (Victim, 2, None),
+                (Stall, 2, TWO_TRANSFERS),
+                (WriteBack, 32, written_back),
+                (Evict, 32, written_back),
+                (Fill, 62, None),
+                (result, 62, None),
+            ],
+        );
+    }
+}
+
+#[test]
+fn timed_write_arounds_stall_right_after_the_compare() {
+    // Cases 9 and 10: no victim, so the stall follows the miss, and the
+    // write to memory costs one miss penalty under either write policy.
+    for (case, write_policy) in [(9, WritePolicy::WriteBack), (10, WritePolicy::WriteThrough)] {
+        check_timed(
+            case,
+            direct_mapped(write_policy, AllocatePolicy::WriteNoAllocate),
+            &[],
+            store(0x0A4, 7),
+            &[
+                (Decode, 0, None),
+                (Miss, 2, None),
+                (Stall, 2, ONE_TRANSFER),
+                (MemWrite, 32, None),
+            ],
+        );
+    }
+}
+
+#[test]
+fn every_kind_of_stall_says_what_the_cpu_waits_for() {
+    let cases = [
+        (
+            direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate),
+            vec![],
+            load(0x0A4, Register::R1),
+            "The CPU stalls for 20 cycles while memory supplies line 0x0A0.",
+        ),
+        (
+            direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate),
+            vec![store(0x0A4, 7)],
+            load(0x1A4, Register::R1),
+            "The CPU stalls for 20 cycles while memory supplies line 0x1A0.",
+        ),
+        (
+            direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate),
+            vec![store(0x0A4, 7)],
+            store(0x1A4, 3),
+            "The CPU stalls for 40 cycles: 20 to write line 0x0A0 back, then 20 to fetch line \
+             0x1A0.",
+        ),
+        (
+            direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteNoAllocate),
+            vec![],
+            store(0x0A4, 7),
+            "The CPU stalls for 20 cycles while the store goes to memory.",
+        ),
+    ];
+    for (config, setup, request, line) in cases {
+        let mut run = Run::new(timed(config, 1, 20));
+        for earlier in setup {
+            run.events(earlier);
+        }
+        let events = run.events(request);
+        let stall = event(&events, Stall);
+        assert_eq!(stall.explain, line);
+        assert_eq!(
+            shape(stall),
+            (None, Some(set(2)), None, &[][..], Some(Cause::Timing))
+        );
+    }
+}
+
+#[test]
+fn the_access_context_holds_the_stall_window() {
+    let mut run = Run::new(timed(two_way(Replacement::Lru), 1, 20));
+    run.load(0x0A4);
+    run.store(0x1A4, 5);
+    run.load(0x0A4);
+    let trace = run.trace(load(0x2A4, Register::R3));
+    let windows: Vec<Option<(u32, u64)>> = trace
+        .iter()
+        .map(|(_, after)| {
+            let window = after.access.as_ref().unwrap().stall;
+            window.map(|window| (window.total, window.end.get()))
+        })
+        .collect();
+    // From the stall on, the window names its length and the cycle count
+    // at which the fill is done: 21 + 21 + 1 before the access, 1 for its
+    // compare, then 40 for the write-back and the fill.
+    let from_stall = Some((40, 84));
+    assert_eq!(
+        windows,
+        [
+            None, None, None, from_stall, from_stall, from_stall, from_stall, from_stall,
+            from_stall
+        ]
+    );
+    // After the access, and on a hit, nothing is stalled.
+    assert_eq!(run.machine.stall(), None);
+    let trace = run.trace(load(0x2A8, Register::R1));
+    for (_, after) in &trace {
+        assert_eq!(after.access.as_ref().unwrap().stall, None);
+        assert_eq!(after.stall(), None);
+    }
+}
+
+#[test]
+fn untimed_runs_stamp_no_cycles_and_never_stall() {
+    let mut run = Run::new(two_way(Replacement::Lru));
+    let mut events = run.store(0x0A4, 7);
+    events.extend(run.load(0x1A4));
+    events.extend(run.load(0x2A4));
+    assert!(events.iter().any(|event| event.kind == WriteBack));
+    assert!(events
+        .iter()
+        .all(|event| event.cycle.is_none() && event.kind != Stall));
+    assert!(events
+        .iter()
+        .all(|event| !event.changed.contains(&counter(Counter::Cycles))));
+    assert_eq!(run.machine.counters.cycles.get(), 0);
+    assert_eq!(run.machine.stall(), None);
+}
+
+#[test]
+fn cycles_add_up_at_every_entry_boundary_and_only_there() {
+    // Between accesses, cycles = accesses × hit + misses × miss + writebacks ×
+    // miss, under every policy. In the middle of a miss they do not: the
+    // miss is counted at Miss, and its penalty charged at the transfers.
+    let mut short_mid_access = false;
+    for (hit, miss) in [(1, 20), (3, 1), (2, 7)] {
+        for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
+            for allocate_policy in [
+                AllocatePolicy::WriteAllocate,
+                AllocatePolicy::WriteNoAllocate,
+            ] {
+                let config = timed(
+                    config(64, 2, Replacement::Lru, write_policy, allocate_policy),
+                    hit,
+                    miss,
+                );
+                let geometry = config.validate().unwrap();
+                let mut run = Run::new(config);
+                let identity = |counters: &crate::stats::Counters| {
+                    u64::from(counters.accesses) * u64::from(hit)
+                        + u64::from(counters.misses + counters.writebacks) * u64::from(miss)
+                };
+                for request in request_stream(&geometry, u64::from(hit + miss), 120) {
+                    let trace = run.trace(request);
+                    for (_, after) in &trace {
+                        short_mid_access |= after.counters.cycles.get() < identity(&after.counters);
+                    }
+                    let counters = run.machine.counters;
+                    assert_eq!(counters.cycles.get(), identity(&counters));
+                    assert_eq!(trace.last().unwrap().0.cycle, Some(counters.cycles));
+                }
+            }
+        }
+    }
+    assert!(short_mid_access);
+}
+
+#[test]
+fn amat_and_the_measured_cost_of_fixed_traces() {
+    let figures = |run: &Run| {
+        let timing = run.machine.config.timing.unwrap();
+        let counters = run.machine.counters;
+        (
+            counters.amat(timing).unwrap().text,
+            counters.measured(timing).unwrap().text,
+        )
+    };
+
+    // Frame 3b's five accesses at 1/20: 4 misses in 5 accesses and one
+    // write-back, 105 cycles.
+    let mut run = Run::new(timed(two_way(Replacement::Lru), 1, 20));
+    run.store(0x0B0, 5);
+    run.load(0x0A4);
+    run.store(0x1A4, 7);
+    run.load(0x0A8);
+    assert_eq!(run.machine.stall(), None);
+    run.load(0x2A4);
+    assert_eq!(run.machine.counters.cycles.get(), 105);
+    assert_eq!(
+        figures(&run),
+        (
+            "AMAT = 1 + 0.80 \u{d7} 20 = 17.0 cycles".to_owned(),
+            "Measured: 21.0 cycles per access (AMAT plus 4.0 for 1 write-back).".to_owned()
+        )
+    );
+
+    // Ten accesses on direct-mapped-8 at 1/20 with 4 misses and 1
+    // write-back: 110 cycles, the figures the AMAT line is designed around.
+    let mut run = Run::new(timed(preset(Preset::DirectMapped8), 1, 20));
+    run.store(0x0A4, 7);
+    for at in [
+        0x0A8, 0x0AC, 0x0A0, 0x1A4, 0x1A8, 0x0B0, 0x0B4, 0x0C0, 0x0C4,
+    ] {
+        run.load(at);
+    }
+    let counters = run.machine.counters;
+    assert_eq!(
+        (counters.accesses, counters.misses, counters.writebacks),
+        (10, 4, 1)
+    );
+    assert_eq!(counters.cycles.get(), 110);
+    assert_eq!(
+        figures(&run),
+        (
+            "AMAT = 1 + 0.40 \u{d7} 20 = 9.0 cycles".to_owned(),
+            "Measured: 11.0 cycles per access (AMAT plus 2.0 for 1 write-back).".to_owned()
+        )
+    );
+
+    // One miss in three accesses: the printed rate is 0.33, so AMAT reads
+    // 7.6, while the 23 cycles spent are 7.67 per access.
+    let mut run = Run::new(timed(preset(Preset::DirectMapped8), 1, 20));
+    for at in [0x0A4, 0x0A8, 0x0AC] {
+        run.load(at);
+    }
+    assert_eq!(run.machine.counters.cycles.get(), 23);
+    assert_eq!(
+        figures(&run),
+        (
+            "AMAT = 1 + 0.33 \u{d7} 20 = 7.6 cycles".to_owned(),
+            "Measured: 7.7 cycles per access (AMAT plus 0.0 for 0 write-backs).".to_owned()
+        )
+    );
+    let amat = run
+        .machine
+        .counters
+        .amat(run.machine.config.timing.unwrap())
+        .unwrap();
+    assert!((amat.value - (1.0 + 20.0 / 3.0)).abs() < 1e-12);
 }

@@ -82,6 +82,10 @@ snapshots! {
     word_bytes_2 => "word-bytes-2",
     word_bytes_4 => "word-bytes-4",
     word_bytes_8 => "word-bytes-8",
+    frame_3b_accesses_timed => "frame-3b-accesses-timed",
+    timed_write_through => "timed-write-through",
+    timed_write_no_allocate => "timed-write-no-allocate",
+    timed_one_cycle_misses => "timed-one-cycle-misses",
 }
 
 #[test]

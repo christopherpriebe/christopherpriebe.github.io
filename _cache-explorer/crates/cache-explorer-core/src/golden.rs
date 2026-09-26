@@ -9,14 +9,16 @@
 //!
 //! Each fixture is a configuration and the loads and stores a student could
 //! issue on it by hand, in order. Together they cover the ten access cases,
-//! the design's flows A and B, the dirty eviction of frame 3b, and the widths
-//! that change how numbers are written.
+//! the design's flows A and B, the dirty eviction of frame 3b, untimed and
+//! timed, every kind of stall, and the widths that change how numbers are
+//! written.
 
 use serde::Serialize;
 use thiserror::Error;
 
 use crate::config::{
-    AllocatePolicy, CacheConfig, Config, ConfigError, Preset, Replacement, WordBytes, WritePolicy,
+    AllocatePolicy, CacheConfig, Config, ConfigError, Preset, Replacement, Timing, WordBytes,
+    WritePolicy,
 };
 use crate::engine::{access, Emitter, EventSink, Flow, Request};
 use crate::event::{ChangeRef, MicroEvent};
@@ -248,6 +250,7 @@ pub fn fixtures() -> Vec<Fixture> {
     let mut fixtures = flows();
     fixtures.extend(stores());
     fixtures.extend(widths());
+    fixtures.extend(timed());
     fixtures
 }
 
@@ -483,6 +486,63 @@ fn widths() -> Vec<Fixture> {
     fixtures
 }
 
+/// Timed mode: the cycle stamps of each case, and every kind of stall.
+fn timed() -> Vec<Fixture> {
+    vec![
+        Fixture {
+            name: "frame-3b-accesses-timed",
+            description: "Frame 3b's accesses as in frame-3b-accesses, timed 1/20: each miss \
+                          stalls once its victim is chosen, and the dirty eviction stalls for 40 \
+                          cycles, 20 for the write-back and 20 for the fill. Cycles are charged \
+                          where the time is spent, so the write-back row reads 85 and the fill \
+                          105, where the design charges the whole miss at the Miss row (cases 7, \
+                          2, 7, 1 and 4).",
+            config: timed_config(Preset::TwoWayLru.config(), 1, 20),
+            issues: vec![
+                store(0x0B0, 5),
+                load(0x0A4),
+                store(0x1A4, 7),
+                load(0x0A8),
+                load(0x2A4),
+            ],
+        },
+        Fixture {
+            name: "timed-write-through",
+            description: "Write-through on direct-mapped-8, timed 1/20: a store miss stalls for \
+                          the fill, a store hit costs the hit time alone although it writes \
+                          memory too, and a load that evicts a clean line stalls for the fill \
+                          only (cases 8, 6 and 3).",
+            config: timed_config(
+                direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate),
+                1,
+                20,
+            ),
+            issues: vec![store(0x0A4, 7), store(0x0A8, 9), load(0x1A4)],
+        },
+        Fixture {
+            name: "timed-write-no-allocate",
+            description: "Write-no-allocate under write-back, timed 1/20: a store miss stalls \
+                          right after the compare while the store goes to memory, the load of \
+                          its line then misses and stalls for the fill, and a store hit costs \
+                          the hit time (cases 9, 2 and 5).",
+            config: timed_config(
+                direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteNoAllocate),
+                1,
+                20,
+            ),
+            issues: vec![store(0x0A4, 7), load(0x0A4), store(0x0A8, 9)],
+        },
+        Fixture {
+            name: "timed-one-cycle-misses",
+            description: "Direct-mapped-8 timed with 3-cycle hits and 1-cycle misses: the stall \
+                          of a single cycle is singular, a dirty eviction stalls for 2, and a \
+                          hit costs more than a transfer (cases 7, 4 and 1).",
+            config: timed_config(Preset::DirectMapped8.config(), 3, 1),
+            issues: vec![store(0x0A4, 7), load(0x1A4), load(0x1A8)],
+        },
+    ]
+}
+
 /// A load of the word at `addr`.
 fn load(addr: u32) -> Issue {
     Issue::Load {
@@ -507,6 +567,17 @@ fn direct_mapped(write_policy: WritePolicy, allocate_policy: AllocatePolicy) -> 
             allocate_policy,
             ..config.cache
         },
+        ..config
+    }
+}
+
+/// `config` in timed mode, with `hit`-cycle hits and `miss`-cycle misses.
+fn timed_config(config: Config, hit: u32, miss: u32) -> Config {
+    Config {
+        timing: Some(Timing {
+            hit_cycles: hit,
+            miss_cycles: miss,
+        }),
         ..config
     }
 }

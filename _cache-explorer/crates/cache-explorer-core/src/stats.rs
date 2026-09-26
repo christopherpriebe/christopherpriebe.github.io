@@ -1,11 +1,22 @@
-//! The run's counters.
+//! The run's counters, and the figures derived from them.
 //!
 //! Counters live in the machine, move at the events that name them in their
-//! `changed` lists, and reset with each run.
+//! `changed` lists, and reset with each run. In timed mode two figures are
+//! derived from them: AMAT, which predicts the cost of an access from the
+//! miss rate, and the measured cost, which is what the run actually spent
+//! per access. They differ by the write-backs AMAT leaves out, and that
+//! difference is itself a lesson.
+//!
+//! Each figure's text is computed in whole numbers of tenths and hundredths,
+//! so no float is ever formatted; its value is an `f64` for the page's own
+//! use.
 
 use serde::Serialize;
 
+use crate::config::Timing;
 use crate::event::Counter;
+use crate::explain;
+use crate::format;
 use crate::units::Cycle;
 
 /// What the run has done so far. Every counter starts at 0 with the run.
@@ -44,6 +55,18 @@ pub struct Counters {
     pub capacity: u32,
     /// The remaining misses, caused by where lines may go.
     pub conflict: u32,
+}
+
+/// A figure the Stats region shows: its exact value, and the text the
+/// student reads, which is rounded.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(rename_all = "camelCase")]
+pub struct Figure {
+    /// The exact value, unrounded.
+    pub value: f64,
+    /// The text, as in "AMAT = 1 + 0.40 × 20 = 9.0 cycles".
+    pub text: String,
 }
 
 impl Default for Counters {
@@ -93,6 +116,64 @@ impl Counters {
             }
         };
         *count = count.saturating_add(amount);
+    }
+
+    /// The average memory access time `timing` predicts from the miss rate:
+    /// `hit + (misses / accesses) × miss`. Its text is the design's, "AMAT =
+    /// 1 + 0.40 × 20 = 9.0 cycles", and is true as printed: the miss rate is
+    /// rounded half up to two decimals, and the result is computed from the
+    /// printed rate and rounded half up to one, so 1 miss in 3 accesses reads
+    /// "AMAT = 1 + 0.33 × 20 = 7.6 cycles" although the value is 7.67. `None`
+    /// before the run's first access.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the Stats region shows AMAT in timed mode")
+    )]
+    pub(crate) fn amat(&self, timing: Timing) -> Option<Figure> {
+        let (hit, miss) = (timing.hit_cycles, timing.miss_cycles);
+        let rate = format::half_up(u64::from(self.misses), u64::from(self.accesses), 2)?;
+        let hundredths = u64::from(hit)
+            .checked_mul(100)?
+            .checked_add(rate.checked_mul(u64::from(miss))?)?;
+        let amat = format::half_up(hundredths, 100, 1)?;
+        let value =
+            f64::from(hit) + f64::from(self.misses) * f64::from(miss) / f64::from(self.accesses);
+        Some(Figure {
+            value,
+            text: explain::amat(hit, rate, miss, amat),
+        })
+    }
+
+    /// What the run actually spent per access, `cycles / accesses`, and how
+    /// much of it the write-backs, which AMAT leaves out, account for:
+    /// `writebacks × miss / accesses`. "Measured: 11.0 cycles per access
+    /// (AMAT plus 2.0 for 1 write-back)." Each number is rounded half up to
+    /// one decimal on its own. Between accesses the cycles are exactly the
+    /// hit time per access and the miss penalty per miss and per write-back,
+    /// so the two agree but for rounding; in the middle of an access the
+    /// miss is counted before its penalty is charged. `None` before the
+    /// run's first access.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the Stats region shows the measured cost in timed mode"
+        )
+    )]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "a run's cycle count stays far below 2^52, where an f64 is still exact"
+    )]
+    pub(crate) fn measured(&self, timing: Timing) -> Option<Figure> {
+        let accesses = u64::from(self.accesses);
+        let cycles = self.cycles.get();
+        let measured = format::half_up(cycles, accesses, 1)?;
+        let write_backs = u64::from(self.writebacks).checked_mul(u64::from(timing.miss_cycles))?;
+        let plus = format::half_up(write_backs, accesses, 1)?;
+        Some(Figure {
+            value: cycles as f64 / f64::from(self.accesses),
+            text: explain::measured(measured, plus, self.writebacks),
+        })
     }
 }
 
@@ -150,6 +231,146 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Hit time `hit`, miss penalty `miss`.
+    fn timing(hit: u32, miss: u32) -> Timing {
+        Timing {
+            hit_cycles: hit,
+            miss_cycles: miss,
+        }
+    }
+
+    /// Counters after `accesses` accesses with `misses` misses and
+    /// `writebacks` write-backs, which spent `cycles` cycles.
+    fn run(accesses: u32, misses: u32, writebacks: u32, cycles: u64) -> Counters {
+        Counters {
+            accesses,
+            hits: accesses - misses,
+            misses,
+            writebacks,
+            cycles: Cycle::new_unchecked(cycles),
+            ..Counters::default()
+        }
+    }
+
+    fn text(figure: Option<Figure>) -> Option<String> {
+        figure.map(|figure| figure.text)
+    }
+
+    #[test]
+    fn amat_is_true_as_printed() {
+        let one_twenty = timing(1, 20);
+        let lines = [
+            ((10, 4), "AMAT = 1 + 0.40 \u{d7} 20 = 9.0 cycles"),
+            // The rate is printed to two places, and the result is computed
+            // from the printed rate: 1 + 0.33 × 20 = 7.6, not 7.67.
+            ((3, 1), "AMAT = 1 + 0.33 \u{d7} 20 = 7.6 cycles"),
+            ((3, 2), "AMAT = 1 + 0.67 \u{d7} 20 = 14.4 cycles"),
+            ((1, 0), "AMAT = 1 + 0.00 \u{d7} 20 = 1.0 cycles"),
+            ((5, 5), "AMAT = 1 + 1.00 \u{d7} 20 = 21.0 cycles"),
+            // 1 / 8 = 0.125 rounds half up to 0.13.
+            ((8, 1), "AMAT = 1 + 0.13 \u{d7} 20 = 3.6 cycles"),
+        ];
+        for ((accesses, misses), line) in lines {
+            let counters = run(accesses, misses, 0, 0);
+            assert_eq!(
+                text(counters.amat(one_twenty)).as_deref(),
+                Some(line),
+                "{misses} in {accesses}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_amat_result_rounds_half_up_to_one_place() {
+        // 1 + 0.25 × 3 = 1.75, which rounds up to 1.8.
+        assert_eq!(
+            text(run(4, 1, 0, 0).amat(timing(1, 3))).as_deref(),
+            Some("AMAT = 1 + 0.25 \u{d7} 3 = 1.8 cycles")
+        );
+        // 2 + 0.33 × 7 = 4.31, which rounds down to 4.3.
+        assert_eq!(
+            text(run(3, 1, 0, 0).amat(timing(2, 7))).as_deref(),
+            Some("AMAT = 2 + 0.33 \u{d7} 7 = 4.3 cycles")
+        );
+        // Long costs are grouped like settings.
+        assert_eq!(
+            text(run(2, 1, 0, 0).amat(timing(3, 2_500))).as_deref(),
+            Some("AMAT = 3 + 0.50 \u{d7} 2,500 = 1,253.0 cycles")
+        );
+    }
+
+    #[test]
+    fn the_amat_value_is_exact() {
+        let figure = run(3, 1, 0, 0).amat(timing(1, 20)).unwrap();
+        assert!((figure.value - (1.0 + 20.0 / 3.0)).abs() < 1e-12);
+        let figure = run(10, 4, 0, 0).amat(timing(1, 20)).unwrap();
+        assert!((figure.value - 9.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn the_measured_cost_names_the_write_backs() {
+        // 10 accesses, 4 misses and 1 write-back at 1/20 spend
+        // 10 + 4 × 20 + 20 = 110 cycles: AMAT 9.0 plus 2.0.
+        let counters = run(10, 4, 1, 110);
+        assert_eq!(
+            text(counters.amat(timing(1, 20))).as_deref(),
+            Some("AMAT = 1 + 0.40 \u{d7} 20 = 9.0 cycles")
+        );
+        let measured = counters.measured(timing(1, 20)).unwrap();
+        assert_eq!(
+            measured.text,
+            "Measured: 11.0 cycles per access (AMAT plus 2.0 for 1 write-back)."
+        );
+        assert!((measured.value - 11.0).abs() < 1e-12);
+        assert_eq!(
+            text(run(5, 4, 2, 125).measured(timing(1, 20))).as_deref(),
+            Some("Measured: 25.0 cycles per access (AMAT plus 8.0 for 2 write-backs).")
+        );
+        assert_eq!(
+            text(run(2, 1, 0, 22).measured(timing(1, 20))).as_deref(),
+            Some("Measured: 11.0 cycles per access (AMAT plus 0.0 for 0 write-backs).")
+        );
+    }
+
+    #[test]
+    fn the_measured_numbers_round_half_up_on_their_own() {
+        // 3 accesses, 1 miss and 1 write-back at 1/20 spend 3 + 20 + 20 =
+        // 43 cycles: 14.33 rounds down to 14.3, and 20 / 3 = 6.67 up to 6.7.
+        assert_eq!(
+            text(run(3, 1, 1, 43).measured(timing(1, 20))).as_deref(),
+            Some("Measured: 14.3 cycles per access (AMAT plus 6.7 for 1 write-back).")
+        );
+        // At 1/5: 4 + 3 × 5 + 2 × 5 = 29 cycles in 4 accesses, 7.25, rounds
+        // up to 7.3; 4 + 5 + 5 = 14 leaves 5 / 4 = 1.25, which rounds up to
+        // 1.3.
+        assert_eq!(
+            text(run(4, 3, 2, 29).measured(timing(1, 5))).as_deref(),
+            Some("Measured: 7.3 cycles per access (AMAT plus 2.5 for 2 write-backs).")
+        );
+        assert_eq!(
+            text(run(4, 1, 1, 14).measured(timing(1, 5))).as_deref(),
+            Some("Measured: 3.5 cycles per access (AMAT plus 1.3 for 1 write-back).")
+        );
+        let measured = run(3, 1, 1, 43).measured(timing(1, 20)).unwrap();
+        assert!((measured.value - 43.0 / 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn neither_figure_exists_before_the_first_access() {
+        let counters = Counters::default();
+        assert_eq!(counters.amat(timing(1, 20)), None);
+        assert_eq!(counters.measured(timing(1, 20)), None);
+    }
+
+    #[test]
+    fn a_figure_serializes_its_value_and_text() {
+        let figure = run(10, 4, 0, 0).amat(timing(1, 20)).unwrap();
+        assert_eq!(
+            serde_json::to_value(figure).unwrap(),
+            json!({ "value": 9.0, "text": "AMAT = 1 + 0.40 \u{d7} 20 = 9.0 cycles" })
+        );
     }
 
     #[test]

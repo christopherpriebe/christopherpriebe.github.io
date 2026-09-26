@@ -1,6 +1,7 @@
 //! The wording of the log: every line built from machine state is written
-//! here, so the tool's voice has one source. Error messages are the
-//! exception; each is the `Display` of its error type, next to that type.
+//! here, so the tool's voice has one source. That includes the CPU's status
+//! and the timed Stats lines, AMAT and the measured cost. Error messages are
+//! the exception; each is the `Display` of its error type, next to that type.
 //!
 //! An access's lines keep the design's wording where it has one, as in "Way 1
 //! chosen: least recently used (rank 1).", and the lines it does not draw
@@ -33,6 +34,37 @@ pub(crate) enum WriteNote {
         /// Whether memory's copy of the word now differs from the cache's.
         stale: bool,
     },
+}
+
+/// What a miss's stall waits for in timed mode, which its `Stall` line names.
+/// Each transfer to or from memory costs one miss penalty.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StallFor {
+    /// Memory supplying the new line.
+    Fill {
+        /// The line coming in.
+        line: LineAddr,
+    },
+    /// A dirty victim's line going back to memory, then memory supplying the
+    /// new line: two transfers.
+    WriteBackThenFill {
+        /// The dirty line going out.
+        victim: LineAddr,
+        /// The line coming in.
+        line: LineAddr,
+    },
+    /// A store that missed under write-no-allocate going to memory.
+    WriteAround,
+}
+
+impl StallFor {
+    /// The transfers the stall waits for, each costing one miss penalty.
+    pub(crate) fn transfers(self) -> u32 {
+        match self {
+            StallFor::Fill { .. } | StallFor::WriteAround => 1,
+            StallFor::WriteBackThenFill { .. } => 2,
+        }
+    }
 }
 
 /// What an entry is, as the CPU status names it. The design calls every
@@ -138,6 +170,33 @@ pub(crate) fn victim(geometry: &Geometry, set: SetIndex, choice: VictimChoice) -
         ),
         VictimReason::FirstIn { .. } => format!("Way {way} chosen: filled earliest (FIFO)."),
         VictimReason::Random => format!("Way {way} chosen at random."),
+    }
+}
+
+/// The `Stall` line of timed mode: how long the CPU waits for memory, and
+/// what for. Each transfer costs `miss` cycles, the miss penalty: "The CPU
+/// stalls for 20 cycles while memory supplies line 0x2A0.", or with a dirty
+/// victim "The CPU stalls for 40 cycles: 20 to write line 0x1A0 back, then 20
+/// to fetch line 0x2A0."
+pub(crate) fn stall(geometry: &Geometry, miss: u32, wait: StallFor) -> String {
+    let total = format::cycles(miss.saturating_mul(wait.transfers()));
+    match wait {
+        StallFor::Fill { line } => format!(
+            "The CPU stalls for {total} while memory supplies line {}.",
+            address(geometry, line.get())
+        ),
+        StallFor::WriteBackThenFill { victim, line } => {
+            let each = format::setting(miss);
+            format!(
+                "The CPU stalls for {total}: {each} to write line {} back, then {each} to fetch \
+                 line {}.",
+                address(geometry, victim.get()),
+                address(geometry, line.get())
+            )
+        }
+        StallFor::WriteAround => {
+            format!("The CPU stalls for {total} while the store goes to memory.")
+        }
     }
 }
 
@@ -298,6 +357,44 @@ pub(crate) fn entry_status(noun: EntryNoun, number: u32, step: u32, steps: u32) 
         format::entry_number(number),
         format::data(step),
         format::data(steps)
+    )
+}
+
+/// The CPU status while a miss stalls it, counting down the cycles left:
+/// "Stalled: 40 cycles".
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the CPU status counts a stall down")
+)]
+pub(crate) fn stalled(remaining: u32) -> String {
+    format!("Stalled: {}", format::cycles(remaining))
+}
+
+/// The AMAT line, as the design writes it: "AMAT = 1 + 0.40 × 20 = 9.0
+/// cycles", from the hit time `hit`, the miss rate `rate` in hundredths, the
+/// miss penalty `miss` and the result `amat` in tenths of a cycle, both
+/// already rounded.
+pub(crate) fn amat(hit: u32, rate: u64, miss: u32, amat: u64) -> String {
+    format!(
+        "AMAT = {} + {} \u{d7} {} = {} cycles",
+        format::setting(hit),
+        format::decimal(rate, 2),
+        format::setting(miss),
+        format::decimal(amat, 1)
+    )
+}
+
+/// The measured line under AMAT: the cycles the run spent per access, and
+/// what its write-backs, which AMAT leaves out, added. "Measured: 11.0
+/// cycles per access (AMAT plus 2.0 for 1 write-back)." `measured` and
+/// `plus` are in tenths of a cycle, already rounded.
+pub(crate) fn measured(measured: u64, plus: u64, writebacks: u32) -> String {
+    format!(
+        "Measured: {} cycles per access (AMAT plus {} for {} {}).",
+        format::decimal(measured, 1),
+        format::decimal(plus, 1),
+        format::data(writebacks),
+        format::plural(writebacks, "write-back", "write-backs")
     )
 }
 
@@ -544,6 +641,119 @@ mod tests {
         assert_eq!(
             fill(&two_way, way(1), line(0x2A0)),
             "Fill way 1 with line 0x2A0\u{2013}0x2AF from memory."
+        );
+    }
+
+    #[test]
+    fn a_stall_names_its_length_and_what_it_waits_for() {
+        let two_way = preset(Preset::TwoWayLru);
+        assert_eq!(
+            stall(&two_way, 20, StallFor::Fill { line: line(0x2A0) }),
+            "The CPU stalls for 20 cycles while memory supplies line 0x2A0."
+        );
+        assert_eq!(
+            stall(
+                &two_way,
+                20,
+                StallFor::WriteBackThenFill {
+                    victim: line(0x1A0),
+                    line: line(0x2A0)
+                }
+            ),
+            "The CPU stalls for 40 cycles: 20 to write line 0x1A0 back, then 20 to fetch line \
+             0x2A0."
+        );
+        assert_eq!(
+            stall(&two_way, 20, StallFor::WriteAround),
+            "The CPU stalls for 20 cycles while the store goes to memory."
+        );
+    }
+
+    #[test]
+    fn a_stall_of_one_cycle_is_singular_and_long_ones_are_grouped() {
+        let direct = preset(Preset::DirectMapped8);
+        assert_eq!(
+            stall(&direct, 1, StallFor::Fill { line: line(0x0A0) }),
+            "The CPU stalls for 1 cycle while memory supplies line 0x0A0."
+        );
+        assert_eq!(
+            stall(
+                &direct,
+                1,
+                StallFor::WriteBackThenFill {
+                    victim: line(0x0A0),
+                    line: line(0x1A0)
+                }
+            ),
+            "The CPU stalls for 2 cycles: 1 to write line 0x0A0 back, then 1 to fetch line \
+             0x1A0."
+        );
+        assert_eq!(
+            stall(
+                &direct,
+                1_500,
+                StallFor::WriteBackThenFill {
+                    victim: line(0x0A0),
+                    line: line(0x1A0)
+                }
+            ),
+            "The CPU stalls for 3,000 cycles: 1,500 to write line 0x0A0 back, then 1,500 to \
+             fetch line 0x1A0."
+        );
+        assert_eq!(
+            stall(&direct, 1, StallFor::WriteAround),
+            "The CPU stalls for 1 cycle while the store goes to memory."
+        );
+    }
+
+    #[test]
+    fn a_stall_waits_for_one_transfer_or_two() {
+        let fill = StallFor::Fill { line: line(0x2A0) };
+        let both = StallFor::WriteBackThenFill {
+            victim: line(0x1A0),
+            line: line(0x2A0),
+        };
+        assert_eq!(fill.transfers(), 1);
+        assert_eq!(StallFor::WriteAround.transfers(), 1);
+        assert_eq!(both.transfers(), 2);
+    }
+
+    #[test]
+    fn the_stall_status_counts_the_cycles_left() {
+        assert_eq!(stalled(40), "Stalled: 40 cycles");
+        assert_eq!(stalled(1), "Stalled: 1 cycle");
+        assert_eq!(stalled(2_000), "Stalled: 2,000 cycles");
+    }
+
+    #[test]
+    fn the_amat_line_shows_its_arithmetic() {
+        assert_eq!(
+            amat(1, 40, 20, 90),
+            "AMAT = 1 + 0.40 \u{d7} 20 = 9.0 cycles"
+        );
+        assert_eq!(
+            amat(1, 33, 20, 76),
+            "AMAT = 1 + 0.33 \u{d7} 20 = 7.6 cycles"
+        );
+        assert_eq!(
+            amat(3, 100, 1_500, 15_030),
+            "AMAT = 3 + 1.00 \u{d7} 1,500 = 1,503.0 cycles"
+        );
+    }
+
+    #[test]
+    fn the_measured_line_names_the_write_backs_amat_leaves_out() {
+        assert_eq!(
+            measured(110, 20, 1),
+            "Measured: 11.0 cycles per access (AMAT plus 2.0 for 1 write-back)."
+        );
+        assert_eq!(
+            measured(77, 0, 0),
+            "Measured: 7.7 cycles per access (AMAT plus 0.0 for 0 write-backs)."
+        );
+        assert_eq!(
+            measured(12_345, 10_005, 12_000),
+            "Measured: 1,234.5 cycles per access (AMAT plus 1,000.5 for 12,000 write-backs)."
         );
     }
 
