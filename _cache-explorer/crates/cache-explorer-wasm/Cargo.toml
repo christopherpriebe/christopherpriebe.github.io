@@ -11,6 +11,7 @@ workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+doctest = false    # no doc-tests; their empty summary, `0 passed`, would fail scripts/test-wasm.mjs
 
 [dependencies]
 cache-explorer-core = { path = "../cache-explorer-core", features = ["ts"] }

@@ -8,6 +8,7 @@
   "scripts": {
     "build:wasm": "node ../scripts/build-wasm.mjs",
     "test:glue": "node ../scripts/test-glue.mjs",
+    "test:wasm": "node ../scripts/test-wasm.mjs",
     "test:wasm:node": "wasm-pack test --node ../crates/cache-explorer-wasm"
   },
   "devDependencies": {
