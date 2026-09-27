@@ -949,6 +949,10 @@ fn each_step_s_rules_have_their_errors() {
             "steps[0].showMe: list at least one op, or leave `showMe` out.",
         ),
         (
+            with(SWITCH_CONFIG, "/steps/1/then", json!([])),
+            "steps[1].then: list at least one op, or leave `then` out.",
+        ),
+        (
             with(SWITCH_CONFIG, "/steps/1/options", json!(["2"])),
             "steps[1].options: a prediction needs at least two options; it has 1.",
         ),
@@ -1568,6 +1572,9 @@ fn the_index_lists_the_modules() {
     let mut bad = index.clone();
     bad[1]["id"] = json!("2-x");
     assert!(refused(bad).starts_with("[1].id: an id is two digits"));
+    let mut bad = index.clone();
+    bad[1]["title"] = json!(" ");
+    assert_eq!(refused(bad), "[1].title: the title is empty.");
     let mut bad = index.clone();
     bad[2]["description"] = json!("_stale_");
     assert!(

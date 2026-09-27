@@ -268,6 +268,11 @@ mod tests {
             MAX_PARSE_ERRORS >= 4,
             "tests/isa.rs lists the four errors of one program"
         );
+        assert!(
+            MAX_RUN_STEPS >= 12,
+            "the sample sessions of tests/session.rs and tests/share.rs run their program with \
+             a `Run` of 12"
+        );
         // The parser tests build sources one over a limit that must stay
         // within the others, or another limit's error would come first. Each
         // relation below names the lines a test writes, newline included.
