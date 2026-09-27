@@ -2,8 +2,10 @@
 //! whole log with the undone ops, the mode chosen and the cursor, position 0
 //! included; the document's shape; a newer format refused; each load
 //! failure with what the page shows for it, its message segments, contents,
-//! repair and the steps before it; each size limit one byte or one op over
-//! its constant; the session's limit stopping a pathological link; loading
+//! repair and the actions before it; each size limit one byte or one op over
+//! its constant; a session as long as a link can hold opening from its link,
+//! and a run too long for one offered as a file, or too large for either;
+//! the session's limit stopping a pathological link; loading
 //! in slices giving the session one slice gives, with the loading state's
 //! summary; the share summary and its texts; and a trace file loaded as a
 //! program.
@@ -17,16 +19,16 @@ use cache_explorer_core::limits::{
     SESSION_EVENT_LIMIT,
 };
 use cache_explorer_core::{
-    CacheConfig, Config, ConfigError, ConfigNumberField, EncodingError, LoadError, LoadFailure,
-    LoadProgress, Op, OpError, Preset, ProgramFormat, Session, ShareAt, ShareDoc, ShareLoad,
-    ShareSummary, TextSegment, TooLarge, WordBytes, SCHEMA_VERSION,
+    CacheConfig, Config, ConfigError, ConfigNumberField, EncodingError, LinkTooLong, LoadError,
+    LoadFailure, LoadProgress, Op, OpError, Preset, ProgramFormat, Session, ShareAt, ShareDoc,
+    ShareLoad, ShareSummary, TextSegment, TooLarge, WordBytes, SCHEMA_VERSION,
 };
 use serde_json::{json, Value};
 
 use support::{
-    apply_all, code, config, counted, failure_of, file_failure, grouped, link, link_failure,
-    link_of, load, loaded, long_program, pathological, plain, pos, program, same, session, varied,
-    with_ops,
+    apply_all, as_long_as_a_link, code, config, counted, failure_of, file_failure, grouped, link,
+    link_failure, link_of, load, loaded, long_program, pathological, plain, pos, program, same,
+    session, varied, with_ops,
 };
 
 /// A loop without an exit and without a memory access: one event per
@@ -39,7 +41,9 @@ const ENDLESS: &str = "        add r1, r0, #1\nloop:   bnez r1, loop";
 mod support {
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine as _;
-    use cache_explorer_core::limits::{LOAD_SLICE_EVENTS, MAX_PROGRAM_BYTES, MAX_PROGRAM_LINES};
+    use cache_explorer_core::limits::{
+        LOAD_SLICE_EVENTS, MAX_PROGRAM_BYTES, MAX_PROGRAM_LINES, MAX_SHARE_OPS,
+    };
     use cache_explorer_core::{
         AccessKind, Config, EventPos, LoadError, LoadFailure, LoadProgress, Op, Preset,
         ProgramFormat, Session, ShareLoad, TextSegment, TextStyle, Word,
@@ -68,6 +72,14 @@ mod support {
     /// A session with an empty log on `config()`.
     pub(crate) fn session() -> Session {
         Session::with_config(config()).unwrap()
+    }
+
+    /// A session whose log holds as many ops as a link can: loads by hand
+    /// of one word, a miss and then hits.
+    pub(crate) fn as_long_as_a_link() -> Session {
+        let mut session = session();
+        apply_all(&mut session, (0..MAX_SHARE_OPS).map(|_| load(0x0A4)));
+        session
     }
 
     /// Position `value`, as one read from JSON is.
@@ -359,11 +371,11 @@ fn a_share_string_reopens_the_session_wherever_its_cursor_is() {
     places.extend([0, 1, end - 1, end]);
     for place in places {
         original.seek(pos(place));
-        let link = original.to_share_string();
+        let link = original.to_share_string().unwrap();
         let loaded = Session::from_share_string(&link).unwrap();
         same(&loaded, &original, &format!("at {place}"));
         // The same document gives the same string.
-        assert_eq!(loaded.to_share_string(), link, "at {place}");
+        assert_eq!(loaded.to_share_string(), Ok(link), "at {place}");
     }
 }
 
@@ -377,7 +389,7 @@ fn a_saved_file_reopens_the_session() {
     assert_eq!(loaded.to_json(), json);
     // Pretty JSON, which a share string also holds, compact.
     assert!(json.starts_with("{\n  \"schema_version\": 1,\n  \"config\": {\n"));
-    let doc = ShareDoc::from_share_string(&original.to_share_string()).unwrap();
+    let doc = ShareDoc::from_share_string(&original.to_share_string().unwrap()).unwrap();
     assert_eq!(doc, ShareDoc::from_json(&json).unwrap());
     assert_eq!(doc, original.share_doc());
     assert_eq!(doc.to_json(), json);
@@ -436,7 +448,7 @@ fn the_document_keeps_the_undone_ops_and_position_0() {
     let doc = original.share_doc();
     assert_eq!(doc.ops.len(), 3);
     assert_eq!(doc.at, Some(ShareAt { op: 0, event: 0 }));
-    let loaded = Session::from_share_string(&original.to_share_string()).unwrap();
+    let loaded = Session::from_share_string(&original.to_share_string().unwrap()).unwrap();
     same(&loaded, &original, "position 0");
     assert_eq!(loaded.op_count(), 3);
     let mut redone = loaded.clone();
@@ -446,7 +458,7 @@ fn the_document_keeps_the_undone_ops_and_position_0() {
     let empty = session();
     assert_eq!(empty.share_doc().at, None);
     same(
-        &Session::from_share_string(&empty.to_share_string()).unwrap(),
+        &Session::from_share_string(&empty.to_share_string().unwrap()).unwrap(),
         &empty,
         "an empty log",
     );
@@ -476,7 +488,7 @@ fn the_mode_chosen_is_kept() {
     original.set_advanced(true);
     apply_all(&mut original, [load(0x0A4)]);
     assert!(original.share_doc().config.advanced);
-    let loaded = Session::from_share_string(&original.to_share_string()).unwrap();
+    let loaded = Session::from_share_string(&original.to_share_string().unwrap()).unwrap();
     assert!(loaded.advanced());
     assert!(loaded.state().advanced);
     same(&loaded, &original, "advanced");
@@ -494,16 +506,18 @@ fn the_mode_chosen_is_kept() {
     let mut basics = loaded.clone();
     basics.set_advanced(false);
     assert!(!basics.share_doc().config.advanced);
-    assert!(!Session::from_share_string(&basics.to_share_string())
-        .unwrap()
-        .advanced());
+    assert!(
+        !Session::from_share_string(&basics.to_share_string().unwrap())
+            .unwrap()
+            .advanced()
+    );
 }
 
 #[test]
 fn a_share_string_is_padding_tolerant_base64url() {
     let mut original = varied();
     original.seek(pos(3));
-    let link = original.to_share_string();
+    let link = original.to_share_string().unwrap();
     assert!(link
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_'));
@@ -600,7 +614,7 @@ fn text_that_is_not_a_share_string_fails_to_decode() {
         assert_eq!((failure.repair, failure.prefix), (None, None), "{s}");
     }
     // A link cut short.
-    let whole = varied().to_share_string();
+    let whole = varied().to_share_string().unwrap();
     let cut = whole.get(..whole.len() / 2).unwrap();
     assert!(matches!(
         Session::from_share_string(cut).unwrap_err(),
@@ -701,7 +715,7 @@ fn json_that_is_not_a_document_names_its_line_and_column() {
 #[test]
 fn the_frame_5c_link_offers_its_repair() {
     // The design's 5c: a link whose cache has three ways in eight lines,
-    // with six steps after it.
+    // with six actions after it.
     let bad = Config {
         cache: CacheConfig {
             associativity: 3,
@@ -730,7 +744,7 @@ fn the_frame_5c_link_offers_its_repair() {
     assert_eq!(
         error.to_string(),
         "Associativity 3 is not a power of two. It must be 1, 2, 4 or 8 (fully associative) \
-         for an 8-line cache. The 6 steps after it were not replayed."
+         for an 8-line cache. The 6 actions after it were not replayed."
     );
     assert_eq!(failure.title, "Could not open link");
     assert_eq!(failure.lead, LINK_LEAD);
@@ -740,7 +754,7 @@ fn the_frame_5c_link_offers_its_repair() {
             code("associativity: 3"),
             plain(
                 " is not a power of two. It must be 1, 2, 4 or 8 (fully associative) for an \
-                 8-line cache. The 6 steps after it were not replayed."
+                 8-line cache. The 6 actions after it were not replayed."
             ),
         ]
     );
@@ -759,7 +773,7 @@ fn the_frame_5c_link_offers_its_repair() {
 }
 
 #[test]
-fn a_config_op_that_fails_offers_its_repair_and_the_steps_before_it() {
+fn a_config_op_that_fails_offers_its_repair_and_the_actions_before_it() {
     let wide = Config {
         address_bits: MAX_ADDRESS_BITS + 8,
         ..Preset::TwoWayLru.config()
@@ -792,7 +806,7 @@ fn a_config_op_that_fails_offers_its_repair_and_the_steps_before_it() {
         [
             code(&format!("addressBits: {}", MAX_ADDRESS_BITS + 8)),
             plain(&format!(
-                " must be between {MIN_ADDRESS_BITS} and {MAX_ADDRESS_BITS} bits. The 6 steps \
+                " must be between {MIN_ADDRESS_BITS} and {MAX_ADDRESS_BITS} bits. The 6 actions \
                  after it were not replayed."
             )),
         ]
@@ -805,9 +819,9 @@ fn a_config_op_that_fails_offers_its_repair_and_the_steps_before_it() {
     let repaired = Session::from_share_string(&repair.share).unwrap();
     assert_eq!(repaired.op_count(), 15);
     assert_eq!(repaired.config().address_bits, MAX_ADDRESS_BITS);
-    // "Open the first 8 steps" opens the ops before it, at their end.
+    // "Open the first 8 actions" opens the ops before it, at their end.
     let prefix = failure.prefix.unwrap();
-    assert_eq!(prefix.label, "Open the first 8 steps");
+    assert_eq!(prefix.label, "Open the first 8 actions");
     let before = Session::from_share_string(&prefix.share).unwrap();
     assert_eq!(before.ops(), ops.get(..8).unwrap());
     let mut expected = session();
@@ -816,7 +830,7 @@ fn a_config_op_that_fails_offers_its_repair_and_the_steps_before_it() {
 }
 
 #[test]
-fn an_op_the_machine_refuses_offers_the_steps_before_it() {
+fn an_op_the_machine_refuses_offers_the_actions_before_it() {
     let mut ops: Vec<Op> = [0x0A4, 0x0A8, 0x1A4, 0x0A4, 0x2A4, 0x0B0, 0x0A4, 0x1A4]
         .into_iter()
         .map(load)
@@ -838,14 +852,14 @@ fn an_op_the_machine_refuses_offers_the_steps_before_it() {
     else {
         panic!("{error:?}");
     };
-    let message = "0x0A6 is not aligned to a 4-byte word; use 0x0A4 or 0x0A8. The 6 steps after \
+    let message = "0x0A6 is not aligned to a 4-byte word; use 0x0A4 or 0x0A8. The 6 actions after \
                    it were not replayed.";
     assert_eq!(error.to_string(), message);
     assert_eq!(failure.message, [plain(message)]);
     assert_eq!(failure.repair, None);
     assert_eq!(failure.contents.as_deref(), Some(doc.to_json().as_str()));
     let prefix = failure.prefix.unwrap();
-    assert_eq!(prefix.label, "Open the first 8 steps");
+    assert_eq!(prefix.label, "Open the first 8 actions");
     let prefix = ShareDoc::from_share_string(&prefix.share).unwrap();
     assert_eq!(prefix.ops, doc.ops.get(..8).unwrap());
     assert_eq!(prefix.at, None);
@@ -860,7 +874,7 @@ fn an_op_the_machine_refuses_offers_the_steps_before_it() {
 }
 
 #[test]
-fn the_steps_not_replayed_are_counted_in_words() {
+fn the_actions_not_replayed_are_counted_in_words() {
     let failing = |before: usize, after: usize| {
         let mut ops = vec![json!({"op": "issue", "kind": "read", "addr": 0x0A4}); before];
         ops.push(json!({"op": "step"}));
@@ -878,13 +892,13 @@ fn the_steps_not_replayed_are_counted_in_words() {
     let (failure, error) = failing(1, 1);
     assert_eq!(
         error.to_string(),
-        format!("{no_program} The step after it was not replayed.")
+        format!("{no_program} The action after it was not replayed.")
     );
-    assert_eq!(failure.prefix.unwrap().label, "Open the first step");
+    assert_eq!(failure.prefix.unwrap().label, "Open the first action");
     let (_, error) = failing(2, 12);
     assert_eq!(
         error.to_string(),
-        format!("{no_program} The 12 steps after it were not replayed.")
+        format!("{no_program} The 12 actions after it were not replayed.")
     );
 }
 
@@ -990,7 +1004,7 @@ fn json_one_byte_over_its_limit_is_too_large() {
     assert_eq!(
         error.to_string(),
         format!(
-            "The run is {} bytes of JSON; at most {} bytes can be opened.",
+            "The saved run is {} bytes of JSON; at most {} bytes can be opened.",
             grouped(MAX_SHARE_JSON_BYTES + 1),
             grouped(MAX_SHARE_JSON_BYTES)
         )
@@ -1053,7 +1067,7 @@ fn a_log_one_op_over_its_limit_is_too_large() {
     assert_eq!(
         error.to_string(),
         format!(
-            "The run has {} steps; at most {} can be opened.",
+            "The saved run has {} actions; at most {} can be opened.",
             grouped(MAX_SHARE_OPS + 1),
             grouped(MAX_SHARE_OPS)
         )
@@ -1108,7 +1122,8 @@ fn a_program_one_byte_over_its_limit_is_too_large() {
     assert_eq!(
         error.to_string(),
         format!(
-            "A program in the run is {} bytes; programs of at most {} bytes can be opened.",
+            "A program in the saved run is {} bytes; programs of at most {} bytes can be \
+             opened.",
             grouped(MAX_PROGRAM_BYTES + 1),
             grouped(MAX_PROGRAM_BYTES)
         )
@@ -1134,6 +1149,110 @@ fn a_program_one_byte_over_its_limit_is_too_large() {
     assert_eq!(
         file_failure(&over),
         failure("Could not open file", FILE_LEAD)
+    );
+}
+
+#[test]
+fn a_session_as_long_as_a_link_can_hold_opens_from_its_link() {
+    let original = as_long_as_a_link();
+    let link = original.to_share_string().unwrap();
+    assert!(link.len() <= MAX_SHARE_TEXT_BYTES as usize);
+    same(
+        &Session::from_share_string(&link).unwrap(),
+        &original,
+        "the link",
+    );
+    same(
+        &Session::from_json(&original.to_json()).unwrap(),
+        &original,
+        "the file",
+    );
+    // The session refuses one op more, which no link could open.
+    let mut longer = original.share_doc();
+    longer.ops.push(load(0x0A4));
+    assert_eq!(
+        ShareDoc::from_share_string(&longer.to_share_string()),
+        Err(LoadError::Encoding(EncodingError::TooLarge(
+            TooLarge::Ops {
+                ops: MAX_SHARE_OPS + 1
+            }
+        )))
+    );
+}
+
+#[test]
+fn a_run_too_long_for_a_link_offers_a_file() {
+    // Programs of text deflate cannot shorten much, until the run is more
+    // than a link can hold, though not more than a file can.
+    let mut original = session();
+    let mut seed = 0;
+    let error = loop {
+        match original.to_share_string() {
+            Ok(link) => assert!(link.len() <= MAX_SHARE_TEXT_BYTES as usize),
+            Err(error) => break error,
+        }
+        seed += 1;
+        apply_all(&mut original, [program(&long_program(Some(seed)))]);
+    };
+    // The link it would have written is one no link could open.
+    let unopenable = original.share_doc().to_share_string();
+    let bytes = u32::try_from(unopenable.len()).unwrap();
+    assert!(bytes > MAX_SHARE_TEXT_BYTES);
+    assert_eq!(
+        Session::from_share_string(&unopenable).unwrap_err(),
+        LoadError::Encoding(EncodingError::TooLarge(TooLarge::Text { bytes }))
+    );
+    assert_eq!(error, LinkTooLong::Text { bytes });
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "This run is too long for a link: its link would be {} bytes long, and at most {} \
+             bytes can be opened. Save it as a file instead.",
+            grouped(bytes),
+            grouped(MAX_SHARE_TEXT_BYTES)
+        )
+    );
+    // The file opens.
+    let json = original.to_json();
+    assert!(json.len() <= MAX_SHARE_JSON_BYTES as usize);
+    same(&Session::from_json(&json).unwrap(), &original, "the file");
+}
+
+#[test]
+fn a_run_too_large_for_a_file_has_no_link_either() {
+    // The same long program loaded again and again: a link shortens it
+    // well, but would unpack to more JSON than can be opened, and a file
+    // holds that JSON.
+    let source = long_program(None);
+    let loads = MAX_SHARE_JSON_BYTES as usize / source.len() + 1;
+    let mut original = session();
+    apply_all(&mut original, vec![program(&source); loads]);
+    let json = original.to_json();
+    let bytes = u32::try_from(json.len()).unwrap();
+    assert!(bytes > MAX_SHARE_JSON_BYTES);
+    let error = original.to_share_string().unwrap_err();
+    assert_eq!(error, LinkTooLong::Json { bytes });
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "This run is too large for a link or a file: saved, it would be {} bytes of JSON, and \
+             at most {} bytes can be opened.",
+            grouped(bytes),
+            grouped(MAX_SHARE_JSON_BYTES)
+        )
+    );
+    // The link it would have written is short, and could not be opened.
+    let unopenable = original.share_doc().to_share_string();
+    assert!(unopenable.len() <= MAX_SHARE_TEXT_BYTES as usize);
+    assert_eq!(
+        Session::from_share_string(&unopenable).unwrap_err(),
+        LoadError::Encoding(EncodingError::TooLarge(TooLarge::Json { bytes: None }))
+    );
+    assert_eq!(
+        Session::from_json(&json).unwrap_err(),
+        LoadError::Encoding(EncodingError::TooLarge(TooLarge::Json {
+            bytes: Some(bytes)
+        }))
     );
 }
 
@@ -1172,15 +1291,15 @@ fn the_session_limit_stops_a_pathological_link() {
         text(&failure.message),
         format!(
             "This session has reached its limit of {} steps. Undo to make room, or save it and \
-             start fresh. The {} steps after it were not replayed.",
+             start fresh. The {} actions after it were not replayed.",
             grouped(SESSION_EVENT_LIMIT),
             counted(not_replayed)
         )
     );
     assert_eq!(failure.repair, None);
-    // The steps before it open, and fill the session to its limit.
+    // The actions before it open, and fill the session to its limit.
     let prefix = failure.prefix.clone().unwrap();
-    assert_eq!(prefix.label, format!("Open the first {index} steps"));
+    assert_eq!(prefix.label, format!("Open the first {index} actions"));
     let before = Session::from_share_string(&prefix.share).unwrap();
     assert_eq!(before.op_count(), index);
     let events = u32::try_from(before.events_range(0, u32::MAX).len()).unwrap();
@@ -1211,7 +1330,7 @@ fn a_slice_counts_the_programs_its_ops_parse() {
         );
     }
     assert!(original.state().program.is_some(), "every run keeps it");
-    let link = original.to_share_string();
+    let link = original.to_share_string().unwrap();
     let mut load = ShareLoad::from_share_string(&link);
     let progress = loaded(&mut load, LOAD_SLICE_EVENTS);
     // Each slice parses no more than its events' worth of source, so the
@@ -1239,7 +1358,7 @@ fn the_loading_state_opens_at_the_step_named_once_the_replay_passes_it() {
     original.seek(pos(1 + INSTRUCTION_BUDGET / 2));
     let opening = original.share_summary().opening_step;
     assert!(opening > 0 && opening < original.share_summary().step_count);
-    let link = original.to_share_string();
+    let link = original.to_share_string().unwrap();
     let mut passed = false;
     for max_events in [1, MAX_EVENTS_PER_ENTRY, 100, LOAD_SLICE_EVENTS] {
         let mut load = ShareLoad::from_share_string(&link);
@@ -1343,7 +1462,7 @@ fn a_file_too_large_for_a_link_offers_no_link() {
 fn loading_in_slices_gives_the_session_one_slice_gives() {
     let mut original = varied();
     original.seek(pos(61));
-    let link = original.to_share_string();
+    let link = original.to_share_string().unwrap();
     let whole = Session::from_share_string(&link).unwrap();
     same(&whole, &original, "one slice");
     for max_events in [1, 2, MAX_EVENTS_PER_ENTRY, 100, LOAD_SLICE_EVENTS, u32::MAX] {
@@ -1383,7 +1502,7 @@ fn loading_in_slices_gives_the_session_one_slice_gives() {
 
 #[test]
 fn a_session_is_taken_once_the_load_is_done_and_only_once() {
-    let link = varied().to_share_string();
+    let link = varied().to_share_string().unwrap();
     let mut load = ShareLoad::from_share_string(&link);
     assert_eq!(load.take_session().unwrap_err(), LoadError::Unfinished);
     assert_eq!(
@@ -1432,7 +1551,7 @@ fn the_loading_summary_is_the_design_s_frame_5b() {
     );
     // Misses mark every step of their entry; first steps are tall.
     assert_eq!(summary.ticks, [3, 2, 2, 2, 2, 1, 0, 0, 3, 2, 2, 2, 2, 2]);
-    let mut load = ShareLoad::from_share_string(&original.to_share_string());
+    let mut load = ShareLoad::from_share_string(&original.to_share_string().unwrap());
     let progress = loaded(&mut load, 1);
     let Some(LoadProgress::Done { summary: done }) = progress.last() else {
         panic!("{progress:?}");
@@ -1512,7 +1631,7 @@ fn the_share_summary_counts_the_opening_run() {
         )
     );
     // The loading state agrees once it is done.
-    let mut load = ShareLoad::from_share_string(&session.to_share_string());
+    let mut load = ShareLoad::from_share_string(&session.to_share_string().unwrap());
     let progress = loaded(&mut load, 1);
     assert_eq!(
         progress.last(),
@@ -1544,7 +1663,7 @@ fn a_trace_file_loads_as_a_program_op_on_the_current_session() {
         json!({"op": "program", "source": trace, "format": "trace"})
     );
     same(
-        &Session::from_share_string(&session.to_share_string()).unwrap(),
+        &Session::from_share_string(&session.to_share_string().unwrap()).unwrap(),
         &session,
         "a trace",
     );
@@ -1717,7 +1836,7 @@ fn load_progress_serializes_with_its_status() {
     );
     let mut original = session();
     apply_all(&mut original, [load(0x0A4)]);
-    let mut load = ShareLoad::from_share_string(&original.to_share_string());
+    let mut load = ShareLoad::from_share_string(&original.to_share_string().unwrap());
     let value = serde_json::to_value(load.advance(u32::MAX)).unwrap();
     assert_eq!(
         value,
@@ -1742,7 +1861,7 @@ fn load_progress_serializes_with_its_status() {
     ]);
     let (failure, _) = failure_of(&link(&bad.to_string()));
     let value = serde_json::to_value(&failure).unwrap();
-    assert_eq!(value["prefix"]["label"], "Open the first step");
+    assert_eq!(value["prefix"]["label"], "Open the first action");
     assert!(value.get("repair").is_none());
     assert!(value["contents"].is_string());
     let progress = ShareLoad::from_share_string(&pathological(1)).advance(1);

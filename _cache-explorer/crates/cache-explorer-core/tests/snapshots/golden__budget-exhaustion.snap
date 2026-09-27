@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/golden.rs
-description: "A bnez loop on direct-mapped-8 with no exit, stepped once past its budget: every instruction the budget allows executes, and the next is replaced by an error entry of its own, with the pc left at the branch. The snapshot holds one line per instruction, so it grows and shrinks with INSTRUCTION_BUDGET."
+description: "A bnez loop on direct-mapped-8 with no exit, stepped to an access (Shift+Space) that never comes: every instruction the budget allows executes, and the next is replaced by an error entry of its own, with the pc left at the branch. The snapshot holds one line per instruction, so it grows and shrinks with INSTRUCTION_BUDGET."
 ---
 - | setup | - | - | - | Loaded a program of 2 instructions. Registers and the pc are reset; the cache and memory keep their contents.
 1.1 | complete | - | r1, pc | - | add: r1 ← 1. No memory access.

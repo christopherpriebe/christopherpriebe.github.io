@@ -477,14 +477,14 @@ mod tests {
             .code("associativity: 3")
             .plain("")
             .plain(" is not a power of two.")
-            .plain(" The 6 steps after it were not replayed.")
+            .plain(" The 6 actions after it were not replayed.")
             .code("")
             .into_vec();
         assert_eq!(
             segments,
             [
                 code("associativity: 3"),
-                plain(" is not a power of two. The 6 steps after it were not replayed.")
+                plain(" is not a power of two. The 6 actions after it were not replayed.")
             ]
         );
         let joined = Segments::new()

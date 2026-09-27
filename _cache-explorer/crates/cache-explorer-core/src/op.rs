@@ -14,7 +14,7 @@ use crate::engine::EditRefusal;
 use crate::format;
 use crate::geometry::{highest_word, AccessError};
 use crate::isa::ParseError;
-use crate::limits::{MAX_RUN_STEPS, SESSION_EVENT_LIMIT};
+use crate::limits::{MAX_RUN_STEPS, MAX_SHARE_OPS, SESSION_EVENT_LIMIT};
 use crate::units::{Addr, SetIndex, WayIndex, Word};
 
 /// One item in the session log. The session's state is a fold over these.
@@ -269,6 +269,15 @@ pub enum OpError {
         format::setting(SESSION_EVENT_LIMIT)
     )]
     SessionFull,
+    /// The log up to where the op would be appended already holds
+    /// [`MAX_SHARE_OPS`] ops, as many as a link can hold, so that every log
+    /// a session keeps can be shared.
+    #[error(
+        "This run is as long as a link can hold: {} actions. Undo to make room, or save it and \
+         start fresh.",
+        format::setting(MAX_SHARE_OPS)
+    )]
+    LinkFull,
     /// The edit's plan refuses it; the message is the refusal's title and
     /// text: `Refused. 0x120 has index 2, so it can only live in set 2, …`.
     #[error("{}. {}", .0.title, .0.text)]
@@ -999,7 +1008,7 @@ mod tests {
     }
 
     #[test]
-    fn refusals_of_an_issue_a_run_and_a_full_session_say_why() {
+    fn refusals_of_an_issue_a_run_a_full_session_and_a_full_link_say_why() {
         assert_eq!(
             OpError::MissingValue.to_string(),
             "A store needs a value to write."
@@ -1037,6 +1046,14 @@ mod tests {
                 "This session has reached its limit of {} steps. Undo to make room, or save it \
                  and start fresh.",
                 format::setting(SESSION_EVENT_LIMIT)
+            )
+        );
+        assert_eq!(
+            OpError::LinkFull.to_string(),
+            format!(
+                "This run is as long as a link can hold: {} actions. Undo to make room, or save \
+                 it and start fresh.",
+                format::setting(MAX_SHARE_OPS)
             )
         );
         let config = OpError::from(ConfigError::AddressBits { got: 4 });

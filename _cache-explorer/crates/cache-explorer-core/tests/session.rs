@@ -6,8 +6,9 @@
 //! accepted; a refused op of each kind leaving the log, the undone ops and
 //! the cursor as they were; configuration changes, applied at once as ops
 //! of their own or asked about first, and Reset; switching between Basics
-//! and Advanced; new runs keeping the program; the session's event limit,
-//! which the editors report before planning; every state the cursor
+//! and Advanced; new runs keeping the program; the session's event limit
+//! and the ops a link can hold, which the editors report before planning;
+//! every state the cursor
 //! reaches equal to the fold's, from checkpoints or not; and the gate a
 //! guided module's unanswered prediction sets, which refuses every op,
 //! holds the cursor at or before where the prediction began, and shows in
@@ -16,19 +17,19 @@
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
 use cache_explorer_core::limits::{
-    CHECKPOINT_INTERVAL, INSTRUCTION_BUDGET, MAX_EVENTS_PER_ENTRY, MAX_RUN_STEPS,
+    CHECKPOINT_INTERVAL, INSTRUCTION_BUDGET, MAX_EVENTS_PER_ENTRY, MAX_RUN_STEPS, MAX_SHARE_OPS,
     SESSION_EVENT_LIMIT,
 };
 use cache_explorer_core::{
     AccessKind, Boundary, CacheConfig, Config, ConfigChange, ConfigError, ControlAction,
     EditOutcome, EventKind, MicroEvent, Op, OpError, OpIndex, Preset, ProgramFormat, ProgramSource,
-    Replacement, ReplayError, Session, StepOutcome, WordBytes, WritePolicy,
+    RefusalReason, Replacement, ReplayError, Session, StepOutcome, WordBytes, WritePolicy,
 };
 
 use support::{
-    addr, apply_all, config, drawer, edit, edit_word, editors_refuse_for_room, end_of,
-    gated_at_end, gated_mid_log, grouped, load, log, log_end, pos, program, refused, session,
-    store, table, varied, word,
+    addr, apply_all, as_long_as_a_link, config, drawer, edit, edit_word, editors_refuse_for_room,
+    end_of, gated_at_end, gated_mid_log, grouped, load, log, log_end, pos, program, refused,
+    session, store, table, varied, word,
 };
 
 /// An `add` then a load: two entries, the second an access.
@@ -54,6 +55,7 @@ const WALK: &str = concat!(
 /// failed `unwrap` is a failed test, as in the tests themselves.
 #[cfg(test)]
 mod support {
+    use cache_explorer_core::limits::MAX_SHARE_OPS;
     use cache_explorer_core::{
         AccessKind, Addr, Boundary, Config, EditOutcome, EventPos, MicroEvent, Module, ModuleRun,
         Op, OpError, Preset, ProgramFormat, ProgramSource, RefusalReason, Session, Tone, WayForm,
@@ -72,6 +74,16 @@ mod support {
     /// A session with an empty log on `config()`.
     pub(crate) fn session() -> Session {
         Session::with_config(config()).unwrap()
+    }
+
+    /// A session whose log holds as many ops as a link can: loads by hand
+    /// of one word, a miss and then hits.
+    pub(crate) fn as_long_as_a_link() -> Session {
+        let mut session = session();
+        for _ in 0..MAX_SHARE_OPS {
+            session.apply(load(0x0A4)).unwrap();
+        }
+        session
     }
 
     /// `value` as an address, unchecked, as one read from JSON is.
@@ -122,10 +134,10 @@ mod support {
     }
 
     /// Checks that the editors refuse every edit on `session` for want of
-    /// room in its log, saying `message` and offering nothing: the plan of
-    /// [`edit_word`], and the drafts of that word and of way 0 of set 0 made
-    /// valid.
-    pub(crate) fn editors_refuse_for_room(session: &Session, message: &str) {
+    /// room in its log, for `reason`, saying `message` and offering nothing:
+    /// the plan of [`edit_word`], and the drafts of that word and of way 0
+    /// of set 0 made valid.
+    pub(crate) fn editors_refuse_for_room(session: &Session, reason: RefusalReason, message: &str) {
         let Op::Edit { target, patch } = edit_word() else {
             panic!("an edit op");
         };
@@ -153,12 +165,7 @@ mod support {
                     refusal.title.as_str(),
                     refusal.text.as_str()
                 ),
-                (
-                    RefusalReason::SessionFull,
-                    Tone::Refused,
-                    "Refused",
-                    message
-                )
+                (reason, Tone::Refused, "Refused", message)
             );
             assert_eq!(refusal.suggestion, None);
         }
@@ -833,7 +840,7 @@ fn a_change_on_an_empty_run_at_the_end_of_the_log_is_appended_at_once() {
     let doc = session.share_doc();
     assert_eq!(doc.config, config());
     assert_eq!(doc.ops, expected);
-    let reopened = Session::from_share_string(&session.to_share_string()).unwrap();
+    let reopened = Session::from_share_string(&session.to_share_string().unwrap()).unwrap();
     assert_eq!(reopened.ops(), expected);
     assert_eq!(reopened.position(), session.position());
     let mut runs = Vec::new();
@@ -1346,7 +1353,7 @@ fn a_full_session_refuses_every_op_until_undo_makes_room() {
     );
     // So do the editors, before any rule of their own, rather than plan an
     // edit that would then be refused.
-    editors_refuse_for_room(&session, &message);
+    editors_refuse_for_room(&session, RefusalReason::SessionFull, &message);
     assert_eq!(
         session.step_event(Some(&drawer("add r1, r0, #1"))),
         StepOutcome::Idle {
@@ -1366,7 +1373,7 @@ fn a_full_session_refuses_every_op_until_undo_makes_room() {
     assert_eq!(session.position().pos, pos(full - 1));
     // The editors say so there too, not that the op should be finished
     // first, which would not make room.
-    editors_refuse_for_room(&session, &message);
+    editors_refuse_for_room(&session, RefusalReason::SessionFull, &message);
     session.seek(pos(full));
     // The fold refuses the same op at the same place.
     let initial = session.initial().clone();
@@ -1393,6 +1400,77 @@ fn a_full_session_refuses_every_op_until_undo_makes_room() {
         EditOutcome::Plan(_)
     ));
     session.apply(load(0x0A4)).unwrap();
+    assert!(!session.redo());
+}
+
+#[test]
+fn a_log_as_long_as_a_link_can_hold_refuses_every_op_until_undo_makes_room() {
+    let mut session = as_long_as_a_link();
+    assert_eq!(session.op_count(), MAX_SHARE_OPS);
+    // The events leave room for more, so it is the link's limit that refuses.
+    let end = session.position().pos.get();
+    assert!(end + MAX_EVENTS_PER_ENTRY <= SESSION_EVENT_LIMIT);
+    // Every op is refused, Reset's `Config` op included, and Space and
+    // Shift+Space say why.
+    for op in [
+        load(0x0A4),
+        program(ENDLESS),
+        Op::Config { config: config() },
+        Op::Run { n: 1 },
+        edit_word(),
+    ] {
+        refused(&mut session, &op, &OpError::LinkFull);
+    }
+    let message = format!(
+        "This run is as long as a link can hold: {} actions. Undo to make room, or save it and \
+         start fresh.",
+        grouped(MAX_SHARE_OPS)
+    );
+    assert_eq!(OpError::LinkFull.to_string(), message);
+    // So do the editors, before any rule of their own.
+    editors_refuse_for_room(&session, RefusalReason::LinkFull, &message);
+    assert_eq!(
+        session.step_event(Some(&drawer("add r1, r0, #1"))),
+        StepOutcome::Idle {
+            message: message.clone()
+        }
+    );
+    assert_eq!(
+        session.step_access(None),
+        StepOutcome::Idle {
+            message: message.clone()
+        }
+    );
+    // Inside the last op, a new op would go at its end, after as many ops
+    // as a link can hold; the editors say so there too, not that the op
+    // should be finished first, which would not make room.
+    session.seek(pos(end - 1));
+    refused(&mut session, &load(0x0A4), &OpError::LinkFull);
+    editors_refuse_for_room(&session, RefusalReason::LinkFull, &message);
+    session.seek(pos(end));
+    // The fold refuses the same op at the same place.
+    let initial = session.initial().clone();
+    let mut ops = session.ops().to_vec();
+    assert!(Session::replay(&initial, &ops).is_ok());
+    ops.push(load(0x0A4));
+    let error = Session::replay(&initial, &ops).unwrap_err();
+    let ReplayError::Op {
+        index,
+        error: refusal,
+    } = &error
+    else {
+        panic!("the op is refused: {error:?}");
+    };
+    assert_eq!((index.get(), refusal), (MAX_SHARE_OPS, &OpError::LinkFull));
+    // Undo makes room: an edit plans there, and an op applied there drops
+    // what came after, so the log stays as long as a link can hold.
+    assert!(session.undo());
+    assert!(matches!(
+        session.draft_memory_edit(addr(0x0A4), "1").outcome,
+        EditOutcome::Plan(_)
+    ));
+    session.apply(load(0x0A4)).unwrap();
+    assert_eq!(session.op_count(), MAX_SHARE_OPS);
     assert!(!session.redo());
 }
 

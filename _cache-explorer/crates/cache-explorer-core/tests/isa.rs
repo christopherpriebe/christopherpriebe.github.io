@@ -880,7 +880,10 @@ fn an_address_held_in_a_register_faults_when_it_does_not_fit() {
 fn the_instruction_after_the_budget_is_replaced_by_an_error() {
     let source = "        add r1, r0, #1\nloop:   bnez r1, loop";
     let budget = count(INSTRUCTION_BUDGET);
-    let events = run(&config(), &load_and_step(source, budget + 1)).unwrap();
+    // Stepped to an access that never comes, in one op: stepped one op an
+    // instruction, the log would hold more ops than a link can first.
+    let to_the_end = [program(source), Issue::StepAccess];
+    let events = run(&config(), &to_the_end).unwrap();
     let (last, executed) = events.split_last().unwrap();
     assert_eq!(
         executed.len(),
@@ -902,7 +905,10 @@ fn the_instruction_after_the_budget_is_replaced_by_an_error() {
         )
     );
     assert_eq!(
-        run(&config(), &load_and_step(source, budget + 2)),
+        run(
+            &config(),
+            &[to_the_end.to_vec(), vec![Issue::Step]].concat()
+        ),
         Err(FixtureError::Op(OpError::Stopped { line: 2 }))
     );
 }
@@ -918,10 +924,20 @@ fn a_program_that_ends_on_the_last_instruction_of_its_budget_finishes() {
     };
     let source = format!("add r1, r0, #{n}\nloop: add r1, r1, #-1\nbnez r1, loop{pad}");
     let budget = count(INSTRUCTION_BUDGET);
-    let events = run(&config(), &load_and_step(&source, budget)).unwrap();
+    // In one op, as the loop makes no access.
+    let to_the_end = [program(&source), Issue::StepAccess];
+    let events = run(&config(), &to_the_end).unwrap();
+    assert_eq!(
+        events.len(),
+        1 + budget,
+        "a setup and one event per instruction"
+    );
     assert!(events.iter().all(|event| event.kind != EventKind::Error));
     assert_eq!(
-        run(&config(), &load_and_step(&source, budget + 1)),
+        run(
+            &config(),
+            &[to_the_end.to_vec(), vec![Issue::Step]].concat()
+        ),
         Err(FixtureError::Op(OpError::Finished))
     );
 }
@@ -964,12 +980,14 @@ fn a_load_issued_by_hand_beside_a_stopped_program_still_says_its_r1_changed() {
     let load = Issue::Load {
         addr: geometry.addr(0x0A4).unwrap(),
     };
-    let budget = count(INSTRUCTION_BUDGET);
     // A program that faulted, and one that used its budget, are loaded and
     // have not finished: the load writes the r1 they show.
     for stopped in [
         load_and_step("add r2, r0, #0xA6\nld r1, [r2]", 2),
-        load_and_step("add r1, r0, #1\nloop: bnez r1, loop", budget + 1),
+        vec![
+            program("add r1, r0, #1\nloop: bnez r1, loop"),
+            Issue::StepAccess,
+        ],
     ] {
         let events = run(&config(), &[stopped, vec![load.clone()]].concat()).unwrap();
         assert!(events.iter().any(|event| event.kind == EventKind::Error));

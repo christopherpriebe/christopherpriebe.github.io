@@ -79,8 +79,8 @@ pub use session::{
     ReplayError, Session, StepOutcome, Tense, Timeline,
 };
 pub use share::{
-    EncodingError, LoadError, LoadFailure, LoadOption, LoadProgress, ShareAt, ShareDoc, ShareLoad,
-    ShareSummary, TooLarge, SCHEMA_VERSION,
+    EncodingError, LinkTooLong, LoadError, LoadFailure, LoadOption, LoadProgress, ShareAt,
+    ShareDoc, ShareLoad, ShareSummary, TooLarge, SCHEMA_VERSION,
 };
 pub use snapshot::{
     BusView, CacheView, ControlAction, Controls, CpuStatus, CpuView, HitMarker, Labels,

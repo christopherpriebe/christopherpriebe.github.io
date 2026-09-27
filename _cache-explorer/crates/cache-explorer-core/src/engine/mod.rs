@@ -16,7 +16,9 @@
 //! entry rather than per event: an op is refused unless the log before it
 //! leaves room for one more entry, and an op that executes several
 //! instructions stops with an `Error` event at the first entry boundary
-//! without that room.
+//! without that room. The log also holds at most [`MAX_SHARE_OPS`] ops, as
+//! many as a link can hold, so an op is refused once the log before it has
+//! that many.
 
 mod access;
 mod edit;
@@ -39,7 +41,7 @@ use crate::explain;
 use crate::format;
 use crate::geometry::{AccessError, Geometry};
 use crate::isa::{ParseFailure, Program};
-use crate::limits::{MAX_EVENTS_PER_ENTRY, MAX_RUN_STEPS, SESSION_EVENT_LIMIT};
+use crate::limits::{MAX_EVENTS_PER_ENTRY, MAX_RUN_STEPS, MAX_SHARE_OPS, SESSION_EVENT_LIMIT};
 use crate::machine::{InvariantViolation, Machine};
 use crate::op::{AccessKind, Op, OpError};
 use crate::units::{Addr, OpIndex, Register, SetIndex, WayIndex, Word};
@@ -294,6 +296,12 @@ pub(crate) fn has_room(events: u64) -> bool {
     events.saturating_add(u64::from(MAX_EVENTS_PER_ENTRY)) <= u64::from(SESSION_EVENT_LIMIT)
 }
 
+/// Whether a log of `ops` ops leaves room for one more under
+/// [`MAX_SHARE_OPS`], so that a link can still hold the log with it.
+pub(crate) fn has_op_room(ops: u32) -> bool {
+    ops < MAX_SHARE_OPS
+}
+
 /// An op checked against the machine it applies to, with what execution
 /// needs from the check.
 enum Checked {
@@ -312,19 +320,20 @@ enum Checked {
 }
 
 /// Applies `op` to `machine`, handing its events to `out`: checks the op
-/// against the machine and against the session's limit, which changes
+/// against the machine and against the session's limits, which changes
 /// nothing, then executes it, which cannot fail. Whatever goes wrong while
 /// executing becomes an `Error` event.
 ///
 /// # Errors
 ///
 /// The [`OpError`] refusing the op, with the machine unchanged and no event
-/// emitted: no room left in the log for one more entry, an invalid
-/// configuration, an issued access with a bad address or value, a program
-/// that does not parse, a `Run` of no instructions or of too many, nothing
-/// to execute, or an edit its plan refuses.
+/// emitted: no room left in the log for one more entry, or for one more op
+/// a link could hold, an invalid configuration, an issued access with a bad
+/// address or value, a program that does not parse, a `Run` of no
+/// instructions or of too many, nothing to execute, or an edit its plan
+/// refuses.
 pub(crate) fn apply(machine: &mut Machine, op: &Op, out: &mut Emitter<'_>) -> Result<(), OpError> {
-    let checked = check(machine, op, out.next_id())?;
+    let checked = check(machine, op, out.op, out.next_id())?;
     match checked {
         Checked::NewRun(start) => new_run(machine, *start, out),
         Checked::Access(request) => {
@@ -372,10 +381,15 @@ pub(crate) fn resume(
     Ok(())
 }
 
-/// Checks `op` against `machine`, in a log of `events` events so far.
-fn check(machine: &Machine, op: &Op, events: u64) -> Result<Checked, OpError> {
+/// Checks `op` against `machine`, as op `index` of a log of `events`
+/// events so far: first whether the log has room for it, events then ops,
+/// then the op's own rules.
+fn check(machine: &Machine, op: &Op, index: OpIndex, events: u64) -> Result<Checked, OpError> {
     if !has_room(events) {
         return Err(OpError::SessionFull);
+    }
+    if !has_op_room(index.get()) {
+        return Err(OpError::LinkFull);
     }
     match op {
         Op::Config { config } => Machine::start(config.clone())

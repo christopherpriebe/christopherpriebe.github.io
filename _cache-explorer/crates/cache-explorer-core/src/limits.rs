@@ -108,7 +108,9 @@ pub const MAX_SHARE_TEXT_BYTES: u32 = 64 * 1024;
 pub const MAX_SHARE_JSON_BYTES: u32 = 1024 * 1024;
 
 /// The most ops one share document may hold, so reading and checking a link
-/// or a file is bounded before any of it replays. Tunable.
+/// or a file is bounded before any of it replays; and the most ops a
+/// session's log may hold, so every session's log fits a link. Tunable,
+/// within the relations tested below.
 pub const MAX_SHARE_OPS: u32 = 10_000;
 
 /// The access outcomes the hit and miss sparkline shows. Tunable; the design
@@ -173,6 +175,23 @@ mod tests {
     #[test]
     fn an_empty_session_has_room_for_an_entry() {
         assert!(MAX_EVENTS_PER_ENTRY < SESSION_EVENT_LIMIT);
+    }
+
+    #[test]
+    fn a_log_of_short_ops_reaches_the_link_limit_before_the_event_limit() {
+        // Every op yields at least one event, so the event limit alone would
+        // let a log hold SESSION_EVENT_LIMIT ops, more than a link can hold.
+        // The session refuses an op past MAX_SHARE_OPS too, so every log
+        // fits a link. At one event an op, a log that long still has room
+        // for an entry, so it is the link's limit that refuses the next op;
+        // a log of longer ops reaches the event limit first.
+        assert!(
+            u64::from(MAX_SHARE_OPS) + u64::from(MAX_EVENTS_PER_ENTRY)
+                <= u64::from(SESSION_EVENT_LIMIT)
+        );
+        // An empty session takes Space's first press: the drawer's program
+        // loaded, then a step, two ops.
+        assert!(MAX_SHARE_OPS >= 2);
     }
 
     #[test]
@@ -306,6 +325,26 @@ mod tests {
         assert!(
             u64::from(MAX_SHARE_OPS / 2) * 120 <= u64::from(MAX_SHARE_JSON_BYTES),
             "tests/share.rs writes MAX_SHARE_OPS / 2 pairs of ops in under 120 bytes each"
+        );
+        // tests/session.rs and tests/share.rs fill a log with MAX_SHARE_OPS
+        // loads by hand of one word: a miss of five events, then hits of
+        // three. The log must still have room for an entry, so that the
+        // next op is refused for the link's limit, and a link must open it.
+        assert!(
+            u64::from(MAX_SHARE_OPS) * 5 + u64::from(MAX_EVENTS_PER_ENTRY)
+                <= u64::from(SESSION_EVENT_LIMIT),
+            "tests/session.rs and tests/share.rs fill a log with MAX_SHARE_OPS loads by hand, \
+             of at most five events each, with room left for an entry"
+        );
+        assert!(
+            u64::from(MAX_SHARE_OPS) * 64 <= u64::from(MAX_SHARE_JSON_BYTES),
+            "tests/share.rs opens a link of MAX_SHARE_OPS loads by hand, in under 64 bytes of \
+             JSON each"
+        );
+        assert!(
+            MAX_SHARE_JSON_BYTES / (MAX_PROGRAM_BYTES / 2) < MAX_SHARE_OPS,
+            "tests/share.rs loads a program of at least half MAX_PROGRAM_BYTES until the run is \
+             more JSON than a file may hold"
         );
         assert!(
             u64::from(MAX_LABEL_CHARS) * 2 + 11 <= u64::from(MAX_PROGRAM_BYTES),

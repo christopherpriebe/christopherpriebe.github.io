@@ -9,13 +9,14 @@
 //!
 //! Each fixture is a configuration and what a student could do on it, in
 //! order: loads and stores issued by hand, program and trace loads, single
-//! steps of the loaded program, and edits. Together they cover the ten access
-//! cases, the design's flows A and B, the dirty eviction of frame 3b, untimed
-//! and timed and as a program, every kind of stall, the widths that change
-//! how numbers are written, programs: loops, branches, `r0`, a store that
-//! truncates a register, a fault, the end of the instruction budget, a trace,
-//! and a load issued by hand beside a program; and each rule that applies an
-//! edit, of a way or of a memory word.
+//! steps of the loaded program and steps to its next access, and edits.
+//! Together they cover the ten access cases, the design's flows A and B, the
+//! dirty eviction of frame 3b, untimed and timed and as a program, every
+//! kind of stall, the widths that change how numbers are written, programs:
+//! loops, branches, `r0`, a store that truncates a register, a fault, the
+//! end of the instruction budget, a trace, and a load issued by hand beside
+//! a program; and each rule that applies an edit, of a way or of a memory
+//! word.
 
 use serde::Serialize;
 use thiserror::Error;
@@ -26,7 +27,6 @@ use crate::config::{
 };
 use crate::event::{ChangeRef, MicroEvent};
 use crate::geometry::AccessError;
-use crate::limits::INSTRUCTION_BUDGET;
 use crate::op::{self, AccessKind, EditPatch, EditTarget, Op, OpError, ProgramFormat, WayPatch};
 use crate::session::Session;
 use crate::units::{Addr, SetIndex, WayIndex, Word};
@@ -46,8 +46,9 @@ pub struct Fixture {
 
 /// One op a student could apply by hand: a load or store issued by hand, a
 /// program or trace loaded, one instruction of the loaded program executed,
-/// as Space executes it at the end of the log, or an edit. A hand-issued load
-/// writes `r1`.
+/// as Space executes it at the end of the log, its instructions up to the
+/// next access, as Shift+Space executes them there, or an edit. A
+/// hand-issued load writes `r1`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Issue {
     /// A load of the word at `addr`.
@@ -74,6 +75,10 @@ pub enum Issue {
     /// The loaded program's next instruction executed. There must be one,
     /// or the fixture is refused.
     Step,
+    /// The loaded program's instructions executed until one memory access
+    /// has completed, or the program finishes or stops. There must be an
+    /// instruction to execute, or the fixture is refused.
+    StepAccess,
     /// A way or a memory word edited. The edit's plan must accept it, or the
     /// fixture is refused.
     Edit {
@@ -173,6 +178,7 @@ impl Issue {
                 format: *format,
             },
             Issue::Step => Op::Step,
+            Issue::StepAccess => Op::StepAccess,
             Issue::Edit { target, patch } => Op::Edit {
                 target: *target,
                 patch: patch.clone(),
@@ -655,21 +661,16 @@ fn programs() -> Vec<Fixture> {
         },
         Fixture {
             name: "budget-exhaustion",
-            description: "A bnez loop on direct-mapped-8 with no exit, stepped once past its \
-                          budget: every instruction the budget allows executes, and the next \
-                          is replaced by an error entry of its own, with the pc left at the \
-                          branch. The snapshot holds one line per instruction, so it grows \
-                          and shrinks with INSTRUCTION_BUDGET.",
+            description: "A bnez loop on direct-mapped-8 with no exit, stepped to an access \
+                          (Shift+Space) that never comes: every instruction the budget allows \
+                          executes, and the next is replaced by an error entry of its own, \
+                          with the pc left at the branch. The snapshot holds one line per \
+                          instruction, so it grows and shrinks with INSTRUCTION_BUDGET.",
             config: Preset::DirectMapped8.config(),
-            issues: [
-                vec![program(ENDLESS_LOOP)],
-                steps(
-                    usize::try_from(INSTRUCTION_BUDGET)
-                        .unwrap_or(usize::MAX)
-                        .saturating_add(1),
-                ),
-            ]
-            .concat(),
+            // One op for the whole budget: stepped by Space, one op an
+            // instruction, the log would hold more ops than a link can before
+            // the budget ran out.
+            issues: vec![program(ENDLESS_LOOP), Issue::StepAccess],
         },
         Fixture {
             name: "store-truncation",

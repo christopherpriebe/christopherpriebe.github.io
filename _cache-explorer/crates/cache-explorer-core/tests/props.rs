@@ -1444,10 +1444,10 @@ mod support {
                 let before = self.before();
                 let result = self.session.apply(Op::Edit { target, patch });
                 if self.checks.edits {
-                    let expected = if refusal.reason == RefusalReason::SessionFull {
-                        OpError::SessionFull
-                    } else {
-                        OpError::Edit(Box::new(refusal.clone()))
+                    let expected = match refusal.reason {
+                        RefusalReason::SessionFull => OpError::SessionFull,
+                        RefusalReason::LinkFull => OpError::LinkFull,
+                        _ => OpError::Edit(Box::new(refusal.clone())),
                     };
                     prop_assert_eq!(result.as_ref().map(drop), Err(&expected));
                 }
@@ -2347,12 +2347,12 @@ fn share_strings_and_files_give_the_session_back() {
                 session.seek(number(pos.into()));
             }
             let doc = session.share_doc();
-            prop_assert_eq!(session.to_share_string(), doc.to_share_string());
+            prop_assert_eq!(session.to_share_string(), Ok(doc.to_share_string()));
             let link = doc.to_share_string();
             prop_assert_eq!(ShareDoc::from_share_string(&link), Ok(doc.clone()));
             prop_assert_eq!(ShareDoc::from_json(&doc.to_json()), Ok(doc.clone()));
             for loaded in [
-                Session::from_share_string(&session.to_share_string()),
+                Session::from_share_string(&session.to_share_string().unwrap()),
                 Session::from_json(&session.to_json()),
             ] {
                 let loaded = loaded.unwrap();
@@ -2796,7 +2796,7 @@ fn seeks_across_checkpoints_reach_the_fold() {
         let at = long.picks[0] % (end + 1);
         session.seek(number(at.into()));
         let opened = [
-            Session::from_share_string(&session.to_share_string()).unwrap(),
+            Session::from_share_string(&session.to_share_string().unwrap()).unwrap(),
             load_in_slices(&session.to_json(), long.slice)?,
         ];
         let mut fold = Fold::of(&opened[0]);

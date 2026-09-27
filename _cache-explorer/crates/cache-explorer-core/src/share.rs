@@ -6,7 +6,10 @@
 //! included; and where the cursor was, relative to an op, so that a change
 //! of wording, or of how many events another op yields, cannot move it. A
 //! saved file is the document as pretty JSON. A share string, the text after
-//! `#s=`, is the same JSON, compact, deflated and in base64url.
+//! `#s=`, is the same JSON, compact, deflated and in base64url. A session
+//! writes one only when a link can open it: a longer run is a
+//! [`LinkTooLong`], whose message offers a saved file instead when a file
+//! can hold the run.
 //!
 //! Opening a link or a file bounds the text first, then decodes it, checks
 //! the document's format version and sizes, and validates the first run's
@@ -16,7 +19,8 @@
 //! What cannot be opened is a [`LoadError`], and for the page a
 //! [`LoadFailure`]: the message with the offending field in mono, the
 //! document's contents, and the ways forward there are, a repaired
-//! configuration or the steps before the op that failed.
+//! configuration or the actions before the op that failed. A link or a file
+//! calls its ops actions, since a step is one micro-event.
 
 use base64::engine::general_purpose::{URL_SAFE_NO_PAD, URL_SAFE_NO_PAD_INDIFFERENT};
 use base64::Engine as _;
@@ -121,7 +125,7 @@ pub enum TooLarge {
     },
     /// The log has more than [`MAX_SHARE_OPS`] ops.
     #[error(
-        "The run has {} steps; at most {} can be opened.",
+        "The saved run has {} actions; at most {} can be opened.",
         format::setting(*.ops),
         format::setting(MAX_SHARE_OPS)
     )]
@@ -131,7 +135,7 @@ pub enum TooLarge {
     },
     /// A `Program` op's source is longer than [`MAX_PROGRAM_BYTES`].
     #[error(
-        "A program in the run is {} bytes; programs of at most {} bytes can be opened.",
+        "A program in the saved run is {} bytes; programs of at most {} bytes can be opened.",
         format::setting(*.bytes),
         format::setting(MAX_PROGRAM_BYTES)
     )]
@@ -139,6 +143,39 @@ pub enum TooLarge {
         /// The op, from 0.
         op: u32,
         /// The source's length, in bytes.
+        bytes: u32,
+    },
+}
+
+/// Why a session's run cannot be written as a link: a link that long could
+/// not be opened. `Display` is what Share says instead of copying a link,
+/// and offers a saved file when a file can hold the run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
+pub enum LinkTooLong {
+    /// The share string would be longer than [`MAX_SHARE_TEXT_BYTES`]; a
+    /// saved file, which may hold up to [`MAX_SHARE_JSON_BYTES`], holds the
+    /// run.
+    #[error(
+        "This run is too long for a link: its link would be {} bytes long, and at most {} bytes \
+         can be opened. Save it as a file instead.",
+        format::setting(*.bytes),
+        format::setting(MAX_SHARE_TEXT_BYTES)
+    )]
+    Text {
+        /// The share string's length, in bytes.
+        bytes: u32,
+    },
+    /// The run is more JSON than [`MAX_SHARE_JSON_BYTES`], as a saved file
+    /// would hold it, so neither a link, which unpacks to no more than that,
+    /// nor a file could be opened.
+    #[error(
+        "This run is too large for a link or a file: saved, it would be {} bytes of JSON, and at \
+         most {} bytes can be opened.",
+        format::setting(*.bytes),
+        format::setting(MAX_SHARE_JSON_BYTES)
+    )]
+    Json {
+        /// The saved file's size, in bytes.
         bytes: u32,
     },
 }
@@ -213,9 +250,9 @@ pub struct LoadFailure {
     /// "This link doesn't describe a cache the Interactive Cache Explorer
     /// can build."
     pub lead: String,
-    /// Why, with the offending field in mono, and how many steps were not
+    /// Why, with the offending field in mono, and how many actions were not
     /// replayed: `associativity: 3` then "is not a power of two. … The 6
-    /// steps after it were not replayed."
+    /// actions after it were not replayed."
     pub message: Vec<TextSegment>,
     /// The document as pretty JSON, for "Show link contents"; the text as
     /// it came when it is not JSON; absent when it could not be decoded.
@@ -227,7 +264,7 @@ pub struct LoadFailure {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repair: Option<LoadOption>,
     /// The ops before the one that failed, opening at their end: "Open the
-    /// first 8 steps"; absent when a link cannot hold them.
+    /// first 8 actions"; absent when a link cannot hold them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prefix: Option<LoadOption>,
 }
@@ -395,7 +432,9 @@ struct Unread {
 impl ShareDoc {
     /// The document as a share string: its compact JSON, deflated at level 9
     /// and written in base64url without padding. The same document always
-    /// gives the same string.
+    /// gives the same string. Whether a link can open it is not checked
+    /// here: a document read from a file may be too large for one, and
+    /// [`Session::to_share_string`] checks a session's.
     pub fn to_share_string(&self) -> String {
         encode(&to_json(self))
     }
@@ -435,7 +474,7 @@ impl LoadError {
     /// The message as segments, with what it quotes in mono: the offending
     /// field of a configuration and its value, as in `associativity: 3`, and
     /// the names serde and the op messages quote between backticks. Then, for
-    /// a configuration or an op that failed, how many steps were not
+    /// a configuration or an op that failed, how many actions were not
     /// replayed.
     pub(crate) fn segments(&self) -> Vec<TextSegment> {
         match self {
@@ -837,11 +876,30 @@ impl Session {
     }
 
     /// The session as a share string, as [`ShareDoc::to_share_string`]
-    /// writes its document. The ops' JSON is kept as they are appended, so
-    /// after a cursor move only the configuration and the cursor are
+    /// writes its document, when a link can open it: its JSON within
+    /// [`MAX_SHARE_JSON_BYTES`] and the string within
+    /// [`MAX_SHARE_TEXT_BYTES`]. The ops' JSON is kept as they are appended,
+    /// so after a cursor move only the configuration and the cursor are
     /// serialized again.
-    pub fn to_share_string(&self) -> String {
-        encode(&self.share_json())
+    ///
+    /// # Errors
+    ///
+    /// [`LinkTooLong::Text`] when the string is too long for a link but a
+    /// saved file can hold the run, and [`LinkTooLong::Json`] when a file
+    /// cannot either.
+    pub fn to_share_string(&self) -> Result<String, LinkTooLong> {
+        let too_large = match link(&self.share_json()) {
+            Ok(share) => return Ok(share),
+            Err(too_large) => too_large,
+        };
+        // A saved file holds the document as pretty JSON, a little larger.
+        let file = self.to_json().len();
+        match too_large {
+            TooLarge::Text { bytes } if !exceeds(file, MAX_SHARE_JSON_BYTES) => {
+                Err(LinkTooLong::Text { bytes })
+            }
+            _ => Err(LinkTooLong::Json { bytes: count(file) }),
+        }
     }
 
     /// The session as a saved file holds it: its document as pretty JSON.
@@ -930,6 +988,29 @@ fn to_json(value: &impl Serialize) -> String {
 /// `json` as a share string: deflated, then base64url without padding.
 fn encode(json: &str) -> String {
     URL_SAFE_NO_PAD.encode(compress_to_vec(json.as_bytes(), DEFLATE_LEVEL))
+}
+
+/// `json` as a share string, if a link can open it: the JSON within
+/// [`MAX_SHARE_JSON_BYTES`], the most a link unpacks to, and the string
+/// within [`MAX_SHARE_TEXT_BYTES`].
+///
+/// # Errors
+///
+/// [`TooLarge::Json`] with the JSON's size, or [`TooLarge::Text`] with the
+/// string's length: the first of the two a link could not open.
+fn link(json: &str) -> Result<String, TooLarge> {
+    if exceeds(json.len(), MAX_SHARE_JSON_BYTES) {
+        return Err(TooLarge::Json {
+            bytes: Some(count(json.len())),
+        });
+    }
+    let share = encode(json);
+    if exceeds(share.len(), MAX_SHARE_TEXT_BYTES) {
+        return Err(TooLarge::Text {
+            bytes: count(share.len()),
+        });
+    }
+    Ok(share)
 }
 
 /// The JSON text a share string holds: bounded first, then decoded from
@@ -1108,7 +1189,7 @@ fn repair(doc: &ShareDoc, error: &LoadError) -> Option<LoadOption> {
     })
 }
 
-/// "Open the first 8 steps": `doc` up to the op that `error` refused,
+/// "Open the first 8 actions": `doc` up to the op that `error` refused,
 /// opening at its end, when an op before it replayed and a link can hold
 /// them.
 fn prefix(doc: &ShareDoc, error: &LoadError) -> Option<LoadOption> {
@@ -1136,24 +1217,20 @@ fn prefix(doc: &ShareDoc, error: &LoadError) -> Option<LoadOption> {
 /// JSON or its share string. Its ops and programs are those of a document
 /// that was read, or fewer, so they are within their limits.
 fn openable(doc: &ShareDoc) -> Option<String> {
-    let json = to_json(doc);
-    if exceeds(json.len(), MAX_SHARE_JSON_BYTES) {
-        return None;
-    }
-    let share = encode(&json);
-    (!exceeds(share.len(), MAX_SHARE_TEXT_BYTES)).then_some(share)
+    link(&to_json(doc)).ok()
 }
 
 /// The sentence after a configuration or an op that failed, saying how
-/// many steps after it were not replayed, with the space before it: " The
-/// 6 steps after it were not replayed."; nothing when none were.
-fn not_replayed_note(steps: u32) -> String {
-    match steps {
+/// many actions, the ops of the log, after it were not replayed, with the
+/// space before it: " The 6 actions after it were not replayed."; nothing
+/// when none were.
+fn not_replayed_note(actions: u32) -> String {
+    match actions {
         0 => String::new(),
-        1 => " The step after it was not replayed.".to_owned(),
-        steps => format!(
-            " The {} steps after it were not replayed.",
-            format::data(steps)
+        1 => " The action after it was not replayed.".to_owned(),
+        actions => format!(
+            " The {} actions after it were not replayed.",
+            format::data(actions)
         ),
     }
 }
@@ -1171,7 +1248,7 @@ fn json_place(line: u32, column: u32) -> String {
 fn json_too_large(bytes: Option<u32>) -> String {
     match bytes {
         Some(bytes) => format!(
-            "The run is {} bytes of JSON; at most {} bytes can be opened.",
+            "The saved run is {} bytes of JSON; at most {} bytes can be opened.",
             format::setting(bytes),
             format::setting(MAX_SHARE_JSON_BYTES)
         ),
@@ -1231,7 +1308,10 @@ mod tests {
     fn kept_json_is_the_documents(session: &Session) {
         let json = session.share_json();
         assert_eq!(json, to_json(&session.share_doc()));
-        assert_eq!(link_text(&session.to_share_string()).unwrap(), json);
+        assert_eq!(
+            link_text(&session.to_share_string().unwrap()).unwrap(),
+            json
+        );
     }
 
     #[test]

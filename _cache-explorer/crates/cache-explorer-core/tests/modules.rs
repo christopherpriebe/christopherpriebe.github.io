@@ -947,7 +947,7 @@ fn a_loaded_session_counts_its_ops_as_made_before_a_step_began() {
     // numbered from 1, the module's own after them.
     let mut original = session();
     original.apply(load(0x0A4)).unwrap();
-    let mut session = Session::from_share_string(&original.to_share_string()).unwrap();
+    let mut session = Session::from_share_string(&original.to_share_string().unwrap()).unwrap();
     let mut run = ModuleRun::new(Module::parse(MISS_THEN_HIT).unwrap());
     run.start(&mut session).unwrap();
     run.next(&mut session);
@@ -1779,7 +1779,7 @@ fn replacing_the_session_ends_the_module() {
     // Undo is allowed under the gate, and the cursor is then saved too.
     assert!(session.undo());
     let opened = [
-        Session::from_share_string(&session.to_share_string()).unwrap(),
+        Session::from_share_string(&session.to_share_string().unwrap()).unwrap(),
         Session::from_json(&session.to_json()).unwrap(),
         Session::with_config(Config::first_visit()).unwrap(),
     ];

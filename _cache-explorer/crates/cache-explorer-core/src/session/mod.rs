@@ -7,7 +7,9 @@
 //! so a refused op leaves the log, the undone ops after the cursor and the
 //! cursor as they were; an accepted op drops the undone ops, is appended, and
 //! the cursor goes to its last event. No call rewrites an op the log keeps.
-//! Every configuration change is an op of its own, which starts a run.
+//! Every configuration change is an op of its own, which starts a run. The
+//! log never holds more ops than a link can, so every session can be shared
+//! as far as its ops go.
 //!
 //! Every state is the fold of the ops over the initial configuration,
 //! stopped after the event the cursor is on: [`Session::replay`] and
@@ -225,7 +227,7 @@ impl Session {
     /// [`ReplayError::InitialConfig`] if `initial` is invalid, and
     /// [`ReplayError::Op`] for the first op the machine refuses, as a
     /// session would refuse it; that includes an op the session's event
-    /// limit leaves no room for.
+    /// limit leaves no room for, and an op past the most a link can hold.
     pub fn replay(initial: &Config, ops: &[Op]) -> Result<Replay, ReplayError> {
         let mut machine = Machine::start(initial.clone())?;
         let mut sink = Recorder::default();
@@ -473,9 +475,12 @@ impl Session {
     /// 0 if there is none, and moves the cursor to the op's last event.
     ///
     /// The op is first checked against the gate, if one is set, then
-    /// against the session's event limit and the machine there. Only once
-    /// it is accepted is the log dropped after that point: the op holding
-    /// the cursor is kept whole, and the undone ops after it go.
+    /// against the session's event limit, then against the ops a link can
+    /// hold, counting those kept before it, and then against the machine
+    /// there. Only once it is accepted is the log dropped after that point:
+    /// the op holding the cursor is kept whole, and the undone ops after it
+    /// go. So Undo makes room for an op when the log is as long as a link
+    /// can hold.
     ///
     /// # Errors
     ///

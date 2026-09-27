@@ -2236,14 +2236,14 @@ pub(crate) fn load_lead(file: bool) -> String {
     )
 }
 
-/// The label of the action that opens the steps a link or a file holds
-/// before the one that could not be replayed: "Open the first 8 steps", or
-/// with one, "Open the first step".
-pub(crate) fn prefix_label(steps: u32) -> String {
-    if steps == 1 {
-        "Open the first step".to_owned()
+/// The label of the option that opens the actions, the ops, a link or a
+/// file holds before the one that could not be replayed: "Open the first 8
+/// actions", or with one, "Open the first action".
+pub(crate) fn prefix_label(actions: u32) -> String {
+    if actions == 1 {
+        "Open the first action".to_owned()
     } else {
-        format!("Open the first {} steps", format::data(steps))
+        format!("Open the first {} actions", format::data(actions))
     }
 }
 

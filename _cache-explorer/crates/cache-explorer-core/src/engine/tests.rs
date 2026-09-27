@@ -28,7 +28,9 @@ use crate::config::{
 use crate::cpu::{Cpu, Halted, Registers};
 use crate::event::Counter;
 use crate::isa::Program;
-use crate::limits::{INSTRUCTION_BUDGET, MAX_ADDRESS_BITS, MAX_EVENTS_PER_ENTRY, MAX_LINES};
+use crate::limits::{
+    INSTRUCTION_BUDGET, MAX_ADDRESS_BITS, MAX_EVENTS_PER_ENTRY, MAX_LINES, MAX_SHARE_OPS,
+};
 use crate::machine::Stalled;
 use crate::memory::StaleInfo;
 use crate::op::{EditPatch, EditTarget, OpError, ProgramFormat, WayPatch};
@@ -3685,6 +3687,38 @@ fn an_op_needs_room_for_one_more_entry_in_the_log() {
     assert_eq!(result, Ok(()));
     assert_eq!(events.first().map(|event| event.id), Some(limit - room));
     assert!(events.len() < MAX_EVENTS_PER_ENTRY as usize);
+}
+
+#[test]
+fn an_op_needs_room_for_one_more_op_a_link_can_hold() {
+    let limit = u64::from(SESSION_EVENT_LIMIT);
+    let room = u64::from(MAX_EVENTS_PER_ENTRY);
+    let issue = Op::Issue {
+        kind: AccessKind::Read,
+        addr: addr(0x0A4),
+        value: None,
+    };
+    let apply_as = |machine: &mut Machine, op: &Op, index: u32, first_id: u64| {
+        let mut recorder = Recorder::default();
+        let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(index), first_id);
+        (apply(machine, op, &mut out), recorder.events)
+    };
+    let mut machine = Machine::start(preset(Preset::DirectMapped8)).unwrap();
+    let before = machine.clone();
+    // Op MAX_SHARE_OPS, from 0, would be one more than a link can hold,
+    // whatever the op; the room for events is checked first.
+    for op in [issue.clone(), Op::Step, Op::Run { n: 0 }] {
+        let (result, events) = apply_as(&mut machine, &op, MAX_SHARE_OPS, 0);
+        assert_eq!(result, Err(OpError::LinkFull), "{op:?}");
+        assert!(events.is_empty());
+        assert_eq!(machine, before);
+        let (result, _) = apply_as(&mut machine, &op, MAX_SHARE_OPS, limit - room + 1);
+        assert_eq!(result, Err(OpError::SessionFull), "{op:?}");
+        assert_eq!(machine, before);
+    }
+    let (result, events) = apply_as(&mut machine, &issue, MAX_SHARE_OPS - 1, 0);
+    assert_eq!(result, Ok(()));
+    assert!(!events.is_empty());
 }
 
 #[test]

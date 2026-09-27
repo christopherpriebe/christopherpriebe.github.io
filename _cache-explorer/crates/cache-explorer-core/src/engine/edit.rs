@@ -189,6 +189,9 @@ pub enum RefusalReason {
     /// The session's log has no room for another entry where the edit would
     /// go, so the edit would be refused as an op.
     SessionFull,
+    /// The session's log already holds as many ops before where the edit
+    /// would go as a link can hold, so the edit would be refused as an op.
+    LinkFull,
     /// The cursor is inside an op, which undoes as a whole.
     MidAccess,
     /// The set, way or address does not exist.
@@ -730,6 +733,9 @@ pub(crate) enum Blocked {
     /// The log has no room for another entry where the edit would go, so
     /// the edit would be refused as an op, as any op would.
     Full,
+    /// The log before where the edit would go holds as many ops as a link
+    /// can hold, so the edit would be refused as an op, as any op would.
+    LinkFull,
     /// The cursor is inside an op, which undoes as a whole, so an edit would
     /// apply after the op's end, not where the editor shows the machine.
     Unfinished(Unfinished),
@@ -737,8 +743,8 @@ pub(crate) enum Blocked {
 
 impl Blocked {
     /// The refusal of `patch` on `target`, `machine` being the machine at
-    /// the cursor: the session's limit, refused, or what to finish first,
-    /// with caution; neither offers another edit.
+    /// the cursor: the session's limit or the link's, refused, or what to
+    /// finish first, with caution; none offers another edit.
     pub(crate) fn refusal(
         self,
         machine: &Machine,
@@ -751,6 +757,12 @@ impl Blocked {
                 Tone::Refused,
                 explain::edit_refused(),
                 OpError::SessionFull.to_string(),
+            ),
+            Blocked::LinkFull => (
+                RefusalReason::LinkFull,
+                Tone::Refused,
+                explain::edit_refused(),
+                OpError::LinkFull.to_string(),
             ),
             Blocked::Unfinished(unfinished) => (
                 RefusalReason::MidAccess,
