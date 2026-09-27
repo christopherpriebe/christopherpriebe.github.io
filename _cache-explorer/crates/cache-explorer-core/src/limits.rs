@@ -82,6 +82,10 @@ pub const INSTRUCTION_BUDGET: u32 = 10_000;
 /// line every few events. Kept below 65,536, past which the events a share
 /// load gathers double their room to 131,072 before they move into the
 /// session.
+///
+/// A saved file keeps room for a cursor this many events into an op, so a
+/// raise that gives this value another digit takes a byte from every saved
+/// file's room: see [`MAX_SHARE_JSON_BYTES`].
 pub const SESSION_EVENT_LIMIT: u32 = 40_000;
 
 /// The most events one entry can produce. Not tunable: it is a bound the
@@ -111,13 +115,30 @@ pub const MAX_SHARE_TEXT_BYTES: u32 = 64 * 1024;
 
 /// The largest inflated share document, and the largest loaded file, in bytes
 /// (1 MiB). It is also the limit of the inflate itself, so a short link cannot
-/// decompress into unbounded memory. Tunable.
+/// decompress into unbounded memory; and the most a session's saved file may
+/// hold, so every session can be saved and opened again: the session refuses
+/// an op that could take its file past it
+/// ([`OpError::FileFull`](crate::OpError::FileFull)). Tunable.
+///
+/// A file's ops are checked against this limit less the rest of the file at
+/// its longest, which includes the longest place a cursor can have: event
+/// [`SESSION_EVENT_LIMIT`] of op [`MAX_SHARE_OPS`] − 1. A load checks a
+/// file's ops against the same room. So raising either count until it takes
+/// another digit leaves every file a byte less room, and a file saved at the
+/// limit before no longer opens, unless
+/// [`SCHEMA_VERSION`](crate::SCHEMA_VERSION) is bumped and the loader bounds
+/// the older version's files by the room they kept. A test below fails on
+/// such a raise.
 pub const MAX_SHARE_JSON_BYTES: u32 = 1024 * 1024;
 
 /// The most ops one share document may hold, so reading and checking a link
 /// or a file is bounded before any of it replays; and the most ops a
 /// session's log may hold, so every session's log fits a link. Tunable,
 /// within the relations tested below.
+///
+/// A saved file keeps room for a cursor in its last op, whose index is one
+/// less than this, so a raise that gives that index another digit takes a
+/// byte from every saved file's room: see [`MAX_SHARE_JSON_BYTES`].
 pub const MAX_SHARE_OPS: u32 = 10_000;
 
 /// The access outcomes the hit and miss sparkline shows. Tunable; the design
@@ -199,6 +220,29 @@ mod tests {
         // An empty session takes Space's first press: the drawer's program
         // loaded, then a step, two ops.
         assert!(MAX_SHARE_OPS >= 2);
+    }
+
+    /// The digits of `value` written in decimal.
+    fn decimal_digits(value: u32) -> u32 {
+        value.checked_ilog10().map_or(1, |log| log + 1)
+    }
+
+    #[test]
+    fn a_saved_file_keeps_its_room_for_the_cursor() {
+        // A saved file keeps room for the longest place a cursor can have,
+        // `{"op":MAX_SHARE_OPS-1,"event":SESSION_EVENT_LIMIT}`, and a load
+        // checks a file's ops against that same room. The two numbers take
+        // nine digits together in the files of schema version 1. One more
+        // digit would leave every file a byte less room, so a file saved at
+        // the limit before would no longer open: raise a count that far only
+        // with a new SCHEMA_VERSION whose loader bounds the older version's
+        // files by the room they kept, then update this bound.
+        assert!(
+            decimal_digits(MAX_SHARE_OPS.saturating_sub(1)) + decimal_digits(SESSION_EVENT_LIMIT)
+                <= 9,
+            "a saved file keeps room for a cursor place of MAX_SHARE_OPS - 1 and \
+             SESSION_EVENT_LIMIT in nine digits"
+        );
     }
 
     #[test]
