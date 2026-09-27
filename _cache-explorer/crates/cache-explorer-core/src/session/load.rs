@@ -7,22 +7,24 @@
 //! from there, as a seek resumes one from a checkpoint. It is bounded by
 //! work, counted in events: the events it replays, and the programs its ops
 //! parse, which one `Setup` event does not measure, at
-//! [`PARSE_BYTES_PER_EVENT`] bytes an event. Each op is checked
-//! as [`Session::apply`] checks it, the session's event limit included, so a
-//! log that could not have been built cannot be loaded either. The session
-//! built is the one the ops would have built had they been applied one by
-//! one, whatever the slices: the same events, entries and checkpoints.
+//! [`PARSE_BYTES_PER_EVENT`] bytes an event. Each op is checked as
+//! [`Session::apply`] checks it, the session's event limit and the room of
+//! its saved file included, so a log that could not have been built cannot
+//! be loaded either. The session built is the one the ops would have built
+//! had they been applied one by one, whatever the slices: the same events,
+//! entries and checkpoints, and the same JSON of its ops.
 //!
 //! A share document places the cursor relative to an op: after the op's
 //! `n`-th event, or with `n` = 0 just before the op, so position 0 of a log
 //! with ops has a place too.
 
-use super::{Builder, Entries, Plan, ReplayError, Session};
+use super::{check_room, Builder, Entries, Plan, ReplayError, Session};
 use crate::engine::{self, Emitter, EventSink, Flow, OpProgress};
 use crate::event::MicroEvent;
 use crate::limits::{MAX_EVENTS_PER_ENTRY, PARSE_BYTES_PER_EVENT};
 use crate::machine::Machine;
 use crate::op::Op;
+use crate::share::{FileRoom, SavedOps};
 use crate::units::{EventPos, OpIndex};
 
 /// A log being replayed a slice at a time into a session on its initial
@@ -34,6 +36,10 @@ pub(crate) struct Loader {
     session: Session,
     /// The ops to replay.
     ops: Vec<Op>,
+    /// Each op started so far, as a share document writes it.
+    ops_json: Vec<String>,
+    /// The room the saved file has after the ops started so far.
+    file: FileRoom,
     /// The machine after the events replayed so far.
     machine: Machine,
     /// The events, entries and checkpoints replayed so far.
@@ -63,9 +69,12 @@ impl Loader {
             checkpoints: Vec::new(),
             entries: Entries::new(&machine, 0),
         };
+        let file = session.saved.room_after(0);
         Loader {
             session,
             ops,
+            ops_json: Vec::new(),
+            file,
             machine,
             builder,
             op_ends: Vec::new(),
@@ -83,8 +92,8 @@ impl Loader {
     /// # Errors
     ///
     /// [`ReplayError::Op`] for an op the machine refuses, as the session
-    /// would have refused it, the session's event limit included. Nothing
-    /// after it is replayed.
+    /// would have refused it, the session's event limit and the room of its
+    /// saved file included. Nothing after it is replayed.
     pub(crate) fn advance(&mut self, max_events: u32) -> Result<bool, ReplayError> {
         let start = self.builder.events.len();
         // The slice's parsing so far, in events.
@@ -107,6 +116,11 @@ impl Loader {
             }
             self.builder.op = index;
             let first = self.builder.next_id();
+            if self.progress == OpProgress::START {
+                let json = check_room(first, index, &mut self.file, op)
+                    .map_err(|error| ReplayError::Op { index, error })?;
+                self.ops_json.push(json);
+            }
             let mut sink = Slice {
                 builder: &mut self.builder,
                 start,
@@ -153,6 +167,7 @@ impl Loader {
         let Loader {
             mut session,
             mut ops,
+            mut ops_json,
             machine,
             builder,
             op_ends,
@@ -165,11 +180,13 @@ impl Loader {
             ..
         } = builder;
         ops.truncate(op_ends.len());
+        ops_json.truncate(op_ends.len());
         let (records, last_base) = entries.finish();
         session.commit(Plan {
             base: EventPos::new_unchecked(0),
             kept: 0,
             ops,
+            ops_json,
             events,
             op_ends,
             checkpoints,
@@ -209,9 +226,9 @@ impl Session {
         self.advanced
     }
 
-    /// Each op as a share document writes it.
-    pub(crate) fn ops_json(&self) -> &[String] {
-        &self.ops_json
+    /// Each op as a share document writes it, with the saved file's size.
+    pub(crate) fn saved_ops(&self) -> &SavedOps {
+        &self.saved
     }
 }
 
@@ -411,7 +428,7 @@ mod tests {
         for max_events in [1, MAX_EVENTS_PER_ENTRY, 50, LOAD_SLICE_EVENTS, u32::MAX] {
             let (session, slices) = loaded(&ops, max_events, &whole);
             assert_eq!(session.ops, whole.ops, "{max_events}");
-            assert_eq!(session.ops_json, whole.ops_json, "{max_events}");
+            assert_eq!(session.saved, whole.saved, "{max_events}");
             assert_eq!(session.events, whole.events, "{max_events}");
             assert_eq!(session.op_ends, whole.op_ends, "{max_events}");
             assert_eq!(session.entries, whole.entries, "{max_events}");

@@ -344,19 +344,26 @@ mod tests {
              a miss of five events then hits of three, with room left for an entry"
         );
         assert!(
-            u64::from(MAX_SHARE_OPS) * 64 <= u64::from(MAX_SHARE_JSON_BYTES),
-            "tests/share.rs opens a link of MAX_SHARE_OPS loads by hand, in under 64 bytes of \
-             JSON each"
+            u64::from(MAX_SHARE_OPS) * 64 + 1024 <= u64::from(MAX_SHARE_JSON_BYTES),
+            "tests/session.rs and tests/share.rs fill a log with MAX_SHARE_OPS loads by hand, \
+             which its saved file and its link must hold, in under 64 bytes of JSON each and \
+             1 KiB for the rest of the document"
         );
+        // tests/share.rs and tests/session.rs fill a saved file until the
+        // session refuses an op for the file's limit, which must come before
+        // the link's and the session's, each op a program load of one event
+        // or a configuration change of one.
         assert!(
             MAX_SHARE_JSON_BYTES / (MAX_PROGRAM_BYTES / 2) < MAX_SHARE_OPS,
-            "tests/share.rs loads a program of at least half MAX_PROGRAM_BYTES until the run is \
-             more JSON than a file may hold"
+            "tests/share.rs and tests/session.rs load programs of at least half \
+             MAX_PROGRAM_BYTES until the session refuses one for the saved file's limit"
         );
         assert!(
-            MAX_SHARE_JSON_BYTES / 256 < MAX_SHARE_OPS,
-            "tests/share.rs changes the configuration, each change over 256 bytes of a saved \
-             file, until the file is more JSON than can be opened"
+            MAX_SHARE_JSON_BYTES / 200 < MAX_SHARE_OPS
+                && u64::from(MAX_SHARE_JSON_BYTES / 200) + u64::from(MAX_EVENTS_PER_ENTRY)
+                    <= u64::from(SESSION_EVENT_LIMIT),
+            "tests/share.rs changes the configuration, each change over 200 bytes of a saved \
+             file, until the session refuses one for the file's limit"
         );
         assert!(
             u64::from(MAX_LABEL_CHARS) * 2 + 11 <= u64::from(MAX_PROGRAM_BYTES),

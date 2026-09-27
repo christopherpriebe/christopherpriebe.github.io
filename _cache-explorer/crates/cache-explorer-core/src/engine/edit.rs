@@ -192,6 +192,10 @@ pub enum RefusalReason {
     /// The session's log already holds as many ops before where the edit
     /// would go as a link can hold, so the edit would be refused as an op.
     LinkFull,
+    /// The session's saved file has no room for the edit's op after the
+    /// ops before where the edit would go, so the edit would be refused as
+    /// an op.
+    FileFull,
     /// The cursor is inside an op, which undoes as a whole.
     MidAccess,
     /// The set, way or address does not exist.
@@ -736,6 +740,9 @@ pub(crate) enum Blocked {
     /// The log before where the edit would go holds as many ops as a link
     /// can hold, so the edit would be refused as an op, as any op would.
     LinkFull,
+    /// The saved file of the log before where the edit would go has no room
+    /// for the edit's op, so the edit would be refused as an op.
+    FileFull,
     /// The cursor is inside an op, which undoes as a whole, so an edit would
     /// apply after the op's end, not where the editor shows the machine.
     Unfinished(Unfinished),
@@ -743,8 +750,9 @@ pub(crate) enum Blocked {
 
 impl Blocked {
     /// The refusal of `patch` on `target`, `machine` being the machine at
-    /// the cursor: the session's limit or the link's, refused, or what to
-    /// finish first, with caution; none offers another edit.
+    /// the cursor: the session's limit, the link's or the saved file's,
+    /// refused, or what to finish first, with caution; none offers another
+    /// edit.
     pub(crate) fn refusal(
         self,
         machine: &Machine,
@@ -763,6 +771,12 @@ impl Blocked {
                 Tone::Refused,
                 explain::edit_refused(),
                 OpError::LinkFull.to_string(),
+            ),
+            Blocked::FileFull => (
+                RefusalReason::FileFull,
+                Tone::Refused,
+                explain::edit_refused(),
+                OpError::FileFull.to_string(),
             ),
             Blocked::Unfinished(unfinished) => (
                 RefusalReason::MidAccess,
@@ -2016,7 +2030,7 @@ fn edit_memory(
 /// The way editor's draft for `form` on way `way` of set `set`: each field
 /// read, the smallest patch that makes the way what the form shows, and
 /// its plan, or the refusal of a field that does not read, or the session's
-/// refusal while it is `blocked`.
+/// refusal of the patch, which `blocked` gives when there is one.
 ///
 /// A field that leaves the way as the edit would anyway is left out of the
 /// patch: the valid bit and the line as the way has them; the data inputs as
@@ -2031,7 +2045,7 @@ pub(crate) fn draft_way(
     set: SetIndex,
     way: WayIndex,
     form: &WayForm,
-    blocked: Option<Blocked>,
+    blocked: impl Fn(&EditTarget, &EditPatch) -> Option<Blocked>,
 ) -> EditDraft {
     let geometry = &machine.geometry;
     let target = EditTarget::Way { set, way };
@@ -2049,7 +2063,7 @@ pub(crate) fn draft_way(
             tag_text: typed.tag_text,
             index_text: typed.index_text,
             word_texts: Vec::new(),
-            outcome: outcome(machine, &target, &patch, blocked, None),
+            outcome: outcome(machine, &target, &patch, blocked(&target, &patch), None),
             patch: Some(patch),
             result: snapshot::lone_way_view(machine, set, way, &empty),
         };
@@ -2129,7 +2143,7 @@ pub(crate) fn draft_way(
                     .map_or_else(String::new, |value| format::plain(*value))
             })
             .collect(),
-        outcome: outcome(machine, &target, &patch, blocked, invalid),
+        outcome: outcome(machine, &target, &patch, blocked(&target, &patch), invalid),
         result: result_view(machine, set, way, current, &patch),
         patch: reads.then_some(patch),
     }
@@ -2137,13 +2151,14 @@ pub(crate) fn draft_way(
 
 /// The memory editor's draft for `value_text` on the word at `addr`: the
 /// value read, its patch and its plan, or the refusal of a value that does
-/// not read, or the session's refusal while it is `blocked`. An empty value
-/// is the word's own, which changes nothing.
+/// not read, or the session's refusal of the patch, which `blocked` gives
+/// when there is one. An empty value is the word's own, which changes
+/// nothing.
 pub(crate) fn draft_memory(
     machine: &Machine,
     addr: Addr,
     value_text: &str,
-    blocked: Option<Blocked>,
+    blocked: impl Fn(&EditTarget, &EditPatch) -> Option<Blocked>,
 ) -> MemoryEditDraft {
     let target = EditTarget::Memory { addr };
     let current = EditPatch::Memory {
@@ -2167,12 +2182,12 @@ pub(crate) fn draft_memory(
     let reads = invalid.is_none();
     MemoryEditDraft {
         value,
-        outcome: outcome(machine, &target, &patch, blocked, invalid),
+        outcome: outcome(machine, &target, &patch, blocked(&target, &patch), invalid),
         patch: reads.then_some(patch),
     }
 }
 
-/// An editor's outcome for `patch` on `target`: the session's refusal while
+/// An editor's outcome for `patch` on `target`: the session's refusal when
 /// it is `blocked`; the refusal of a field that does not read, `invalid`,
 /// with its reason, title and message; or the patch's plan or refusal.
 fn outcome(

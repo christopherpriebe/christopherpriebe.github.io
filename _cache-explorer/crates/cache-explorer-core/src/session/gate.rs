@@ -199,9 +199,14 @@ impl Session {
             found: None,
             done: false,
         };
-        resume_into(&mut machine, start, &self.ops, &mut finder, |finder| {
-            finder.done
-        })
+        resume_into(
+            &mut machine,
+            start,
+            &self.ops,
+            &mut finder,
+            None,
+            |finder| finder.done,
+        )
         .ok()?;
         finder.found
     }

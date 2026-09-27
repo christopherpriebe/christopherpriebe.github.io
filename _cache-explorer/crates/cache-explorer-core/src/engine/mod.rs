@@ -18,7 +18,9 @@
 //! instructions stops with an `Error` event at the first entry boundary
 //! without that room. The log also holds at most [`MAX_SHARE_OPS`] ops, as
 //! many as a link can hold, so an op is refused once the log before it has
-//! that many.
+//! that many. The session then checks, before the machine's rules, that the
+//! op's JSON fits in a saved file of the log; the engine knows nothing of
+//! files.
 
 mod access;
 mod edit;

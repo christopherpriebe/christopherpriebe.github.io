@@ -16,7 +16,9 @@
 //!
 //! The fold is a pure function, and undo, redo, scrubbing, seeking and
 //! Space reach the machines it reaches, from checkpoints too; share strings
-//! and saved files give the same session back; the cache's invariants and
+//! and saved files give the same session back, a saved file being the
+//! compact JSON a link deflates, of the size the session keeps after every
+//! call and within what a file can hold; the cache's invariants and
 //! the counters' identities hold at every event; every event lists exactly
 //! the cells it changed; a refused call changes nothing, and an accepted one
 //! never rewrites the log before the point it appends at; a planned edit
@@ -93,7 +95,8 @@ mod support {
 
     use cache_explorer_core::limits::{
         CHECKPOINT_INTERVAL, LOAD_SLICE_EVENTS, MAX_CYCLES, MAX_EVENTS_PER_ENTRY, MAX_LINES,
-        MAX_RUN_STEPS, MAX_SEED, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS, MIN_CYCLES,
+        MAX_RUN_STEPS, MAX_SEED, MAX_SHARE_JSON_BYTES, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS,
+        MIN_CYCLES,
     };
     use cache_explorer_core::{
         AccessKind, AccessMatch, Addr, AddrLoc, AllPredicate, AllocatePolicy, AnyPredicate,
@@ -1322,6 +1325,13 @@ mod support {
             if let (Some(snapshot), Call::Refused) = (before.snapshot, call) {
                 prop_assert_eq!(Snapshot::of(&self.session), snapshot);
             }
+            if self.checks.append_only {
+                // The saved file's size, kept op by op, is the file's own,
+                // and within what a file can hold.
+                let json = self.session.to_json();
+                prop_assert_eq!(self.session.to_json_len() as usize, json.len());
+                prop_assert!(json.len() <= MAX_SHARE_JSON_BYTES as usize);
+            }
             Ok(())
         }
 
@@ -1450,6 +1460,7 @@ mod support {
                     let expected = match refusal.reason {
                         RefusalReason::SessionFull => OpError::SessionFull,
                         RefusalReason::LinkFull => OpError::LinkFull,
+                        RefusalReason::FileFull => OpError::FileFull,
                         _ => OpError::Edit(Box::new(refusal.clone())),
                     };
                     prop_assert_eq!(result.as_ref().map(drop), Err(&expected));
@@ -2351,6 +2362,10 @@ fn share_strings_and_files_give_the_session_back() {
             }
             let doc = session.share_doc();
             prop_assert_eq!(session.to_share_string(), Ok(doc.to_share_string()));
+            // A saved file is the compact JSON the link deflates.
+            prop_assert_eq!(session.to_json(), doc.to_json());
+            prop_assert_eq!(session.to_json(), serde_json::to_string(&doc).unwrap());
+            prop_assert_eq!(session.to_json_len() as usize, session.to_json().len());
             let link = doc.to_share_string();
             prop_assert_eq!(ShareDoc::from_share_string(&link), Ok(doc.clone()));
             prop_assert_eq!(ShareDoc::from_json(&doc.to_json()), Ok(doc.clone()));

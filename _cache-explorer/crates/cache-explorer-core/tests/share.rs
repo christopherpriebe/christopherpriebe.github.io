@@ -1,12 +1,14 @@
 //! Sharing: share strings and saved files round-tripping a session, its
 //! whole log with the undone ops, the mode chosen and the cursor, position 0
-//! included; the document's shape; a newer format refused; each load
-//! failure with what the page shows for it, its message segments, contents,
-//! repair and the actions before it; each size limit one byte or one op over
-//! its constant; a session as long as a link can hold opening from its link,
-//! and a run too long for one offered as a file, or too large for either,
-//! whether its link would unpack to too much JSON or only be too long;
-//! the session's limit stopping a pathological link; loading
+//! included; a saved file as the compact JSON its link holds, and a pretty
+//! one still opening; the document's shape; a newer format refused; each
+//! load failure with what the page shows for it, its message segments,
+//! contents, repair and the actions before it; each size limit one byte or
+//! one op over its constant; a session as long as a link can hold opening
+//! from its link, and a run too long for one offered as a file; the runs
+//! that once made a file too large to open, configuration changes and
+//! programs loaded again and again, now stopped at the file's limit, saved
+//! and opened; the session's limit stopping a pathological link; loading
 //! in slices giving the session one slice gives, with the loading state's
 //! summary; the share summary and its texts; and a trace file loaded as a
 //! program.
@@ -28,8 +30,8 @@ use serde_json::{json, Value};
 
 use support::{
     apply_all, as_long_as_a_link, code, config, counted, failure_of, file_failure, grouped, link,
-    link_failure, link_of, load, loaded, long_program, pathological, plain, pos, program, same,
-    session, varied, with_ops,
+    link_failure, link_of, load, loaded, long_program, pathological, plain, pos, pretty, program,
+    same, session, unpacked, varied, with_ops,
 };
 
 /// A loop without an exit and without a memory access: one event per
@@ -47,7 +49,7 @@ mod support {
     };
     use cache_explorer_core::{
         AccessKind, Config, EventPos, LoadError, LoadFailure, LoadProgress, Op, Preset,
-        ProgramFormat, Session, ShareLoad, TextSegment, TextStyle, Word,
+        ProgramFormat, Session, ShareDoc, ShareLoad, TextSegment, TextStyle, Word,
     };
     use serde_json::{json, Value};
 
@@ -210,6 +212,17 @@ mod support {
     /// `bytes` as a share string, whether or not they are text.
     pub(crate) fn link_of(bytes: &[u8]) -> String {
         URL_SAFE_NO_PAD.encode(miniz_oxide::deflate::compress_to_vec(bytes, 9))
+    }
+
+    /// The text the share string `s` holds: decoded and inflated, unchecked.
+    pub(crate) fn unpacked(s: &str) -> String {
+        let deflated = URL_SAFE_NO_PAD.decode(s).unwrap();
+        String::from_utf8(miniz_oxide::inflate::decompress_to_vec(&deflated).unwrap()).unwrap()
+    }
+
+    /// `doc` as pretty JSON, as "Show link contents" shows a document read.
+    pub(crate) fn pretty(doc: &ShareDoc) -> String {
+        serde_json::to_string_pretty(doc).unwrap()
     }
 
     /// A link of `pairs` loads of a loop without an exit, each followed by a
@@ -388,12 +401,39 @@ fn a_saved_file_reopens_the_session() {
     let loaded = Session::from_json(&json).unwrap();
     same(&loaded, &original, "the file");
     assert_eq!(loaded.to_json(), json);
-    // Pretty JSON, which a share string also holds, compact.
-    assert!(json.starts_with("{\n  \"schema_version\": 1,\n  \"config\": {\n"));
-    let doc = ShareDoc::from_share_string(&original.to_share_string().unwrap()).unwrap();
+    // Compact JSON, the very text the session's link holds, so a file holds
+    // whatever a link can; its size is known without writing it.
+    assert!(json.starts_with("{\"schema_version\":1,\"config\":{\""));
+    assert_eq!(json, serde_json::to_string(&original.share_doc()).unwrap());
+    let link = original.to_share_string().unwrap();
+    assert_eq!(unpacked(&link), json);
+    assert_eq!(original.to_json_len() as usize, json.len());
+    let doc = ShareDoc::from_share_string(&link).unwrap();
     assert_eq!(doc, ShareDoc::from_json(&json).unwrap());
     assert_eq!(doc, original.share_doc());
     assert_eq!(doc.to_json(), json);
+}
+
+#[test]
+fn a_pretty_printed_file_still_opens() {
+    let mut original = varied();
+    original.seek(pos(40));
+    let file = pretty(&original.share_doc());
+    assert!(file.starts_with("{\n  \"schema_version\": 1,\n  \"config\": {\n"));
+    assert!(file.len() > original.to_json().len());
+    let opened = Session::from_json(&file).unwrap();
+    same(&opened, &original, "a pretty file");
+    assert_eq!(ShareDoc::from_json(&file).unwrap(), original.share_doc());
+    // Saved again, it is compact.
+    assert_eq!(opened.to_json(), original.to_json());
+    let mut load = ShareLoad::from_json(&file);
+    let progress = loaded(&mut load, LOAD_SLICE_EVENTS);
+    assert!(matches!(progress.last(), Some(LoadProgress::Done { .. })));
+    same(
+        &load.take_session().unwrap(),
+        &original,
+        "a pretty file in slices",
+    );
 }
 
 #[test]
@@ -759,7 +799,7 @@ fn the_frame_5c_link_offers_its_repair() {
             ),
         ]
     );
-    assert_eq!(failure.contents.as_deref(), Some(doc.to_json().as_str()));
+    assert_eq!(failure.contents, Some(pretty(&doc)));
     assert_eq!(failure.prefix, None);
     // "Open with 2-way instead" opens the same document with the cache
     // repaired, at the same place.
@@ -858,7 +898,7 @@ fn an_op_the_machine_refuses_offers_the_actions_before_it() {
     assert_eq!(error.to_string(), message);
     assert_eq!(failure.message, [plain(message)]);
     assert_eq!(failure.repair, None);
-    assert_eq!(failure.contents.as_deref(), Some(doc.to_json().as_str()));
+    assert_eq!(failure.contents, Some(pretty(&doc)));
     let prefix = failure.prefix.unwrap();
     assert_eq!(prefix.label, "Open the first 8 actions");
     let prefix = ShareDoc::from_share_string(&prefix.share).unwrap();
@@ -1081,7 +1121,7 @@ fn a_log_one_op_over_its_limit_is_too_large() {
         title: title.to_owned(),
         lead: lead.to_owned(),
         message: vec![plain(&error.to_string())],
-        contents: Some(read.to_json()),
+        contents: Some(pretty(&read)),
         repair: None,
         prefix: None,
     };
@@ -1138,7 +1178,7 @@ fn a_program_one_byte_over_its_limit_is_too_large() {
         title: title.to_owned(),
         lead: lead.to_owned(),
         message: vec![plain(&error.to_string())],
-        contents: Some(read.to_json()),
+        contents: Some(pretty(&read)),
         repair: None,
         prefix: None,
     };
@@ -1203,7 +1243,7 @@ fn a_run_too_long_for_a_link_offers_a_file() {
         Session::from_share_string(&unopenable).unwrap_err(),
         LoadError::Encoding(EncodingError::TooLarge(TooLarge::Text { bytes }))
     );
-    assert_eq!(error, LinkTooLong::Text { bytes });
+    assert_eq!(error, LinkTooLong { bytes });
     assert_eq!(
         error.to_string(),
         format!(
@@ -1213,56 +1253,26 @@ fn a_run_too_long_for_a_link_offers_a_file() {
             grouped(MAX_SHARE_TEXT_BYTES)
         )
     );
-    // The file opens.
+    // The file, the JSON the link would have unpacked to, opens.
     let json = original.to_json();
+    assert_eq!(unpacked(&unopenable), json);
     assert!(json.len() <= MAX_SHARE_JSON_BYTES as usize);
     same(&Session::from_json(&json).unwrap(), &original, "the file");
 }
 
-#[test]
-fn a_run_too_large_for_a_file_has_no_link_either() {
-    // The same long program loaded again and again: a link shortens it
-    // well, but would unpack to more JSON than can be opened, and a file
-    // holds that JSON.
-    let source = long_program(None);
-    let loads = MAX_SHARE_JSON_BYTES as usize / source.len() + 1;
-    let mut original = session();
-    apply_all(&mut original, vec![program(&source); loads]);
-    let json = original.to_json();
-    let bytes = u32::try_from(json.len()).unwrap();
-    assert!(bytes > MAX_SHARE_JSON_BYTES);
-    let error = original.to_share_string().unwrap_err();
-    assert_eq!(error, LinkTooLong::Json { bytes });
-    assert_eq!(
-        error.to_string(),
-        format!(
-            "This run is too large for a link or a file: saved, it would be {} bytes of JSON, and \
-             at most {} bytes can be opened.",
-            grouped(bytes),
-            grouped(MAX_SHARE_JSON_BYTES)
-        )
-    );
-    // The link it would have written is short, and could not be opened.
-    let unopenable = original.share_doc().to_share_string();
-    assert!(unopenable.len() <= MAX_SHARE_TEXT_BYTES as usize);
-    assert_eq!(
-        Session::from_share_string(&unopenable).unwrap_err(),
-        LoadError::Encoding(EncodingError::TooLarge(TooLarge::Json { bytes: None }))
-    );
-    assert_eq!(
-        Session::from_json(&json).unwrap_err(),
-        LoadError::Encoding(EncodingError::TooLarge(TooLarge::Json {
-            bytes: Some(bytes)
-        }))
-    );
+/// Applies each of `ops` in turn until the session refuses one: the error.
+fn until_refused(session: &mut Session, ops: impl IntoIterator<Item = Op>) -> Option<OpError> {
+    ops.into_iter().find_map(|op| session.apply(op).err())
 }
 
 #[test]
-fn a_link_too_long_whose_file_is_too_large_offers_neither() {
-    // Configuration changes, which a link shortens well and a saved file's
-    // pretty JSON lengthens, until the file is more JSON than can be
-    // opened. Each pair of changes adds as much to the file as the one
-    // before, so their count is measured, not searched for.
+fn configuration_changes_stop_at_the_file_limit() {
+    // Configuration changes, which a link shortens well and which once
+    // made a link unpack to more JSON than can be opened: the session
+    // refuses the one that would take its saved file past the limit, well
+    // before the ops a link can hold, and its file and its link open. Each
+    // pair of changes adds the same JSON, so their count is measured, not
+    // searched for.
     let mut original = session();
     let pair = [
         Op::Config {
@@ -1271,52 +1281,101 @@ fn a_link_too_long_whose_file_is_too_large_offers_neither() {
         Op::Config { config: config() },
     ];
     apply_all(&mut original, pair.clone());
-    let before = original.to_json().len();
+    let before = original.to_json_len();
     apply_all(&mut original, pair.clone());
-    let file = original.to_json().len();
-    let pairs = (MAX_SHARE_JSON_BYTES as usize - file) / (file - before) + 1;
-    apply_all(&mut original, pair.iter().cycle().take(pairs * 2).cloned());
-    assert!(original.to_json().len() > MAX_SHARE_JSON_BYTES as usize);
-    // Then programs of text deflate cannot shorten much, until the link is
-    // too long.
-    let mut seed = 0;
-    let error = loop {
-        if let Err(error) = original.to_share_string() {
-            break error;
-        }
-        seed += 1;
-        apply_all(&mut original, [program(&long_program(Some(seed)))]);
-    };
-    // The JSON a link holds is within its limit, but the link is too long,
-    // and the file too large: neither could be opened.
-    let compact = serde_json::to_string(&original.share_doc()).unwrap();
-    assert!(compact.len() <= MAX_SHARE_JSON_BYTES as usize);
-    let unopenable = original.share_doc().to_share_string();
-    let text = u32::try_from(unopenable.len()).unwrap();
-    assert!(text > MAX_SHARE_TEXT_BYTES);
-    assert_eq!(
-        Session::from_share_string(&unopenable).unwrap_err(),
-        LoadError::Encoding(EncodingError::TooLarge(TooLarge::Text { bytes: text }))
-    );
+    let added = original.to_json_len() - before;
+    let pairs = (MAX_SHARE_JSON_BYTES - original.to_json_len()) / added + 1;
+    let ops = pair.iter().cycle().take(pairs as usize * 2).cloned();
+    assert_eq!(until_refused(&mut original, ops), Some(OpError::FileFull));
+    assert!(original.op_count() < MAX_SHARE_OPS);
     let json = original.to_json();
-    let bytes = u32::try_from(json.len()).unwrap();
+    assert_eq!(original.to_json_len() as usize, json.len());
+    assert!(json.len() <= MAX_SHARE_JSON_BYTES as usize);
+    same(&Session::from_json(&json).unwrap(), &original, "the file");
+    let link = original.to_share_string().unwrap();
+    assert!(link.len() <= MAX_SHARE_TEXT_BYTES as usize);
+    assert_eq!(unpacked(&link), json);
+    same(
+        &Session::from_share_string(&link).unwrap(),
+        &original,
+        "the link",
+    );
+}
+
+#[test]
+fn one_program_loaded_again_and_again_stops_at_the_file_limit() {
+    // The same long program loaded again and again, which a link shortens
+    // well, and which once made a link unpack to more JSON than can be
+    // opened: the session refuses the load that would take its saved file
+    // past the limit, and its file and its link open.
+    let source = long_program(None);
+    let mut original = session();
+    let loads = std::iter::repeat_with(|| program(&source));
+    assert_eq!(until_refused(&mut original, loads), Some(OpError::FileFull));
+    let json = original.to_json();
+    assert!(json.len() <= MAX_SHARE_JSON_BYTES as usize);
+    same(&Session::from_json(&json).unwrap(), &original, "the file");
+    let link = original.to_share_string().unwrap();
+    assert!(link.len() <= MAX_SHARE_TEXT_BYTES as usize);
+    assert_eq!(unpacked(&link), json);
+    same(
+        &Session::from_share_string(&link).unwrap(),
+        &original,
+        "the link",
+    );
+    // With one more load, which no session writes, the document is more
+    // JSON than a file or a link may hold.
+    let mut longer = original.share_doc();
+    longer.ops.push(program(&source));
+    let bytes = u32::try_from(longer.to_json().len()).unwrap();
+    assert!(bytes > MAX_SHARE_JSON_BYTES);
     assert_eq!(
-        Session::from_json(&json).unwrap_err(),
+        Session::from_json(&longer.to_json()).unwrap_err(),
         LoadError::Encoding(EncodingError::TooLarge(TooLarge::Json {
             bytes: Some(bytes)
         }))
     );
-    // So the run is too large for a file, not only too long for a link.
-    assert_eq!(error, LinkTooLong::Json { bytes });
     assert_eq!(
-        error.to_string(),
-        format!(
-            "This run is too large for a link or a file: saved, it would be {} bytes of JSON, and \
-             at most {} bytes can be opened.",
-            grouped(bytes),
-            grouped(MAX_SHARE_JSON_BYTES)
-        )
+        Session::from_share_string(&longer.to_share_string()).unwrap_err(),
+        LoadError::Encoding(EncodingError::TooLarge(TooLarge::Json { bytes: None }))
     );
+}
+
+#[test]
+fn a_run_too_long_for_a_link_still_saves_once_its_file_is_full() {
+    // Programs of text deflate cannot shorten much, until the link is too
+    // long; then configuration changes, which once took the saved file past
+    // what can be opened too, so that neither could be. The session refuses
+    // the change that would take the file past its limit: the link is too
+    // long, and the file, the JSON it would unpack to, opens.
+    let mut original = session();
+    let mut seed = 0;
+    while original.to_share_string().is_ok() {
+        seed += 1;
+        apply_all(&mut original, [program(&long_program(Some(seed)))]);
+    }
+    let pair = [
+        Op::Config {
+            config: Preset::TwoWayLru.config(),
+        },
+        Op::Config { config: config() },
+    ];
+    let changes = pair.iter().cycle().take(MAX_SHARE_OPS as usize).cloned();
+    assert_eq!(
+        until_refused(&mut original, changes),
+        Some(OpError::FileFull)
+    );
+    let json = original.to_json();
+    assert!(json.len() <= MAX_SHARE_JSON_BYTES as usize);
+    let unopenable = original.share_doc().to_share_string();
+    assert_eq!(unpacked(&unopenable), json);
+    assert_eq!(
+        original.to_share_string(),
+        Err(LinkTooLong {
+            bytes: u32::try_from(unopenable.len()).unwrap()
+        })
+    );
+    same(&Session::from_json(&json).unwrap(), &original, "the file");
 }
 
 #[test]
@@ -1488,7 +1547,7 @@ fn a_file_too_large_for_a_link_offers_no_link() {
         Session::from_json(&bad.to_json()).unwrap_err(),
         LoadError::InitialConfig { .. }
     ));
-    assert_eq!(failure.contents.as_deref(), Some(bad.to_json().as_str()));
+    assert_eq!(failure.contents, Some(pretty(&bad)));
     assert_eq!(failure.repair, None);
     assert_eq!(failure.prefix, None);
     // A configuration change that fails after the programs: its repair and

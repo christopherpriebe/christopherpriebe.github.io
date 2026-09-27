@@ -5,11 +5,13 @@
 //! student chose; every op of the log, the undone ones after the cursor
 //! included; and where the cursor was, relative to an op, so that a change
 //! of wording, or of how many events another op yields, cannot move it. A
-//! saved file is the document as pretty JSON. A share string, the text after
-//! `#s=`, is the same JSON, compact, deflated and in base64url. A session
-//! writes one only when a link can open it: a longer run is a
-//! [`LinkTooLong`], whose message offers a saved file instead when a file
-//! can hold the run.
+//! saved file is the document as compact JSON, and a share string, the text
+//! after `#s=`, is the same JSON deflated and in base64url, so a file holds
+//! whatever a link can. A session keeps its saved file within the most a
+//! file or a link may hold, refusing any op that would take it further, so
+//! every session can be saved, and opened again. It writes a link only when
+//! a link can open it: a longer run is a [`LinkTooLong`], whose message
+//! offers the saved file instead.
 //!
 //! Opening a link or a file bounds the text first, then decodes it, checks
 //! the document's format version and sizes, and validates the first run's
@@ -34,7 +36,10 @@ use crate::config::{Config, ConfigError};
 use crate::event::{EventKind, MicroEvent};
 use crate::explain;
 use crate::format;
-use crate::limits::{MAX_PROGRAM_BYTES, MAX_SHARE_JSON_BYTES, MAX_SHARE_OPS, MAX_SHARE_TEXT_BYTES};
+use crate::limits::{
+    MAX_PROGRAM_BYTES, MAX_SHARE_JSON_BYTES, MAX_SHARE_OPS, MAX_SHARE_TEXT_BYTES,
+    SESSION_EVENT_LIMIT,
+};
 use crate::module::{code_spans, Segments, TextSegment};
 use crate::op::{Op, OpError};
 use crate::session::{position_in_op, Loader, ReplayError, Session};
@@ -147,37 +152,22 @@ pub enum TooLarge {
     },
 }
 
-/// Why a session's run cannot be written as a link: a link that long could
-/// not be opened. `Display` is what Share says instead of copying a link,
-/// and offers a saved file when a file can hold the run.
+/// Why a session's run cannot be written as a link: its share string would
+/// be longer than [`MAX_SHARE_TEXT_BYTES`], so no link could open it. Its
+/// JSON is never the reason: the session keeps its saved file, the same
+/// JSON a link unpacks to, within [`MAX_SHARE_JSON_BYTES`], so a saved file
+/// always holds the run. `Display` is what Share says instead of copying a
+/// link, and offers that file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
-pub enum LinkTooLong {
-    /// The share string would be longer than [`MAX_SHARE_TEXT_BYTES`]; a
-    /// saved file, which may hold up to [`MAX_SHARE_JSON_BYTES`], holds the
-    /// run.
-    #[error(
-        "This run is too long for a link: its link would be {} bytes long, and at most {} bytes \
-         can be opened. Save it as a file instead.",
-        format::setting(*.bytes),
-        format::setting(MAX_SHARE_TEXT_BYTES)
-    )]
-    Text {
-        /// The share string's length, in bytes.
-        bytes: u32,
-    },
-    /// The run is more JSON than [`MAX_SHARE_JSON_BYTES`], as a saved file
-    /// would hold it, so neither a link, which unpacks to no more than that,
-    /// nor a file could be opened.
-    #[error(
-        "This run is too large for a link or a file: saved, it would be {} bytes of JSON, and at \
-         most {} bytes can be opened.",
-        format::setting(*.bytes),
-        format::setting(MAX_SHARE_JSON_BYTES)
-    )]
-    Json {
-        /// The saved file's size, in bytes.
-        bytes: u32,
-    },
+#[error(
+    "This run is too long for a link: its link would be {} bytes long, and at most {} bytes can \
+     be opened. Save it as a file instead.",
+    format::setting(*.bytes),
+    format::setting(MAX_SHARE_TEXT_BYTES)
+)]
+pub struct LinkTooLong {
+    /// The share string's length, in bytes.
+    pub bytes: u32,
 }
 
 /// Why a link or a file cannot be opened. `Display` is the message the
@@ -439,11 +429,11 @@ impl ShareDoc {
         encode(&to_json(self))
     }
 
-    /// The document as a saved file holds it: pretty JSON.
+    /// The document as a saved file holds it: compact JSON, the text a
+    /// share string deflates, so a file holds whatever a link can. A file
+    /// read may be pretty JSON; it is written compact.
     pub fn to_json(&self) -> String {
-        // Nothing in a document fails to serialize: it holds no map, and
-        // every value serializes.
-        serde_json::to_string_pretty(self).unwrap_or_default()
+        to_json(self)
     }
 
     /// The document a share string holds, decoded and checked, without
@@ -876,35 +866,49 @@ impl Session {
     }
 
     /// The session as a share string, as [`ShareDoc::to_share_string`]
-    /// writes its document, when a link can open it: its JSON within
-    /// [`MAX_SHARE_JSON_BYTES`] and the string within
-    /// [`MAX_SHARE_TEXT_BYTES`]. The ops' JSON is kept as they are appended,
-    /// so after a cursor move only the configuration and the cursor are
-    /// serialized again.
+    /// writes its document, when a link can open it: the string within
+    /// [`MAX_SHARE_TEXT_BYTES`]. Its JSON, the saved file's, is within
+    /// [`MAX_SHARE_JSON_BYTES`] already, since the session refuses any op
+    /// that would take the file past it, wherever the cursor goes. The ops'
+    /// JSON is kept as they are appended, so after a cursor move only the
+    /// configuration and the cursor are serialized again.
     ///
     /// # Errors
     ///
-    /// [`LinkTooLong::Text`] when the string is too long for a link but a
-    /// saved file can hold the run, and [`LinkTooLong::Json`] when a file
-    /// cannot either.
+    /// [`LinkTooLong`] when the string is too long for a link; the saved
+    /// file holds the run.
     pub fn to_share_string(&self) -> Result<String, LinkTooLong> {
-        let too_large = match link(&self.share_json()) {
-            Ok(share) => return Ok(share),
-            Err(too_large) => too_large,
-        };
-        // A saved file holds the document as pretty JSON, a little larger.
-        let file = self.to_json().len();
-        match too_large {
-            TooLarge::Text { bytes } if !exceeds(file, MAX_SHARE_JSON_BYTES) => {
-                Err(LinkTooLong::Text { bytes })
-            }
-            _ => Err(LinkTooLong::Json { bytes: count(file) }),
+        let share = encode(&self.share_json());
+        if exceeds(share.len(), MAX_SHARE_TEXT_BYTES) {
+            return Err(LinkTooLong {
+                bytes: count(share.len()),
+            });
         }
+        Ok(share)
     }
 
-    /// The session as a saved file holds it: its document as pretty JSON.
+    /// The session as a saved file holds it: its document as compact JSON,
+    /// the JSON its share string deflates, written from the ops' JSON the
+    /// session keeps. It is never larger than [`MAX_SHARE_JSON_BYTES`].
     pub fn to_json(&self) -> String {
-        self.share_doc().to_json()
+        self.share_json()
+    }
+
+    /// The size of the file [`Session::to_json`] writes, in bytes, without
+    /// writing it: the ops' JSON, whose size is kept as they are appended,
+    /// and the first run's configuration and the cursor's place.
+    pub fn to_json_len(&self) -> u32 {
+        let doc = ShareDoc {
+            schema_version: SCHEMA_VERSION,
+            config: self.share_config(),
+            ops: Vec::new(),
+            at: self.share_at(),
+        };
+        count(
+            to_json(&doc)
+                .len()
+                .saturating_add(self.saved_ops().text().len()),
+        )
     }
 
     /// The share summary of the session as it stands: the displayed run's
@@ -963,7 +967,7 @@ impl Session {
         let mut json = format!(
             "{{\"schema_version\":{SCHEMA_VERSION},\"config\":{},\"ops\":[{}]",
             to_json(&self.share_config()),
-            self.ops_json().join(",")
+            self.saved_ops().text()
         );
         if let Some(at) = self.share_at() {
             json.push_str(",\"at\":");
@@ -977,6 +981,150 @@ impl Session {
 /// `op` as a share document writes it.
 pub(crate) fn op_json(op: &Op) -> String {
     to_json(op)
+}
+
+/// A session's ops as its saved file writes them, kept as ops are appended
+/// and dropped, so that a file or a link written after a cursor move
+/// serializes only the configuration and the cursor, and the file's size is
+/// known op by op without writing it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SavedOps {
+    /// The most bytes the file takes besides its ops' JSON, whatever the
+    /// mode and wherever the cursor is: see [`frame`].
+    frame: usize,
+    /// Each op's JSON, in order, with a comma between two: what the
+    /// document's `ops` array holds between its brackets.
+    text: String,
+    /// Where each op's JSON ends in `text`.
+    ends: Vec<usize>,
+}
+
+/// The room a saved file has for more ops, taken as ops are checked in
+/// turn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct FileRoom {
+    /// The bytes left under [`MAX_SHARE_JSON_BYTES`].
+    left: usize,
+    /// Whether the file holds an op already, from which a comma separates
+    /// the next.
+    after_op: bool,
+}
+
+impl SavedOps {
+    /// No op yet, for a session whose first run's configuration is
+    /// `initial`.
+    pub(crate) fn new(initial: &Config) -> Self {
+        Self {
+            frame: frame(initial),
+            text: String::new(),
+            ends: Vec::new(),
+        }
+    }
+
+    /// The ops' JSON, a comma between two.
+    pub(crate) fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// Keeps the JSON of the first `ops` ops only.
+    pub(crate) fn truncate(&mut self, ops: usize) {
+        // Each end is where an op's JSON ended as it was appended, so it
+        // falls between two characters.
+        self.text.truncate(self.len_of(ops));
+        self.ends.truncate(ops);
+    }
+
+    /// Appends the next op's JSON, `json`.
+    pub(crate) fn push(&mut self, json: &str) {
+        if !self.ends.is_empty() {
+            self.text.push(',');
+        }
+        self.text.push_str(json);
+        self.ends.push(self.text.len());
+    }
+
+    /// The room the file has for ops after its first `ops`, those after
+    /// them not counted, since an op appended there drops them.
+    pub(crate) fn room_after(&self, ops: usize) -> FileRoom {
+        let used = self.frame.saturating_add(self.len_of(ops));
+        let limit = usize::try_from(MAX_SHARE_JSON_BYTES).unwrap_or(usize::MAX);
+        FileRoom {
+            left: limit.saturating_sub(used),
+            after_op: ops.min(self.ends.len()) > 0,
+        }
+    }
+
+    /// The bytes of the first `ops` ops' JSON, the commas between them
+    /// included.
+    fn len_of(&self, ops: usize) -> usize {
+        ops.min(self.ends.len())
+            .checked_sub(1)
+            .and_then(|last| self.ends.get(last))
+            .copied()
+            .unwrap_or(0)
+    }
+}
+
+impl FileRoom {
+    /// The room of the saved file of a log with no op yet over a first run
+    /// of `initial`: where the fold and a load start.
+    pub(crate) fn new(initial: &Config) -> Self {
+        SavedOps::new(initial).room_after(0)
+    }
+
+    /// Whether an op whose JSON is `json` fits.
+    pub(crate) fn fits(self, json: &str) -> bool {
+        self.needed(json) <= self.left
+    }
+
+    /// Takes the room of an op whose JSON is `json`.
+    ///
+    /// # Errors
+    ///
+    /// [`OpError::FileFull`] when it does not fit; nothing is taken.
+    pub(crate) fn take(&mut self, json: &str) -> Result<(), OpError> {
+        if !self.fits(json) {
+            return Err(OpError::FileFull);
+        }
+        self.left = self.left.saturating_sub(self.needed(json));
+        self.after_op = true;
+        Ok(())
+    }
+
+    /// The bytes an op whose JSON is `json` adds to the file, with the comma
+    /// before it.
+    fn needed(self, json: &str) -> usize {
+        json.len().saturating_add(usize::from(self.after_op))
+    }
+}
+
+/// The most bytes a saved file of a session on `initial` takes besides its
+/// ops' JSON: the document with no op, its configuration in whichever mode
+/// writes it longer, and the longest place a cursor can have, since no log
+/// a session keeps holds more than [`MAX_SHARE_OPS`] ops or more than
+/// [`SESSION_EVENT_LIMIT`] events. So a file within that and its ops is
+/// within it whatever the mode chosen and wherever the cursor goes.
+fn frame(initial: &Config) -> usize {
+    let at = ShareAt {
+        op: MAX_SHARE_OPS.saturating_sub(1),
+        event: SESSION_EVENT_LIMIT,
+    };
+    [false, true]
+        .into_iter()
+        .map(|advanced| {
+            let doc = ShareDoc {
+                schema_version: SCHEMA_VERSION,
+                config: Config {
+                    advanced,
+                    ..initial.clone()
+                },
+                ops: Vec::new(),
+                at: Some(at),
+            };
+            to_json(&doc).len()
+        })
+        .max()
+        .unwrap_or(usize::MAX)
 }
 
 /// `value` as compact JSON. A configuration, an op, a place and a document
@@ -1142,7 +1290,8 @@ fn failure(
 /// otherwise; nothing if it was never decoded.
 fn contents(doc: Option<&ShareDoc>, text: Option<&str>) -> Option<String> {
     if let Some(doc) = doc {
-        return Some(doc.to_json());
+        // A document holds no map, and every value serializes.
+        return serde_json::to_string_pretty(doc).ok();
     }
     let text = text?;
     let pretty = serde_json::from_str::<serde_json::Value>(text)
@@ -1304,10 +1453,13 @@ mod tests {
     }
 
     /// Checks that the JSON the session writes from the ops' JSON it keeps
-    /// is the JSON `serde_json` writes for its document.
+    /// is the JSON `serde_json` writes for its document, the file's and the
+    /// link's alike, and that the size it keeps is that JSON's.
     fn kept_json_is_the_documents(session: &Session) {
         let json = session.share_json();
         assert_eq!(json, to_json(&session.share_doc()));
+        assert_eq!(session.to_json(), json);
+        assert_eq!(session.to_json_len() as usize, json.len());
         assert_eq!(
             link_text(&session.to_share_string().unwrap()).unwrap(),
             json
@@ -1315,7 +1467,7 @@ mod tests {
     }
 
     #[test]
-    fn the_ops_json_kept_is_the_documents_as_the_log_changes() {
+    fn the_ops_json_kept_and_its_size_are_the_documents_as_the_log_changes() {
         let mut session = Session::with_config(Preset::TwoWayLru.config()).unwrap();
         kept_json_is_the_documents(&session);
         for op in [
@@ -1344,6 +1496,85 @@ mod tests {
         kept_json_is_the_documents(&session);
         session.seek(EventPos::new_unchecked(0));
         kept_json_is_the_documents(&session);
+        session.set_advanced(false);
+        kept_json_is_the_documents(&session);
+    }
+
+    #[test]
+    fn a_files_room_is_what_its_frame_and_its_ops_leave() {
+        let initial = Preset::TwoWayLru.config();
+        let limit = usize::try_from(MAX_SHARE_JSON_BYTES).unwrap();
+        let mut saved = SavedOps::new(&initial);
+        // The frame is the document with no op at its longest: in the mode
+        // that writes it longer, with the longest place a cursor can have.
+        let longest = ShareDoc {
+            schema_version: SCHEMA_VERSION,
+            config: Config {
+                advanced: false,
+                ..initial.clone()
+            },
+            ops: Vec::new(),
+            at: Some(ShareAt {
+                op: MAX_SHARE_OPS - 1,
+                event: SESSION_EVENT_LIMIT,
+            }),
+        };
+        let advanced = ShareDoc {
+            config: Config {
+                advanced: true,
+                ..initial
+            },
+            ..longest.clone()
+        };
+        assert!(to_json(&advanced).len() < to_json(&longest).len());
+        assert_eq!(saved.frame, to_json(&longest).len());
+        let empty = FileRoom {
+            left: limit - saved.frame,
+            after_op: false,
+        };
+        assert_eq!(saved.room_after(0), empty);
+        // An op takes its JSON, and a comma before it after the first.
+        let ops = [load(0x0A4), Op::Step];
+        let mut room = empty;
+        for (count, op) in (1..).zip(&ops) {
+            let json = op_json(op);
+            room.take(&json).unwrap();
+            saved.push(&json);
+            assert_eq!(room, saved.room_after(count));
+        }
+        let (first, second) = (op_json(&load(0x0A4)), op_json(&Op::Step));
+        assert_eq!(saved.text(), format!("{first},{second}"));
+        assert_eq!(
+            room.left,
+            limit - saved.frame - first.len() - 1 - second.len()
+        );
+        // The document with those ops at its longest is the frame and the
+        // ops' JSON, to the byte.
+        let doc = ShareDoc {
+            ops: ops.to_vec(),
+            ..longest
+        };
+        assert_eq!(to_json(&doc).len(), saved.frame + saved.text().len());
+        // An op that fills the room to the byte fits; one a byte longer does
+        // not, and takes nothing.
+        let exact = "x".repeat(room.left - 1);
+        let over = format!("{exact}x");
+        assert!(room.fits(&exact));
+        assert!(!room.fits(&over));
+        let mut full = room;
+        assert_eq!(full.take(&over), Err(OpError::FileFull));
+        assert_eq!(full, room);
+        full.take(&exact).unwrap();
+        assert_eq!(full.left, 0);
+        assert!(!full.fits(""));
+        // Dropping ops gives their room back; counting past the ops kept
+        // counts those.
+        saved.truncate(1);
+        assert_eq!(saved.text(), first);
+        assert_eq!(saved.room_after(5), saved.room_after(1));
+        saved.truncate(0);
+        assert_eq!(saved.text(), "");
+        assert_eq!(saved.room_after(0), empty);
     }
 
     #[test]

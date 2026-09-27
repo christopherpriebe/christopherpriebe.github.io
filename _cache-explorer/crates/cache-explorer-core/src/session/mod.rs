@@ -8,8 +8,9 @@
 //! cursor as they were; an accepted op drops the undone ops, is appended, and
 //! the cursor goes to its last event. No call rewrites an op the log keeps.
 //! Every configuration change is an op of its own, which starts a run. The
-//! log never holds more ops than a link can, so every session can be shared
-//! as far as its ops go.
+//! log never holds more ops than a link can, nor more JSON than a saved file
+//! can, wherever the cursor is and in either mode, so every session can be
+//! saved, and shared by link whenever its link is short enough to open.
 //!
 //! Every state is the fold of the ops over the initial configuration,
 //! stopped after the event the cursor is on: [`Session::replay`] and
@@ -33,8 +34,9 @@
 //! draw.
 //!
 //! A session is written out as a share document, keeping each op's JSON as
-//! the op is appended, and is built again from one a slice of events at a
-//! time, each op checked as it was when it was appended.
+//! the op is appended, and with it the saved file's size, and is built again
+//! from one a slice of events at a time, each op checked as it was when it
+//! was appended.
 //!
 //! A guided module's unanswered prediction gates the session: while the
 //! gate is set, every op is refused and the cursor cannot pass the point
@@ -72,7 +74,7 @@ use crate::geometry::{AccessError, Decoded};
 use crate::isa::ParseResult;
 use crate::machine::Machine;
 use crate::op::{Op, OpError, ProgramFormat};
-use crate::share;
+use crate::share::{self, FileRoom, SavedOps};
 use crate::snapshot::{
     self, BusView, CacheView, ControlAction, Controls, CpuView, Labels, MemoryLineView, MemoryRows,
     MemoryView, ProgramView, RequestView, State,
@@ -105,8 +107,8 @@ pub struct Session {
     last_serial: u64,
     /// Each op as a share document writes it, kept as ops are appended and
     /// dropped, so a share string written after a cursor move serializes
-    /// only the cursor.
-    ops_json: Vec<String>,
+    /// only the cursor, and the saved file's size is known op by op.
+    saved: SavedOps,
     /// Every event of every op, in order; at most
     /// [`SESSION_EVENT_LIMIT`](crate::limits::SESSION_EVENT_LIMIT).
     events: Vec<MicroEvent>,
@@ -199,13 +201,13 @@ impl Session {
         let origin = Machine::start(initial.clone())?;
         Ok(Session {
             advanced: initial.advanced,
+            saved: SavedOps::new(&initial),
             initial,
             watch: BTreeSet::new(),
             gate: None,
             ops: Vec::new(),
             serials: Vec::new(),
             last_serial: 0,
-            ops_json: Vec::new(),
             events: Vec::new(),
             op_ends: Vec::new(),
             entries: Vec::new(),
@@ -227,13 +229,17 @@ impl Session {
     /// [`ReplayError::InitialConfig`] if `initial` is invalid, and
     /// [`ReplayError::Op`] for the first op the machine refuses, as a
     /// session would refuse it; that includes an op the session's event
-    /// limit leaves no room for, and an op past the most a link can hold.
+    /// limit leaves no room for, an op past the most a link can hold, and
+    /// an op a saved file has no room for.
     pub fn replay(initial: &Config, ops: &[Op]) -> Result<Replay, ReplayError> {
         let mut machine = Machine::start(initial.clone())?;
+        let mut file = FileRoom::new(initial);
         let mut sink = Recorder::default();
         for (index, op) in (0_u32..).zip(ops) {
             let index = OpIndex::new_unchecked(index);
             let first = u64::try_from(sink.events.len()).unwrap_or(u64::MAX);
+            check_room(first, index, &mut file, op)
+                .map_err(|error| ReplayError::Op { index, error })?;
             let mut out = Emitter::new(&mut sink, index, first);
             engine::apply(&mut machine, op, &mut out)
                 .map_err(|error| ReplayError::Op { index, error })?;
@@ -261,7 +267,8 @@ impl Session {
             op: OpIndex::new_unchecked(0),
             progress: OpProgress::START,
         };
-        replay_quietly(start, ops, pos)
+        let file = Some(FileRoom::new(initial));
+        replay_capturing(start, ops, pos, None, file).map(|(machine, _)| machine)
     }
 
     /// The first run's configuration.
@@ -476,11 +483,12 @@ impl Session {
     ///
     /// The op is first checked against the gate, if one is set, then
     /// against the session's event limit, then against the ops a link can
-    /// hold, counting those kept before it, and then against the machine
-    /// there. Only once it is accepted is the log dropped after that point:
-    /// the op holding the cursor is kept whole, and the undone ops after it
-    /// go. So Undo makes room for an op when the log is as long as a link
-    /// can hold.
+    /// hold, then against the bytes a saved file can hold, counting the ops
+    /// kept before it, and then against the machine there. Only once it is
+    /// accepted is the log dropped after that point: the op holding the
+    /// cursor is kept whole, and the undone ops after it go. So Undo makes
+    /// room for an op when the log is as long as a link can hold, or as
+    /// large as a file can.
     ///
     /// # Errors
     ///
@@ -507,8 +515,9 @@ impl Session {
     ///
     /// [`OpError::Gated`] while a gate is set, [`OpError::Config`] if
     /// `config` is invalid, the error refusing the `Config` op when it would
-    /// be applied at once, and otherwise [`OpError::SessionFull`] or
-    /// [`OpError::LinkFull`] when the log has no room for it.
+    /// be applied at once, and otherwise [`OpError::SessionFull`],
+    /// [`OpError::LinkFull`] or [`OpError::FileFull`] when the log has no
+    /// room for it.
     pub fn propose_config(&mut self, config: Config) -> Result<ConfigChange, OpError> {
         if self.gate.is_some() {
             return Err(OpError::Gated);
@@ -526,7 +535,9 @@ impl Session {
             self.apply(Op::Config { config })?;
             return Ok(ConfigChange::Applied);
         }
-        self.room()?;
+        self.room(&Op::Config {
+            config: config.clone(),
+        })?;
         Ok(ConfigChange::NeedsReset {
             message: self.reset_question(),
             config,
@@ -619,6 +630,8 @@ impl Session {
             checkpoints: Vec::new(),
             entries: Entries::new(&machine, self.steps_through(base)),
         };
+        let mut file = self.saved.room_after(slot_of(kept));
+        let mut ops_json = Vec::with_capacity(ops.len());
         let mut op_ends = Vec::with_capacity(ops.len());
         let mut last_start = None;
         for (index, op) in (kept..).zip(&ops) {
@@ -628,6 +641,7 @@ impl Session {
             }
             builder.op = index;
             let first = builder.next_id();
+            ops_json.push(check_room(first, index, &mut file, op)?);
             let mut out = Emitter::new(&mut builder, index, first);
             engine::apply(&mut machine, op, &mut out)?;
             let end = builder.pos();
@@ -646,6 +660,7 @@ impl Session {
             base,
             kept,
             ops,
+            ops_json,
             events,
             op_ends,
             checkpoints,
@@ -657,18 +672,18 @@ impl Session {
     }
 
     /// Makes `plan` the session's: drops the log after its base, appends its
-    /// ops, events and entries, each op with the next serial, and puts the
-    /// cursor on its last event.
+    /// ops, their JSON, events and entries, each op with the next serial, and
+    /// puts the cursor on its last event.
     fn commit(&mut self, plan: Plan) {
         let from = self.cursor;
-        let kept = usize::try_from(plan.kept).unwrap_or(usize::MAX);
+        let kept = slot_of(plan.kept);
         self.ops.truncate(kept);
         self.serials.truncate(kept);
         for _ in &plan.ops {
             self.last_serial = self.last_serial.saturating_add(1);
             self.serials.push(self.last_serial);
         }
-        self.ops_json.truncate(kept);
+        self.saved.truncate(kept);
         self.op_ends.truncate(kept);
         self.events.truncate(slot(plan.base));
         let entries = self
@@ -677,7 +692,9 @@ impl Session {
         self.entries.truncate(entries);
         self.last_accesses.truncate(entries);
         self.checkpoints.truncate_after(plan.base);
-        self.ops_json.extend(plan.ops.iter().map(share::op_json));
+        for json in &plan.ops_json {
+            self.saved.push(json);
+        }
         self.ops.extend(plan.ops);
         self.op_ends.extend(plan.op_ends);
         self.events.extend(plan.events);
@@ -691,18 +708,25 @@ impl Session {
         self.stepped = self.cursor.get().abs_diff(from.get()) == 1;
     }
 
-    /// Whether the log has room for a new op where one would go, as
+    /// Whether the log has room for `op` where a new op would go, as
     /// [`Session::apply`] checks after the gate: under the session's event
-    /// limit, then under the ops a link can hold, counting the ops kept
-    /// before it.
+    /// limit, then under the ops a link can hold, then under the bytes a
+    /// saved file can hold, counting the ops kept before it.
     ///
     /// # Errors
     ///
-    /// [`OpError::SessionFull`] or [`OpError::LinkFull`], the first that
-    /// fails.
-    fn room(&self) -> Result<(), OpError> {
+    /// [`OpError::SessionFull`], [`OpError::LinkFull`] or
+    /// [`OpError::FileFull`], the first that fails.
+    fn room(&self, op: &Op) -> Result<(), OpError> {
         let (base, kept) = self.base();
-        engine::room(u64::from(base.get()), kept)
+        let mut file = self.saved.room_after(slot_of(kept));
+        check_room(
+            u64::from(base.get()),
+            OpIndex::new_unchecked(kept),
+            &mut file,
+            op,
+        )
+        .map(drop)
     }
 
     /// Where a new op goes: the end of the op holding the cursor, or
@@ -768,7 +792,7 @@ impl Session {
                 progress: checkpoint.progress,
             }
         };
-        let (machine, captured) = replay_capturing(start, &self.ops, pos, Some(capture))?;
+        let (machine, captured) = replay_capturing(start, &self.ops, pos, Some(capture), None)?;
         let captured = captured.unwrap_or_else(|| machine.clone());
         Ok((captured, machine))
     }
@@ -902,6 +926,8 @@ struct Plan {
     kept: u32,
     /// The ops.
     ops: Vec<Op>,
+    /// Each op as a share document writes it.
+    ops_json: Vec<String>,
     /// Their events.
     events: Vec<MicroEvent>,
     /// Where each ends.
@@ -936,17 +962,20 @@ struct Start<'m> {
 /// Replays `ops` quietly from `start` and returns the machine after the
 /// event at `target`, or after the last op if the ops end first.
 fn replay_quietly(start: Start<'_>, ops: &[Op], target: EventPos) -> Result<Machine, ReplayError> {
-    replay_capturing(start, ops, target, None).map(|(machine, _)| machine)
+    replay_capturing(start, ops, target, None, None).map(|(machine, _)| machine)
 }
 
 /// Replays `ops` quietly from `start` as [`replay_quietly`] does, keeping a
 /// copy of the machine at `capture` on the way, when the replay passes that
-/// position.
+/// position. With `file`, the room a saved file has at `start`, each op the
+/// replay starts is checked for room first, as the fold checks it; a
+/// session's own replays leave it out, since they replay ops it accepted.
 fn replay_capturing(
     start: Start<'_>,
     ops: &[Op],
     target: EventPos,
     capture: Option<EventPos>,
+    file: Option<FileRoom>,
 ) -> Result<(Machine, Option<Machine>), ReplayError> {
     let mut machine = start.machine.clone();
     let at_start = capture
@@ -964,7 +993,7 @@ fn replay_capturing(
             .filter(|&events| events > 0),
         captured: at_start,
     };
-    resume_into(&mut machine, start, ops, &mut sink, |sink| {
+    resume_into(&mut machine, start, ops, &mut sink, file, |sink| {
         sink.remaining == 0
     })?;
     Ok((machine, sink.captured))
@@ -973,12 +1002,15 @@ fn replay_capturing(
 /// Replays `ops` into `machine`, the machine of `start`, from `start`'s op
 /// and progress, handing each event to `sink`, until the ops end or, after
 /// an op, `finished` says the sink has what it waits for; a sink stops the
-/// op it wants to end inside.
+/// op it wants to end inside. With `file`, the room a saved file has at
+/// `start`, each op started is first checked for room, as the fold checks
+/// it.
 fn resume_into<S: EventSink>(
     machine: &mut Machine,
     start: Start<'_>,
     ops: &[Op],
     sink: &mut S,
+    mut file: Option<FileRoom>,
     finished: impl Fn(&S) -> bool,
 ) -> Result<(), ReplayError> {
     let mut next_id = u64::from(start.pos.get());
@@ -986,6 +1018,10 @@ fn resume_into<S: EventSink>(
     let first = usize::try_from(start.op.get()).unwrap_or(usize::MAX);
     for (index, op) in (0_u32..).zip(ops).skip(first) {
         let index = OpIndex::new_unchecked(index);
+        if let Some(file) = file.as_mut().filter(|_| progress == OpProgress::START) {
+            check_room(next_id, index, file, op)
+                .map_err(|error| ReplayError::Op { index, error })?;
+        }
         let mut out = Emitter::new(&mut *sink, index, next_id);
         engine::resume(machine, op, progress, &mut out)
             .map_err(|error| ReplayError::Op { index, error })?;
@@ -1006,6 +1042,33 @@ fn position(count: usize) -> EventPos {
 /// The number of events before `pos`, as an index into the events.
 fn slot(pos: EventPos) -> usize {
     usize::try_from(pos.get()).unwrap_or(usize::MAX)
+}
+
+/// A count of ops, as an index into the ops.
+fn slot_of(ops: u32) -> usize {
+    usize::try_from(ops).unwrap_or(usize::MAX)
+}
+
+/// Checks that a log of `events` events whose ops before it number `index`
+/// has room for `op`, as every op is checked before the machine's rules:
+/// room for one more entry, then for one more op a link can hold, then for
+/// the op's JSON in a saved file, whose room `file` it takes. Gives the op's
+/// JSON, as a share document writes it.
+///
+/// # Errors
+///
+/// [`OpError::SessionFull`], [`OpError::LinkFull`] or [`OpError::FileFull`],
+/// the first that fails; nothing is taken.
+fn check_room(
+    events: u64,
+    index: OpIndex,
+    file: &mut FileRoom,
+    op: &Op,
+) -> Result<String, OpError> {
+    engine::room(events, index.get())?;
+    let json = share::op_json(op);
+    file.take(&json)?;
+    Ok(json)
 }
 
 /// Keeps every event.

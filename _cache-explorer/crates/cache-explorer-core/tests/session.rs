@@ -6,10 +6,12 @@
 //! accepted; a refused op of each kind leaving the log, the undone ops and
 //! the cursor as they were; configuration changes, applied at once as ops
 //! of their own or asked about first, and Reset; switching between Basics
-//! and Advanced; new runs keeping the program; the session's event limit
-//! and the ops a link can hold, which the editors report before planning
-//! and the configuration bar before asking, and which refuse a press of two
-//! ops whole; every state the cursor
+//! and Advanced; new runs keeping the program; the session's event limit,
+//! the ops a link can hold and the bytes a saved file can hold, which the
+//! editors report before planning and the configuration bar before asking,
+//! and the first two of which refuse a press of two ops whole; a file at its
+//! limit to the byte, within it wherever the cursor is and in either mode,
+//! whose size the session keeps as the file's own; every state the cursor
 //! reaches equal to the fold's, from checkpoints or not; and the gate a
 //! guided module's unanswered prediction sets, which refuses every op,
 //! holds the cursor at or before where the prediction began, and shows in
@@ -18,19 +20,20 @@
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
 use cache_explorer_core::limits::{
-    CHECKPOINT_INTERVAL, INSTRUCTION_BUDGET, MAX_EVENTS_PER_ENTRY, MAX_RUN_STEPS, MAX_SHARE_OPS,
-    SESSION_EVENT_LIMIT,
+    CHECKPOINT_INTERVAL, INSTRUCTION_BUDGET, MAX_EVENTS_PER_ENTRY, MAX_RUN_STEPS,
+    MAX_SHARE_JSON_BYTES, MAX_SHARE_OPS, SESSION_EVENT_LIMIT,
 };
 use cache_explorer_core::{
     AccessKind, Boundary, CacheConfig, Config, ConfigChange, ConfigError, ControlAction,
-    EditOutcome, EventKind, MicroEvent, Op, OpError, OpIndex, Preset, ProgramFormat, ProgramSource,
-    RefusalReason, Replacement, ReplayError, Session, StepOutcome, WordBytes, WritePolicy,
+    EditOutcome, EventKind, LoadError, MicroEvent, Op, OpError, OpIndex, Preset, ProgramFormat,
+    ProgramSource, RefusalReason, Replacement, ReplayError, Session, StepOutcome, WordBytes,
+    WritePolicy,
 };
 
 use support::{
-    addr, apply_all, as_long_as_a_link, change_refused, config, drawer, edit, edit_word,
-    editors_refuse_for_room, end_of, gated_at_end, gated_mid_log, grouped, hand_loads, load, log,
-    log_end, pos, program, refused, session, store, table, varied, word,
+    addr, apply_all, as_large_as_a_file, as_long_as_a_link, change_refused, config, drawer, edit,
+    edit_word, editors_refuse_for_room, end_of, gated_at_end, gated_mid_log, grouped, hand_loads,
+    load, log, log_end, padded, pos, program, refused, session, store, table, varied, word,
 };
 
 /// An `add` then a load: two entries, the second an access.
@@ -56,7 +59,7 @@ const WALK: &str = concat!(
 /// failed `unwrap` is a failed test, as in the tests themselves.
 #[cfg(test)]
 mod support {
-    use cache_explorer_core::limits::MAX_SHARE_OPS;
+    use cache_explorer_core::limits::{MAX_PROGRAM_BYTES, MAX_SHARE_OPS};
     use cache_explorer_core::{
         AccessKind, Addr, Boundary, Config, EditOutcome, EventPos, MicroEvent, Module, ModuleRun,
         Op, OpError, Preset, ProgramFormat, ProgramSource, RefusalReason, Session, Tone, WayForm,
@@ -90,6 +93,43 @@ mod support {
     /// A session whose log holds as many ops as a link can, loads by hand.
     pub(crate) fn as_long_as_a_link() -> Session {
         hand_loads(MAX_SHARE_OPS)
+    }
+
+    /// The instruction a padded program starts with, and the comment that
+    /// follows it.
+    const PADDED: &str = "add r1, r0, #1\n; ";
+
+    /// A load of a program of one instruction and a comment of `letters`
+    /// letters, whose JSON grows by exactly one byte a letter.
+    pub(crate) fn padded(letters: usize) -> Op {
+        program(&format!("{PADDED}{}", "x".repeat(letters)))
+    }
+
+    /// A session whose saved file is as large as a file can hold, to the
+    /// byte: padded programs, the last of them the longest the session
+    /// accepts, found by bisection, so that no op of any kind fits after it.
+    pub(crate) fn as_large_as_a_file() -> Session {
+        let most = MAX_PROGRAM_BYTES as usize - PADDED.len();
+        let fits = |session: &Session, letters| session.clone().apply(padded(letters)).is_ok();
+        let mut session = session();
+        // Half the longest program at a time: while the longest fits, what
+        // is left after half of it still has room for the shortest.
+        while fits(&session, most) {
+            session.apply(padded(most / 2)).unwrap();
+        }
+        let (mut low, mut high) = (0, most);
+        assert!(fits(&session, low));
+        while high - low > 1 {
+            let mid = low.midpoint(high);
+            if fits(&session, mid) {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        assert_eq!(session.clone().apply(padded(high)), Err(OpError::FileFull));
+        session.apply(padded(low)).unwrap();
+        session
     }
 
     /// Checks that a change from the configuration bar to `two-way-lru` is
@@ -1449,8 +1489,8 @@ fn a_log_as_long_as_a_link_can_hold_refuses_every_op_until_undo_makes_room() {
         refused(&mut session, &op, &OpError::LinkFull);
     }
     let message = format!(
-        "This run is as long as a link can hold: {} actions. Undo to make room, or save it and \
-         start fresh.",
+        "A link can hold at most {} actions, and this would pass that. Undo to make room, or save \
+         the run and start fresh.",
         grouped(MAX_SHARE_OPS)
     );
     assert_eq!(OpError::LinkFull.to_string(), message);
@@ -1530,6 +1570,113 @@ fn a_press_that_would_pass_the_link_limit_is_refused_whole() {
     assert_eq!(session.step_event(Some(&sample)), idle);
     assert_eq!(session.step_access(Some(&sample)), idle);
     assert_eq!(session.op_count(), MAX_SHARE_OPS);
+}
+
+#[test]
+fn a_log_as_large_as_a_file_can_hold_refuses_every_op_until_undo_makes_room() {
+    let mut session = as_large_as_a_file();
+    let end = session.position().pos.get();
+    // The file is within its limit wherever the cursor is and in either
+    // mode, at the size the session keeps without writing it.
+    for advanced in [true, false] {
+        session.set_advanced(advanced);
+        for at in [0, 1, end / 2, end] {
+            session.seek(pos(at));
+            let json = session.to_json();
+            assert_eq!(session.to_json_len() as usize, json.len(), "at {at}");
+            assert!(json.len() <= MAX_SHARE_JSON_BYTES as usize, "at {at}");
+        }
+    }
+    // The events and the ops leave room for more, so it is the file's
+    // limit that refuses, its room used to the byte.
+    assert!(session.op_count() < MAX_SHARE_OPS);
+    assert!(end + MAX_EVENTS_PER_ENTRY <= SESSION_EVENT_LIMIT);
+    // Every op is refused, the shortest and Reset's `Config` op included,
+    // and Space and Shift+Space say why.
+    for op in [
+        Op::Step,
+        Op::StepAccess,
+        Op::Run { n: 1 },
+        load(0x0A4),
+        padded(0),
+        Op::Config { config: config() },
+        edit_word(),
+    ] {
+        refused(&mut session, &op, &OpError::FileFull);
+    }
+    let message = format!(
+        "A saved file can hold at most {} bytes, and this would pass that. Undo to make room, or \
+         save the run and start fresh.",
+        grouped(MAX_SHARE_JSON_BYTES)
+    );
+    assert_eq!(OpError::FileFull.to_string(), message);
+    // So do the editors, before any rule of their own, and the
+    // configuration bar, rather than ask about a new run.
+    editors_refuse_for_room(&session, RefusalReason::FileFull, &message);
+    change_refused(&mut session, &OpError::FileFull);
+    let idle = StepOutcome::Idle {
+        message: message.clone(),
+    };
+    assert_eq!(session.step_event(None), idle);
+    assert_eq!(session.step_event(Some(&drawer(ADD_THEN_LOAD))), idle);
+    assert_eq!(session.step_access(None), idle);
+    // The fold refuses the same op at the same place, as far as it goes.
+    let initial = session.initial().clone();
+    let mut ops = session.ops().to_vec();
+    assert!(Session::replay(&initial, &ops).is_ok());
+    ops.push(Op::Step);
+    let last = u32::try_from(ops.len() - 1).unwrap();
+    let error = Session::replay(&initial, &ops).unwrap_err();
+    let ReplayError::Op {
+        index,
+        error: refusal,
+    } = &error
+    else {
+        panic!("the op is refused: {error:?}");
+    };
+    assert_eq!((index.get(), refusal), (last, &OpError::FileFull));
+    assert!(Session::replay_to(&initial, &ops, pos(end)).is_ok());
+    assert_eq!(
+        Session::replay_to(&initial, &ops, pos(end + 1)).unwrap_err(),
+        error
+    );
+    // So does a load of a document with that op, which no session writes,
+    // though its JSON is within the limit without the cursor's place.
+    let mut doc = session.share_doc();
+    doc.ops.push(Op::Step);
+    doc.at = None;
+    let json = doc.to_json();
+    assert!(json.len() <= MAX_SHARE_JSON_BYTES as usize);
+    assert_eq!(
+        Session::from_json(&json).unwrap_err(),
+        LoadError::Op {
+            index: last,
+            error: OpError::FileFull,
+            not_replayed: 0,
+        }
+    );
+    // Moving back makes room for as much as the ops passed: one op back, a
+    // load replaces the last program.
+    let count = session.op_count();
+    let mut back = session.clone();
+    back.scrub_to(count - 1);
+    back.apply(load(0x0A4)).unwrap();
+    assert_eq!(back.op_count(), count);
+    assert!(back.to_json_len() < session.to_json_len());
+    // Undo makes room: an edit plans there, a configuration change asks
+    // first, and an op applied there drops what came after.
+    assert!(session.undo());
+    assert!(matches!(
+        session.draft_memory_edit(addr(0x0A4), "1").outcome,
+        EditOutcome::Plan(_)
+    ));
+    assert!(matches!(
+        session.propose_config(Preset::TwoWayLru.config()),
+        Ok(ConfigChange::NeedsReset { .. })
+    ));
+    session.apply(load(0x0A4)).unwrap();
+    assert!(session.op_count() < count);
+    assert!(!session.redo());
 }
 
 /// A call on a session, as the page makes it.

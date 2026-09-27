@@ -6,33 +6,37 @@
 //! the one the edit applies to, and a plan shown is the plan applied. The
 //! refusal names what to finish first; Shift+Space goes to the op's end.
 //! Before that, as for every op, the session refuses an edit while its log
-//! has no room for another entry there, or already holds as many ops before
-//! it as a link can hold. Then the machine's own rules decide.
+//! has no room for another entry there, already holds as many ops before it
+//! as a link can hold, or would take its saved file past what a file can
+//! hold with the edit. Then the machine's own rules decide.
 
-use super::{EntryKind, EntryRecord, Session};
+use super::{slot_of, EntryKind, EntryRecord, Session};
 use crate::engine::{self, Blocked, EditDraft, EditPlan, EditRefusal, MemoryEditDraft, WayForm};
 use crate::explain::Unfinished;
-use crate::op::{EditPatch, EditTarget};
+use crate::op::{EditPatch, EditTarget, Op};
+use crate::share;
 use crate::snapshot;
 use crate::units::{Addr, EventPos, OpIndex, SetIndex, WayIndex};
 
 impl Session {
     /// Plans `patch` on `target` at the cursor: refused while the log has no
     /// room for another entry where the edit would go, or for another op a
-    /// link could hold, or while the cursor is inside an op, and otherwise
-    /// planned by the rules on the machine at the cursor, which is the
-    /// machine [`Session::apply`] checks the edit against.
+    /// link could hold, or for the edit in a saved file, or while the cursor
+    /// is inside an op, and otherwise planned by the rules on the machine at
+    /// the cursor, which is the machine [`Session::apply`] checks the edit
+    /// against.
     ///
     /// # Errors
     ///
-    /// The [`EditRefusal`] of the session's limit or the link's, of the
-    /// cursor's place, or of the first rule that refuses the edit.
+    /// The [`EditRefusal`] of the session's limit, the link's or the saved
+    /// file's, of the cursor's place, or of the first rule that refuses the
+    /// edit.
     pub fn plan_edit(
         &self,
         target: &EditTarget,
         patch: &EditPatch,
     ) -> Result<EditPlan, EditRefusal> {
-        match self.blocked() {
+        match self.blocked(target, patch) {
             Some(blocked) => Err(blocked.refusal(&self.current, target, patch)),
             None => engine::plan_edit(&self.current, target, patch),
         }
@@ -42,28 +46,44 @@ impl Session {
     /// cursor: every field read, the patch Apply sends, its plan or refusal,
     /// and the way as it would be.
     pub fn draft_edit(&self, set: SetIndex, way: WayIndex, form: &WayForm) -> EditDraft {
-        engine::draft_way(&self.current, set, way, form, self.blocked())
+        engine::draft_way(&self.current, set, way, form, |target, patch| {
+            self.blocked(target, patch)
+        })
     }
 
     /// The memory editor's draft of `value_text` for the word at `addr` at
     /// the cursor: the value read, the patch Apply sends, and its plan or
     /// refusal.
     pub fn draft_memory_edit(&self, addr: Addr, value_text: &str) -> MemoryEditDraft {
-        engine::draft_memory(&self.current, addr, value_text, self.blocked())
+        engine::draft_memory(&self.current, addr, value_text, |target, patch| {
+            self.blocked(target, patch)
+        })
     }
 
-    /// Why the session refuses any edit at the cursor before the rules see
-    /// it, if it does: the log up to where the edit would go, the end of the
-    /// op holding the cursor, leaves no room for another entry, or holds as
-    /// many ops as a link can, which [`Session::apply`] checks first, in
-    /// that order; or the cursor is inside that op.
-    fn blocked(&self) -> Option<Blocked> {
+    /// Why the session refuses the edit of `patch` on `target` at the
+    /// cursor before the rules see it, if it does: the log up to where the
+    /// edit would go, the end of the op holding the cursor, leaves no room
+    /// for another entry, holds as many ops as a link can, or leaves its
+    /// saved file no room for the edit's op, which [`Session::apply`] checks
+    /// first, in that order; or the cursor is inside that op.
+    fn blocked(&self, target: &EditTarget, patch: &EditPatch) -> Option<Blocked> {
         let (base, kept) = self.base();
         if !engine::has_room(u64::from(base.get())) {
             return Some(Blocked::Full);
         }
         if !engine::has_op_room(kept) {
             return Some(Blocked::LinkFull);
+        }
+        let op = Op::Edit {
+            target: *target,
+            patch: patch.clone(),
+        };
+        if !self
+            .saved
+            .room_after(slot_of(kept))
+            .fits(&share::op_json(&op))
+        {
+            return Some(Blocked::FileFull);
         }
         self.unfinished().map(Blocked::Unfinished)
     }
