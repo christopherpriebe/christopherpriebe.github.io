@@ -28,6 +28,6 @@ wasm-bindgen-test = { workspace = true }
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false          # run the pinned binaryen from web/node_modules instead
 [package.metadata.wasm-pack.profile.release.wasm-bindgen]
-debug-js-glue = false
+debug-js-glue = true      # type checks on arguments and freed objects: wrong types throw instead of trapping
 demangle-name-section = false
 dwarf-debug-info = false

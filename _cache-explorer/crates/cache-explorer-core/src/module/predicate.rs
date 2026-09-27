@@ -19,14 +19,18 @@
 //! began made it: ops are told apart by serial, since entry numbers restart
 //! with each run and positions are reused after the log is truncated.
 
-use serde::{Deserialize, Serialize};
+use std::cell::Cell;
+
+use serde::{de, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use super::{addr_or_hex, optional_addr_or_hex, ModuleError, ModuleProblem};
 use crate::cache::Way;
 use crate::config::{AllocatePolicy, Config, Replacement, WritePolicy};
 use crate::event::{Counter, EventKind, MicroEvent};
+use crate::format;
 use crate::geometry::{AccessError, Geometry};
+use crate::limits::MAX_PREDICATE_DEPTH;
 use crate::machine::Machine;
 use crate::op::{AccessKind, Field};
 use crate::session::Session;
@@ -39,10 +43,11 @@ use crate::units::{Addr, EventPos, Register, Tag, Word};
 /// Serialized as the spec shapes it, keyed by which field it has: a way
 /// predicate as `{"way":{"set":2,"way":0},"valid":true}`, a counter
 /// predicate as `{"counter":"misses","op":">=","value":2}`. Read through a
-/// flat form with every key optional, as an op is.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// flat form with every key optional, as an op is, and nested at most
+/// [`MAX_PREDICATE_DEPTH`] deep.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
-#[serde(untagged, try_from = "RawPredicate")]
+#[serde(untagged)]
 pub enum Predicate {
     /// A way's fields.
     Way(WayPredicate),
@@ -710,6 +715,33 @@ struct RawPredicate {
     config: Field<ConfigMatch>,
 }
 
+thread_local! {
+    /// How many predicates enclose the one being read, through `all`, `any`
+    /// and `not`. serde's derive passes nothing down to a nested value, so
+    /// the depth is kept here, and restored whenever a read returns, whether
+    /// it read a predicate or not. An exception that JavaScript throws during
+    /// a read unwinds past the restore and leaves the depth raised; the page
+    /// passes only plain data, which throws none.
+    static DEPTH: Cell<u32> = const { Cell::new(0) };
+}
+
+impl<'de> Deserialize<'de> for Predicate {
+    /// Reads the flat form, then requires the keys of one kind. A predicate
+    /// nested deeper than [`MAX_PREDICATE_DEPTH`] is refused before any of
+    /// it is read, so the reading stays within the stack whatever the
+    /// deserializer's own limit on nesting.
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let depth = DEPTH.get();
+        if depth > MAX_PREDICATE_DEPTH {
+            return Err(de::Error::custom(ShapeError::TooDeep));
+        }
+        DEPTH.set(depth + 1);
+        let raw = RawPredicate::deserialize(deserializer);
+        DEPTH.set(depth);
+        Predicate::try_from(raw?).map_err(de::Error::custom)
+    }
+}
+
 /// The kinds of predicate, each named by the key it has.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
@@ -793,9 +825,10 @@ impl Kind {
     }
 }
 
-/// Why a flat predicate does not have the keys of one kind. Lower case and
-/// unterminated, like serde's own messages, since it reaches a reader only
-/// through serde, which adds the line and column.
+/// Why a flat predicate is not a predicate: it does not have the keys of one
+/// kind, or it nests too deep. Lower case and unterminated, like serde's own
+/// messages, since it reaches a reader only through serde, which adds the
+/// line and column.
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 enum ShapeError {
     /// None, or more than one, of the keys that name a kind.
@@ -829,6 +862,12 @@ enum ShapeError {
         /// The key.
         key: &'static str,
     },
+    /// Predicates nested deeper than [`MAX_PREDICATE_DEPTH`].
+    #[error(
+        "predicates nest at most {} deep in `all`, `any` and `not`",
+        format::setting(MAX_PREDICATE_DEPTH)
+    )]
+    TooDeep,
 }
 
 /// `keys` joined for a message, `way, line`, or `none`.

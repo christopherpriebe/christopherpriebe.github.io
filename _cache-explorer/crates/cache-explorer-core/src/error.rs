@@ -55,8 +55,8 @@ pub enum ArgKind {
     EditTarget,
     /// An `EventPos`: a position of the event cursor.
     EventPos,
-    /// A `LineAddr`: the address of a memory line.
-    LineAddr,
+    /// A `LineAddr[]`: addresses of memory lines.
+    LineAddrs,
     /// An `Op`.
     Op,
     /// A `Predicate`.
@@ -83,7 +83,7 @@ impl fmt::Display for ArgKind {
             ArgKind::EditPatch => "EditPatch",
             ArgKind::EditTarget => "EditTarget",
             ArgKind::EventPos => "EventPos",
-            ArgKind::LineAddr => "LineAddr",
+            ArgKind::LineAddrs => "LineAddr[]",
             ArgKind::Op => "Op",
             ArgKind::Predicate => "Predicate",
             ArgKind::ProgramFormat => "ProgramFormat",
@@ -138,7 +138,7 @@ mod tests {
             (ArgKind::EditPatch, "EditPatch"),
             (ArgKind::EditTarget, "EditTarget"),
             (ArgKind::EventPos, "EventPos"),
-            (ArgKind::LineAddr, "LineAddr"),
+            (ArgKind::LineAddrs, "LineAddr[]"),
             (ArgKind::Op, "Op"),
             (ArgKind::Predicate, "Predicate"),
             (ArgKind::ProgramFormat, "ProgramFormat"),

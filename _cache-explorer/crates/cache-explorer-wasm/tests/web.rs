@@ -1,7 +1,9 @@
 //! The facade's conversions and error mapping, run in wasm: values built in
 //! JavaScript go in, values come out as JavaScript sees them, and every
 //! failure is thrown as an `Error` whose message is the core's text, for
-//! arguments of the wrong shape as for refusals.
+//! arguments of the wrong shape as for refusals. Arguments JavaScript could
+//! send to break the module, a predicate nested thousands deep and a list
+//! that is not one, are refused and leave it working.
 //!
 //! The suite has no `run_in_browser`, so it runs under Node as well as in a
 //! browser. On a native target `wasm_bindgen_test` compiles each test as a
@@ -11,7 +13,7 @@
 
 #[cfg(test)]
 mod support {
-    use js_sys::{BigInt, Reflect, JSON};
+    use js_sys::{Array, BigInt, Object, Reflect, JSON};
     use tsify::{Ts, Tsify};
     use wasm_bindgen::{JsCast, JsError, JsValue};
 
@@ -41,6 +43,24 @@ mod support {
         get(value, key).as_string().unwrap()
     }
 
+    /// The elements of the JavaScript array `value`.
+    pub(crate) fn items(value: &JsValue) -> Vec<JsValue> {
+        value.dyn_ref::<Array>().unwrap().iter().collect()
+    }
+
+    /// `predicate` inside `depth` objects `{ [key]: … }`, or with `list`,
+    /// `{ [key]: [ … ] }`.
+    pub(crate) fn nest(predicate: JsValue, key: &str, list: bool, depth: u32) -> JsValue {
+        (0..depth).fold(predicate, |inner, _| {
+            let inner = if list {
+                Array::of1(&inner).into()
+            } else {
+                inner
+            };
+            with(Object::new().into(), key, &inner)
+        })
+    }
+
     /// `value` as a JavaScript `bigint`.
     pub(crate) fn big(value: u64) -> JsValue {
         BigInt::from(value).into()
@@ -55,27 +75,48 @@ mod support {
 
 #[cfg(test)]
 mod web {
-    use cache_explorer_core::limits::{MAX_ADDRESS_BITS, MAX_SHARE_TEXT_BYTES};
+    use cache_explorer_core::limits::{
+        MAX_ADDRESS_BITS, MAX_PREDICATE_DEPTH, MAX_SHARE_TEXT_BYTES,
+    };
     use cache_explorer_core::{
-        self as model, Config, EncodingError, LoadError, OpError, WordBytes, SCHEMA_VERSION,
+        self as model, Config, EncodingError, LoadError, MemoryInit, OpError, WordBytes,
+        SCHEMA_VERSION,
     };
     use cache_explorer_wasm::{
         build_info, eval_predicate, parse_module, validate_config, ModuleRun, Session, ShareLoad,
     };
+    use js_sys::Array;
     use tsify::{Ts, Tsify};
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    use super::support::{big, get, js, message, text, ts, with};
+    use super::support::{big, get, items, js, message, nest, text, ts, with};
 
-    /// A configuration with 8-byte words, the widest data values.
+    /// A configuration with 8-byte words, the widest data values, and
+    /// memory holding its pattern, so that writing zero changes a word.
     fn eight_byte_words() -> Ts<Config> {
         Config {
             word_bytes: WordBytes::Eight,
+            memory_init: MemoryInit::Pattern,
             ..Config::default()
         }
         .into_ts()
         .unwrap()
+    }
+
+    /// The counter predicate `accesses == 0`, true on an empty session.
+    fn no_accesses() -> JsValue {
+        js(r#"{"counter":"accesses","op":"==","value":0}"#)
+    }
+
+    /// The lines `session` is asked to watch, as its memory table marks them.
+    fn watched(session: &Session) -> Vec<f64> {
+        let rows: JsValue = session.memory_lines(0, 64).unwrap().into();
+        items(&rows)
+            .iter()
+            .filter(|row| get(row, "watched").as_bool() == Some(true))
+            .map(|row| get(row, "line").as_f64().unwrap())
+            .collect()
     }
 
     #[wasm_bindgen_test]
@@ -102,23 +143,23 @@ mod web {
         let expected = model::Session::with_config(config.clone())
             .unwrap_err()
             .to_string();
-        let error = Session::with_config(config.into_ts().unwrap()).unwrap_err();
+        let error = Session::with_config(&config.into_ts().unwrap()).unwrap_err();
         assert_eq!(message(error), expected);
     }
 
     #[wasm_bindgen_test]
     fn an_argument_of_the_wrong_shape_names_its_type_and_passes_serdes_reason() {
         let mut session = Session::new().unwrap();
-        let thrown = message(session.apply_op(ts(r#"{"op":"stpe"}"#)).unwrap_err());
+        let thrown = message(session.apply_op(&ts(r#"{"op":"stpe"}"#)).unwrap_err());
         assert!(
             thrown.starts_with("invalid Op: unknown variant `stpe`, expected one of `config`"),
             "{thrown}"
         );
-        let thrown = message(Session::with_config(ts(r#""wide""#)).unwrap_err());
+        let thrown = message(Session::with_config(&ts(r#""wide""#)).unwrap_err());
         assert!(thrown.starts_with("invalid Config: "), "{thrown}");
-        let thrown = message(session.set_memory_watch(vec![ts("1.5")]).unwrap_err());
-        assert!(thrown.starts_with("invalid LineAddr: "), "{thrown}");
-        let thrown = message(session.seek(ts("-1")).unwrap_err());
+        let thrown = message(session.set_memory_watch(js("[1.5]")).unwrap_err());
+        assert!(thrown.starts_with("invalid LineAddr[]: "), "{thrown}");
+        let thrown = message(session.seek(&ts("-1")).unwrap_err());
         assert!(thrown.starts_with("invalid EventPos: "), "{thrown}");
         assert_eq!(session.op_count(), 0);
     }
@@ -127,7 +168,7 @@ mod web {
     fn a_refused_op_throws_the_cores_message_and_changes_nothing() {
         let mut session = Session::new().unwrap();
         let before = session.to_json();
-        let error = session.apply_op(ts(r#"{"op":"step"}"#)).unwrap_err();
+        let error = session.apply_op(&ts(r#"{"op":"step"}"#)).unwrap_err();
         assert_eq!(message(error), OpError::NoProgram.to_string());
         assert_eq!(session.to_json(), before);
         assert_eq!(session.op_count(), 0);
@@ -135,34 +176,47 @@ mod web {
 
     #[wasm_bindgen_test]
     fn words_cross_as_bigints_and_come_back_exact() {
-        let mut session = Session::with_config(eight_byte_words()).unwrap();
+        let session = Session::with_config(&eight_byte_words()).unwrap();
         let read: JsValue = session.read_word("18446744073709551615").unwrap().into();
         assert_eq!(text(&read, "status"), "valid");
         assert!(get(&read, "value").is_bigint());
         assert_eq!(get(&read, "value"), big(u64::MAX));
-        for value in [big(0), big(7), big(u64::MAX), JsValue::from(7)] {
-            let op = with(
-                js(r#"{"op":"issue","kind":"write","addr":168}"#),
-                "value",
-                &value,
-            );
-            session.apply_op(Ts::new_unchecked(op)).unwrap();
+        // A memory edit's plan gives back the word it was sent, as the
+        // patch and as the value memory would then hold.
+        let target = ts(r#"{"kind":"memory","addr":168}"#);
+        let cases = [
+            (big(0), 0),
+            (big(7), 7),
+            (big(u64::MAX), u64::MAX),
+            (JsValue::from(7), 7),
+        ];
+        for (value, expected) in cases {
+            let patch = with(js(r#"{"kind":"memory"}"#), "value", &value);
+            let outcome: JsValue = session
+                .plan_edit(&target, &Ts::new_unchecked(patch))
+                .unwrap()
+                .into();
+            assert_eq!(text(&outcome, "outcome"), "plan", "{expected}");
+            assert_eq!(get(&get(&outcome, "patch"), "value"), big(expected));
+            let consequences = items(&get(&outcome, "consequences"));
+            let written = consequences
+                .iter()
+                .find(|consequence| text(consequence, "consequence") == "memoryWrite")
+                .unwrap();
+            assert!(get(written, "to").is_bigint());
+            assert_eq!(get(written, "to"), big(expected));
         }
-        let zero: JsValue = session.read_word("0").unwrap().into();
-        assert_eq!(get(&zero, "value"), big(0));
-        let seven: JsValue = session.read_word("7").unwrap().into();
-        assert_eq!(get(&seven, "value"), big(7));
     }
 
     #[wasm_bindgen_test]
     fn a_word_above_the_safe_integers_is_refused_as_a_number() {
-        let mut session = Session::with_config(eight_byte_words()).unwrap();
+        let mut session = Session::with_config(&eight_byte_words()).unwrap();
         let op = with(
             js(r#"{"op":"issue","kind":"write","addr":168}"#),
             "value",
             &JsValue::from(2_f64.powi(53)),
         );
-        let thrown = message(session.apply_op(Ts::new_unchecked(op)).unwrap_err());
+        let thrown = message(session.apply_op(&Ts::new_unchecked(op)).unwrap_err());
         assert!(thrown.starts_with("invalid Op: "), "{thrown}");
         assert_eq!(session.op_count(), 0);
     }
@@ -171,7 +225,7 @@ mod web {
     fn a_link_round_trips_and_a_broken_one_throws_the_load_message() {
         let mut session = Session::first_visit().unwrap();
         session
-            .apply_op(ts(r#"{"op":"issue","kind":"read","addr":164}"#))
+            .apply_op(&ts(r#"{"op":"issue","kind":"read","addr":164}"#))
             .unwrap();
         let share = session.to_share_string().unwrap();
         assert!(share.len() <= usize::try_from(MAX_SHARE_TEXT_BYTES).unwrap());
@@ -190,7 +244,7 @@ mod web {
     fn a_share_load_hands_over_its_session_once() {
         let mut session = Session::first_visit().unwrap();
         session
-            .apply_op(ts(r#"{"op":"issue","kind":"read","addr":164}"#))
+            .apply_op(&ts(r#"{"op":"issue","kind":"read","addr":164}"#))
             .unwrap();
         let mut load = ShareLoad::from_share_string(&session.to_share_string().unwrap());
         let early = load.take_session().unwrap_err();
@@ -217,18 +271,78 @@ mod web {
     #[wasm_bindgen_test]
     fn predicates_and_configurations_are_read_before_the_core_sees_them() {
         let session = Session::new().unwrap();
-        let holds = eval_predicate(
-            &session,
-            ts(r#"{"counter":"accesses","op":"==","value":0}"#),
-        )
-        .unwrap();
+        let holds = eval_predicate(&session, &Ts::new_unchecked(no_accesses())).unwrap();
         assert!(holds);
-        let thrown = message(eval_predicate(&session, ts(r#"{"nothing":1}"#)).unwrap_err());
+        let thrown = message(eval_predicate(&session, &ts(r#"{"nothing":1}"#)).unwrap_err());
         assert!(thrown.starts_with("invalid Predicate: "), "{thrown}");
-        let check: JsValue = validate_config(Config::default().into_ts().unwrap())
+        let check: JsValue = validate_config(&Config::default().into_ts().unwrap())
             .unwrap()
             .into();
         assert_eq!(text(&check, "status"), "valid");
+    }
+
+    #[wasm_bindgen_test]
+    fn a_predicate_nested_too_deep_throws_and_leaves_the_module_working() {
+        let mut session = Session::new().unwrap();
+        let other = Session::first_visit().unwrap();
+        let expected = format!(
+            "invalid Predicate: predicates nest at most {MAX_PREDICATE_DEPTH} deep in `all`, \
+             `any` and `not`"
+        );
+        for (key, list) in [("not", false), ("all", true), ("any", true)] {
+            // The deepest predicate the core reads is read and evaluated.
+            let deepest = Ts::new_unchecked(nest(no_accesses(), key, list, MAX_PREDICATE_DEPTH));
+            assert!(eval_predicate(&session, &deepest).unwrap(), "{key}");
+            assert_eq!(session.find_event(&deepest).unwrap(), Some(0), "{key}");
+            // Far deeper than the stack could follow, it is refused before
+            // it is read that deep, by both calls, and again.
+            let deep = Ts::new_unchecked(nest(no_accesses(), key, list, 10_000));
+            for _ in 0..2 {
+                let thrown = message(eval_predicate(&session, &deep).unwrap_err());
+                assert_eq!(thrown, expected, "{key}");
+                let thrown = message(session.find_event(&deep).unwrap_err());
+                assert_eq!(thrown, expected, "{key}");
+            }
+        }
+        session
+            .apply_op(&ts(r#"{"op":"issue","kind":"read","addr":164}"#))
+            .unwrap();
+        assert_eq!(session.op_count(), 1);
+        assert!(Session::from_json(&other.to_json()).is_ok());
+    }
+
+    #[wasm_bindgen_test]
+    fn a_watch_list_is_read_whole_and_anything_else_throws_and_changes_nothing() {
+        let mut session = Session::new().unwrap();
+        session.set_memory_watch(js("[160, 176]")).unwrap();
+        assert_eq!(watched(&session), [160.0, 176.0]);
+        // A sparse array longer than wasm's memory could hold as a list of
+        // handles is read one element at a time, and the first is a hole.
+        let sparse = Array::new();
+        sparse.set_length(2_u32.pow(30) + 1);
+        let values = [
+            JsValue::from(5),
+            JsValue::TRUE,
+            big(7),
+            js("{}"),
+            JsValue::from_str(""),
+            JsValue::NULL,
+            JsValue::UNDEFINED,
+            js("[1.5]"),
+            js("[160, -1]"),
+            sparse.into(),
+        ];
+        // Named by place: the sparse array is too long to print.
+        for (place, value) in values.into_iter().enumerate() {
+            let thrown = message(session.set_memory_watch(value).unwrap_err());
+            assert!(
+                thrown.starts_with("invalid LineAddr[]: "),
+                "{place}: {thrown}"
+            );
+            assert_eq!(watched(&session), [160.0, 176.0], "{place}");
+        }
+        session.set_memory_watch(js("[]")).unwrap();
+        assert!(watched(&session).is_empty());
     }
 
     #[wasm_bindgen_test]

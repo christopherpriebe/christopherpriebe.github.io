@@ -1,0 +1,66 @@
+// Checks the release build in web/pkg, glue included, against arguments JavaScript could send
+// to break the module: each must throw an Error, and the module must keep working after all of
+// them. Run through `npm run test:glue` in web/, after `npm run build:wasm`.
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const pkg = resolve(import.meta.dirname, '..', 'web', 'pkg');
+if (!existsSync(resolve(pkg, 'cache_explorer_bg.wasm'))) {
+  console.error('test:glue: web/pkg has no build; run `npm run build:wasm` first');
+  process.exit(1);
+}
+const glue = await import(pathToFileURL(resolve(pkg, 'cache_explorer.js')).href);
+glue.initSync({ module: readFileSync(resolve(pkg, 'cache_explorer_bg.wasm')) });
+const { Session, ShareLoad, evalPredicate, parseModule } = glue;
+
+const throws = (call, message) => assert.throws(call, (e) => e.constructor === Error && message.test(e.message));
+const kept = Session.firstVisit();
+kept.applyOp({ op: 'issue', kind: 'read', addr: 164 });
+const json = kept.toJson();
+
+// Text, number and boolean arguments are type-checked by the glue.
+const session = new Session();
+for (const value of [5, true, 7n, {}, [], null]) {
+  throws(() => Session.fromJson(value), /^expected a string argument/);
+  throws(() => ShareLoad.fromJson(value), /^expected a string argument/);
+  throws(() => parseModule(value), /^expected a string argument/);
+  throws(() => session.readAddress(value), /^expected a string argument/);
+}
+throws(() => session.scrubTo('5'), /^expected a number argument/);
+throws(() => session.setAdvanced('true'), /^expected a boolean argument/);
+
+// A freed object refuses every call before it reaches wasm, however many there are.
+const freed = new Session();
+freed.free();
+for (let i = 0; i < 20_000; i += 1) throws(() => freed.state(), /^Attempt to use a moved value/);
+
+// A watch list is read whole: nothing is allocated from a length, and a non-list throws.
+const sparse = [];
+sparse.length = 2 ** 30 + 1;
+for (const value of [sparse, 5, {}, null]) throws(() => session.setMemoryWatch(value), /^invalid LineAddr\[\]: /);
+
+// A predicate nested far deeper than the stack could follow is refused before it is read.
+let deep = { counter: 'accesses', op: '==', value: 0 };
+for (let i = 0; i < 10_000; i += 1) deep = { not: deep };
+throws(() => evalPredicate(session, deep), /^invalid Predicate: predicates nest at most /);
+throws(() => session.findEvent(deep), /^invalid Predicate: predicates nest at most /);
+
+// The page passes only plain data: an exception thrown while an argument is read leaves the
+// object borrowed, and it refuses every later call. Other objects keep working.
+const borrowed = new Session();
+const log = console.error;
+console.error = () => {}; // the glue logs the exception an import threw
+try {
+  throws(() => borrowed.applyOp({ get op() { throw new Error('boom'); } }), /^boom$/);
+} finally {
+  console.error = log;
+}
+throws(() => borrowed.state(), /^recursive use of an object detected/);
+
+assert.equal(kept.toJson(), json);
+assert.equal(Session.fromJson(json).toJson(), json);
+session.applyOp({ op: 'issue', kind: 'read', addr: 164 });
+assert.equal(session.opCount(), 1);
+console.log('test:glue: ok');

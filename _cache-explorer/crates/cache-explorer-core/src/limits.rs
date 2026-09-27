@@ -145,6 +145,14 @@ pub const MAX_SHARE_OPS: u32 = 10_000;
 /// shows 24.
 pub const RECENT_OUTCOMES: u32 = 24;
 
+/// The deepest predicates may nest inside `all`, `any` and `not`, so reading
+/// a predicate is bounded work, and a bounded depth of recursion, whatever it
+/// comes from: `serde_json` stops module JSON nested deeper than 128, but a
+/// predicate from JavaScript is read with no such limit, and one nested a few
+/// thousand deep would exhaust the stack. Tunable, down to 128, so that no
+/// module JSON meets this limit before `serde_json`'s.
+pub const MAX_PREDICATE_DEPTH: u32 = 128;
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::disallowed_macros)] // assertions are how tests fail
@@ -242,6 +250,17 @@ mod tests {
                 <= 9,
             "a saved file keeps room for a cursor place of MAX_SHARE_OPS - 1 and \
              SESSION_EVENT_LIMIT in nine digits"
+        );
+    }
+
+    #[test]
+    fn module_json_meets_serde_jsons_nesting_limit_before_the_predicate_depth() {
+        // serde_json refuses JSON nested deeper than 128, and each predicate
+        // inside another is at least one level of JSON deeper, so module JSON
+        // behaves as if predicates had no depth limit of their own.
+        assert!(
+            MAX_PREDICATE_DEPTH >= 128,
+            "a module whose JSON serde_json reads must not meet MAX_PREDICATE_DEPTH"
         );
     }
 

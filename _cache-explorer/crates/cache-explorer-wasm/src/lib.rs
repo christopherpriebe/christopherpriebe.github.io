@@ -13,9 +13,6 @@
 //! [`ModuleRun`].
 
 #![forbid(unsafe_code)]
-// wasm-bindgen needs owned arguments, so every export that reads a `Ts<T>`
-// takes it by value and lends it to `arg`.
-#![allow(clippy::needless_pass_by_value)]
 
 use cache_explorer_core::limits::LOAD_SLICE_EVENTS;
 use cache_explorer_core::{
@@ -49,7 +46,17 @@ fn arg<T>(value: &Ts<T>, kind: ArgKind) -> Result<T, JsError>
 where
     T: Tsify + DeserializeOwned,
 {
-    serde_wasm_bindgen::from_value(value.js_value()).map_err(|error| {
+    read(value.js_value(), kind)
+}
+
+/// `value` read as a `T`, for an argument passed as a plain `JsValue`
+/// because tsify has no type for it, such as a list.
+///
+/// # Errors
+///
+/// As [`arg`].
+fn read<T: DeserializeOwned>(value: JsValue, kind: ArgKind) -> Result<T, JsError> {
+    serde_wasm_bindgen::from_value(value).map_err(|error| {
         let detail = JsValue::from(error)
             .dyn_into::<js_sys::Error>()
             .map(|error| String::from(error.message()))
@@ -101,9 +108,9 @@ impl Session {
     /// Throws when `config` is not a configuration, or the message of the
     /// first rule it breaks.
     #[wasm_bindgen(js_name = withConfig)]
-    pub fn with_config(config: Ts<Config>) -> Result<Session, JsError> {
+    pub fn with_config(config: &Ts<Config>) -> Result<Session, JsError> {
         Ok(Session {
-            inner: model::Session::with_config(arg(&config, ArgKind::Config)?)?,
+            inner: model::Session::with_config(arg(config, ArgKind::Config)?)?,
         })
     }
 
@@ -139,8 +146,8 @@ impl Session {
     ///
     /// Throws why the op is refused, leaving the session unchanged.
     #[wasm_bindgen(js_name = applyOp)]
-    pub fn apply_op(&mut self, op: Ts<Op>) -> Result<Ts<MicroEvents>, JsError> {
-        Ok(MicroEvents(self.inner.apply(arg(&op, ArgKind::Op)?)?).into_ts()?)
+    pub fn apply_op(&mut self, op: &Ts<Op>) -> Result<Ts<MicroEvents>, JsError> {
+        Ok(MicroEvents(self.inner.apply(arg(op, ArgKind::Op)?)?).into_ts()?)
     }
 
     /// Moves the cursor back to the previous undo stop; false if there is
@@ -168,8 +175,8 @@ impl Session {
     /// # Errors
     ///
     /// Throws when `pos` is not a position.
-    pub fn seek(&mut self, pos: Ts<EventPos>) -> Result<(), JsError> {
-        self.inner.seek(arg(&pos, ArgKind::EventPos)?);
+    pub fn seek(&mut self, pos: &Ts<EventPos>) -> Result<(), JsError> {
+        self.inner.seek(arg(pos, ArgKind::EventPos)?);
         Ok(())
     }
 
@@ -228,10 +235,10 @@ impl Session {
     /// Throws when `config` is not a configuration, or why the new run's op
     /// would be refused.
     #[wasm_bindgen(js_name = proposeConfig)]
-    pub fn propose_config(&mut self, config: Ts<Config>) -> Result<Ts<ConfigChange>, JsError> {
+    pub fn propose_config(&mut self, config: &Ts<Config>) -> Result<Ts<ConfigChange>, JsError> {
         Ok(self
             .inner
-            .propose_config(arg(&config, ArgKind::Config)?)?
+            .propose_config(arg(config, ArgKind::Config)?)?
             .into_ts()?)
     }
 
@@ -242,10 +249,10 @@ impl Session {
     ///
     /// Throws when `shown` is not a configuration.
     #[wasm_bindgen(js_name = configControls)]
-    pub fn config_controls(&self, shown: Ts<Config>) -> Result<Ts<ConfigControls>, JsError> {
+    pub fn config_controls(&self, shown: &Ts<Config>) -> Result<Ts<ConfigControls>, JsError> {
         Ok(self
             .inner
-            .config_controls(&arg(&shown, ArgKind::Config)?)
+            .config_controls(&arg(shown, ArgKind::Config)?)
             .into_ts()?)
     }
 
@@ -257,16 +264,16 @@ impl Session {
     #[wasm_bindgen(js_name = readConfigNumber)]
     pub fn read_config_number(
         &self,
-        field: Ts<ConfigNumberField>,
+        field: &Ts<ConfigNumberField>,
         text: &str,
-        shown: Ts<Config>,
+        shown: &Ts<Config>,
     ) -> Result<Ts<ConfigNumberInput>, JsError> {
         Ok(self
             .inner
             .read_config_number(
-                arg(&field, ArgKind::ConfigNumberField)?,
+                arg(field, ArgKind::ConfigNumberField)?,
                 text,
-                &arg(&shown, ArgKind::Config)?,
+                &arg(shown, ArgKind::Config)?,
             )
             .into_ts()?)
     }
@@ -340,13 +347,16 @@ impl Session {
     ///
     /// # Errors
     ///
-    /// Throws when a value of `lines` is not a line address.
+    /// Throws when `lines` is not a list of line addresses.
+    // Read as one value, as returned lists are built: wasm-bindgen's glue for
+    // a `Vec` argument allocates from the array's length before anything
+    // checks the array.
     #[wasm_bindgen(js_name = setMemoryWatch)]
-    pub fn set_memory_watch(&mut self, lines: Vec<Ts<LineAddr>>) -> Result<(), JsError> {
-        let lines = lines
-            .iter()
-            .map(|line| arg(line, ArgKind::LineAddr))
-            .collect::<Result<Vec<_>, _>>()?;
+    pub fn set_memory_watch(
+        &mut self,
+        #[wasm_bindgen(unchecked_param_type = "LineAddr[]")] lines: JsValue,
+    ) -> Result<(), JsError> {
+        let lines: Vec<LineAddr> = read(lines, ArgKind::LineAddrs)?;
         self.inner.set_memory_watch(&lines);
         Ok(())
     }
@@ -398,13 +408,13 @@ impl Session {
     #[wasm_bindgen(js_name = draftIssue)]
     pub fn draft_issue(
         &self,
-        kind: Ts<AccessKind>,
+        kind: &Ts<AccessKind>,
         #[wasm_bindgen(js_name = addrText)] addr_text: &str,
         #[wasm_bindgen(js_name = valueText)] value_text: &str,
     ) -> Result<Ts<IssueDraft>, JsError> {
         Ok(self
             .inner
-            .draft_issue(arg(&kind, ArgKind::AccessKind)?, addr_text, value_text)
+            .draft_issue(arg(kind, ArgKind::AccessKind)?, addr_text, value_text)
             .into_ts()?)
     }
 
@@ -416,11 +426,11 @@ impl Session {
     #[wasm_bindgen(js_name = planEdit)]
     pub fn plan_edit(
         &self,
-        target: Ts<EditTarget>,
-        patch: Ts<EditPatch>,
+        target: &Ts<EditTarget>,
+        patch: &Ts<EditPatch>,
     ) -> Result<Ts<EditOutcome>, JsError> {
-        let target = arg(&target, ArgKind::EditTarget)?;
-        let patch = arg(&patch, ArgKind::EditPatch)?;
+        let target = arg(target, ArgKind::EditTarget)?;
+        let patch = arg(patch, ArgKind::EditPatch)?;
         Ok(EditOutcome::from(self.inner.plan_edit(&target, &patch)).into_ts()?)
     }
 
@@ -432,16 +442,16 @@ impl Session {
     #[wasm_bindgen(js_name = draftEdit)]
     pub fn draft_edit(
         &self,
-        set: Ts<SetIndex>,
-        way: Ts<WayIndex>,
-        form: Ts<WayForm>,
+        set: &Ts<SetIndex>,
+        way: &Ts<WayIndex>,
+        form: &Ts<WayForm>,
     ) -> Result<Ts<EditDraft>, JsError> {
         Ok(self
             .inner
             .draft_edit(
-                arg(&set, ArgKind::SetIndex)?,
-                arg(&way, ArgKind::WayIndex)?,
-                &arg(&form, ArgKind::WayForm)?,
+                arg(set, ArgKind::SetIndex)?,
+                arg(way, ArgKind::WayIndex)?,
+                &arg(form, ArgKind::WayForm)?,
             )
             .into_ts()?)
     }
@@ -454,12 +464,12 @@ impl Session {
     #[wasm_bindgen(js_name = draftMemoryEdit)]
     pub fn draft_memory_edit(
         &self,
-        addr: Ts<Addr>,
+        addr: &Ts<Addr>,
         #[wasm_bindgen(js_name = valueText)] value_text: &str,
     ) -> Result<Ts<MemoryEditDraft>, JsError> {
         Ok(self
             .inner
-            .draft_memory_edit(arg(&addr, ArgKind::Addr)?, value_text)
+            .draft_memory_edit(arg(addr, ArgKind::Addr)?, value_text)
             .into_ts()?)
     }
 
@@ -473,11 +483,11 @@ impl Session {
     pub fn parse_program(
         &self,
         source: &str,
-        format: Ts<ProgramFormat>,
+        format: &Ts<ProgramFormat>,
     ) -> Result<Ts<ParseResult>, JsError> {
         Ok(self
             .inner
-            .parse_program(source, arg(&format, ArgKind::ProgramFormat)?)
+            .parse_program(source, arg(format, ArgKind::ProgramFormat)?)
             .into_ts()?)
     }
 
@@ -487,10 +497,10 @@ impl Session {
     ///
     /// Throws when `p` is not a predicate.
     #[wasm_bindgen(js_name = findEvent)]
-    pub fn find_event(&self, p: Ts<Predicate>) -> Result<Option<u32>, JsError> {
+    pub fn find_event(&self, p: &Ts<Predicate>) -> Result<Option<u32>, JsError> {
         Ok(self
             .inner
-            .find_event(&arg(&p, ArgKind::Predicate)?)
+            .find_event(&arg(p, ArgKind::Predicate)?)
             .map(EventPos::get))
     }
 
@@ -731,8 +741,8 @@ pub fn parse_module_index(json: &str) -> Result<Ts<ModuleIndexView>, JsError> {
 ///
 /// Throws when `p` is not a predicate.
 #[wasm_bindgen(js_name = evalPredicate)]
-pub fn eval_predicate(session: &Session, p: Ts<Predicate>) -> Result<bool, JsError> {
-    Ok(session.inner.eval_predicate(&arg(&p, ArgKind::Predicate)?))
+pub fn eval_predicate(session: &Session, p: &Ts<Predicate>) -> Result<bool, JsError> {
+    Ok(session.inner.eval_predicate(&arg(p, ArgKind::Predicate)?))
 }
 
 /// `config` checked on its own: its summary and geometry, or the first rule
@@ -742,8 +752,8 @@ pub fn eval_predicate(session: &Session, p: Ts<Predicate>) -> Result<bool, JsErr
 ///
 /// Throws when `config` is not a configuration.
 #[wasm_bindgen(js_name = validateConfig)]
-pub fn validate_config(config: Ts<Config>) -> Result<Ts<ConfigCheck>, JsError> {
-    Ok(model::validate_config(&arg(&config, ArgKind::Config)?).into_ts()?)
+pub fn validate_config(config: &Ts<Config>) -> Result<Ts<ConfigCheck>, JsError> {
+    Ok(model::validate_config(&arg(config, ArgKind::Config)?).into_ts()?)
 }
 
 /// The build: the crates' version and the share format.

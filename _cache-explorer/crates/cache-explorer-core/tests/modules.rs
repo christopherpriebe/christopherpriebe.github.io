@@ -4,9 +4,11 @@
 //! waits for a micro-event. Each parses, serializes back, and completes end
 //! to end through its "Show me" paths. Every rule of `Module::parse` has its
 //! error, a predicate checked against the configuration in force after a
-//! `config` op included; the predicates mean what they say, `event`,
-//! `lastAccess` across a truncation and a new run, and `config` included,
-//! and a search for `lastAccess` along a full session is one replay;
+//! `config` op included; a predicate nests at most `MAX_PREDICATE_DEPTH`
+//! deep, a limit module JSON never meets before `serde_json`'s; the
+//! predicates mean what they say, `event`, `lastAccess` across a truncation
+//! and a new run, and `config` included, and a search for `lastAccess` along
+//! a full session is one replay;
 //! "Show me" on a prediction comes only after a wrong answer, and a right
 //! or revealed answer applies the `then` ops where the prediction began;
 //! ops the state refuses leave the step waiting; replacing the session ends
@@ -19,11 +21,12 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use cache_explorer_core::limits::{MAX_EVENTS_PER_ENTRY, SESSION_EVENT_LIMIT};
+use cache_explorer_core::limits::{MAX_EVENTS_PER_ENTRY, MAX_PREDICATE_DEPTH, SESSION_EVENT_LIMIT};
 use cache_explorer_core::{
     parse_module_index, Boundary, Callout, CalloutArea, CellRef, Config, EventKind, FeedbackTone,
     Module, ModuleActionKind, ModuleError, ModuleRun, ModuleStepKind, Op, OpError, OptionState,
-    Preset, ProgramFormat, Replacement, Session, Step, StepOutcome, TextSegment, TextStyle,
+    Predicate, Preset, ProgramFormat, Replacement, Session, Step, StepOutcome, TextSegment,
+    TextStyle,
 };
 use serde_json::{json, Value};
 
@@ -1419,6 +1422,46 @@ fn an_expect_must_tell_the_configuration_its_show_me_switches_to() {
     ] {
         Module::parse(&with(SWITCH_CONFIG, "/steps/3/expect", expect)).unwrap();
     }
+}
+
+#[test]
+fn a_predicate_nests_at_most_max_predicate_depth_deep() {
+    let counter = json!({"counter": "accesses", "op": "==", "value": 0});
+    let nest = |key: &str, depth: u32| {
+        (0..depth).fold(counter.clone(), |inner, _| {
+            if key == "not" {
+                json!({ key: inner })
+            } else {
+                json!({ key: [inner] })
+            }
+        })
+    };
+    let session = session();
+    // A `Value` sets no limit on nesting, as a value from JavaScript sets
+    // none, so the predicate's own limit is what stops it.
+    for key in ["all", "any", "not"] {
+        let deepest = predicate(nest(key, MAX_PREDICATE_DEPTH));
+        assert!(session.eval_predicate(&deepest), "{key}");
+        let error =
+            serde_json::from_value::<Predicate>(nest(key, MAX_PREDICATE_DEPTH + 1)).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!("predicates nest at most {MAX_PREDICATE_DEPTH} deep in `all`, `any` and `not`"),
+            "{key}"
+        );
+    }
+    // A refusal leaves the depth as it found it, so the next predicate reads.
+    assert!(session.eval_predicate(&predicate(nest("not", MAX_PREDICATE_DEPTH))));
+    // In module JSON, serde_json's own limit comes first, as it did before
+    // predicates had a limit.
+    shape_refused(&[(
+        with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            nest("not", MAX_PREDICATE_DEPTH),
+        ),
+        "recursion limit exceeded",
+    )]);
 }
 
 #[test]
