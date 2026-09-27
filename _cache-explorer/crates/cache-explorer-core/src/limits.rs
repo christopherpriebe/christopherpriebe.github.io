@@ -347,6 +347,11 @@ mod tests {
              more JSON than a file may hold"
         );
         assert!(
+            MAX_SHARE_JSON_BYTES / 256 < MAX_SHARE_OPS,
+            "tests/share.rs changes the configuration, each change over 256 bytes of a saved \
+             file, until the file is more JSON than can be opened"
+        );
+        assert!(
             u64::from(MAX_LABEL_CHARS) * 2 + 11 <= u64::from(MAX_PROGRAM_BYTES),
             "tests/isa.rs defines a label at the limit and branches to it on one line, \
              `{{label}}: bnez r0, {{label}}`"

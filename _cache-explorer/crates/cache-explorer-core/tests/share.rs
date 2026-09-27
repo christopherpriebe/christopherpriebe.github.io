@@ -4,7 +4,8 @@
 //! failure with what the page shows for it, its message segments, contents,
 //! repair and the actions before it; each size limit one byte or one op over
 //! its constant; a session as long as a link can hold opening from its link,
-//! and a run too long for one offered as a file, or too large for either;
+//! and a run too long for one offered as a file, or too large for either,
+//! whether its link would unpack to too much JSON or only be too long;
 //! the session's limit stopping a pathological link; loading
 //! in slices giving the session one slice gives, with the loading state's
 //! summary; the share summary and its texts; and a trace file loaded as a
@@ -1253,6 +1254,68 @@ fn a_run_too_large_for_a_file_has_no_link_either() {
         LoadError::Encoding(EncodingError::TooLarge(TooLarge::Json {
             bytes: Some(bytes)
         }))
+    );
+}
+
+#[test]
+fn a_link_too_long_whose_file_is_too_large_offers_neither() {
+    // Configuration changes, which a link shortens well and a saved file's
+    // pretty JSON lengthens, until the file is more JSON than can be
+    // opened. Each pair of changes adds as much to the file as the one
+    // before, so their count is measured, not searched for.
+    let mut original = session();
+    let pair = [
+        Op::Config {
+            config: Preset::TwoWayLru.config(),
+        },
+        Op::Config { config: config() },
+    ];
+    apply_all(&mut original, pair.clone());
+    let before = original.to_json().len();
+    apply_all(&mut original, pair.clone());
+    let file = original.to_json().len();
+    let pairs = (MAX_SHARE_JSON_BYTES as usize - file) / (file - before) + 1;
+    apply_all(&mut original, pair.iter().cycle().take(pairs * 2).cloned());
+    assert!(original.to_json().len() > MAX_SHARE_JSON_BYTES as usize);
+    // Then programs of text deflate cannot shorten much, until the link is
+    // too long.
+    let mut seed = 0;
+    let error = loop {
+        if let Err(error) = original.to_share_string() {
+            break error;
+        }
+        seed += 1;
+        apply_all(&mut original, [program(&long_program(Some(seed)))]);
+    };
+    // The JSON a link holds is within its limit, but the link is too long,
+    // and the file too large: neither could be opened.
+    let compact = serde_json::to_string(&original.share_doc()).unwrap();
+    assert!(compact.len() <= MAX_SHARE_JSON_BYTES as usize);
+    let unopenable = original.share_doc().to_share_string();
+    let text = u32::try_from(unopenable.len()).unwrap();
+    assert!(text > MAX_SHARE_TEXT_BYTES);
+    assert_eq!(
+        Session::from_share_string(&unopenable).unwrap_err(),
+        LoadError::Encoding(EncodingError::TooLarge(TooLarge::Text { bytes: text }))
+    );
+    let json = original.to_json();
+    let bytes = u32::try_from(json.len()).unwrap();
+    assert_eq!(
+        Session::from_json(&json).unwrap_err(),
+        LoadError::Encoding(EncodingError::TooLarge(TooLarge::Json {
+            bytes: Some(bytes)
+        }))
+    );
+    // So the run is too large for a file, not only too long for a link.
+    assert_eq!(error, LinkTooLong::Json { bytes });
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "This run is too large for a link or a file: saved, it would be {} bytes of JSON, and \
+             at most {} bytes can be opened.",
+            grouped(bytes),
+            grouped(MAX_SHARE_JSON_BYTES)
+        )
     );
 }
 

@@ -302,6 +302,23 @@ pub(crate) fn has_op_room(ops: u32) -> bool {
     ops < MAX_SHARE_OPS
 }
 
+/// Whether a log of `events` events and `ops` ops has room for one more op,
+/// as every op is checked first: room for one more entry, then for one more
+/// op a link could hold.
+///
+/// # Errors
+///
+/// [`OpError::SessionFull`] or [`OpError::LinkFull`], the first that fails.
+pub(crate) fn room(events: u64, ops: u32) -> Result<(), OpError> {
+    if !has_room(events) {
+        return Err(OpError::SessionFull);
+    }
+    if !has_op_room(ops) {
+        return Err(OpError::LinkFull);
+    }
+    Ok(())
+}
+
 /// An op checked against the machine it applies to, with what execution
 /// needs from the check.
 enum Checked {
@@ -385,12 +402,7 @@ pub(crate) fn resume(
 /// events so far: first whether the log has room for it, events then ops,
 /// then the op's own rules.
 fn check(machine: &Machine, op: &Op, index: OpIndex, events: u64) -> Result<Checked, OpError> {
-    if !has_room(events) {
-        return Err(OpError::SessionFull);
-    }
-    if !has_op_room(index.get()) {
-        return Err(OpError::LinkFull);
-    }
+    room(events, index.get())?;
     match op {
         Op::Config { config } => Machine::start(config.clone())
             .map(|start| Checked::NewRun(Box::new(start)))

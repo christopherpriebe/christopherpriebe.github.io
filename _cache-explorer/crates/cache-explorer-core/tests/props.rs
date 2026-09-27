@@ -1384,7 +1384,10 @@ mod support {
                         Ok(ConfigChange::NeedsReset { config, .. }) => {
                             self.after(before, Call::Refused)?;
                             if *reset {
-                                self.apply(Op::Config { config })?;
+                                // The bar asks only about a change that
+                                // agreeing applies.
+                                let accepted = self.apply(Op::Config { config })?;
+                                prop_assert!(accepted, "a change the bar asked about was refused");
                             }
                             Ok(())
                         }

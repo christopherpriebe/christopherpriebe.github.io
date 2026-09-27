@@ -498,13 +498,17 @@ impl Session {
     /// applied at once by appending `Op::Config`, as [`Session::apply`]
     /// would: every change is an op of its own, with its own run and its own
     /// undo stop, and none replaces another. Otherwise nothing changes, and
-    /// the result asks the student first, with the question worded here.
+    /// the result asks the student first, with the question worded here,
+    /// unless the log has no room for the `Config` op: then the change is
+    /// refused at once, as the editors refuse an edit before planning it,
+    /// rather than asked about and refused once the student agrees.
     ///
     /// # Errors
     ///
     /// [`OpError::Gated`] while a gate is set, [`OpError::Config`] if
-    /// `config` is invalid, and the error refusing the `Config` op when it
-    /// would be applied at once.
+    /// `config` is invalid, the error refusing the `Config` op when it would
+    /// be applied at once, and otherwise [`OpError::SessionFull`] or
+    /// [`OpError::LinkFull`] when the log has no room for it.
     pub fn propose_config(&mut self, config: Config) -> Result<ConfigChange, OpError> {
         if self.gate.is_some() {
             return Err(OpError::Gated);
@@ -522,6 +526,7 @@ impl Session {
             self.apply(Op::Config { config })?;
             return Ok(ConfigChange::Applied);
         }
+        self.room()?;
         Ok(ConfigChange::NeedsReset {
             message: self.reset_question(),
             config,
@@ -535,7 +540,10 @@ impl Session {
     /// Switching to Basics while the displayed run's configuration needs
     /// Advanced changes nothing and asks first, as a change from the
     /// configuration bar does, offering the configuration's Basics form as a
-    /// new run. Once that run is applied, switching again succeeds.
+    /// new run. Once that run is applied, switching again succeeds. The
+    /// question is asked whether or not the new run's op could be appended:
+    /// while a gate is set, or once the log has no room for it, the op is
+    /// refused when the student agrees, as Reset is.
     pub fn set_advanced(&mut self, on: bool) -> ConfigChange {
         let displayed = &self.current.config;
         if !on && !displayed.fits_basics() {
@@ -681,6 +689,20 @@ impl Session {
         self.current = plan.end;
         self.entry_base = plan.last_base;
         self.stepped = self.cursor.get().abs_diff(from.get()) == 1;
+    }
+
+    /// Whether the log has room for a new op where one would go, as
+    /// [`Session::apply`] checks after the gate: under the session's event
+    /// limit, then under the ops a link can hold, counting the ops kept
+    /// before it.
+    ///
+    /// # Errors
+    ///
+    /// [`OpError::SessionFull`] or [`OpError::LinkFull`], the first that
+    /// fails.
+    fn room(&self) -> Result<(), OpError> {
+        let (base, kept) = self.base();
+        engine::room(u64::from(base.get()), kept)
     }
 
     /// Where a new op goes: the end of the op holding the cursor, or

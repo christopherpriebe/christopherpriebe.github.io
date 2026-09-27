@@ -7,8 +7,9 @@
 //! the cursor as they were; configuration changes, applied at once as ops
 //! of their own or asked about first, and Reset; switching between Basics
 //! and Advanced; new runs keeping the program; the session's event limit
-//! and the ops a link can hold, which the editors report before planning;
-//! every state the cursor
+//! and the ops a link can hold, which the editors report before planning
+//! and the configuration bar before asking, and which refuse a press of two
+//! ops whole; every state the cursor
 //! reaches equal to the fold's, from checkpoints or not; and the gate a
 //! guided module's unanswered prediction sets, which refuses every op,
 //! holds the cursor at or before where the prediction began, and shows in
@@ -27,9 +28,9 @@ use cache_explorer_core::{
 };
 
 use support::{
-    addr, apply_all, as_long_as_a_link, config, drawer, edit, edit_word, editors_refuse_for_room,
-    end_of, gated_at_end, gated_mid_log, grouped, load, log, log_end, pos, program, refused,
-    session, store, table, varied, word,
+    addr, apply_all, as_long_as_a_link, change_refused, config, drawer, edit, edit_word,
+    editors_refuse_for_room, end_of, gated_at_end, gated_mid_log, grouped, hand_loads, load, log,
+    log_end, pos, program, refused, session, store, table, varied, word,
 };
 
 /// An `add` then a load: two entries, the second an access.
@@ -76,14 +77,34 @@ mod support {
         Session::with_config(config()).unwrap()
     }
 
-    /// A session whose log holds as many ops as a link can: loads by hand
-    /// of one word, a miss and then hits.
-    pub(crate) fn as_long_as_a_link() -> Session {
+    /// A session whose log holds `count` loads by hand of one word, a miss
+    /// and then hits.
+    pub(crate) fn hand_loads(count: u32) -> Session {
         let mut session = session();
-        for _ in 0..MAX_SHARE_OPS {
+        for _ in 0..count {
             session.apply(load(0x0A4)).unwrap();
         }
         session
+    }
+
+    /// A session whose log holds as many ops as a link can, loads by hand.
+    pub(crate) fn as_long_as_a_link() -> Session {
+        hand_loads(MAX_SHARE_OPS)
+    }
+
+    /// Checks that a change from the configuration bar to `two-way-lru` is
+    /// refused on `session` with `error`, rather than asked about, and
+    /// changes nothing: agreeing would append a `Config` op, which `error`
+    /// refuses.
+    pub(crate) fn change_refused(session: &mut Session, error: &OpError) {
+        let before = session.clone();
+        assert_eq!(
+            session.propose_config(Preset::TwoWayLru.config()).as_ref(),
+            Err(error)
+        );
+        assert_eq!(session.ops(), before.ops());
+        assert_eq!(session.position(), before.position());
+        assert_eq!(session.machine(), before.machine());
     }
 
     /// `value` as an address, unchecked, as one read from JSON is.
@@ -1352,8 +1373,10 @@ fn a_full_session_refuses_every_op_until_undo_makes_room() {
         grouped(SESSION_EVENT_LIMIT)
     );
     // So do the editors, before any rule of their own, rather than plan an
-    // edit that would then be refused.
+    // edit that would then be refused, and so does the configuration bar,
+    // rather than ask about a new run that would then be refused.
     editors_refuse_for_room(&session, RefusalReason::SessionFull, &message);
+    change_refused(&mut session, &OpError::SessionFull);
     assert_eq!(
         session.step_event(Some(&drawer("add r1, r0, #1"))),
         StepOutcome::Idle {
@@ -1391,13 +1414,17 @@ fn a_full_session_refuses_every_op_until_undo_makes_room() {
     };
     assert_eq!((index.get(), refusal), (last, &OpError::SessionFull));
     assert_eq!(error.to_string(), message);
-    // Undo makes room: an edit plans there, and an op applied there drops
-    // what came after.
+    // Undo makes room: an edit plans there, a configuration change asks
+    // first, and an op applied there drops what came after.
     assert!(session.undo());
     assert!(session.position().pos.get() < full);
     assert!(matches!(
         session.draft_memory_edit(addr(0x0A4), "1").outcome,
         EditOutcome::Plan(_)
+    ));
+    assert!(matches!(
+        session.propose_config(Preset::TwoWayLru.config()),
+        Ok(ConfigChange::NeedsReset { .. })
     ));
     session.apply(load(0x0A4)).unwrap();
     assert!(!session.redo());
@@ -1427,8 +1454,10 @@ fn a_log_as_long_as_a_link_can_hold_refuses_every_op_until_undo_makes_room() {
         grouped(MAX_SHARE_OPS)
     );
     assert_eq!(OpError::LinkFull.to_string(), message);
-    // So do the editors, before any rule of their own.
+    // So do the editors, before any rule of their own, and the
+    // configuration bar, rather than ask about a new run.
     editors_refuse_for_room(&session, RefusalReason::LinkFull, &message);
+    change_refused(&mut session, &OpError::LinkFull);
     assert_eq!(
         session.step_event(Some(&drawer("add r1, r0, #1"))),
         StepOutcome::Idle {
@@ -1462,16 +1491,45 @@ fn a_log_as_long_as_a_link_can_hold_refuses_every_op_until_undo_makes_room() {
         panic!("the op is refused: {error:?}");
     };
     assert_eq!((index.get(), refusal), (MAX_SHARE_OPS, &OpError::LinkFull));
-    // Undo makes room: an edit plans there, and an op applied there drops
-    // what came after, so the log stays as long as a link can hold.
+    // Undo makes room: an edit plans there, a configuration change asks
+    // first, and an op applied there drops what came after, so the log
+    // stays as long as a link can hold.
     assert!(session.undo());
     assert!(matches!(
         session.draft_memory_edit(addr(0x0A4), "1").outcome,
         EditOutcome::Plan(_)
     ));
+    assert!(matches!(
+        session.propose_config(Preset::TwoWayLru.config()),
+        Ok(ConfigChange::NeedsReset { .. })
+    ));
     session.apply(load(0x0A4)).unwrap();
     assert_eq!(session.op_count(), MAX_SHARE_OPS);
     assert!(!session.redo());
+}
+
+#[test]
+fn a_press_that_would_pass_the_link_limit_is_refused_whole() {
+    // One op short of the limit, Space and Shift+Space with a new program in
+    // the drawer would append two ops, its load and then the step, and the
+    // second would pass the limit: neither is appended, and they say why
+    // with the link limit's message.
+    let mut session = hand_loads(MAX_SHARE_OPS - 1);
+    let before = session.clone();
+    let sample = drawer(ADD_THEN_LOAD);
+    let idle = StepOutcome::Idle {
+        message: OpError::LinkFull.to_string(),
+    };
+    assert_eq!(session.step_event(Some(&sample)), idle);
+    assert_eq!(session.step_access(Some(&sample)), idle);
+    assert_eq!(session.ops(), before.ops());
+    assert_eq!(session.position(), before.position());
+    // The load alone fits; then the step does not.
+    apply_all(&mut session, [program(ADD_THEN_LOAD)]);
+    assert_eq!(session.op_count(), MAX_SHARE_OPS);
+    assert_eq!(session.step_event(Some(&sample)), idle);
+    assert_eq!(session.step_access(Some(&sample)), idle);
+    assert_eq!(session.op_count(), MAX_SHARE_OPS);
 }
 
 /// A call on a session, as the page makes it.
