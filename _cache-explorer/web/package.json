@@ -1,0 +1,19 @@
+{
+  "name": "cache-explorer-web",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.21.0"
+  },
+  "scripts": {
+    "build:wasm": "node ../scripts/build-wasm.mjs",
+    "test:wasm:node": "wasm-pack test --node ../crates/cache-explorer-wasm"
+  },
+  "devDependencies": {
+    "binaryen": "132.0.0",
+    "wasm-pack": "0.15.0"
+  },
+  "allowScripts": {
+    "wasm-pack@0.15.0": true
+  }
+}

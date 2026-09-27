@@ -58,7 +58,7 @@ use thiserror::Error;
 
 pub use cursor::{Boundary, Position, StepOutcome};
 pub use gate::Gate;
-pub use timeline::{EntryKind, EntryOutcome, EntryView, EventRow, Tense, Timeline};
+pub use timeline::{EntryKind, EntryOutcome, EntryView, EntryViews, EventRow, Tense, Timeline};
 
 pub(crate) use load::{position_in_op, Loader};
 pub(crate) use timeline::EntryRecord;

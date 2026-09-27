@@ -13,9 +13,9 @@
 use cache_explorer_core::limits::{MAX_RUN_STEPS, MIN_ADDRESS_BITS};
 use cache_explorer_core::{
     AccessKind, AddressInput, AllocatePolicy, CacheConfig, ChangeRef, Config, ControlAction,
-    Counter, CpuStatus, EntryKind, EntryOutcome, EventKind, HitMarker, Op, Preset, RankHeader,
-    RankRole, Register, Replacement, RequestStatus, Session, SetIndex, State, Tense, Timing,
-    Transfer, WayCompare, WordIndex, WritePolicy,
+    Counter, CpuStatus, EntryKind, EntryOutcome, EntryViews, EventKind, HitMarker, MemoryLines,
+    MicroEvents, Op, Preset, RankHeader, RankRole, Register, Replacement, RequestStatus, Session,
+    SetIndex, State, Tense, Timing, Transfer, WayCompare, WordIndex, WritePolicy,
 };
 use insta::{Comparator, DefaultComparator, Snapshot};
 
@@ -1296,4 +1296,28 @@ fn the_snapshot_serializes_with_its_tags() {
         serde_json::to_value(CpuStatus::OutOfBudget).unwrap(),
         serde_json::json!({"state": "outOfBudget"})
     );
+}
+
+#[test]
+fn the_boundarys_lists_serialize_as_bare_arrays() {
+    let session = frame_3b();
+    let events = session.events_range(0, 6).to_vec();
+    assert_eq!(
+        serde_json::to_value(MicroEvents(events.clone())).unwrap(),
+        serde_json::to_value(&events).unwrap()
+    );
+    let entries = session.entries(0, 5);
+    assert_eq!(
+        serde_json::to_value(EntryViews(entries.clone())).unwrap(),
+        serde_json::to_value(&entries).unwrap()
+    );
+    let lines = session.memory_lines(0, 5);
+    assert_eq!(
+        serde_json::to_value(MemoryLines(lines.clone())).unwrap(),
+        serde_json::to_value(&lines).unwrap()
+    );
+    assert!(serde_json::to_value(MicroEvents::default())
+        .unwrap()
+        .as_array()
+        .is_some_and(Vec::is_empty));
 }

@@ -273,6 +273,13 @@ pub struct MemoryLineView {
     pub words: Vec<MemoryWordView>,
 }
 
+/// Rows of the memory table in order, as the boundary returns a window of
+/// them: an array in JavaScript, which one serializer call builds.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(transparent)]
+pub struct MemoryLines(pub Vec<MemoryLineView>);
+
 /// The memory table's heading and size.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]

@@ -154,6 +154,13 @@ pub struct EntryView {
     pub events: Vec<EventRow>,
 }
 
+/// Entries of the log in order, as the boundary returns a window of them:
+/// an array in JavaScript, which one serializer call builds.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(transparent)]
+pub struct EntryViews(pub Vec<EntryView>);
+
 /// One event of the current entry, as its row in the log shows it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]

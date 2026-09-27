@@ -56,6 +56,13 @@ pub struct MicroEvent {
     pub cause: Option<Cause>,
 }
 
+/// Events in order, as the boundary returns a list of them: an array in
+/// JavaScript, which one serializer call builds.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
+#[serde(transparent)]
+pub struct MicroEvents(pub Vec<MicroEvent>);
+
 /// What an event did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]

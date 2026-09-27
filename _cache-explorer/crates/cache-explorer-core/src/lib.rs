@@ -24,12 +24,14 @@ mod cache;
 mod config;
 mod cpu;
 mod engine;
+mod error;
 mod event;
 mod explain;
 mod format;
 mod geometry;
 #[cfg(feature = "golden")]
 pub mod golden;
+mod info;
 mod input;
 mod isa;
 mod machine;
@@ -54,10 +56,12 @@ pub use engine::{
     Consequence, EditDraft, EditOutcome, EditPlan, EditRefusal, FieldChange, FieldInput,
     MemoryEditDraft, RefusalReason, Suggestion, Tone, WayForm, WordMark,
 };
-pub use event::{Cause, ChangeRef, Counter, EventKind, MicroEvent};
+pub use error::{ArgKind, ArgumentError};
+pub use event::{Cause, ChangeRef, Counter, EventKind, MicroEvent, MicroEvents};
 pub use geometry::{
     AccessError, AddressField, BitRange, BitRanges, Decoded, FieldKind, Geometry, Placement,
 };
+pub use info::{build_info, BuildInfo};
 pub use input::{AddressInput, ConfigNumberInput, IssueDraft, WordInput};
 pub use isa::{ParseError, ParseResult};
 pub use machine::{InvariantViolation, Machine};
@@ -75,8 +79,8 @@ pub use op::{
     AccessKind, EditPatch, EditTarget, Op, OpError, ProgramFormat, ProgramSource, WayPatch,
 };
 pub use session::{
-    Boundary, ConfigChange, EntryKind, EntryOutcome, EntryView, EventRow, Gate, Position, Replay,
-    ReplayError, Session, StepOutcome, Tense, Timeline,
+    Boundary, ConfigChange, EntryKind, EntryOutcome, EntryView, EntryViews, EventRow, Gate,
+    Position, Replay, ReplayError, Session, StepOutcome, Tense, Timeline,
 };
 pub use share::{
     EncodingError, LinkTooLong, LoadError, LoadFailure, LoadOption, LoadProgress, ShareAt,
@@ -84,9 +88,9 @@ pub use share::{
 };
 pub use snapshot::{
     BusView, CacheView, ControlAction, Controls, CpuStatus, CpuView, HitMarker, Labels,
-    MemoryLineView, MemoryView, MemoryWordView, ProgramLine, ProgramView, RankCell, RankHeader,
-    RankRole, RegisterView, RequestStatus, RequestView, SetView, Stale, State, Transfer,
-    WayCompare, WayLoc, WayView,
+    MemoryLineView, MemoryLines, MemoryView, MemoryWordView, ProgramLine, ProgramView, RankCell,
+    RankHeader, RankRole, RegisterView, RequestStatus, RequestView, SetView, Stale, State,
+    Transfer, WayCompare, WayLoc, WayView,
 };
 pub use stats::{Counters, Figure, Outcome, StatKey, StatRow, Stats, Traffic};
 pub use units::{
