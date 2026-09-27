@@ -323,10 +323,11 @@ pub enum ModuleProblem {
     #[error(transparent)]
     Op(OpError),
     /// A "Show me" that changes the configuration, on a step whose
-    /// `expect` does not check the configuration it switches to.
+    /// `expect` does not tell the configuration it switches to from the
+    /// one before, so the step could complete without the switch.
     #[error(
         "Show me changes the configuration, so `expect` needs a `config` predicate that the new \
-         configuration meets."
+         configuration meets and the one before it does not."
     )]
     ConfigUnchecked,
     /// A set the configuration in force does not have.
@@ -433,8 +434,9 @@ impl Module {
     /// configuration, the `cycles` counter only when it is timed; entries
     /// are numbered from 1 and no `all` or `any` is empty. An instruct step
     /// whose "Show me" switches the configuration has its `expect` checked
-    /// against the new one, and needs a `config` predicate there that the
-    /// new configuration meets, so a switch made by hand is checked too.
+    /// against the new one, and needs `config` predicates there that the
+    /// new configuration meets and the one before it does not, so the step
+    /// waits for a switch made by hand too.
     ///
     /// # Errors
     ///
@@ -572,13 +574,14 @@ impl Step {
                 ..
             } => {
                 check_hint(path, hint.as_deref())?;
+                let before = force.config.clone();
                 let mut switched = false;
                 if let Some(ops) = show_me {
                     switched = force.apply(path, "showMe", ops)?;
                 }
                 let at = format!("{path}.expect");
                 expect.check(&at, &force.config, &force.geometry)?;
-                if switched && !expect.requires_config(&force.config) {
+                if switched && !expect.tells_config(&before, &force.config) {
                     return Err(invalid(&at, ModuleProblem::ConfigUnchecked));
                 }
                 Ok(())

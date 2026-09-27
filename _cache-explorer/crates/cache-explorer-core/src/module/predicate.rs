@@ -129,8 +129,10 @@ pub struct CounterPredicate {
     pub counter: Counter,
     /// How it compares.
     pub op: CmpOp,
-    /// What it is compared with.
-    pub value: u64,
+    /// What it is compared with. A `u32`, as counts are: no counter of a
+    /// session comes near its end, and a module read back across the
+    /// boundary then holds no number JavaScript cannot represent.
+    pub value: u32,
 }
 
 /// True when the register holds the value.
@@ -385,10 +387,11 @@ impl Predicate {
                 .is_some_and(|addr| machine.memory.word(addr) == p.equals),
             Predicate::Counter(p) => {
                 let counter = machine.counters.get(p.counter);
+                let value = u64::from(p.value);
                 match p.op {
-                    CmpOp::Equal => counter == p.value,
-                    CmpOp::AtLeast => counter >= p.value,
-                    CmpOp::AtMost => counter <= p.value,
+                    CmpOp::Equal => counter == value,
+                    CmpOp::AtLeast => counter >= value,
+                    CmpOp::AtMost => counter <= value,
                 }
             }
             Predicate::Register(p) => machine.registers.get(p.register) == p.equals.get(),
@@ -517,14 +520,27 @@ impl Predicate {
         }
     }
 
-    /// Whether the predicate requires a configuration and `config` meets
-    /// it: a `config` predicate that `config` matches, or an `all` that
-    /// holds one.
-    pub(crate) fn requires_config(&self, config: &Config) -> bool {
+    /// Whether the predicate tells `after`, the configuration a switch
+    /// leads to, from `before`, the one in force before it: `after` meets
+    /// every `config` predicate the predicate cannot hold without, and
+    /// `before` does not, so it cannot hold until the switch is made, by
+    /// "Show me" or by hand.
+    pub(crate) fn tells_config(&self, before: &Config, after: &Config) -> bool {
+        self.required_config(after) == Some(true) && self.required_config(before) == Some(false)
+    }
+
+    /// Whether `config` meets every `config` predicate the predicate cannot
+    /// hold without: itself, or those an `all` holds, at any depth; none if
+    /// there is no such predicate.
+    fn required_config(&self, config: &Config) -> Option<bool> {
         match self {
-            Predicate::Config(p) => p.config.matches(config),
-            Predicate::All(p) => p.all.iter().any(|p| p.requires_config(config)),
-            _ => false,
+            Predicate::Config(p) => Some(p.config.matches(config)),
+            Predicate::All(p) => p
+                .all
+                .iter()
+                .filter_map(|p| p.required_config(config))
+                .reduce(|met, also| met && also),
+            _ => None,
         }
     }
 }
@@ -670,7 +686,7 @@ struct RawPredicate {
     op: Field<CmpOp>,
     /// A counter predicate's value.
     #[serde(default)]
-    value: Field<u64>,
+    value: Field<u32>,
     /// A register predicate's register.
     #[serde(default)]
     register: Field<Register>,

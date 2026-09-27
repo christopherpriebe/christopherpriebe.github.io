@@ -5,7 +5,8 @@
 //! to end through its "Show me" paths. Every rule of `Module::parse` has its
 //! error, a predicate checked against the configuration in force after a
 //! `config` op included; the predicates mean what they say, `event`,
-//! `lastAccess` across a truncation and a new run, and `config` included;
+//! `lastAccess` across a truncation and a new run, and `config` included,
+//! and a search for `lastAccess` along a full session is one replay;
 //! "Show me" on a prediction comes only after a wrong answer, and a right
 //! or revealed answer applies the `then` ops where the prediction began;
 //! ops the state refuses leave the step waiting; replacing the session ends
@@ -14,10 +15,15 @@
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+use cache_explorer_core::limits::{MAX_EVENTS_PER_ENTRY, SESSION_EVENT_LIMIT};
 use cache_explorer_core::{
     parse_module_index, Boundary, Callout, CalloutArea, CellRef, Config, EventKind, FeedbackTone,
     Module, ModuleActionKind, ModuleError, ModuleRun, ModuleStepKind, Op, OpError, OptionState,
-    Preset, Replacement, Session, Step, StepOutcome, TextSegment, TextStyle,
+    Preset, ProgramFormat, Replacement, Session, Step, StepOutcome, TextSegment, TextStyle,
 };
 use serde_json::{json, Value};
 
@@ -41,6 +47,15 @@ const STALE_MEMORY: &str = include_str!("fixtures/modules/03-fixture-stale-memor
 
 /// Every fixture module.
 const FIXTURES: [&str; 3] = [MISS_THEN_HIT, SWITCH_CONFIG, STALE_MEMORY];
+
+/// A loop without an exit and without a memory access: one event per
+/// instruction until the budget or the session's limit stops it.
+const ENDLESS: &str = "        add r1, r0, #1\nloop:   bnez r1, loop";
+
+/// How long searches along a full session may take, in a debug build: many
+/// times what one quiet replay of it takes, and far less than a search
+/// that looks back along the run at every position.
+const SEARCH_BOUND: Duration = Duration::from_secs(20);
 
 /// The tests' helpers. They sit in a module compiled for tests only, where a
 /// failed `unwrap` is a failed test, as in the tests themselves.
@@ -333,6 +348,37 @@ fn an_observe_step_shows_the_micro_event_it_waits_for() {
     assert_eq!(run.sync(&mut session).kind, ModuleStepKind::Observe);
     session.seek(position.pos);
     assert_eq!(run.sync(&mut session).kind, ModuleStepKind::Predict);
+}
+
+#[test]
+fn an_observe_step_s_show_me_counts_only_ops_made_since_it_began() {
+    // The observe step waits for a load of 0x0A4; the step before it made
+    // one, then a load of 0x1A4.
+    let json = edited(MISS_THEN_HIT, |module| {
+        module["steps"][1]["expect"] = json!({"lastAccess": {"addr": "0x1A4"}});
+        module["steps"][1]["showMe"] = json!([
+            {"op": "issue", "kind": "read", "addr": "0x0A4"},
+            {"op": "issue", "kind": "read", "addr": "0x1A4"}
+        ]);
+        module["steps"][2]["until"] = json!({"lastAccess": {"addr": "0x0A4"}});
+    });
+    let (mut run, mut session) = started(&json);
+    run.next(&mut session);
+    assert_eq!(run.show_me(&mut session).kind, ModuleStepKind::Observe);
+    // "Show me" does not go back to the load made before the step began,
+    // where the step could not complete: the cursor stays, and the step
+    // waits.
+    let before = session.position();
+    assert_eq!(run.show_me(&mut session).kind, ModuleStepKind::Observe);
+    assert_eq!(session.position(), before);
+    // A load of 0x0A4 made since is found, although another op followed
+    // it, and the step completes there.
+    session.apply(load(0x0A4)).unwrap();
+    let made = session.position().pos;
+    session.apply(load(0x1A4)).unwrap();
+    assert_eq!(run.sync(&mut session).kind, ModuleStepKind::Observe);
+    assert_eq!(run.show_me(&mut session).kind, ModuleStepKind::Predict);
+    assert_eq!(session.position().pos, made);
 }
 
 #[test]
@@ -864,6 +910,38 @@ fn the_last_access_follows_undo_truncation_and_new_runs() {
 }
 
 #[test]
+fn the_search_for_the_last_access_along_a_full_run_is_one_replay() {
+    // One load, then a run as long as the session holds of instructions
+    // that access nothing. The search evaluates `lastAccess` at every
+    // position of the run: each evaluation must find the run's latest
+    // access without looking back along the run, or the search takes
+    // minutes instead of one quiet replay.
+    let mut session = session();
+    session.apply(load(0x0A4)).unwrap();
+    let loaded = session.position().pos;
+    let endless = Op::Program {
+        source: ENDLESS.to_owned(),
+        format: ProgramFormat::Asm,
+    };
+    while session.apply(endless.clone()).is_ok() && session.apply(Op::StepAccess).is_ok() {}
+    let full = session.position().pos.get();
+    assert!(full + MAX_EVENTS_PER_ENTRY > SESSION_EVENT_LIMIT, "{full}");
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let found = |value| session.find_event(&predicate(value));
+        let _ = sender.send((
+            found(json!({"lastAccess": {"addr": "0x0A8"}})),
+            found(json!({"lastAccess": {"addr": "0x0A4"}})),
+        ));
+    });
+    let (never, first) = receiver
+        .recv_timeout(SEARCH_BOUND)
+        .expect("the searches end in time");
+    assert_eq!(never, None);
+    assert_eq!(first, Some(loaded));
+}
+
+#[test]
 fn a_loaded_session_counts_its_ops_as_made_before_a_step_began() {
     // A module started on a session loaded from a share string: its ops are
     // numbered from 1, the module's own after them.
@@ -932,8 +1010,7 @@ fn the_module_s_own_rules_have_their_errors() {
 
 #[test]
 fn each_step_s_rules_have_their_errors() {
-    // Text, options and answers, empty op lists, callouts, and an expect
-    // that must check the configuration its "Show me" switches to.
+    // Text, options and answers, empty op lists and callouts.
     refused_with(&[
         (
             with(SWITCH_CONFIG, "/steps", json!([])),
@@ -979,24 +1056,6 @@ fn each_step_s_rules_have_their_errors() {
             "steps[1].hint: the text is empty.",
         ),
         (
-            with(
-                SWITCH_CONFIG,
-                "/steps/3/expect",
-                json!({"counter": "accesses", "op": "==", "value": 0}),
-            ),
-            "steps[3].expect: Show me changes the configuration, so `expect` needs a `config` \
-             predicate that the new configuration meets.",
-        ),
-        (
-            with(
-                SWITCH_CONFIG,
-                "/steps/3/expect",
-                json!({"config": {"replacement": "lru"}}),
-            ),
-            "steps[3].expect: Show me changes the configuration, so `expect` needs a `config` \
-             predicate that the new configuration meets.",
-        ),
-        (
             with(SWITCH_CONFIG, "/steps/4/callout", json!({"set": 4})),
             "steps[4].callout.set: this configuration has no set 4; its sets are 0\u{2013}3.",
         ),
@@ -1015,6 +1074,7 @@ fn each_step_s_rules_have_their_errors() {
 fn a_step_s_ops_have_their_errors() {
     // Each op as a run of the configuration in force would refuse it, and
     // each configuration a `config` op switches to.
+    let run_steps = format!("steps[0].showMe[0]: {}", OpError::RunSteps);
     refused_with(&[
         (
             with(
@@ -1022,7 +1082,7 @@ fn a_step_s_ops_have_their_errors() {
                 "/steps/0/showMe/0",
                 json!({"op": "run", "n": 0}),
             ),
-            "steps[0].showMe[0]: Run between 1 and 1,000 instructions at a time.",
+            run_steps.as_str(),
         ),
         (
             with(
@@ -1081,6 +1141,19 @@ fn a_step_s_ops_have_their_errors() {
         (
             edited(SWITCH_CONFIG, |module| {
                 module["program"]["source"] = json!("R 0x100");
+                module["steps"][1]["then"][0]["config"]["addressBits"] = json!(8);
+            }),
+            "steps[1].then[0].config: the module's program does not fit this configuration. The \
+             trace has an error on line 1: ",
+        ),
+        // A program an earlier step's ops load replaces the module's: the
+        // module's fits 8-bit addresses, the one loaded does not.
+        (
+            edited(SWITCH_CONFIG, |module| {
+                module["steps"][0]["showMe"] = json!([
+                    {"op": "program", "source": "R 0x100", "format": "trace"},
+                    {"op": "run", "n": 1}
+                ]);
                 module["steps"][1]["then"][0]["config"]["addressBits"] = json!(8);
             }),
             "steps[1].then[0].config: the module's program does not fit this configuration. The \
@@ -1300,6 +1373,52 @@ fn a_check_follows_the_configuration_in_force() {
         json!({"way": {"set": 3, "way": 1}, "rank": 1}),
     ))
     .unwrap();
+    // A program an earlier step's ops load replaces the module's for the
+    // configurations after it: here one that fits 8-bit addresses, where
+    // the module's does not.
+    Module::parse(&edited(SWITCH_CONFIG, |module| {
+        module["program"]["source"] = json!("R 0x100");
+        module["steps"][0]["showMe"] = json!([
+            {"op": "program", "source": "R 0x000\nR 0x080", "format": "trace"},
+            {"op": "run", "n": 2}
+        ]);
+        module["steps"][1]["then"][0]["config"]["addressBits"] = json!(8);
+    }))
+    .unwrap();
+}
+
+#[test]
+fn an_expect_must_tell_the_configuration_its_show_me_switches_to() {
+    // Step 3's "Show me" switches two-way LRU to two-way FIFO. Its `expect`
+    // needs `config` predicates it cannot hold without, which FIFO meets
+    // and LRU does not, so the step waits for a switch made by hand too.
+    const UNCHECKED: &str = "steps[3].expect: Show me changes the configuration, so `expect` \
+                             needs a `config` predicate that the new configuration meets and the \
+                             one before it does not.";
+    let unchecked = |expect: Value| (with(SWITCH_CONFIG, "/steps/3/expect", expect), UNCHECKED);
+    refused_with(&[
+        // None, or one the new configuration does not meet.
+        unchecked(json!({"counter": "accesses", "op": "==", "value": 0})),
+        unchecked(json!({"config": {"replacement": "lru"}})),
+        // Ones the configuration before the switch meets too: the step
+        // would complete without the switch.
+        unchecked(json!({"config": {}})),
+        unchecked(json!({"config": {"associativity": 2}})),
+        unchecked(json!({"all": [{"config": {"associativity": 2}},
+                                 {"counter": "accesses", "op": ">=", "value": 0}]})),
+        // One the step can hold without.
+        unchecked(json!({"any": [{"config": {"replacement": "fifo"}},
+                                 {"counter": "accesses", "op": ">=", "value": 0}]})),
+    ]);
+    // Together they tell the switch: two-way alone holds before it, and
+    // with FIFO it does not.
+    for expect in [
+        json!({"all": [{"config": {"associativity": 2}}, {"config": {"replacement": "fifo"}}]}),
+        json!({"all": [{"counter": "accesses", "op": ">=", "value": 0},
+                       {"all": [{"config": {"replacement": "fifo"}}]}]}),
+    ] {
+        Module::parse(&with(SWITCH_CONFIG, "/steps/3/expect", expect)).unwrap();
+    }
 }
 
 #[test]
@@ -1377,6 +1496,16 @@ fn a_predicate_without_its_shape_is_refused_with_its_place() {
                 json!({"counter": "misses", "op": "!=", "value": 0}),
             ),
             "unknown variant `!=`, expected one of `==`, `>=`, `<=`",
+        ),
+        // A count, as the counters are: a module read back across the
+        // boundary never holds a number JavaScript cannot represent.
+        (
+            with(
+                MISS_THEN_HIT,
+                "/steps/1/expect",
+                json!({"counter": "misses", "op": "==", "value": 9_007_199_254_740_993_u64}),
+            ),
+            "invalid value: integer `9007199254740993`, expected u32",
         ),
         (
             with(
@@ -1485,6 +1614,7 @@ fn predicates_serialize_as_the_spec_shapes_them() {
         json!({"line": {"addr": 164}, "present": true}),
         json!({"memory": {"addr": 164}, "equals": 18_446_744_073_709_551_615_u64}),
         json!({"counter": "writearounds", "op": "<=", "value": 3}),
+        json!({"counter": "cycles", "op": ">=", "value": u32::MAX}),
         json!({"register": "r7", "equals": 5}),
         json!({"all": [{"any": [{"not": {"event": {"kind": "memWrite", "entry": 2}}}]}]}),
         json!({"lastAccess": {"kind": "write", "addr": 164, "outcome": "hit"}}),

@@ -10,7 +10,8 @@
 //! can be appended, so the log cannot change under the gate and its limit
 //! always names the same state.
 
-use super::{resume_into, EntryKind, EntryOutcome, Session, Start};
+use super::timeline::EntryAccess;
+use super::{resume_into, EntryKind, EntryOutcome, EntryRecord, Session, Start};
 use crate::engine::{EventSink, Flow};
 use crate::event::MicroEvent;
 use crate::machine::Machine;
@@ -113,24 +114,20 @@ impl Session {
     /// The most recent access of run `run` completed at or before `pos`: the
     /// last access entry of the run whose last event is there or earlier
     /// and which reached its tag compare. An access an internal error
-    /// abandoned before it is passed over.
+    /// abandoned before it is passed over. The entries note it as they are
+    /// appended, so finding it costs a search of the entries, however long
+    /// the run.
     pub(crate) fn last_access(&self, pos: EventPos, run: u32) -> Option<LastAccess> {
         let done = self.entries.partition_point(|record| record.last <= pos);
-        let (record, access, outcome) = self
-            .entries
-            .get(..done)?
-            .iter()
-            .rev()
-            .take_while(|record| record.run == run)
-            .find_map(|record| {
-                let outcome = match record.outcome {
-                    EntryOutcome::Hit => Outcome::Hit,
-                    EntryOutcome::Miss => Outcome::Miss,
-                    _ => return None,
-                };
-                let access = record.access.filter(|_| record.kind == EntryKind::Access)?;
-                Some((record, access, outcome))
-            })?;
+        let latest = done.checked_sub(1)?;
+        // The latest entry done is an earlier run's while this run has none
+        // done yet.
+        if self.entries.get(latest)?.run != run {
+            return None;
+        }
+        let index = (*self.last_accesses.get(latest)?)?;
+        let record = self.entries.get(usize::try_from(index).ok()?)?;
+        let (access, outcome) = completed(record)?;
         let op = self.event_at(record.first)?.op_index;
         Some(LastAccess {
             kind: access.kind,
@@ -138,6 +135,23 @@ impl Session {
             outcome,
             serial: self.serial(op)?,
         })
+    }
+
+    /// Appends `records` to the log's entries, noting for each the latest
+    /// access of its run, at or before it, that reached its tag compare.
+    pub(super) fn extend_entries(&mut self, records: Vec<EntryRecord>) {
+        for record in records {
+            let latest = if completed(&record).is_some() {
+                u32::try_from(self.entries.len()).ok()
+            } else {
+                self.entries
+                    .last()
+                    .filter(|before| before.run == record.run)
+                    .and_then(|_| self.last_accesses.last().copied().flatten())
+            };
+            self.last_accesses.push(latest);
+            self.entries.push(record);
+        }
     }
 
     /// Whether `predicate` holds at the cursor, every op of the log counting
@@ -191,6 +205,18 @@ impl Session {
         .ok()?;
         finder.found
     }
+}
+
+/// The load or store `record` makes and whether it hit or missed, when it
+/// is an access that reached its tag compare.
+fn completed(record: &EntryRecord) -> Option<(EntryAccess, Outcome)> {
+    let outcome = match record.outcome {
+        EntryOutcome::Hit => Outcome::Hit,
+        EntryOutcome::Miss => Outcome::Miss,
+        _ => return None,
+    };
+    let access = record.access.filter(|_| record.kind == EntryKind::Access)?;
+    Some((access, outcome))
 }
 
 /// Looks for the first event after a run's origin at which a predicate
@@ -319,6 +345,60 @@ mod tests {
         assert_eq!(last.serial, 1);
         // Another run has none of this run's.
         assert_eq!(session.last_access(session.cursor, 2), None);
+    }
+
+    /// The latest access of each entry's run at or before it that reached
+    /// its tag compare, found by walking back along the run.
+    fn walked(session: &Session) -> Vec<Option<u32>> {
+        (0..session.entries.len())
+            .map(|entry| {
+                let run = session.entries[entry].run;
+                (0..=entry)
+                    .rev()
+                    .take_while(|&index| session.entries[index].run == run)
+                    .find(|&index| completed(&session.entries[index]).is_some())
+                    .map(|index| u32::try_from(index).unwrap())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn each_entry_notes_its_run_s_latest_access() {
+        let mut session = session();
+        let ops = [
+            load(0x0A4),
+            Op::Program {
+                source: "add r1, r0, #1\nld r2, [0x0B0]\nadd r3, r0, #2\nst [0x1A4], r3".to_owned(),
+                format: ProgramFormat::Asm,
+            },
+            Op::Run { n: 3 },
+            Op::Edit {
+                target: serde_json::from_str(r#"{"kind": "memory", "addr": 164}"#).unwrap(),
+                patch: serde_json::from_str(r#"{"kind": "memory", "value": 9}"#).unwrap(),
+            },
+            // A new run, which keeps the program: an instruction without an
+            // access, then a load.
+            Op::Config {
+                config: Preset::TwoWayLru.config(),
+            },
+            Op::Step,
+            Op::Step,
+            Op::StepAccess,
+        ];
+        for op in ops {
+            session.apply(op).unwrap();
+            assert_eq!(session.last_accesses, walked(&session));
+        }
+        assert!(session.last_accesses.contains(&None));
+        // Undone, then truncated by a new op.
+        assert!(session.undo());
+        assert!(session.undo());
+        session.apply(Op::Step).unwrap();
+        assert_eq!(session.last_accesses, walked(&session));
+        assert_eq!(session.last_accesses.len(), session.entries.len());
+        // A loaded session notes the same.
+        let loaded = Session::from_json(&session.to_json()).unwrap();
+        assert_eq!(loaded.last_accesses, session.last_accesses);
     }
 
     #[test]

@@ -210,7 +210,8 @@ pub enum Markdown {
     ListItem,
     /// A block quote: `>` at the start.
     BlockQuote,
-    /// An indented code block: four spaces or a tab at the start.
+    /// An indented code block: four spaces at the start, or a tab after
+    /// fewer.
     IndentedCode,
     /// A horizontal rule: `---` alone.
     Rule,
@@ -220,7 +221,7 @@ pub enum Markdown {
     Underscore,
     /// Strikethrough: `~~`.
     Strikethrough,
-    /// A link: `[text](url)`.
+    /// A link: `[text](url)` or `[text][ref]`.
     Link,
     /// An image: `![text](url)`.
     Image,
@@ -319,8 +320,11 @@ pub(crate) fn markup(text: &str) -> Result<Vec<TextSegment>, MarkupError> {
 /// Refuses the markdown a paragraph can open with: an indented code block,
 /// a heading, a block quote, a list item or a rule.
 fn block_start(chars: &[char]) -> Result<(), MarkupError> {
+    // Four columns of indentation make a code block. A tab goes on to the
+    // next tab stop, four columns apart, so a tab after fewer spaces does
+    // too.
     let spaces = chars.iter().take_while(|&&c| c == ' ').count();
-    if spaces >= 4 || chars.first() == Some(&'\t') {
+    if spaces >= 4 || chars.get(spaces) == Some(&'\t') {
         return Err(unsupported(Markdown::IndentedCode, 0));
     }
     let rest = chars.get(spaces..).unwrap_or_default();
@@ -376,14 +380,30 @@ fn inline(chars: &[char], i: usize) -> Result<(), MarkupError> {
     }
 }
 
-/// Whether the `[` at `i` of `chars` opens a link: its `]` is followed by
-/// `(` or by another `[`.
+/// Whether the `[` at `i` of `chars` opens a link: the `]` that closes it
+/// is followed by `(` or by another `[`. Brackets pair as markdown pairs
+/// them in a link's text: a pair may hold other pairs, and a bracket inside
+/// code is text.
 fn links(chars: &[char], i: usize) -> bool {
-    let rest = chars.get(i.saturating_add(1)..).unwrap_or_default();
-    rest.iter()
-        .position(|&c| c == ']')
-        .and_then(|close| rest.get(close.saturating_add(1)))
-        .is_some_and(|&c| c == '(' || c == '[')
+    let mut open = 0_u32;
+    let mut at = i;
+    while let Some(&c) = chars.get(at) {
+        match c {
+            // Code is passed over whole; a backtick that nothing closes is
+            // text.
+            '`' => at = span(chars, at, '`').map_or(at, |(_, close)| close),
+            '[' => open = open.saturating_add(1),
+            ']' => {
+                open = open.saturating_sub(1);
+                if open == 0 {
+                    return matches!(chars.get(at.saturating_add(1)), Some('(' | '['));
+                }
+            }
+            _ => {}
+        }
+        at = at.saturating_add(1);
+    }
+    false
 }
 
 /// Whether the `&` at `i` of `chars` starts an entity: letters, digits or
@@ -571,6 +591,17 @@ mod tests {
             markup("128 B lines. 0x0A4 = tag 0x01").unwrap(),
             [plain("128 B lines. 0x0A4 = tag 0x01")]
         );
+        // Brackets that close no link, the pair first: a `](` that no
+        // bracket opens, or one inside code, is text.
+        assert_eq!(
+            markup("[a] b](c) and `[d](e)`").unwrap(),
+            [plain("[a] b](c) and "), code("[d](e)")]
+        );
+        assert_eq!(
+            markup("[x `a](b` y] z").unwrap(),
+            [plain("[x "), code("a](b"), plain(" y] z")]
+        );
+        assert_eq!(markup("  two spaces").unwrap(), [plain("  two spaces")]);
         // A backslash before anything but punctuation escapes nothing.
         assert_eq!(markup("C:\\temp \\").unwrap(), [plain("C:\\temp \\")]);
     }
@@ -614,6 +645,9 @@ mod tests {
             ("3) item", unsupported(Markdown::ListItem, 1)),
             ("    indented", unsupported(Markdown::IndentedCode, 1)),
             ("\tindented", unsupported(Markdown::IndentedCode, 1)),
+            // A tab reaches the next tab stop, four columns on.
+            (" \tindented", unsupported(Markdown::IndentedCode, 1)),
+            ("   \tindented", unsupported(Markdown::IndentedCode, 1)),
             ("---", unsupported(Markdown::Rule, 1)),
             ("a **b**", unsupported(Markdown::Strong, 3)),
             ("write_back", unsupported(Markdown::Underscore, 6)),
@@ -621,6 +655,10 @@ mod tests {
             ("a ~~b~~", unsupported(Markdown::Strikethrough, 3)),
             ("see [the log](#log)", unsupported(Markdown::Link, 5)),
             ("see [the log][1]", unsupported(Markdown::Link, 5)),
+            // Link text may hold brackets in pairs, and code.
+            ("see [a [b] c](d)", unsupported(Markdown::Link, 5)),
+            ("see [a `]` b](d)", unsupported(Markdown::Link, 5)),
+            ("see [a `b](d)", unsupported(Markdown::Link, 5)),
             ("an ![image](a.png)", unsupported(Markdown::Image, 4)),
             ("a <b>bold</b>", unsupported(Markdown::Html, 3)),
             ("a &amp; b", unsupported(Markdown::Entity, 3)),

@@ -113,6 +113,11 @@ pub struct Session {
     /// Every entry of the log, in order, each written once as its events
     /// were recorded.
     entries: Vec<EntryRecord>,
+    /// For each entry, in the order of `entries`, the index of the latest
+    /// access of its run, at or before it, that reached its tag compare;
+    /// none while the run has made none. The last access at a position is
+    /// then one lookup, not a walk back along the run.
+    last_accesses: Vec<Option<u32>>,
     /// Copies of the machine along the log, which seeks replay from.
     checkpoints: Checkpoints,
     /// The cursor's position.
@@ -202,6 +207,7 @@ impl Session {
             events: Vec::new(),
             op_ends: Vec::new(),
             entries: Vec::new(),
+            last_accesses: Vec::new(),
             checkpoints: Checkpoints::new(origin.clone()),
             cursor: EventPos::new_unchecked(0),
             current: origin,
@@ -638,8 +644,8 @@ impl Session {
     }
 
     /// Makes `plan` the session's: drops the log after its base, appends its
-    /// ops and events, each op with the next serial, and puts the cursor on
-    /// its last event.
+    /// ops, events and entries, each op with the next serial, and puts the
+    /// cursor on its last event.
     fn commit(&mut self, plan: Plan) {
         let from = self.cursor;
         let kept = usize::try_from(plan.kept).unwrap_or(usize::MAX);
@@ -656,12 +662,13 @@ impl Session {
             .entries
             .partition_point(|record| record.last <= plan.base);
         self.entries.truncate(entries);
+        self.last_accesses.truncate(entries);
         self.checkpoints.truncate_after(plan.base);
         self.ops_json.extend(plan.ops.iter().map(share::op_json));
         self.ops.extend(plan.ops);
         self.op_ends.extend(plan.op_ends);
         self.events.extend(plan.events);
-        self.entries.extend(plan.records);
+        self.extend_entries(plan.records);
         for (pos, checkpoint) in plan.checkpoints {
             self.checkpoints.insert(pos, checkpoint);
         }
