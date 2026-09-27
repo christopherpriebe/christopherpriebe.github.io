@@ -3468,6 +3468,40 @@ fn ready_says_why_there_is_nothing_to_execute() {
 }
 
 #[test]
+fn a_recorded_event_keeps_no_spare_room() {
+    // A program's load of the least recently used line of a fully
+    // associative set of `MAX_LINES` ways moves every rank: its `Rank` event
+    // lists every way and the pc, the longest list an access makes, and its
+    // line names every way. The session keeps every event for as long as it
+    // holds the log, so no event keeps room it does not use.
+    let mut driven = Driven::new(config(
+        MAX_LINES * 16,
+        MAX_LINES,
+        Replacement::Lru,
+        WritePolicy::WriteBack,
+        AllocatePolicy::WriteAllocate,
+    ));
+    let mut trace = Vec::new();
+    for line in 0..MAX_LINES {
+        trace.extend(driven.issue(load(line * 0x10, Register::R1)));
+    }
+    trace.extend(driven.load("ld r1, [0x000]"));
+    trace.extend(driven.step());
+    let (rank, _) = trace.last().unwrap();
+    assert_eq!(rank.kind, Rank);
+    assert_eq!(rank.changed.len(), MAX_LINES as usize + 1);
+    assert_eq!(rank.changed.last(), Some(&ChangeRef::Pc));
+    for (event, _) in &trace {
+        assert_eq!(
+            (event.changed.capacity(), event.explain.capacity()),
+            (event.changed.len(), event.explain.len()),
+            "{}",
+            event.explain
+        );
+    }
+}
+
+#[test]
 fn a_branch_moves_the_pc_to_its_label_or_on() {
     let mut driven = Driven::new(preset(Preset::DirectMapped8));
     driven.load(

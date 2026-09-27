@@ -75,11 +75,14 @@ pub const INSTRUCTION_BUDGET: u32 = 10_000;
 
 /// The most micro-events one session stores, over the whole log. The main
 /// lever on memory use and on the time a shared link takes to load. Tunable.
-/// Set so that the heaviest logs measured, runs that touch a new 128-byte
-/// line every few events, stay under 64 MB at their peak, and kept below
-/// 65,536, past which the events a share load gathers double their room to
-/// 131,072 before they move into the session.
-pub const SESSION_EVENT_LIMIT: u32 = 65_000;
+/// Set so that the heaviest logs measured stay under 64 MB at their peak:
+/// runs of accesses that each move every rank of a set of `MAX_LINES` ways,
+/// where one event in four is a `Rank` of about 2 KB that lists every way in
+/// its changed cells and in its log line; and runs that touch a new 128-byte
+/// line every few events. Kept below 65,536, past which the events a share
+/// load gathers double their room to 131,072 before they move into the
+/// session.
+pub const SESSION_EVENT_LIMIT: u32 = 40_000;
 
 /// The most events one entry can produce. Not tunable: it is a bound the
 /// engine guarantees (an access has at most ten events), and the session's
@@ -335,10 +338,10 @@ mod tests {
         // three. The log must still have room for an entry, so that the
         // next op is refused for the link's limit, and a link must open it.
         assert!(
-            u64::from(MAX_SHARE_OPS) * 5 + u64::from(MAX_EVENTS_PER_ENTRY)
+            5 + u64::from(MAX_SHARE_OPS.saturating_sub(1)) * 3 + u64::from(MAX_EVENTS_PER_ENTRY)
                 <= u64::from(SESSION_EVENT_LIMIT),
             "tests/session.rs and tests/share.rs fill a log with MAX_SHARE_OPS loads by hand, \
-             of at most five events each, with room left for an entry"
+             a miss of five events then hits of three, with room left for an entry"
         );
         assert!(
             u64::from(MAX_SHARE_OPS) * 64 <= u64::from(MAX_SHARE_JSON_BYTES),

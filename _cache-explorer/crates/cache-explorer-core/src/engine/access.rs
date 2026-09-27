@@ -661,13 +661,13 @@ fn rank(
         return Err(lost(machine, set));
     };
     set_ranks(target.ways_mut(), moves, |moved| moved.to);
-    let mut changed: Vec<ChangeRef> = moves
-        .iter()
-        .map(|moved| ChangeRef::Rank {
-            set,
-            way: moved.way,
-        })
-        .collect();
+    // Room for every move and the pc, so the list never grows: in a set of
+    // many ways, growing would double it.
+    let mut changed = Vec::with_capacity(moves.len().saturating_add(1));
+    changed.extend(moves.iter().map(|moved| ChangeRef::Rank {
+        set,
+        way: moved.way,
+    }));
     changed.extend(finish(machine));
     let draft = Draft {
         set: Some(set),

@@ -617,7 +617,7 @@ pub(crate) fn program_unloaded(format: ProgramFormat, first: &ParseError) -> Str
 }
 
 /// The `Error` line that stops a program when the log has no room for
-/// another entry: "The session reached its limit of 65,000 steps, so the
+/// another entry: "The session reached its limit of 40,000 steps, so the
 /// program stopped here."
 pub(crate) fn session_limit() -> String {
     format!(

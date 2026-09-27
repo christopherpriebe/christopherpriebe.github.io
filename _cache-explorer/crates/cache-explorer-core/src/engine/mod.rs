@@ -213,6 +213,11 @@ impl<'s> Emitter<'s> {
     /// the event is stamped with the machine's cycle count. `explain` gives
     /// the event's log line, and is called only when the sink records.
     ///
+    /// A recorded event keeps no spare room in its changed list or its log
+    /// line: the session keeps every event for as long as it holds the log,
+    /// and a list or a line built by pushing can hold up to twice what it
+    /// needs, as a `Rank` event's does in a set of many ways.
+    ///
     /// # Errors
     ///
     /// [`Halt::Stopped`] when the sink stops the op here.
@@ -230,6 +235,9 @@ impl<'s> Emitter<'s> {
             let mut changed = draft.changed;
             changed.sort_unstable();
             changed.dedup();
+            changed.shrink_to_fit();
+            let mut explain = explain();
+            explain.shrink_to_fit();
             MicroEvent {
                 id,
                 op_index: self.op,
@@ -244,7 +252,7 @@ impl<'s> Emitter<'s> {
                 set: draft.set,
                 way: draft.way,
                 changed,
-                explain: explain(),
+                explain,
                 cause: draft.cause,
             }
         });
