@@ -1,6 +1,6 @@
-// Checks the release build in web/pkg, glue included, against arguments JavaScript could send
-// to break the module: each must throw an Error, and the module must keep working after all of
-// them. Run through `npm run test:glue` in web/, after `npm run build:wasm`.
+// Checks the release build in web/pkg, glue included, against arguments and calls JavaScript could
+// send to break the module: each must throw an Error, and the module must keep working after all
+// of them. Run through `npm run test:glue` in web/, after `npm run build:wasm`.
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -13,7 +13,7 @@ if (!existsSync(resolve(pkg, 'cache_explorer_bg.wasm'))) {
 }
 const glue = await import(pathToFileURL(resolve(pkg, 'cache_explorer.js')).href);
 glue.initSync({ module: readFileSync(resolve(pkg, 'cache_explorer_bg.wasm')) });
-const { Session, ShareLoad, evalPredicate, parseModule } = glue;
+const { ModuleRun, Session, ShareLoad, evalPredicate, parseModule } = glue;
 
 const throws = (call, message) => assert.throws(call, (e) => e.constructor === Error && message.test(e.message));
 const kept = Session.firstVisit();
@@ -31,10 +31,29 @@ for (const value of [5, true, 7n, {}, [], null]) {
 throws(() => session.scrubTo('5'), /^expected a number argument/);
 throws(() => session.setAdvanced('true'), /^expected a boolean argument/);
 
-// A freed object refuses every call before it reaches wasm, however many there are.
+// A freed object refuses every method call before it reaches wasm, however many there are.
 const freed = new Session();
 freed.free();
 for (let i = 0; i < 20_000; i += 1) throws(() => freed.state(), /^Attempt to use a moved value/);
+
+// Releasing an object twice is not refused by the glue: a second free(), or [Symbol.dispose](),
+// which `using` calls when its block ends, passes a null pointer into wasm and throws from Rust.
+// Each such throw leaks its stack frame, and a few hundred break the module, so the page releases
+// every object exactly once. Checked here, a few times only, so that a change in the glue shows.
+const modules = resolve(import.meta.dirname, '..', 'crates', 'cache-explorer-core', 'tests', 'fixtures', 'modules');
+const moduleJson = readFileSync(resolve(modules, '01-fixture-miss-then-hit.json'), 'utf8');
+for (const make of [() => new Session(), () => ShareLoad.fromJson(json), () => ModuleRun.fromJson(moduleJson)]) {
+  const twice = make();
+  twice.free();
+  throws(() => twice.free(), /^null pointer passed to rust$/);
+  const disposed = make();
+  disposed.free();
+  throws(() => disposed[Symbol.dispose](), /^null pointer passed to rust$/);
+}
+throws(() => {
+  using scoped = new Session();
+  scoped.free();
+}, /^null pointer passed to rust$/);
 
 // A watch list is read whole: nothing is allocated from a length, and a non-list throws.
 const sparse = [];
