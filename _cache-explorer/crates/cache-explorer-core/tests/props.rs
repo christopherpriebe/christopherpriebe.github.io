@@ -10,20 +10,24 @@
 //! scrubbing, seeking, Space and Shift+Space. Each action is read against
 //! the session as it stands, and every address it names falls in a pool of
 //! three times the cache's lines, so hits, conflicts and dirty evictions all
-//! happen.
+//! happen. A long session starts with long runs of a loop, and after what
+//! the student does its log is cut back and grown again, so that it crosses
+//! the checkpoints the session keeps, before the cut and after.
 //!
 //! The fold is a pure function, and undo, redo, scrubbing, seeking and
-//! Space reach the machines it reaches; share strings and saved files give
-//! the same session back; the cache's invariants and the counters'
-//! identities hold at every event; every event lists exactly the cells it
-//! changed; a refused call changes nothing, and an accepted one never
-//! rewrites the log before the point it appends at; a planned edit applies
-//! and drops no dirty data without saying so; every configuration repairs to
-//! a valid one, whose geometry splits and rebuilds every address; the
-//! parsers take any text; and every input type round-trips through JSON.
+//! Space reach the machines it reaches, from checkpoints too; share strings
+//! and saved files give the same session back; the cache's invariants and
+//! the counters' identities hold at every event; every event lists exactly
+//! the cells it changed; a refused call changes nothing, and an accepted one
+//! never rewrites the log before the point it appends at; a planned edit
+//! applies and drops no dirty data without saying so, and one the plan
+//! refuses is refused as an op too; every configuration repairs to a valid
+//! one, whose geometry splits and rebuilds every address; the parsers take
+//! any text; and every input type round-trips through JSON.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use cache_explorer_core::limits::MAX_PARSE_ERRORS;
@@ -37,21 +41,35 @@ use proptest::prelude::*;
 
 use support::{
     arb_access_match, arb_config, arb_config_match, arb_edit_patch, arb_edit_target,
-    arb_event_match, arb_op, arb_predicate, arb_raw_config, arb_session, arb_share_doc, arb_step,
-    arb_text, arb_valid_config, arb_way_form, arb_way_patch, cells, changes, end, event_kinds,
-    every_position, number, number_fields, op_ends, op_start, play, registers, round_trip,
-    undo_stops, without_mode, Checks, COUNTERS,
+    arb_event_match, arb_long_session, arb_op, arb_predicate, arb_raw_config, arb_session,
+    arb_share_doc, arb_step, arb_text, arb_valid_config, arb_way_form, arb_way_patch, cells,
+    changes, check, checked_positions, end, event_kinds, every_position, load_in_slices, number,
+    number_fields, op_ends, op_start, play, play_long, registers, round_trip, seeks_reach,
+    undo_stops, without_mode, Checks, Fold, COUNTERS,
 };
 
 /// How the properties over whole sessions run: with a quarter of the cases
 /// proptest runs by default, or of `PROPTEST_CASES` when it is set, since
-/// each case builds a session and walks every event of it. A failure is
-/// printed with its smallest case rather than written to a file beside this
-/// one; once the bug is fixed, that case becomes a test of its own.
+/// each case builds a session and walks every event of it. They run through
+/// [`check`], which keeps that quarter. A failure is printed with its
+/// smallest case rather than written to a file beside this one; once the bug
+/// is fixed, that case becomes a test of its own.
 fn sessions() -> ProptestConfig {
     let base = values();
     ProptestConfig {
         cases: (base.cases / 4).max(1),
+        ..base
+    }
+}
+
+/// How the property over long sessions runs: with a sixteenth of the cases
+/// of those over whole sessions, since each builds a log several checkpoint
+/// intervals long and replays it from position 0 to every position it
+/// checks.
+fn long_sessions() -> ProptestConfig {
+    let base = sessions();
+    ProptestConfig {
+        cases: (base.cases / 16).max(1),
         ..base
     }
 }
@@ -74,25 +92,26 @@ mod support {
     use std::fmt::Debug;
 
     use cache_explorer_core::limits::{
-        MAX_CYCLES, MAX_LINES, MAX_RUN_STEPS, MAX_SEED, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS,
-        MIN_CYCLES,
+        CHECKPOINT_INTERVAL, LOAD_SLICE_EVENTS, MAX_CYCLES, MAX_EVENTS_PER_ENTRY, MAX_LINES,
+        MAX_RUN_STEPS, MAX_SEED, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS, MIN_CYCLES,
     };
     use cache_explorer_core::{
         AccessKind, AccessMatch, Addr, AddrLoc, AllPredicate, AllocatePolicy, AnyPredicate,
         Boundary, CacheConfig, Callout, CalloutArea, CellRef, ChangeRef, CmpOp, Config,
         ConfigChange, ConfigMatch, ConfigNumberField, ConfigPredicate, Consequence, Counter,
         CounterPredicate, Counters, EditPatch, EditPlan, EditTarget, EventKind, EventMatch,
-        EventPos, EventPredicate, Geometry, LastAccessPredicate, LinePredicate, Machine,
-        MemoryInit, MemoryPredicate, MicroEvent, NotPredicate, Op, OpError, Outcome, Position,
-        Predicate, ProgramFormat, ProgramSource, Register, RegisterPredicate, Replacement, Session,
-        ShareAt, ShareDoc, State, Step, StepOutcome, Timeline, Timing, Tone, WayForm, WayLoc,
-        WayPatch, WayPredicate, WayView, WordBytes, WritePolicy,
+        EventPos, EventPredicate, Geometry, LastAccessPredicate, LinePredicate, LoadProgress,
+        Machine, MemoryInit, MemoryPredicate, MicroEvent, NotPredicate, Op, OpError, Outcome,
+        Position, Predicate, ProgramFormat, ProgramSource, RefusalReason, Register,
+        RegisterPredicate, Replacement, Session, ShareAt, ShareDoc, ShareLoad, State, Step,
+        StepOutcome, Timeline, Timing, Tone, WayForm, WayLoc, WayPatch, WayPredicate, WayView,
+        WordBytes, WritePolicy,
     };
     use proptest::collection::vec;
     use proptest::option;
     use proptest::prelude::*;
     use proptest::sample::select;
-    use proptest::test_runner::TestCaseError;
+    use proptest::test_runner::{TestCaseError, TestRunner};
     use serde::de::DeserializeOwned;
     use serde::Serialize;
     use serde_json::json;
@@ -112,6 +131,13 @@ mod support {
 
     /// The most actions a generated session has.
     const ACTIONS: usize = 64;
+
+    /// The most actions a student takes in a long session, between its long
+    /// runs.
+    const LONG_ACTIONS: usize = 16;
+
+    /// How many positions of a long session are picked at random to check.
+    const PICKS: usize = 8;
 
     /// Every counter, in the order the Stats region names them.
     pub(crate) const COUNTERS: [Counter; 14] = [
@@ -145,6 +171,22 @@ mod support {
     /// A test failure saying `error`.
     fn fail(error: impl std::fmt::Display) -> TestCaseError {
         TestCaseError::fail(error.to_string())
+    }
+
+    /// Checks `property` of the values `strategy` generates, as many as
+    /// `config` says. The `proptest!` macro would read `PROPTEST_CASES`
+    /// again over `config`, which runs the properties over whole sessions
+    /// as many times as those over single values; a runner of their own
+    /// keeps their share of the cases.
+    pub(crate) fn check<S: Strategy>(
+        config: ProptestConfig,
+        strategy: &S,
+        property: impl Fn(S::Value) -> Result<(), TestCaseError>,
+    ) {
+        let mut runner = TestRunner::new(config);
+        if let Err(error) = runner.run(strategy, property) {
+            panic!("{error}\n{runner}");
+        }
     }
 
     /// `counter`'s value in `counters`.
@@ -468,8 +510,9 @@ mod support {
 
     /// The programs a student loads: assembly that walks an array, strides
     /// through the lines of one set, or alternates between two lines of one
-    /// set; a trace; assembly that faults; and assembly that does not parse.
-    /// Every instruction has a line of its own, from the first line on.
+    /// set; a trace; assembly that faults; assembly that does not parse; and
+    /// a loop that never ends. Every instruction has a line of its own, from
+    /// the first line on.
     #[derive(Clone, Copy, Debug)]
     pub(crate) enum Template {
         /// Loads and stores each word of a stretch of the pool.
@@ -486,6 +529,9 @@ mod support {
         Fault,
         /// An unknown instruction.
         Broken,
+        /// Loads and stores of the pool, round a loop that never ends; for
+        /// the long runs of a long session only.
+        Endless,
     }
 
     /// A program from a template, with the numbers it is read with.
@@ -502,6 +548,24 @@ mod support {
     }
 
     impl ProgramChoice {
+        /// The words a trace or a loop of accesses names, in order: one to
+        /// six of the pool, their lines one to five apart.
+        fn accesses(self, geometry: &Geometry) -> Vec<u32> {
+            let n = 1 + self.count % 6;
+            let step = 1 + self.other % 5;
+            (0..n)
+                .map(|i| {
+                    let line = self.start.wrapping_add(i * step);
+                    pool_addr(geometry, line, self.other.wrapping_add(i))
+                })
+                .collect()
+        }
+
+        /// Whether access `i` of a trace or a loop of accesses is a store.
+        fn stores(self, i: u32) -> bool {
+            (self.other >> i) & 1 == 1
+        }
+
         /// The program under `geometry`, and every address it can reach.
         fn program(self, geometry: &Geometry) -> (ProgramSource, Vec<u32>) {
             let line = geometry.line_bytes();
@@ -541,18 +605,11 @@ mod support {
                     (source, vec![load, store])
                 }
                 Template::Trace => {
-                    let n = 1 + self.count % 6;
-                    let step = 1 + self.other % 5;
-                    let addrs: Vec<u32> = (0..n)
-                        .map(|i| {
-                            let line = self.start.wrapping_add(i * step);
-                            pool_addr(geometry, line, self.other.wrapping_add(i))
-                        })
-                        .collect();
-                    let lines: Vec<String> = (0..n)
+                    let addrs = self.accesses(geometry);
+                    let lines: Vec<String> = (0..)
                         .zip(&addrs)
                         .map(|(i, addr)| {
-                            if (self.other >> i) & 1 == 1 {
+                            if self.stores(i) {
                                 format!("W {addr:#X} {}", self.other.wrapping_add(i) % 100)
                             } else {
                                 format!("R {addr:#X}")
@@ -575,6 +632,25 @@ mod support {
                     (format!("add r2, r0, #{addr}\nld r1, [r2]"), Vec::new())
                 }
                 Template::Broken => ("lw r1, [0x0]".to_owned(), Vec::new()),
+                Template::Endless => {
+                    let addrs = self.accesses(geometry);
+                    // `r4` is never 0, and `r5` counts the rounds, so each
+                    // store writes a new value.
+                    let body: Vec<String> = (0..)
+                        .zip(&addrs)
+                        .map(|(i, addr)| {
+                            let label = if i == 0 { "loop: " } else { "" };
+                            if self.stores(i) {
+                                format!("{label}st [{addr:#X}], r5")
+                            } else {
+                                format!("{label}ld r1, [{addr:#X}]")
+                            }
+                        })
+                        .collect();
+                    let body = body.join("\n");
+                    let source = format!("add r4, r0, #1\n{body}\nadd r5, r5, #1\nbnez r4, loop");
+                    (source, addrs)
+                }
             };
             let source = ProgramSource {
                 source,
@@ -894,6 +970,78 @@ mod support {
         (arb_config(), vec(arb_action(), 0..=ACTIONS))
     }
 
+    /// A session whose log crosses checkpoints: long runs of a loop, then
+    /// what a student does, then the log cut back and grown again by long
+    /// runs of another loop, past a checkpoint it had.
+    #[derive(Clone, Debug)]
+    pub(crate) struct LongSession {
+        /// The first run's configuration.
+        config: Config,
+        /// The loop the first long runs go round, and the one the runs after
+        /// the cut go round, so that the log differs from the cut on.
+        loops: (ProgramChoice, ProgramChoice),
+        /// How many instructions each long run asks for, taken in turn.
+        runs: Vec<u32>,
+        /// How many events the first long runs reach.
+        first: u32,
+        /// What the student does after them.
+        actions: Vec<Action>,
+        /// How many ops the cut keeps, modulo one more than the op holding
+        /// the last multiple of the checkpoint interval, so that its
+        /// checkpoint goes.
+        cut: u32,
+        /// How many events past the cut the log grows again.
+        again: u32,
+        /// Positions to check besides those around the checkpoints, each
+        /// modulo how many there are.
+        pub(crate) picks: Vec<u32>,
+        /// The most events a slice of a saved file's load replays.
+        pub(crate) slice: u32,
+    }
+
+    /// A session whose log crosses checkpoints, in runs of a quarter of
+    /// the most a run may ask for and up, so that a few of them do it.
+    pub(crate) fn arb_long_session() -> impl Strategy<Value = LongSession> {
+        let endless = || {
+            (any::<u32>(), any::<u32>(), any::<u32>()).prop_map(|(start, other, count)| {
+                ProgramChoice {
+                    template: Template::Endless,
+                    start,
+                    other,
+                    count,
+                }
+            })
+        };
+        let log = (
+            arb_config(),
+            (endless(), endless()),
+            vec(MAX_RUN_STEPS / 4..=MAX_RUN_STEPS, 1..=3),
+            CHECKPOINT_INTERVAL + 1..=3 * CHECKPOINT_INTERVAL,
+        );
+        let rest = (
+            vec(arb_action(), 0..=LONG_ACTIONS),
+            any::<u32>(),
+            CHECKPOINT_INTERVAL + 1..=2 * CHECKPOINT_INTERVAL,
+            vec(any::<u32>(), PICKS),
+            1..=LOAD_SLICE_EVENTS,
+        );
+        (log, rest).prop_map(|(log, rest)| {
+            let (config, loops, runs, first) = log;
+            let (actions, cut, again, picks, slice) = rest;
+            LongSession {
+                config,
+                loops,
+                runs,
+                first,
+                actions,
+                cut,
+                again,
+                picks,
+                slice,
+            }
+        })
+    }
+
     // --- The student ----------------------------------------------------
 
     /// Which properties of each call the student checks while acting.
@@ -905,7 +1053,9 @@ mod support {
         /// initial configuration.
         pub(crate) append_only: bool,
         /// A plan applies, planned again gives itself, keeps the invariants,
-        /// and names the dirty data it drops; a suggestion plans.
+        /// and names the dirty data it drops; a suggestion plans; and at the
+        /// end of an op, an edit the plan refuses is refused as an op, with
+        /// the plan's refusal.
         pub(crate) edits: bool,
     }
 
@@ -996,19 +1146,91 @@ mod support {
         actions: &[Action],
         checks: Checks,
     ) -> Result<Student, TestCaseError> {
-        let mut student = Student {
-            session: Session::with_config(config.clone()).map_err(fail)?,
-            addrs: BTreeSet::new(),
-            checks,
-            initial: config.clone(),
-        };
+        let mut student = Student::new(config, checks)?;
         for action in actions {
             student.act(action)?;
         }
         Ok(student)
     }
 
+    /// The student's session after the long runs and the actions of `long`,
+    /// checking `checks` along the way; the log is not cut back yet.
+    pub(crate) fn play_long(long: &LongSession, checks: Checks) -> Result<Student, TestCaseError> {
+        let mut student = Student::new(&long.config, checks)?;
+        student.grow(long.loops.0, &long.runs, long.first)?;
+        for action in &long.actions {
+            student.act(action)?;
+        }
+        Ok(student)
+    }
+
     impl Student {
+        /// A student on a first run of `config`, checking `checks`.
+        fn new(config: &Config, checks: Checks) -> Result<Self, TestCaseError> {
+            Ok(Student {
+                session: Session::with_config(config.clone()).map_err(fail)?,
+                addrs: BTreeSet::new(),
+                checks,
+                initial: config.clone(),
+            })
+        }
+
+        /// Loads the loop `endless` where the cursor is, then runs it, as
+        /// many instructions at a time as `runs` say in turn, until the log
+        /// is `to` events long; a loop that has used its budget is loaded
+        /// again.
+        fn grow(
+            &mut self,
+            endless: ProgramChoice,
+            runs: &[u32],
+            to: u32,
+        ) -> Result<(), TestCaseError> {
+            self.load_endless(endless)?;
+            for &n in runs.iter().cycle() {
+                if self.session.position().pos.get() >= to {
+                    break;
+                }
+                if !self.apply(Op::Run { n })? {
+                    self.load_endless(endless)?;
+                    prop_assert!(self.apply(Op::Run { n })?, "a fresh loop does not run");
+                }
+            }
+            prop_assert!(self.session.position().pos.get() >= to);
+            Ok(())
+        }
+
+        /// Loads the loop `choice` makes under the displayed run's geometry.
+        fn load_endless(&mut self, choice: ProgramChoice) -> Result<(), TestCaseError> {
+            let (program, addrs) = choice.program(&geometry(&self.session));
+            self.addrs.extend(addrs);
+            let op = Op::Program {
+                source: program.source,
+                format: program.format,
+            };
+            prop_assert!(self.apply(op)?, "the loop does not load");
+            Ok(())
+        }
+
+        /// Cuts the log back and grows it again, as `long` says: scrubs to
+        /// the end of an op, or to position 0, before the op holding the
+        /// last multiple of the checkpoint interval, whose checkpoint the
+        /// next op appended drops, and runs the second loop from there as
+        /// far again as `long` says. A log shorter than an interval is cut
+        /// before its last op.
+        pub(crate) fn cut_and_grow(&mut self, long: &LongSession) -> Result<(), TestCaseError> {
+            let ends = op_ends(&self.session);
+            let last = end(&self.session).get() / CHECKPOINT_INTERVAL * CHECKPOINT_INTERVAL;
+            let holding = ends.iter().position(|&end| last > 0 && end >= last);
+            let keep = holding.map_or(ends.len(), |op| op + 1);
+            let ops = long.cut % u32::try_from(keep).map_err(fail)?.max(1);
+            self.cursor(|session| {
+                session.scrub_to(ops);
+                true
+            })?;
+            let cut = self.session.position().pos.get();
+            self.grow(long.loops.1, &long.runs, cut + long.again)
+        }
+
         /// Does `action`.
         fn act(&mut self, action: &Action) -> Result<(), TestCaseError> {
             let geometry = geometry(&self.session);
@@ -1205,7 +1427,8 @@ mod support {
             }
         }
 
-        /// An edit: planned, then applied if planned; otherwise its
+        /// An edit: planned, then applied if planned; otherwise, at the end
+        /// of an op, applied as the op the plan refused, and then its
         /// suggestion, planned and applied, if the refusal offers one.
         fn edit(&mut self, intent: EditIntent) -> Result<(), TestCaseError> {
             let (target, patch, addr) = intent.resolve(&self.session);
@@ -1214,6 +1437,22 @@ mod support {
                 Ok(plan) => return self.apply_plan(target, patch, &plan),
                 Err(refusal) => refusal,
             };
+            // At the end of an op, the session checks the op on the machine
+            // the plan read, so the op is refused as the plan was, whether
+            // or not the refusal offers another edit.
+            if self.session.position().boundary >= Boundary::OpEnd {
+                let before = self.before();
+                let result = self.session.apply(Op::Edit { target, patch });
+                if self.checks.edits {
+                    let expected = if refusal.reason == RefusalReason::SessionFull {
+                        OpError::SessionFull
+                    } else {
+                        OpError::Edit(Box::new(refusal.clone()))
+                    };
+                    prop_assert_eq!(result.as_ref().map(drop), Err(&expected));
+                }
+                self.after(before, Call::of(&result))?;
+            }
             if let Some(suggestion) = refusal.suggestion.map(|boxed| *boxed) {
                 self.addrs
                     .extend(edit_addr(&suggestion.target, &suggestion.patch));
@@ -1233,21 +1472,6 @@ mod support {
                     Ok(plan) => self.apply_plan(suggestion.target, suggestion.patch, &plan),
                     Err(_) => Ok(()),
                 };
-            }
-            // At the end of an op, the rules that refused the plan are the
-            // ones the session checks the op against, so the op is refused.
-            if self.session.position().boundary >= Boundary::OpEnd {
-                let before = self.before();
-                let result = self.session.apply(Op::Edit { target, patch });
-                if self.checks.edits {
-                    prop_assert!(
-                        matches!(result, Err(OpError::Edit(_))),
-                        "an edit the plan refused as {:?} was applied as {:?}",
-                        refusal.reason,
-                        result
-                    );
-                }
-                self.after(before, Call::of(&result))?;
             }
             Ok(())
         }
@@ -1418,6 +1642,90 @@ mod support {
             visit(session, event)?;
         }
         Ok(())
+    }
+
+    /// The machines the fold of a log reaches, each replayed from position
+    /// 0 once, when it is first asked for.
+    pub(crate) struct Fold {
+        /// The log's initial configuration.
+        initial: Config,
+        /// The log.
+        ops: Vec<Op>,
+        /// The machines replayed so far, by position.
+        machines: BTreeMap<u32, Machine>,
+    }
+
+    impl Fold {
+        /// The fold of `session`'s log, the undone ops included.
+        pub(crate) fn of(session: &Session) -> Self {
+            Fold {
+                initial: session.initial().clone(),
+                ops: session.ops().to_vec(),
+                machines: BTreeMap::new(),
+            }
+        }
+
+        /// The machine at position `pos`.
+        pub(crate) fn at(&mut self, pos: u32) -> &Machine {
+            self.machines.entry(pos).or_insert_with(|| {
+                Session::replay_to(&self.initial, &self.ops, number(pos.into())).unwrap()
+            })
+        }
+    }
+
+    /// The positions of a long log to check: position 0, the end of every
+    /// op, the positions `picks` name, and those around each multiple of the
+    /// checkpoint interval, where a checkpoint is taken at the first entry
+    /// boundary at or after it that an op ends at or a long op executes an
+    /// instruction at. Around a multiple, those are the position before it
+    /// and every one from it to the first entry boundary; the second
+    /// boundary, since a new run's setup can end one before an error ends
+    /// its op; the position after each boundary; and a position past any
+    /// entry a checkpoint of the log before a cut could be at.
+    pub(crate) fn checked_positions(session: &Session, picks: &[u32]) -> BTreeSet<u32> {
+        let events = session.events_range(0, u32::MAX);
+        let end = end(session).get();
+        let boundary = |pos: u32| events.get(pos as usize).is_none_or(|event| event.seq == 1);
+        let mut positions: BTreeSet<u32> = [0, end].into();
+        positions.extend(op_ends(session));
+        positions.extend(picks.iter().map(|pick| pick % (end + 1)));
+        for multiple in (CHECKPOINT_INTERVAL..=end).step_by(CHECKPOINT_INTERVAL as usize) {
+            let mut boundaries = (multiple..=end).filter(|&pos| boundary(pos));
+            let first = boundaries.next().unwrap_or(end);
+            let second = boundaries.next().unwrap_or(first);
+            positions.extend(multiple - 1..=first);
+            let past = multiple + 2 * MAX_EVENTS_PER_ENTRY;
+            positions.extend([first + 1, second, second + 1, past].map(|pos| pos.min(end)));
+        }
+        positions
+    }
+
+    /// Checks that a seek to each of `positions`, in turn, reaches the
+    /// machine `fold` reaches there.
+    pub(crate) fn seeks_reach(
+        session: &mut Session,
+        positions: impl IntoIterator<Item = u32>,
+        fold: &mut Fold,
+    ) -> Result<(), TestCaseError> {
+        for pos in positions {
+            session.seek(number(pos.into()));
+            prop_assert_eq!(session.position().pos.get(), pos);
+            prop_assert_eq!(session.machine(), fold.at(pos), "at {}", pos);
+        }
+        Ok(())
+    }
+
+    /// The session a saved file holds, loaded at most `slice` events at a
+    /// time.
+    pub(crate) fn load_in_slices(json: &str, slice: u32) -> Result<Session, TestCaseError> {
+        let mut load = ShareLoad::from_json(json);
+        loop {
+            match load.advance(slice) {
+                LoadProgress::Replaying { .. } => {}
+                LoadProgress::Done { .. } => return load.take_session().map_err(fail),
+                LoadProgress::Failed { failure } => return Err(fail(format!("{failure:?}"))),
+            }
+        }
     }
 
     /// Every cell and counter an event's `changed` can name, at the cursor,
@@ -1878,14 +2186,12 @@ mod support {
     }
 }
 
-proptest! {
-    #![proptest_config(sessions())]
-
-    /// The fold is a pure function of the initial configuration and the
-    /// log: two replays agree, with each other and with the session built
-    /// one call at a time, at the end of its log.
-    #[test]
-    fn replay_is_a_pure_function_of_the_log((config, actions) in arb_session()) {
+/// The fold is a pure function of the initial configuration and the log: two
+/// replays agree, with each other and with the session built one call at a
+/// time, at the end of its log.
+#[test]
+fn replay_is_a_pure_function_of_the_log() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         let session = &mut student.session;
         let initial = session.initial().clone();
@@ -1896,17 +2202,17 @@ proptest! {
         session.seek(end(session));
         prop_assert_eq!(session.machine(), &replay.machine);
         prop_assert_eq!(session.events_range(0, u32::MAX), replay.events.as_slice());
-    }
+        Ok(())
+    });
+}
 
-    /// Scrubbing to a count of ops reaches the fold of that many ops; undo
-    /// from the end of the log visits every undo stop back to position 0,
-    /// and redo every one forward again; from any position, undo and redo
-    /// go to the stops before and after it; and a seek reaches the fold
-    /// stopped at its position.
-    #[test]
-    fn undo_redo_scrubbing_and_seeking_reach_the_fold(
-        (config, actions) in arb_session(),
-    ) {
+/// Scrubbing to a count of ops reaches the fold of that many ops; undo from
+/// the end of the log visits every undo stop back to position 0, and redo
+/// every one forward again; from any position, undo and redo go to the stops
+/// before and after it; and a seek reaches the fold stopped at its position.
+#[test]
+fn undo_redo_scrubbing_and_seeking_reach_the_fold() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         let session = &mut student.session;
         let initial = session.initial().clone();
@@ -1943,7 +2249,12 @@ proptest! {
             let holding = session.position().op.map(|op| op.get() as usize);
             let back = holding.map(|op| {
                 let start = op_start(&ends, op);
-                stops.iter().copied().filter(|&stop| stop <= start).max().unwrap_or(0)
+                stops
+                    .iter()
+                    .copied()
+                    .filter(|&stop| stop <= start)
+                    .max()
+                    .unwrap_or(0)
             });
             prop_assert_eq!(session.undo(), back.is_some());
             prop_assert_eq!(session.position().pos.get(), back.unwrap_or(pos));
@@ -1952,17 +2263,19 @@ proptest! {
             prop_assert_eq!(session.redo(), on.is_some());
             prop_assert_eq!(session.position().pos.get(), on.unwrap_or(pos));
         }
-    }
+        Ok(())
+    });
+}
 
-    /// Space from position 0 visits every position of the log in turn,
-    /// each the fold's machine; a quiet replay, which words nothing, reaches
-    /// the machine a recording one does at the end of every op; every
-    /// event's id is its position less one; runs are numbered from 1 and
-    /// start at a new configuration's setup; and each entry's events are
-    /// numbered from 1, its label saying which entry of the run and which
-    /// event of it.
-    #[test]
-    fn space_visits_every_event_in_order((config, actions) in arb_session()) {
+/// Space from position 0 visits every position of the log in turn, each the
+/// fold's machine; a quiet replay, which words nothing, reaches the machine
+/// a recording one does at the end of every op; every event's id is its
+/// position less one; runs are numbered from 1 and start at a new
+/// configuration's setup; and each entry's events are numbered from 1, its
+/// label saying which entry of the run and which event of it.
+#[test]
+fn space_visits_every_event_in_order() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         let session = &mut student.session;
         let initial = session.initial().clone();
@@ -2013,17 +2326,18 @@ proptest! {
             }
             previous = Some(event);
         }
-    }
+        Ok(())
+    });
+}
 
-    /// A share string and a saved file each give back the initial
-    /// configuration, whose flag is the mode chosen, the whole log with its
-    /// undone ops, the cursor, position 0 included, every event and the
-    /// state, which may differ only in the displayed configuration's flag;
-    /// the session's share string is its document's.
-    #[test]
-    fn share_strings_and_files_give_the_session_back(
-        (config, actions) in arb_session(),
-    ) {
+/// A share string and a saved file each give back the initial configuration,
+/// whose flag is the mode chosen, the whole log with its undone ops, the
+/// cursor, position 0 included, every event and the state, which may differ
+/// only in the displayed configuration's flag; the session's share string is
+/// its document's.
+#[test]
+fn share_strings_and_files_give_the_session_back() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         let session = &mut student.session;
         let end = end(session).get();
@@ -2060,13 +2374,16 @@ proptest! {
                 prop_assert_eq!(theirs, ours);
             }
         }
-    }
+        Ok(())
+    });
+}
 
-    /// At every event, the ranks of every set are a permutation of its
-    /// ways; under random replacement, and in a set of one way, each way's
-    /// rank is its number, edits included.
-    #[test]
-    fn ranks_stay_a_permutation((config, actions) in arb_session()) {
+/// At every event, the ranks of every set are a permutation of its ways;
+/// under random replacement, and in a set of one way, each way's rank is its
+/// number, edits included.
+#[test]
+fn ranks_stay_a_permutation() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         every_position(&mut student.session, |session, _| {
             let state = session.state();
@@ -2082,7 +2399,10 @@ proptest! {
                     // way a module's predicate reads them.
                     for way in 0..ways {
                         let identity = Predicate::Way(WayPredicate {
-                            way: WayLoc { set: set.set, way: number(way.into()) },
+                            way: WayLoc {
+                                set: set.set,
+                                way: number(way.into()),
+                            },
                             valid: None,
                             tag: None,
                             dirty: None,
@@ -2094,15 +2414,15 @@ proptest! {
                 }
             }
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// Under LRU and FIFO, every valid way ranks before every empty one at
-    /// every entry boundary.
-    #[test]
-    fn valid_ways_rank_before_empty_ones_between_entries(
-        (config, actions) in arb_session(),
-    ) {
+/// Under LRU and FIFO, every valid way ranks before every empty one at every
+/// entry boundary.
+#[test]
+fn valid_ways_rank_before_empty_ones_between_entries() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         every_position(&mut student.session, |session, _| {
             let state = session.state();
@@ -2121,13 +2441,15 @@ proptest! {
                 }
             }
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// At every event, a valid way's line decodes to the way's own set and
-    /// tag, and no set holds a tag twice.
-    #[test]
-    fn every_line_sits_once_in_its_own_set((config, actions) in arb_session()) {
+/// At every event, a valid way's line decodes to the way's own set and tag,
+/// and no set holds a tag twice.
+#[test]
+fn every_line_sits_once_in_its_own_set() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         every_position(&mut student.session, |session, _| {
             let state = session.state();
@@ -2144,12 +2466,14 @@ proptest! {
                 }
             }
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// Under write-through no way is ever dirty.
-    #[test]
-    fn write_through_leaves_no_way_dirty((config, actions) in arb_session()) {
+/// Under write-through no way is ever dirty.
+#[test]
+fn write_through_leaves_no_way_dirty() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         every_position(&mut student.session, |session, _| {
             let state = session.state();
@@ -2159,28 +2483,30 @@ proptest! {
                 }
             }
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// Hits and misses add up to the accesses at every event.
-    #[test]
-    fn hits_and_misses_add_up_to_accesses((config, actions) in arb_session()) {
+/// Hits and misses add up to the accesses at every event.
+#[test]
+fn hits_and_misses_add_up_to_accesses() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         every_position(&mut student.session, |session, _| {
             let counters = session.stats().counters;
             prop_assert_eq!(counters.hits + counters.misses, counters.accesses);
             prop_assert_eq!(counters.loads + counters.stores, counters.accesses);
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// Between entries, a clean valid way holds memory's words; at every
-    /// event, a word is stale exactly when a dirty way holds it with another
-    /// value, and the stale mark names that way.
-    #[test]
-    fn clean_lines_match_memory_and_stale_words_have_dirty_lines(
-        (config, actions) in arb_session(),
-    ) {
+/// Between entries, a clean valid way holds memory's words; at every event,
+/// a word is stale exactly when a dirty way holds it with another value, and
+/// the stale mark names that way.
+#[test]
+fn clean_lines_match_memory_and_stale_words_have_dirty_lines() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         student.watch();
         let addrs = student.addrs.clone();
@@ -2203,15 +2529,26 @@ proptest! {
                         let cell = memory.get(&addr).unwrap();
                         let differs = &cell.text != text;
                         let clean = !way.dirty && between;
-                        prop_assert!(!(clean && differs), "{:?}/{} at {:#X}", set.set, index, addr);
-                        let stale = cell.stale.as_ref().map(|stale| (stale.set, stale.way.get()));
+                        prop_assert!(
+                            !(clean && differs),
+                            "{:?}/{} at {:#X}",
+                            set.set,
+                            index,
+                            addr
+                        );
+                        let marked = cell
+                            .stale
+                            .as_ref()
+                            .map(|stale| (stale.set, stale.way.get()));
                         let holder = (way.dirty && differs).then_some((set.set, index));
-                        prop_assert_eq!(stale, holder);
+                        prop_assert_eq!(marked, holder);
                     }
                 }
             }
             for &addr in &addrs {
-                let Some(addr) = geometry.addr(addr) else { continue };
+                let Some(addr) = geometry.addr(addr) else {
+                    continue;
+                };
                 if let Some(stale) = session.machine().stale(addr) {
                     let set = &state.cache.sets[stale.set.get() as usize];
                     let way = &set.ways[stale.way.get() as usize];
@@ -2220,14 +2557,16 @@ proptest! {
                 }
             }
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// In timed mode the cycles are the hit time for every access and the
-    /// miss penalty for every miss and every write-back, at every entry
-    /// boundary; untimed, there are none, and no event has a cycle stamp.
-    #[test]
-    fn cycles_follow_the_counters((config, actions) in arb_session()) {
+/// In timed mode the cycles are the hit time for every access and the miss
+/// penalty for every miss and every write-back, at every entry boundary;
+/// untimed, there are none, and no event has a cycle stamp.
+#[test]
+fn cycles_follow_the_counters() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         every_position(&mut student.session, |session, event| {
             let state = session.state();
@@ -2249,16 +2588,18 @@ proptest! {
                 Some(_) => {}
             }
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// Each event lists exactly the cells and counters it changed, sorted
-    /// and each once: over everything a change can name, the difference
-    /// between the states on either side of it, with the tag and every word
-    /// of a way that took another line. A new configuration's setup starts
-    /// a run rather than changing one, and is left out.
-    #[test]
-    fn each_event_lists_exactly_what_it_changed((config, actions) in arb_session()) {
+/// Each event lists exactly the cells and counters it changed, sorted and
+/// each once: over everything a change can name, the difference between the
+/// states on either side of it, with the tag and every word of a way that
+/// took another line. A new configuration's setup starts a run rather than
+/// changing one, and is left out.
+#[test]
+fn each_event_lists_exactly_what_it_changed() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         student.watch();
         let ops = student.session.ops().to_vec();
@@ -2285,66 +2626,84 @@ proptest! {
             }
             before = Some(now);
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// A refused call, whether an op, a configuration change, a mode switch
-    /// that asks first, Space or Shift+Space with nothing to do, or an undo
-    /// or redo with nowhere to go, and with or without undone ops after the
-    /// cursor, leaves the log, the undone ops, the cursor and the state as
-    /// they were.
-    #[test]
-    fn a_refused_call_changes_nothing((config, actions) in arb_session()) {
-        let checks = Checks { refusals: true, ..Checks::default() };
-        play(&config, &actions, checks)?;
-    }
+/// A refused call, whether an op, a configuration change, a mode switch that
+/// asks first, Space or Shift+Space with nothing to do, or an undo or redo
+/// with nowhere to go, and with or without undone ops after the cursor,
+/// leaves the log, the undone ops, the cursor and the state as they were.
+#[test]
+fn a_refused_call_changes_nothing() {
+    check(sessions(), &arb_session(), |(config, actions)| {
+        let checks = Checks {
+            refusals: true,
+            ..Checks::default()
+        };
+        play(&config, &actions, checks).map(drop)
+    });
+}
 
-    /// A plan applies, keeps the invariants, and planned again is itself; a
-    /// refusal's suggestion always plans; and a plan that takes a dirty
-    /// line from its way while some of its words are newer than memory's
-    /// says so, naming them, and only then.
-    #[test]
-    fn planned_edits_apply_and_drop_no_dirty_data_silently(
-        (config, actions) in arb_session(),
-    ) {
-        let checks = Checks { edits: true, ..Checks::default() };
-        play(&config, &actions, checks)?;
-    }
+/// A plan applies, keeps the invariants, and planned again is itself; a
+/// refusal's suggestion always plans; at the end of an op, an edit the plan
+/// refuses, with or without a suggestion, is refused as an op with the same
+/// refusal; and a plan that takes a dirty line from its way while some of
+/// its words are newer than memory's says so, naming them, and only then.
+#[test]
+fn planned_edits_apply_and_drop_no_dirty_data_silently() {
+    check(sessions(), &arb_session(), |(config, actions)| {
+        let checks = Checks {
+            edits: true,
+            ..Checks::default()
+        };
+        play(&config, &actions, checks).map(drop)
+    });
+}
 
-    /// The compulsory, capacity and conflict misses add up to the misses at
-    /// every event.
-    #[test]
-    fn miss_classes_add_up_to_misses((config, actions) in arb_session()) {
+/// The compulsory, capacity and conflict misses add up to the misses at
+/// every event.
+#[test]
+fn miss_classes_add_up_to_misses() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         every_position(&mut student.session, |session, _| {
             let counters = session.stats().counters;
             let classes = counters.compulsory + counters.capacity + counters.conflict;
             prop_assert_eq!(classes, counters.misses);
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// The machine's invariants hold after every event, and no event is an
-    /// internal error.
-    #[test]
-    fn the_invariants_hold_at_every_event((config, actions) in arb_session()) {
+/// The machine's invariants hold after every event, and no event is an
+/// internal error.
+#[test]
+fn the_invariants_hold_at_every_event() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         every_position(&mut student.session, |session, event| {
             prop_assert_eq!(session.machine().check_invariants(), Ok(()));
             if let Some(event) = event {
                 let internal = event.explain.starts_with("Internal error");
-                prop_assert!(event.kind != EventKind::Error || !internal, "{}", event.explain);
+                prop_assert!(
+                    event.kind != EventKind::Error || !internal,
+                    "{}",
+                    event.explain
+                );
             }
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// A write-back run counts no write-throughs, and a write-allocate run
-    /// no write-arounds; the words written to memory are the write-throughs
-    /// and write-arounds, the lines read the fills and the lines written
-    /// the write-backs, and the bytes follow.
-    #[test]
-    fn memory_writes_follow_the_policies((config, actions) in arb_session()) {
+/// A write-back run counts no write-throughs, and a write-allocate run no
+/// write-arounds; the words written to memory are the write-throughs and
+/// write-arounds, the lines read the fills and the lines written the
+/// write-backs, and the bytes follow.
+#[test]
+fn memory_writes_follow_the_policies() {
+    check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         every_position(&mut student.session, |session, _| {
             let stats = session.stats();
@@ -2369,17 +2728,114 @@ proptest! {
                 u64::from(counters.writebacks) * line + u64::from(traffic.word_writes) * word
             );
             Ok(())
-        })?;
-    }
+        })
+    });
+}
 
-    /// The log is append-only: every call keeps every op before the point
-    /// it appends at, a call that appends nothing keeps them all, and the
-    /// initial configuration never changes.
-    #[test]
-    fn the_log_is_append_only((config, actions) in arb_session()) {
-        let checks = Checks { append_only: true, ..Checks::default() };
-        play(&config, &actions, checks)?;
-    }
+/// The log is append-only: every call keeps every op before the point it
+/// appends at, a call that appends nothing keeps them all, and the initial
+/// configuration never changes.
+#[test]
+fn the_log_is_append_only() {
+    check(sessions(), &arb_session(), |(config, actions)| {
+        let checks = Checks {
+            append_only: true,
+            ..Checks::default()
+        };
+        play(&config, &actions, checks).map(drop)
+    });
+}
+
+/// A log several checkpoint intervals long, of long runs of a loop and of
+/// what a student does after them, a refused call changing nothing, the log
+/// staying append-only and edits going as planned, then cut back and grown
+/// again past the checkpoints it had. Before the cut and after, a seek
+/// around each checkpoint, to the end of each op or anywhere else reaches
+/// the fold's machine; the ops appended at the cut build on the machine
+/// there; undo and redo stop at every undo stop with the fold's machine; and
+/// a share string, and a saved file loaded a slice at a time, give back a
+/// session whose seeks reach the same machines.
+#[test]
+fn seeks_across_checkpoints_reach_the_fold() {
+    check(long_sessions(), &arb_long_session(), |long| {
+        let checks = Checks {
+            refusals: true,
+            append_only: true,
+            edits: true,
+        };
+        let mut student = play_long(&long, checks)?;
+        let positions = checked_positions(&student.session, &long.picks);
+        let mut fold = Fold::of(&student.session);
+        seeks_reach(&mut student.session, positions, &mut fold)?;
+        student.cut_and_grow(&long)?;
+        let session = &mut student.session;
+        let end = end(session).get();
+        let replay = Session::replay(session.initial(), session.ops()).unwrap();
+        prop_assert_eq!(session.events_range(0, u32::MAX), replay.events.as_slice());
+        prop_assert_eq!(session.machine(), &replay.machine);
+        let positions = checked_positions(session, &long.picks);
+        let mut fold = Fold::of(session);
+        seeks_reach(session, positions.iter().copied(), &mut fold)?;
+        let stops = undo_stops(session);
+        session.seek(number(end.into()));
+        for &stop in stops.iter().rev().skip(1) {
+            prop_assert!(session.undo());
+            prop_assert_eq!(session.position().pos.get(), stop);
+            prop_assert_eq!(session.machine(), fold.at(stop));
+        }
+        prop_assert!(!session.undo());
+        for &stop in stops.iter().skip(1) {
+            prop_assert!(session.redo());
+            prop_assert_eq!(session.position().pos.get(), stop);
+            prop_assert_eq!(session.machine(), fold.at(stop));
+        }
+        prop_assert!(!session.redo());
+        // Saved with the cursor where the first pick puts it, and opened
+        // again: the same log, on the initial configuration in the mode
+        // chosen, a flag the fold never reads but keeps in the machine.
+        let at = long.picks[0] % (end + 1);
+        session.seek(number(at.into()));
+        let opened = [
+            Session::from_share_string(&session.to_share_string()).unwrap(),
+            load_in_slices(&session.to_json(), long.slice)?,
+        ];
+        let mut fold = Fold::of(&opened[0]);
+        for mut loaded in opened {
+            prop_assert_eq!(
+                without_mode(loaded.initial()),
+                without_mode(session.initial())
+            );
+            prop_assert_eq!(loaded.ops(), session.ops());
+            prop_assert_eq!(
+                loaded.events_range(0, u32::MAX),
+                session.events_range(0, u32::MAX)
+            );
+            prop_assert_eq!(loaded.position(), session.position());
+            prop_assert_eq!(loaded.machine(), fold.at(at));
+            seeks_reach(&mut loaded, positions.iter().copied(), &mut fold)?;
+        }
+        Ok(())
+    });
+}
+
+/// The properties over whole sessions run their share of the cases, and the
+/// property over long sessions its share, whatever `PROPTEST_CASES` says:
+/// the `proptest!` macro would run as many as `PROPTEST_CASES` of each.
+#[test]
+fn session_properties_run_their_share_of_the_cases() {
+    let cases = Cell::new(0);
+    check(sessions(), &arb_session(), |_| {
+        cases.set(cases.get() + 1);
+        Ok(())
+    });
+    assert_eq!(cases.get(), sessions().cases);
+    cases.set(0);
+    check(long_sessions(), &arb_long_session(), |_| {
+        cases.set(cases.get() + 1);
+        Ok(())
+    });
+    assert_eq!(cases.get(), long_sessions().cases);
+    assert_eq!(sessions().cases, (values().cases / 4).max(1));
 }
 
 proptest! {
