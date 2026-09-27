@@ -147,6 +147,7 @@ fn run(machine: &mut Machine, request: Request, out: &mut Emitter<'_>) -> Result
         way: None,
         stall: None,
         done: false,
+        counters_before: machine.counters,
     });
     let decode = Draft {
         addr: Some(addr),

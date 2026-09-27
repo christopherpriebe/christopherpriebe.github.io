@@ -115,6 +115,11 @@ pub(crate) struct AccessContext {
     /// False until the access's last event: while false, the access is in
     /// flight and the machine is not between entries.
     pub(crate) done: bool,
+    /// The run's counters as they stood before the access's first event.
+    /// Only accesses move counters, so these are the counters after the
+    /// run's last completed access, which AMAT and the measured cost show
+    /// while this access is in flight.
+    pub(crate) counters_before: Counters,
 }
 
 /// How long a miss stalls the CPU in timed mode, and when the stall is over.
@@ -883,6 +888,7 @@ mod tests {
             way: None,
             stall: None,
             done: false,
+            counters_before: machine.counters,
         });
         assert!(machine.in_flight());
         assert_eq!(machine.check_invariants(), Ok(()));

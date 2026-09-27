@@ -4,7 +4,8 @@
 //! entry boundaries, timing that adds only its stalls, and untimed runs that
 //! are never stamped and never stall. And as the snapshot shows it: the
 //! CPU's countdown through a stall, the cycle chip of the transfer lane, and
-//! AMAT with the measured cost of fixed traces, mid-access and at the end.
+//! AMAT with the measured cost of fixed traces, at the end and, while an
+//! access is in flight, as of the last completed access.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -434,6 +435,11 @@ const FRAME_3B: [By; 5] = [
     By::Load(0x2A4),
 ];
 
+/// The position the cursor rests on at `event`.
+fn position(event: &MicroEvent) -> Result<EventPos, String> {
+    serde_json::from_value(serde_json::json!(event.id + 1)).map_err(|error| error.to_string())
+}
+
 /// The position of the first event of `kind` in entry `entry` of
 /// `session`'s log.
 fn position_of(session: &Session, entry: u32, kind: EventKind) -> Result<EventPos, String> {
@@ -442,7 +448,7 @@ fn position_of(session: &Session, entry: u32, kind: EventKind) -> Result<EventPo
         .iter()
         .find(|event| event.entry == Some(entry) && event.kind == kind)
         .ok_or_else(|| format!("entry {entry} has no {kind:?}"))?;
-    serde_json::from_value(serde_json::json!(event.id + 1)).map_err(|error| error.to_string())
+    position(event)
 }
 
 #[test]
@@ -565,18 +571,18 @@ fn amat_and_the_measured_cost_follow_the_cursor() -> Result<(), String> {
             Some("Measured: 21.0 cycles per access (AMAT plus 4.0 for 1 write-back).".to_owned())
         )
     );
-    // Mid-access, the miss is counted before its penalty is charged.
-    session.seek(position_of(&session, 5, Stall)?);
-    assert_eq!(
-        figures(&session).1.as_deref(),
-        Some("Measured: 13.0 cycles per access (AMAT plus 0.0 for 0 write-backs).")
-    );
-    session.seek(position_of(&session, 5, WriteBack)?);
+    // After access #4: 64 cycles for 4 accesses, 3 misses and no write-back.
+    let fourth = session
+        .entries(0, u32::MAX)
+        .get(3)
+        .map(|entry| entry.last)
+        .ok_or("the run has no access #4")?;
+    session.seek(fourth);
     assert_eq!(
         figures(&session),
         (
-            Some("AMAT = 1 + 0.80 \u{d7} 20 = 17.0 cycles".to_owned()),
-            Some("Measured: 17.0 cycles per access (AMAT plus 4.0 for 1 write-back).".to_owned())
+            Some("AMAT = 1 + 0.75 \u{d7} 20 = 16.0 cycles".to_owned()),
+            Some("Measured: 16.0 cycles per access (AMAT plus 0.0 for 0 write-backs).".to_owned())
         )
     );
     // The rate is rounded before AMAT is computed from it.
@@ -596,6 +602,85 @@ fn amat_and_the_measured_cost_follow_the_cursor() -> Result<(), String> {
     assert_eq!(figures(&session), (None, None));
     let untimed = self::session(&Preset::TwoWayLru.config(), &FRAME_3B)?;
     assert_eq!(figures(&untimed), (None, None));
+    Ok(())
+}
+
+#[test]
+fn amat_and_the_measured_cost_wait_for_an_access_in_flight_to_complete() -> Result<(), String> {
+    // Access #5 of frame 3b misses and writes its dirty victim back. Its miss
+    // is counted at the tag compare but its penalty only at the write-back
+    // and the fill, so until its last event both figures stay those after
+    // access #4, while the counters move at each event.
+    let mut session = session(&timed(Preset::TwoWayLru.config(), 1, 20), &FRAME_3B)?;
+    let after_fourth = (
+        Some("AMAT = 1 + 0.75 \u{d7} 20 = 16.0 cycles".to_owned()),
+        Some("Measured: 16.0 cycles per access (AMAT plus 0.0 for 0 write-backs).".to_owned()),
+    );
+    let fourth = session
+        .entries(0, u32::MAX)
+        .get(3)
+        .map(|entry| entry.last)
+        .ok_or("the run has no access #4")?;
+    session.seek(fourth);
+    let settled = session.stats();
+    assert_eq!(figures(&session), after_fourth);
+
+    // Each counter as the Stats region shows it: accesses, misses,
+    // write-backs and cycles.
+    let counts = |session: &Session| {
+        let counters = session.stats().counters;
+        (
+            counters.accesses,
+            counters.misses,
+            counters.writebacks,
+            counters.cycles.get(),
+        )
+    };
+    assert_eq!(counts(&session), (4, 3, 0, 64));
+    session.seek(position_of(&session, 5, Stall)?);
+    assert_eq!(counts(&session), (5, 4, 0, 65));
+    assert_eq!(figures(&session), after_fourth);
+    session.seek(position_of(&session, 5, WriteBack)?);
+    assert_eq!(counts(&session), (5, 4, 1, 85));
+    assert_eq!(figures(&session), after_fourth);
+
+    // The same at every event before the access's last, values included.
+    let events: Vec<MicroEvent> = session
+        .events_range(0, u32::MAX)
+        .iter()
+        .filter(|event| event.entry == Some(5))
+        .cloned()
+        .collect();
+    let (last, in_flight) = events.split_last().ok_or("access #5 has no events")?;
+    assert_eq!(in_flight.len(), 8);
+    for event in in_flight {
+        session.seek(position(event)?);
+        let stats = session.stats();
+        assert_eq!(
+            (stats.amat, stats.measured),
+            (settled.amat.clone(), settled.measured.clone()),
+            "{}",
+            event.label
+        );
+    }
+
+    // At its last event the access is complete, and both take it in.
+    session.seek(position(last)?);
+    assert_eq!(last.kind, Rank);
+    assert_eq!(counts(&session), (5, 4, 1, 105));
+    assert_eq!(
+        figures(&session),
+        (
+            Some("AMAT = 1 + 0.80 \u{d7} 20 = 17.0 cycles".to_owned()),
+            Some("Measured: 21.0 cycles per access (AMAT plus 4.0 for 1 write-back).".to_owned())
+        )
+    );
+
+    // Before the run's first access completes, there is nothing to show,
+    // although the access is already counted.
+    session.seek(position_of(&session, 1, Stall)?);
+    assert_eq!(counts(&session), (1, 1, 0, 1));
+    assert_eq!(figures(&session), (None, None));
     Ok(())
 }
 

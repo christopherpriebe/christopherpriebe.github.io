@@ -249,8 +249,9 @@ fn frame_3b_paused_on_its_write_back_reads_as_the_design_draws_it() {
          reached memory, so nothing is stale there; the store to 0x0B0 is still stale. The CPU \
          is stalled with 20 of 40 cycles to go, the lane shows the write-back with its 20-cycle \
          chip, the status line ends in `timed`, the summary and the stats are Advanced's, the \
-         comparators show a miss, and the changed line is the design's `memory 0x1A4 \u{b7} \
-         misses, write-backs`.",
+         counters include access #5 so far while AMAT and the measured cost are still those \
+         after access #4, the comparators show a miss, and the changed line is the design's \
+         `memory 0x1A4 \u{b7} misses, write-backs`.",
         &text,
     );
     // The frame's pause, as the design draws it.
@@ -286,6 +287,17 @@ fn frame_3b_paused_on_its_write_back_reads_as_the_design_draws_it() {
         Some(vec![WayCompare::Mismatch, WayCompare::Mismatch])
     );
     assert_eq!(state.cpu.hit_marker, HitMarker::Miss);
+    // The write-back is counted, but AMAT and the measured cost wait for the
+    // access to complete.
+    assert_eq!(state.stats.counters.writebacks, 1);
+    assert_eq!(
+        state.stats.amat.map(|figure| figure.text).as_deref(),
+        Some("AMAT = 1 + 0.75 \u{d7} 20 = 16.0 cycles")
+    );
+    assert_eq!(
+        state.stats.measured.map(|figure| figure.text).as_deref(),
+        Some("Measured: 16.0 cycles per access (AMAT plus 0.0 for 0 write-backs).")
+    );
 }
 
 #[test]

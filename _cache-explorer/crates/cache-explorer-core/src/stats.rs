@@ -22,6 +22,11 @@
 //! sparkline. AMAT predicts the cost of an access from the miss rate; the
 //! measured cost is what the run actually spent per access. They differ by
 //! the write-backs AMAT leaves out, and that difference is itself a lesson.
+//! Both are shown as of the run's last completed access. An access's miss
+//! is counted at its tag compare, but its miss penalty only at the transfers
+//! that follow, so figures taken mid-access would weigh a counted miss
+//! against cycles not yet spent. The counters themselves move at every
+//! event.
 //!
 //! Each figure's text is computed in whole numbers of tenths and hundredths,
 //! so no float is ever formatted; its value is an `f64` for the page's own
@@ -197,13 +202,16 @@ pub struct Stats {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hit_rate: Option<Figure>,
     /// In timed mode, the average memory access time the miss rate
-    /// predicts: "AMAT = 1 + 0.40 × 20 = 9.0 cycles". Absent untimed, and
-    /// before the run's first access.
+    /// predicts: "AMAT = 1 + 0.40 × 20 = 9.0 cycles". As of the run's last
+    /// completed access: while an access is in flight, it is the figure
+    /// from before that access began. Absent untimed, and until the run's
+    /// first access has completed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub amat: Option<Figure>,
     /// In timed mode, what the run actually spent per access: "Measured:
-    /// 11.0 cycles per access (AMAT plus 2.0 for 1 write-back)." Absent
-    /// untimed, and before the run's first access.
+    /// 11.0 cycles per access (AMAT plus 2.0 for 1 write-back)." As of the
+    /// run's last completed access, like `amat`. Absent untimed, and until
+    /// the run's first access has completed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub measured: Option<Figure>,
     /// The sparkline: the outcomes of the run's latest accesses, oldest
@@ -333,7 +341,9 @@ impl Counters {
     /// print above the measured cost, and a rate below 0.005 prints as 0.00
     /// though there are misses. In the middle of an access the miss is
     /// counted before its penalty is charged, so until the fill the measured
-    /// cost can read far below AMAT. `None` before the run's first access.
+    /// cost can read far below AMAT; the Stats region therefore takes both
+    /// from the counters of the last completed access. `None` before the
+    /// run's first access.
     #[allow(
         clippy::cast_precision_loss,
         reason = "a run's cycle count stays far below 2^52, where an f64 is still exact"
@@ -425,9 +435,16 @@ impl Stats {
     /// Advanced when `advanced` and in Basics otherwise. `highlight` is what
     /// the cursor's entry has changed so far; a row is changed when one of
     /// its counters is among it. The hit rate, which no event names, never
-    /// is.
+    /// is. The counters, the rows, the traffic, the hit rate and the
+    /// sparkline are those where the machine stands; AMAT and the measured
+    /// cost are those of the run's last completed access, so while an
+    /// access is in flight they are the figures from before it began.
     pub(crate) fn new(machine: &Machine, advanced: bool, highlight: &[ChangeRef]) -> Self {
         let counters = machine.counters;
+        let completed = match &machine.access {
+            Some(access) if !access.done => access.counters_before,
+            _ => counters,
+        };
         let timing = machine.config.timing;
         let recent: Vec<Outcome> = machine.recent.outcomes().collect();
         let recent_text = (counters.accesses > 0).then(|| {
@@ -443,8 +460,8 @@ impl Stats {
             traffic: Traffic::new(&counters, &machine.geometry),
             rows: rows(&counters, advanced, timing.is_some(), highlight),
             hit_rate: counters.hit_rate(),
-            amat: timing.and_then(|timing| counters.amat(timing)),
-            measured: timing.and_then(|timing| counters.measured(timing)),
+            amat: timing.and_then(|timing| completed.amat(timing)),
+            measured: timing.and_then(|timing| completed.measured(timing)),
             recent,
             recent_text,
         }
