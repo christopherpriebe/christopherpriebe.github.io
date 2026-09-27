@@ -287,9 +287,16 @@ fn frame_3b_paused_on_its_write_back_reads_as_the_design_draws_it() {
         Some(vec![WayCompare::Mismatch, WayCompare::Mismatch])
     );
     assert_eq!(state.cpu.hit_marker, HitMarker::Miss);
-    // The write-back is counted, but AMAT and the measured cost wait for the
-    // access to complete.
+    // Here the frame departs from the design, which draws AMAT from the live
+    // counters: `AMAT = 1 + 0.80 × 20 = 17.0 cycles`. The write-back is
+    // counted, but AMAT and the measured cost wait for the access to
+    // complete, so they are access #4's, while the hit rate is live and no
+    // longer matches the rate in the AMAT line.
     assert_eq!(state.stats.counters.writebacks, 1);
+    assert_eq!(
+        state.stats.hit_rate.map(|figure| figure.text).as_deref(),
+        Some("20%")
+    );
     assert_eq!(
         state.stats.amat.map(|figure| figure.text).as_deref(),
         Some("AMAT = 1 + 0.75 \u{d7} 20 = 16.0 cycles")
