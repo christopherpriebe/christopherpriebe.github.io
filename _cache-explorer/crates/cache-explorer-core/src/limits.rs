@@ -75,7 +75,11 @@ pub const INSTRUCTION_BUDGET: u32 = 10_000;
 
 /// The most micro-events one session stores, over the whole log. The main
 /// lever on memory use and on the time a shared link takes to load. Tunable.
-pub const SESSION_EVENT_LIMIT: u32 = 100_000;
+/// Set so that the heaviest logs measured, runs that touch a new 128-byte
+/// line every few events, stay under 64 MB at their peak, and kept below
+/// 65,536, past which the events a share load gathers double their room to
+/// 131,072 before they move into the session.
+pub const SESSION_EVENT_LIMIT: u32 = 65_000;
 
 /// The most events one entry can produce. Not tunable: it is a bound the
 /// engine guarantees (an access has at most ten events), and the session's

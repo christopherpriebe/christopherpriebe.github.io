@@ -6,11 +6,19 @@
 //! is also the list of lines the run has touched, which the memory view shows
 //! even for lines that were only read.
 //!
+//! A copy of memory, such as a checkpoint's, shares each line's bytes with
+//! the memory it was copied from rather than copying them: the copy costs
+//! its own list of lines, and a line's bytes are copied only when one of the
+//! memories sharing them writes that line. Checkpoints along a run that
+//! touches thousands of lines therefore hold those lines once, not once
+//! each.
+//!
 //! Words are little-endian, in memory as in the cache's lines. A word in
 //! memory is stale when a valid dirty way holds its line with a different
 //! value for it; that is derived when asked for, never stored.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use crate::cache::{Dirtiness, Slot};
 use crate::config::MemoryInit;
@@ -22,7 +30,10 @@ use crate::units::{Addr, LineAddr, SetIndex, WayIndex, Word};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Memory {
     /// The lines the run has touched, with their bytes, `line_bytes` each.
-    lines: BTreeMap<LineAddr, Vec<u8>>,
+    /// A line's bytes are shared with the copies of this memory until one
+    /// of them writes the line; `Arc` rather than `Rc` keeps machines and
+    /// sessions `Send` and `Sync`.
+    lines: BTreeMap<LineAddr, Arc<[u8]>>,
     /// What an untouched line reads as.
     init: MemoryInit,
     /// Bytes per line.
@@ -71,14 +82,13 @@ impl Memory {
     pub(crate) fn line(&self, line: LineAddr) -> Vec<u8> {
         self.lines
             .get(&line)
-            .cloned()
-            .unwrap_or_else(|| self.initial_line(line))
+            .map_or_else(|| self.initial_line(line), |bytes| bytes.to_vec())
     }
 
     /// True when `line`'s bytes are `data`, as a clean cached copy's must be.
     pub(crate) fn holds(&self, line: LineAddr, data: &[u8]) -> bool {
         match self.lines.get(&line) {
-            Some(bytes) => bytes == data,
+            Some(bytes) => **bytes == *data,
             None => self.initial_line(line) == data,
         }
     }
@@ -104,9 +114,30 @@ impl Memory {
         u32::try_from(self.lines.range(..line).count()).unwrap_or(u32::MAX)
     }
 
-    /// Records `line` as touched, with the contents it has now.
+    /// How many of the lines the run has touched share their bytes with
+    /// `other`'s copy of the same line, rather than holding bytes of their
+    /// own.
+    #[cfg(test)]
+    pub(crate) fn lines_shared_with(&self, other: &Memory) -> usize {
+        self.lines
+            .iter()
+            .filter(|(line, bytes)| {
+                other
+                    .lines
+                    .get(line)
+                    .is_some_and(|theirs| Arc::ptr_eq(bytes, theirs))
+            })
+            .count()
+    }
+
+    /// Records `line` as touched, with the contents it has now. A line
+    /// touched already keeps its bytes, shared with any copy of this memory
+    /// as they were.
     pub(crate) fn touch(&mut self, line: LineAddr) {
-        self.touched_line(line);
+        if !self.lines.contains_key(&line) {
+            let initial = self.initial_line(line);
+            self.lines.insert(line, initial.into());
+        }
     }
 
     /// Writes `value`, already fitted to the word, to the word at `addr`, a
@@ -125,14 +156,16 @@ impl Memory {
         }
     }
 
-    /// The bytes of `line` for changing, recorded as touched first.
-    fn touched_line(&mut self, line: LineAddr) -> &mut Vec<u8> {
+    /// The bytes of `line` for changing, recorded as touched first. They
+    /// are this memory's own: copied first when a copy of this memory
+    /// shares them, so the copy keeps the bytes it had.
+    fn touched_line(&mut self, line: LineAddr) -> &mut [u8] {
         let initial = if self.lines.contains_key(&line) {
             Vec::new()
         } else {
             self.initial_line(line)
         };
-        self.lines.entry(line).or_insert(initial)
+        Arc::make_mut(self.lines.entry(line).or_insert_with(|| initial.into()))
     }
 
     /// The line holding `addr`, and `addr`'s byte within it.
@@ -351,6 +384,50 @@ mod tests {
         set_word_at(&mut bytes, 14, 4, u64::MAX);
         assert_eq!(&bytes[14..], [0xFF, 0xFF]);
         assert_eq!(word_at(&bytes, 14, 4), 0xFFFF);
+    }
+
+    #[test]
+    fn a_copy_shares_the_lines_until_one_side_writes_them() {
+        // A checkpoint is a copy of the machine, and so of its memory.
+        let mut memory = memory(&Preset::DirectMapped8.config());
+        memory.write_word(addr(0x0A4), Word::new_unchecked(7));
+        memory.touch(line(0x1A0));
+        memory.touch(line(0x2A0));
+        let checkpoint = memory.clone();
+        let count = |memory: &Memory, at| Arc::strong_count(&memory.lines[&line(at)]);
+        assert_eq!(memory.lines_shared_with(&checkpoint), 3);
+        assert_eq!(count(&checkpoint, 0x1A0), 2);
+        // Touching a line touched already, as a fill does, keeps it shared.
+        memory.touch(line(0x0A0));
+        assert_eq!(memory.lines_shared_with(&checkpoint), 3);
+        // A write copies the line it writes, and only that line; the copy
+        // keeps the bytes it had.
+        let initial = checkpoint.line(line(0x1A0));
+        memory.write_word(addr(0x0A8), Word::new_unchecked(9));
+        memory.write_line(line(0x1A0), &[5; 16]);
+        assert_eq!(memory.lines_shared_with(&checkpoint), 1);
+        assert_eq!(count(&checkpoint, 0x0A0), 1);
+        assert_eq!(count(&checkpoint, 0x1A0), 1);
+        assert_eq!(count(&checkpoint, 0x2A0), 2);
+        assert_eq!(memory.word(addr(0x0A8)).get(), 9);
+        assert_eq!(memory.line(line(0x1A0)), [5; 16]);
+        assert_eq!(checkpoint.word(addr(0x0A4)).get(), 7);
+        assert_eq!(checkpoint.word(addr(0x0A8)).get(), 66);
+        assert_eq!(checkpoint.line(line(0x1A0)), initial);
+        // A line touched after the copy is not the copy's.
+        memory.touch(line(0x3A0));
+        assert!(!checkpoint.is_touched(line(0x3A0)));
+        // Writing the copy leaves the original alone, as writing the
+        // original left the copy.
+        let mut copy = checkpoint.clone();
+        copy.write_word(addr(0x2A4), Word::new_unchecked(11));
+        assert_eq!(
+            checkpoint.word(addr(0x2A4)).get(),
+            memory.word(addr(0x2A4)).get()
+        );
+        assert_ne!(checkpoint.word(addr(0x2A4)).get(), 11);
+        assert_eq!(copy.lines_shared_with(&checkpoint), 2);
+        assert_eq!(copy.lines_shared_with(&memory), 0);
     }
 
     #[test]

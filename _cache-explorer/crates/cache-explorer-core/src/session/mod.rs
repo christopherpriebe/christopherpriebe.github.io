@@ -1128,9 +1128,10 @@ mod tests {
     #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
     use super::*;
-    use crate::config::Preset;
+    use crate::config::{CacheConfig, Preset, WritePolicy};
     use crate::limits::{CHECKPOINT_INTERVAL, INSTRUCTION_BUDGET, MAX_RUN_STEPS};
-    use crate::op::ProgramFormat;
+    use crate::op::{AccessKind, ProgramFormat};
+    use crate::units::{Addr, Word};
 
     /// A loop without an exit or a memory access: one event per instruction.
     const ENDLESS: &str = "        add r1, r0, #1\nloop:   bnez r1, loop";
@@ -1150,7 +1151,14 @@ mod tests {
     /// interval, with the loop loaded and budget left, then a `StepAccess`
     /// that executes the loop across the interval.
     fn across_an_interval() -> Session {
-        let mut session = Session::with_config(Preset::DirectMapped8.config()).unwrap();
+        let session = Session::with_config(Preset::DirectMapped8.config()).unwrap();
+        run_across_an_interval(session)
+    }
+
+    /// `session`, its log taken one event short of the first checkpoint
+    /// interval by the loop and then across it by a `StepAccess`, as
+    /// [`across_an_interval`] does from an empty log.
+    fn run_across_an_interval(mut session: Session) -> Session {
         let target = CHECKPOINT_INTERVAL - 1;
         session.apply(endless()).unwrap();
         loop {
@@ -1204,14 +1212,76 @@ mod tests {
         let base = session.op_end(op).unwrap();
         session
             .apply(Op::Issue {
-                kind: crate::op::AccessKind::Read,
-                addr: crate::units::Addr::new_unchecked(0x0A4),
+                kind: AccessKind::Read,
+                addr: Addr::new_unchecked(0x0A4),
                 value: None,
             })
             .unwrap();
         assert_eq!(session.checkpoints.last_at_or_before(session.end()), pos(0));
         assert!(base < pos(CHECKPOINT_INTERVAL));
         assert_eq!(session.checkpoints.len(), 0);
+    }
+
+    #[test]
+    fn a_checkpoint_shares_memory_lines_until_the_run_writes_them() {
+        // Write-through, so a store writes memory's copy of its line.
+        let preset = Preset::DirectMapped8.config();
+        let config = Config {
+            cache: CacheConfig {
+                write_policy: WritePolicy::WriteThrough,
+                ..preset.cache
+            },
+            ..preset
+        };
+        let issue = |kind, at, value: Option<Word>| Op::Issue {
+            kind,
+            addr: Addr::new_unchecked(at),
+            value,
+        };
+        let mut session = Session::with_config(config).unwrap();
+        for at in [0x0A4, 0x1A4, 0x2A4] {
+            session.apply(issue(AccessKind::Read, at, None)).unwrap();
+        }
+        let mut session = run_across_an_interval(session);
+        let (at, checkpoint) = session.checkpoints.at_or_before(session.end());
+        assert!(at >= pos(CHECKPOINT_INTERVAL));
+        let touched = checkpoint.machine.memory.touched_count() as usize;
+        assert_eq!(touched, 3);
+        // The checkpoint holds no bytes of its own: every line it has is
+        // shared with the machine at the cursor.
+        let current = &session.current.memory;
+        assert_eq!(
+            checkpoint.machine.memory.lines_shared_with(current),
+            touched
+        );
+        // A store copies the line it writes, and only that line; the
+        // checkpoint keeps the value it had.
+        let written = Addr::new_unchecked(0x1A4);
+        let before = checkpoint.machine.memory.word(written);
+        let after = Word::new_unchecked(before.get() + 1);
+        session
+            .apply(issue(AccessKind::Write, written.get(), Some(after)))
+            .unwrap();
+        let (_, checkpoint) = session.checkpoints.at_or_before(at);
+        let memory = &checkpoint.machine.memory;
+        assert_eq!(
+            memory.lines_shared_with(&session.current.memory),
+            touched - 1
+        );
+        assert_eq!(memory.word(written), before);
+        assert_eq!(session.current.memory.word(written), after);
+        // Seeks from the checkpoint still reach the fold's machines.
+        let initial = session.initial.clone();
+        let ops = session.ops.clone();
+        let end = session.end().get();
+        for at in [at.get(), at.get() + 1, end - 1, end] {
+            session.seek(pos(at));
+            assert_eq!(
+                Ok(&session.current),
+                Session::replay_to(&initial, &ops, pos(at)).as_ref(),
+                "at {at}"
+            );
+        }
     }
 
     #[test]
