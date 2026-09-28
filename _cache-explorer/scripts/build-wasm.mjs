@@ -18,5 +18,8 @@ const run = (cmd, args) => execFileSync(cmd, args, { cwd: web, env, stdio: 'inhe
 // --out-dir is relative to the crate, so ../../web/pkg is _cache-explorer/web/pkg.
 run('wasm-pack', ['build', '../crates/cache-explorer-wasm', '--target', 'web', '--release',
                   '--out-dir', '../../web/pkg', '--out-name', 'cache_explorer', '--', '--locked']);
-run('wasm-opt', ['pkg/cache_explorer_bg.wasm', '-Oz', '--strip-debug', '--strip-producers',
-                 '-o', 'pkg/cache_explorer_bg.wasm']);
+// --reorder-functions-by-name sorts the functions by their mangled names, which puts the
+// instantiations of one generic function side by side, where gzip finds their common bytes. It only
+// moves functions; it runs before --strip-debug removes the names.
+run('wasm-opt', ['pkg/cache_explorer_bg.wasm', '-Oz', '--reorder-functions-by-name',
+                 '--strip-debug', '--strip-producers', '-o', 'pkg/cache_explorer_bg.wasm']);
