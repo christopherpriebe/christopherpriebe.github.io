@@ -19,9 +19,10 @@
 //! began made it: ops are told apart by serial, since entry numbers restart
 //! with each run and positions are reused after the log is truncated.
 
-use std::cell::Cell;
+use std::fmt;
 
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::de::{self, DeserializeSeed};
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use super::{addr_or_hex, optional_addr_or_hex, ModuleError, ModuleProblem};
@@ -660,77 +661,74 @@ fn check_list(
 /// A predicate as read from JSON: every key any kind has, each optional.
 /// [`Predicate`]'s `TryFrom` then requires exactly one key that names a
 /// kind, the keys that kind requires, and no key it does not take.
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+///
+/// Read by [`RawPredicateSeed`], not derived: `all`, `any` and `not` hold
+/// further predicates, and a derived `Deserialize` has no way to carry this
+/// read's nesting depth down into them.
 struct RawPredicate {
     /// A way predicate's way.
-    #[serde(default)]
     way: Field<WayLoc>,
     /// A way predicate's valid bit.
-    #[serde(default)]
     valid: Field<bool>,
     /// A way predicate's tag.
-    #[serde(default)]
     tag: Field<Tag>,
     /// A way or line predicate's dirty bit.
-    #[serde(default)]
     dirty: Field<bool>,
     /// A way predicate's rank.
-    #[serde(default)]
     rank: Field<u32>,
     /// A line predicate's line.
-    #[serde(default)]
     line: Field<AddrLoc>,
     /// Whether a line predicate's line is cached.
-    #[serde(default)]
     present: Field<bool>,
     /// A memory predicate's word.
-    #[serde(default)]
     memory: Field<AddrLoc>,
     /// A memory or register predicate's value.
-    #[serde(default)]
     equals: Field<Word>,
     /// A counter predicate's counter.
-    #[serde(default)]
     counter: Field<Counter>,
     /// A counter predicate's comparison.
-    #[serde(default)]
     op: Field<CmpOp>,
     /// A counter predicate's value.
-    #[serde(default)]
     value: Field<u32>,
     /// A register predicate's register.
-    #[serde(default)]
     register: Field<Register>,
     /// An `all` predicate's list.
-    #[serde(default)]
     all: Field<Vec<Predicate>>,
     /// An `any` predicate's list.
-    #[serde(default)]
     any: Field<Vec<Predicate>>,
     /// A `not` predicate's predicate.
-    #[serde(default)]
     not: Field<Box<Predicate>>,
     /// An event predicate's event.
-    #[serde(default)]
     event: Field<EventMatch>,
     /// A `lastAccess` predicate's access.
-    #[serde(default)]
     last_access: Field<AccessMatch>,
     /// A `config` predicate's configuration.
-    #[serde(default)]
     config: Field<ConfigMatch>,
 }
 
-thread_local! {
-    /// How many predicates enclose the one being read, through `all`, `any`
-    /// and `not`. serde's derive passes nothing down to a nested value, so
-    /// the depth is kept here, and restored whenever a read returns, whether
-    /// it read a predicate or not. An exception that JavaScript throws during
-    /// a read unwinds past the restore and leaves the depth raised; the page
-    /// passes only plain data, which throws none.
-    static DEPTH: Cell<u32> = const { Cell::new(0) };
-}
+/// [`RawPredicate`]'s fields, in the order given to `deserialize_struct` and
+/// listed in an unknown field's message.
+const FIELDS: &[&str] = &[
+    "way",
+    "valid",
+    "tag",
+    "dirty",
+    "rank",
+    "line",
+    "present",
+    "memory",
+    "equals",
+    "counter",
+    "op",
+    "value",
+    "register",
+    "all",
+    "any",
+    "not",
+    "event",
+    "lastAccess",
+    "config",
+];
 
 impl<'de> Deserialize<'de> for Predicate {
     /// Reads the flat form, then requires the keys of one kind. A predicate
@@ -738,14 +736,362 @@ impl<'de> Deserialize<'de> for Predicate {
     /// it is read, so the reading stays within the stack whatever the
     /// deserializer's own limit on nesting.
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let depth = DEPTH.get();
-        if depth > MAX_PREDICATE_DEPTH {
+        PredicateSeed { depth: 0 }.deserialize(deserializer)
+    }
+}
+
+/// Reads a [`Predicate`] enclosed by `depth` `all`, `any` and `not`
+/// predicates, refusing before any of it is read once `depth` exceeds
+/// [`MAX_PREDICATE_DEPTH`].
+///
+/// The depth travels with the read, on the call stack, rather than in a
+/// shared counter: a read that fails, by an ordinary refusal, an unwind or a
+/// thrown exception, leaves nothing behind for the next read to find.
+struct PredicateSeed {
+    /// How many `all`, `any` or `not` predicates enclose this one.
+    depth: u32,
+}
+
+impl<'de> DeserializeSeed<'de> for PredicateSeed {
+    type Value = Predicate;
+
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Predicate, D::Error> {
+        if self.depth > MAX_PREDICATE_DEPTH {
             return Err(de::Error::custom(ShapeError::TooDeep));
         }
-        DEPTH.set(depth + 1);
-        let raw = RawPredicate::deserialize(deserializer);
-        DEPTH.set(depth);
-        Predicate::try_from(raw?).map_err(de::Error::custom)
+        let raw = RawPredicateSeed {
+            depth: self.depth + 1,
+        }
+        .deserialize(deserializer)?;
+        Predicate::try_from(raw).map_err(de::Error::custom)
+    }
+}
+
+/// Reads a [`RawPredicate`], seeding the predicates its `all`, `any` and
+/// `not` fields hold at `depth`.
+struct RawPredicateSeed {
+    /// The depth [`PredicateSeed`] passes to nested predicates.
+    depth: u32,
+}
+
+impl<'de> DeserializeSeed<'de> for RawPredicateSeed {
+    type Value = RawPredicate;
+
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<RawPredicate, D::Error> {
+        deserializer.deserialize_struct(
+            "RawPredicate",
+            FIELDS,
+            RawPredicateVisitor { depth: self.depth },
+        )
+    }
+}
+
+/// Sets `slot` to the map's next value for the field `name`, or refuses a
+/// second value for it, as serde's derive refuses a repeated field.
+fn set<'de, A: de::MapAccess<'de>, T: Deserialize<'de>>(
+    map: &mut A,
+    slot: &mut Option<T>,
+    name: &'static str,
+) -> Result<(), A::Error> {
+    if slot.is_some() {
+        return Err(de::Error::duplicate_field(name));
+    }
+    *slot = Some(map.next_value()?);
+    Ok(())
+}
+
+/// [`set`], reading the value through `seed` rather than through
+/// `Deserialize`.
+fn set_seed<'de, A: de::MapAccess<'de>, S: DeserializeSeed<'de>>(
+    map: &mut A,
+    slot: &mut Option<S::Value>,
+    name: &'static str,
+    seed: S,
+) -> Result<(), A::Error> {
+    if slot.is_some() {
+        return Err(de::Error::duplicate_field(name));
+    }
+    *slot = Some(map.next_value_seed(seed)?);
+    Ok(())
+}
+
+struct RawPredicateVisitor {
+    /// The depth [`PredicateSeed`] passes to a nested `all`, `any` or `not`.
+    depth: u32,
+}
+
+impl<'de> de::Visitor<'de> for RawPredicateVisitor {
+    type Value = RawPredicate;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("struct RawPredicate")
+    }
+
+    fn visit_map<A: de::MapAccess<'de>>(self, mut map: A) -> Result<RawPredicate, A::Error> {
+        let mut way = None;
+        let mut valid = None;
+        let mut tag = None;
+        let mut dirty = None;
+        let mut rank = None;
+        let mut line = None;
+        let mut present = None;
+        let mut memory = None;
+        let mut equals = None;
+        let mut counter = None;
+        let mut op = None;
+        let mut value = None;
+        let mut register = None;
+        let mut all = None;
+        let mut any = None;
+        let mut not = None;
+        let mut event = None;
+        let mut last_access = None;
+        let mut config = None;
+        while let Some(key) = map.next_key::<Key>()? {
+            match key {
+                Key::Way => set(&mut map, &mut way, "way")?,
+                Key::Valid => set(&mut map, &mut valid, "valid")?,
+                Key::Tag => set(&mut map, &mut tag, "tag")?,
+                Key::Dirty => set(&mut map, &mut dirty, "dirty")?,
+                Key::Rank => set(&mut map, &mut rank, "rank")?,
+                Key::Line => set(&mut map, &mut line, "line")?,
+                Key::Present => set(&mut map, &mut present, "present")?,
+                Key::Memory => set(&mut map, &mut memory, "memory")?,
+                Key::Equals => set(&mut map, &mut equals, "equals")?,
+                Key::Counter => set(&mut map, &mut counter, "counter")?,
+                Key::Op => set(&mut map, &mut op, "op")?,
+                Key::Value => set(&mut map, &mut value, "value")?,
+                Key::Register => set(&mut map, &mut register, "register")?,
+                Key::All => set_seed(
+                    &mut map,
+                    &mut all,
+                    "all",
+                    FieldSeed(PredicateVecSeed { depth: self.depth }),
+                )?,
+                Key::Any => set_seed(
+                    &mut map,
+                    &mut any,
+                    "any",
+                    FieldSeed(PredicateVecSeed { depth: self.depth }),
+                )?,
+                Key::Not => set_seed(
+                    &mut map,
+                    &mut not,
+                    "not",
+                    FieldSeed(BoxPredicateSeed { depth: self.depth }),
+                )?,
+                Key::Event => set(&mut map, &mut event, "event")?,
+                Key::LastAccess => set(&mut map, &mut last_access, "lastAccess")?,
+                Key::Config => set(&mut map, &mut config, "config")?,
+            }
+        }
+        Ok(RawPredicate {
+            way: way.unwrap_or_default(),
+            valid: valid.unwrap_or_default(),
+            tag: tag.unwrap_or_default(),
+            dirty: dirty.unwrap_or_default(),
+            rank: rank.unwrap_or_default(),
+            line: line.unwrap_or_default(),
+            present: present.unwrap_or_default(),
+            memory: memory.unwrap_or_default(),
+            equals: equals.unwrap_or_default(),
+            counter: counter.unwrap_or_default(),
+            op: op.unwrap_or_default(),
+            value: value.unwrap_or_default(),
+            register: register.unwrap_or_default(),
+            all: all.unwrap_or_default(),
+            any: any.unwrap_or_default(),
+            not: not.unwrap_or_default(),
+            event: event.unwrap_or_default(),
+            last_access: last_access.unwrap_or_default(),
+            config: config.unwrap_or_default(),
+        })
+    }
+}
+
+/// One of [`FIELDS`], read as serde's derive reads a struct's field names.
+#[derive(Clone, Copy)]
+enum Key {
+    /// `way`.
+    Way,
+    /// `valid`.
+    Valid,
+    /// `tag`.
+    Tag,
+    /// `dirty`.
+    Dirty,
+    /// `rank`.
+    Rank,
+    /// `line`.
+    Line,
+    /// `present`.
+    Present,
+    /// `memory`.
+    Memory,
+    /// `equals`.
+    Equals,
+    /// `counter`.
+    Counter,
+    /// `op`.
+    Op,
+    /// `value`.
+    Value,
+    /// `register`.
+    Register,
+    /// `all`.
+    All,
+    /// `any`.
+    Any,
+    /// `not`.
+    Not,
+    /// `event`.
+    Event,
+    /// `lastAccess`.
+    LastAccess,
+    /// `config`.
+    Config,
+}
+
+impl<'de> Deserialize<'de> for Key {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Key, D::Error> {
+        deserializer.deserialize_identifier(KeyVisitor)
+    }
+}
+
+/// `key`, if it is one of [`FIELDS`].
+fn key_of(key: &str) -> Option<Key> {
+    Some(match key {
+        "way" => Key::Way,
+        "valid" => Key::Valid,
+        "tag" => Key::Tag,
+        "dirty" => Key::Dirty,
+        "rank" => Key::Rank,
+        "line" => Key::Line,
+        "present" => Key::Present,
+        "memory" => Key::Memory,
+        "equals" => Key::Equals,
+        "counter" => Key::Counter,
+        "op" => Key::Op,
+        "value" => Key::Value,
+        "register" => Key::Register,
+        "all" => Key::All,
+        "any" => Key::Any,
+        "not" => Key::Not,
+        "event" => Key::Event,
+        "lastAccess" => Key::LastAccess,
+        "config" => Key::Config,
+        _ => return None,
+    })
+}
+
+struct KeyVisitor;
+
+impl de::Visitor<'_> for KeyVisitor {
+    type Value = Key;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("field identifier")
+    }
+
+    fn visit_str<E: de::Error>(self, value: &str) -> Result<Key, E> {
+        key_of(value).ok_or_else(|| de::Error::unknown_field(value, FIELDS))
+    }
+
+    fn visit_bytes<E: de::Error>(self, value: &[u8]) -> Result<Key, E> {
+        std::str::from_utf8(value)
+            .ok()
+            .and_then(key_of)
+            .ok_or_else(|| de::Error::unknown_field(&String::from_utf8_lossy(value), FIELDS))
+    }
+}
+
+/// Reads an optional field's value through `seed`, as [`Field<T>`]'s own
+/// `Deserialize` reads one unseeded: present as `null` reads as
+/// [`Field::Null`]; present with a value, as [`Field::Value`] through
+/// `seed`.
+struct FieldSeed<S>(S);
+
+impl<'de, S: DeserializeSeed<'de>> DeserializeSeed<'de> for FieldSeed<S> {
+    type Value = Field<S::Value>;
+
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_option(FieldVisitor(self.0))
+    }
+}
+
+struct FieldVisitor<S>(S);
+
+impl<'de, S: DeserializeSeed<'de>> de::Visitor<'de> for FieldVisitor<S> {
+    type Value = Field<S::Value>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("option")
+    }
+
+    fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(Field::Null)
+    }
+
+    fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+        self.0.deserialize(deserializer).map(Field::Value)
+    }
+}
+
+/// Reads an `all` or `any` predicate's list, seeding each predicate at
+/// `depth`.
+struct PredicateVecSeed {
+    /// The depth each element of the list is seeded at.
+    depth: u32,
+}
+
+impl<'de> DeserializeSeed<'de> for PredicateVecSeed {
+    type Value = Vec<Predicate>;
+
+    fn deserialize<D: Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Vec<Predicate>, D::Error> {
+        deserializer.deserialize_seq(PredicateVecVisitor { depth: self.depth })
+    }
+}
+
+struct PredicateVecVisitor {
+    /// The depth each element is seeded at.
+    depth: u32,
+}
+
+impl<'de> de::Visitor<'de> for PredicateVecVisitor {
+    type Value = Vec<Predicate>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a sequence")
+    }
+
+    fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<Predicate>, A::Error> {
+        let mut predicates = Vec::new();
+        while let Some(predicate) = seq.next_element_seed(PredicateSeed { depth: self.depth })? {
+            predicates.push(predicate);
+        }
+        Ok(predicates)
+    }
+}
+
+/// Reads a `not` predicate's predicate, seeded at `depth`, boxed.
+struct BoxPredicateSeed {
+    /// The depth the boxed predicate is seeded at.
+    depth: u32,
+}
+
+impl<'de> DeserializeSeed<'de> for BoxPredicateSeed {
+    type Value = Box<Predicate>;
+
+    fn deserialize<D: Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Box<Predicate>, D::Error> {
+        PredicateSeed { depth: self.depth }
+            .deserialize(deserializer)
+            .map(Box::new)
     }
 }
 
@@ -980,5 +1326,144 @@ impl TryFrom<RawPredicate> for Predicate {
                 config: raw.config.value().ok_or_else(|| missing("config"))?,
             }),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+
+    use std::panic;
+
+    use serde::de::{MapAccess, Visitor};
+    use serde::Deserializer;
+
+    use super::*;
+
+    /// A deserializer for one predicate: `remaining` more `not` wrappers
+    /// around a leaf `counter` predicate, panicking instead of reading
+    /// further once asked to read a struct with `panic_after` at 0.
+    struct NotChain {
+        /// How many more `not` levels remain before the leaf.
+        remaining: u32,
+        /// Structs left to read before this one panics instead.
+        panic_after: u32,
+    }
+
+    impl<'de> Deserializer<'de> for NotChain {
+        type Error = serde_json::Error;
+
+        fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+            self.deserialize_struct("", &[], visitor)
+        }
+
+        fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+            // Every `not` this test builds is present, never `null`.
+            visitor.visit_some(self)
+        }
+
+        fn deserialize_struct<V: Visitor<'de>>(
+            self,
+            name: &'static str,
+            fields: &'static [&'static str],
+            visitor: V,
+        ) -> Result<V::Value, Self::Error> {
+            assert!(
+                self.panic_after != 0,
+                "a deliberate panic partway through a predicate read"
+            );
+            if self.remaining == 0 {
+                let leaf = serde_json::json!({"counter": "accesses", "op": "==", "value": 0});
+                return leaf.deserialize_struct(name, fields, visitor);
+            }
+            visitor.visit_map(NotMapAccess {
+                child: Some(NotChain {
+                    remaining: self.remaining - 1,
+                    panic_after: self.panic_after - 1,
+                }),
+            })
+        }
+
+        serde::forward_to_deserialize_any! {
+            bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+            bytes byte_buf unit unit_struct newtype_struct seq tuple
+            tuple_struct map enum identifier ignored_any
+        }
+    }
+
+    /// A map of exactly one key, `not`, whose value reads through `child`
+    /// once and then is gone, as a real `{"not": ...}` object has.
+    struct NotMapAccess {
+        /// The value at `not`, taken by the one `next_value_seed` call.
+        child: Option<NotChain>,
+    }
+
+    impl<'de> MapAccess<'de> for NotMapAccess {
+        type Error = serde_json::Error;
+
+        fn next_key_seed<K: DeserializeSeed<'de>>(
+            &mut self,
+            seed: K,
+        ) -> Result<Option<K::Value>, Self::Error> {
+            if self.child.is_some() {
+                seed.deserialize(KeyDeserializer).map(Some)
+            } else {
+                Ok(None)
+            }
+        }
+
+        fn next_value_seed<S: DeserializeSeed<'de>>(
+            &mut self,
+            seed: S,
+        ) -> Result<S::Value, Self::Error> {
+            let child = self
+                .child
+                .take()
+                .expect("next_value_seed follows next_key_seed, which found the one key");
+            seed.deserialize(child)
+        }
+    }
+
+    /// A deserializer that reads as the field name `not`.
+    struct KeyDeserializer;
+
+    impl<'de> Deserializer<'de> for KeyDeserializer {
+        type Error = serde_json::Error;
+
+        fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+            visitor.visit_str("not")
+        }
+
+        fn deserialize_identifier<V: Visitor<'de>>(
+            self,
+            visitor: V,
+        ) -> Result<V::Value, Self::Error> {
+            visitor.visit_str("not")
+        }
+
+        serde::forward_to_deserialize_any! {
+            bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+            bytes byte_buf option unit unit_struct newtype_struct seq tuple
+            tuple_struct map struct enum ignored_any
+        }
+    }
+
+    /// A panic partway through reading a predicate, caught with
+    /// `catch_unwind`, leaves nothing behind: unlike a thread-local counter
+    /// left raised by a skipped restore, a depth carried on the stack goes
+    /// with the unwind, so a later, unrelated read is unaffected.
+    #[test]
+    fn a_panic_mid_read_leaves_no_depth_behind() {
+        let panicked = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+            Predicate::deserialize(NotChain {
+                remaining: 5,
+                panic_after: 3,
+            })
+        }));
+        assert!(panicked.is_err());
+        let counter = serde_json::json!({"counter": "accesses", "op": "==", "value": 0});
+        let deepest =
+            (0..MAX_PREDICATE_DEPTH).fold(counter, |inner, _| serde_json::json!({ "not": inner }));
+        assert!(serde_json::from_value::<Predicate>(deepest).is_ok());
     }
 }

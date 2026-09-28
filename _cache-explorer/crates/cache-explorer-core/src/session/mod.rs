@@ -700,7 +700,17 @@ impl Session {
         }
         self.ops.extend(plan.ops);
         self.op_ends.extend(plan.op_ends);
-        self.events.extend(plan.events);
+        // An empty log (a fresh session, or one undone back to its start)
+        // takes the plan's buffer instead of copying it in: a share load
+        // builds tens of thousands of events, and extending an empty `Vec`
+        // would still allocate and copy every one of them into a second,
+        // exact-size buffer while the plan's own buffer is still alive.
+        if self.events.is_empty() {
+            self.events = plan.events;
+            self.events.shrink_to_fit();
+        } else {
+            self.events.extend(plan.events);
+        }
         self.extend_entries(plan.records);
         for (pos, checkpoint) in plan.checkpoints {
             self.checkpoints.insert(pos, checkpoint);
@@ -1242,6 +1252,17 @@ mod tests {
         }
         session.apply(Op::StepAccess).unwrap();
         session
+    }
+
+    #[test]
+    fn a_share_loads_events_end_with_no_spare_capacity() {
+        let mut session = Session::with_config(Preset::TwoWayLru.config()).unwrap();
+        session.apply(endless()).unwrap();
+        session.apply(Op::Run { n: 200 }).unwrap();
+        let shared = session.to_share_string().unwrap();
+        let loaded = Session::from_share_string(&shared).unwrap();
+        assert!(!loaded.events.is_empty());
+        assert_eq!(loaded.events.capacity(), loaded.events.len());
     }
 
     #[test]

@@ -139,7 +139,7 @@ pub struct IssueDraft {
 /// Why typed text is not a number the core can use. `Display` is the message
 /// the student reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
-enum InputError {
+pub(crate) enum InputError {
     /// Text that is not a hex address within the width, whether it is not hex
     /// at all or too large.
     #[error(
@@ -210,7 +210,7 @@ impl Geometry {
         match decoded {
             None => AddressInput::Invalid {
                 message: InputError::NotAnAddress {
-                    address_bits: self.address_bits,
+                    address_bits: self.address_bits(),
                 }
                 .to_string(),
             },
@@ -218,8 +218,8 @@ impl Geometry {
             Some(decoded) => AddressInput::Misaligned {
                 message: AccessError::Misaligned {
                     addr: decoded.addr,
-                    address_bits: self.address_bits,
-                    word_bytes: self.word_bytes,
+                    address_bits: self.address_bits(),
+                    word_bytes: self.word_bytes(),
                 }
                 .to_string(),
                 decoded,
@@ -240,7 +240,7 @@ impl Geometry {
         if text.is_empty() {
             return WordInput::Empty;
         }
-        let word_bytes = self.word_bytes;
+        let word_bytes = self.word_bytes();
         let (negative, unsigned) = match text.strip_prefix(['-', '\u{2212}']) {
             Some(rest) => (true, rest),
             None => (false, text),
@@ -259,7 +259,9 @@ impl Geometry {
                 value,
                 text: format::data(value.get()),
             },
-            Err(message) => WordInput::Invalid { message },
+            Err(error) => WordInput::Invalid {
+                message: error.to_string(),
+            },
         }
     }
 
@@ -297,7 +299,7 @@ impl Geometry {
                 explain::typed_request(self, kind, decoded.addr)
             }),
             selected_set: decoded.map(|decoded| decoded.index),
-            compare: decoded.map(|_| (0..self.ways).map(|_| WayCompare::Pending).collect()),
+            compare: decoded.map(|_| (0..self.ways()).map(|_| WayCompare::Pending).collect()),
             address,
             value,
             op,
@@ -400,7 +402,11 @@ impl Session {
 ///
 /// The word-fit message, for a number the word cannot hold: `300 does not
 /// fit a 1-byte word (−128 to 255).`
-pub(crate) fn fit_word(negative: bool, magnitude: u64, word_bytes: u32) -> Result<Word, String> {
+pub(crate) fn fit_word(
+    negative: bool,
+    magnitude: u64,
+    word_bytes: u32,
+) -> Result<Word, InputError> {
     let fits = if negative {
         magnitude <= lowest_magnitude(word_bytes)
     } else {
@@ -411,8 +417,7 @@ pub(crate) fn fit_word(negative: bool, magnitude: u64, word_bytes: u32) -> Resul
             negative,
             magnitude,
             word_bytes,
-        }
-        .to_string());
+        });
     }
     let value = if negative {
         magnitude.wrapping_neg() & highest_word(word_bytes)

@@ -1862,6 +1862,29 @@ fn the_gate_refuses_every_op() {
 }
 
 #[test]
+fn plans_and_drafts_refuse_under_the_gate_as_apply_does() {
+    // Mid-op: without the gate this would be an "unfinished" refusal, but
+    // apply refuses with the gate first, so the plan and the drafts must
+    // say the same, not name an op that was never in question.
+    let (_run, session) = gated_mid_log();
+    assert_ne!(session.position().boundary, Boundary::OpEnd);
+    editors_refuse_for_room(&session, RefusalReason::Gated, GUARD);
+
+    // At an op end within the limit, where the rules on the machine would
+    // otherwise plan an edit that apply then refuses with the gate: a plan
+    // shown must be a plan apply honours.
+    let (_run, mut at_an_op_end) = gated_mid_log();
+    while at_an_op_end.undo() {}
+    assert_eq!(at_an_op_end.position().pos, pos(0));
+    assert_eq!(at_an_op_end.position().boundary, Boundary::OpEnd);
+    editors_refuse_for_room(&at_an_op_end, RefusalReason::Gated, GUARD);
+
+    // At the very end of the log, also an op end.
+    let (_run, session) = gated_at_end();
+    editors_refuse_for_room(&session, RefusalReason::Gated, GUARD);
+}
+
+#[test]
 fn the_gate_holds_the_cursor_at_or_before_its_limit() {
     let (_run, mut session) = gated_mid_log();
     let limit = session.gate().unwrap().seek_limit();

@@ -5,10 +5,11 @@
 //! the cursor is at the end of an op: the machine the editor shows is then
 //! the one the edit applies to, and a plan shown is the plan applied. The
 //! refusal names what to finish first; Shift+Space goes to the op's end.
-//! Before that, as for every op, the session refuses an edit while its log
-//! has no room for another entry there, already holds as many ops before it
-//! as a link can hold, or would take its saved file past what a file can
-//! hold with the edit. Then the machine's own rules decide.
+//! Before that, as for every op, the session refuses an edit while a guided
+//! module's prediction is unanswered, while its log has no room for another
+//! entry there, already holds as many ops before it as a link can hold, or
+//! would take its saved file past what a file can hold with the edit. Then
+//! the machine's own rules decide.
 
 use super::{slot_of, EntryKind, EntryRecord, Session};
 use crate::engine::{self, Blocked, EditDraft, EditPlan, EditRefusal, MemoryEditDraft, WayForm};
@@ -19,18 +20,19 @@ use crate::snapshot;
 use crate::units::{Addr, EventPos, OpIndex, SetIndex, WayIndex};
 
 impl Session {
-    /// Plans `patch` on `target` at the cursor: refused while the log has no
-    /// room for another entry where the edit would go, or for another op a
-    /// link could hold, or for the edit in a saved file, or while the cursor
-    /// is inside an op, and otherwise planned by the rules on the machine at
+    /// Plans `patch` on `target` at the cursor: refused while a guided
+    /// module's prediction is unanswered, while the log has no room for
+    /// another entry where the edit would go, or for another op a link
+    /// could hold, or for the edit in a saved file, or while the cursor is
+    /// inside an op, and otherwise planned by the rules on the machine at
     /// the cursor, which is the machine [`Session::apply`] checks the edit
     /// against.
     ///
     /// # Errors
     ///
-    /// The [`EditRefusal`] of the session's limit, the link's or the saved
-    /// file's, of the cursor's place, or of the first rule that refuses the
-    /// edit.
+    /// The [`EditRefusal`] of the gate, the session's limit, the link's or
+    /// the saved file's, of the cursor's place, or of the first rule that
+    /// refuses the edit.
     pub fn plan_edit(
         &self,
         target: &EditTarget,
@@ -61,12 +63,16 @@ impl Session {
     }
 
     /// Why the session refuses the edit of `patch` on `target` at the
-    /// cursor before the rules see it, if it does: the log up to where the
-    /// edit would go, the end of the op holding the cursor, leaves no room
-    /// for another entry, holds as many ops as a link can, or leaves its
-    /// saved file no room for the edit's op, which [`Session::apply`] checks
-    /// first, in that order; or the cursor is inside that op.
+    /// cursor before the rules see it, if it does: a guided module's
+    /// unanswered prediction, or, as [`Session::apply`] checks in the same
+    /// order, the log up to where the edit would go, the end of the op
+    /// holding the cursor, leaves no room for another entry, holds as many
+    /// ops as a link can, or leaves its saved file no room for the edit's
+    /// op; or the cursor is inside that op.
     fn blocked(&self, target: &EditTarget, patch: &EditPatch) -> Option<Blocked> {
+        if self.gate.is_some() {
+            return Some(Blocked::Gated);
+        }
         let (base, kept) = self.base();
         if !engine::has_room(u64::from(base.get())) {
             return Some(Blocked::Full);

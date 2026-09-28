@@ -140,8 +140,7 @@ pub enum ParseResult {
     },
     /// The source has errors.
     Invalid {
-        /// The errors in source order, at most
-        /// [`MAX_PARSE_ERRORS`](crate::limits::MAX_PARSE_ERRORS); never
+        /// The errors in source order, at most [`MAX_PARSE_ERRORS`]; never
         /// empty.
         errors: Vec<ParseError>,
     },

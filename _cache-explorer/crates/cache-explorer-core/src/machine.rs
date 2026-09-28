@@ -37,6 +37,7 @@ use crate::event::ChangeRef;
 use crate::format;
 use crate::geometry::{Geometry, Location};
 use crate::isa::{Placed, Program};
+use crate::limits::MAX_LINES;
 use crate::memory::{word_at, Memory};
 use crate::prng::Prng;
 use crate::replacement::VictimChoice;
@@ -361,9 +362,7 @@ impl Machine {
         let count = self.geometry.ways();
         let replacement = self.config.cache.replacement;
 
-        let mut ranks: Vec<u32> = ways.iter().map(|way| way.rank).collect();
-        ranks.sort_unstable();
-        if !ranks.into_iter().eq(0..count) {
+        if !ranks_are_permutation(ways, count) {
             return Err(InvariantViolation::RanksNotAPermutation { set, ways: count });
         }
 
@@ -386,14 +385,7 @@ impl Machine {
             }
         }
 
-        let duplicate = ways.iter().enumerate().any(|(index, way)| {
-            way.tag().is_some_and(|tag| {
-                ways.iter()
-                    .take(index)
-                    .any(|other| other.tag() == Some(tag))
-            })
-        });
-        if duplicate {
+        if has_duplicate_tag(ways) {
             return Err(InvariantViolation::DuplicateTag { set });
         }
 
@@ -425,21 +417,9 @@ impl Machine {
             }
         }
 
+        let (clean_differs, untouched) = self.memory_state(set, ways, between_accesses);
         if between_accesses {
-            let differs = (0_u32..)
-                .zip(ways)
-                .find_map(|(number, way)| match &way.slot {
-                    Slot::Valid {
-                        tag,
-                        dirty: Dirtiness::Clean,
-                        data,
-                    } => {
-                        let line = self.geometry.line_addr(*tag, set);
-                        (!self.memory.holds(line, data)).then_some(number)
-                    }
-                    _ => None,
-                });
-            if let Some(number) = differs {
+            if let Some(number) = clean_differs {
                 return Err(InvariantViolation::CleanLineDiffersFromMemory {
                     set,
                     way: WayIndex::new_unchecked(number),
@@ -453,11 +433,6 @@ impl Machine {
             return Err(InvariantViolation::RanksNotWayNumbers { set });
         }
 
-        let untouched = (0_u32..).zip(ways).find_map(|(number, way)| {
-            way.tag()
-                .filter(|tag| !self.memory.is_touched(self.geometry.line_addr(*tag, set)))
-                .map(|_| number)
-        });
         if let Some(number) = untouched {
             return Err(InvariantViolation::LineNotInMemory {
                 set,
@@ -466,6 +441,106 @@ impl Machine {
         }
         Ok(())
     }
+
+    /// I6 and I8 together, in one pass over `ways` rather than one each:
+    /// the lowest-numbered way whose clean line differs from memory's copy
+    /// of it (I6, meaningful only `between_accesses`), and the
+    /// lowest-numbered way holding a line memory has not recorded as
+    /// touched (I8). Every way with a tag looks its line up in memory once,
+    /// serving both checks, rather than once for each.
+    fn memory_state(
+        &self,
+        set: SetIndex,
+        ways: &[Way],
+        between_accesses: bool,
+    ) -> (Option<u32>, Option<u32>) {
+        let mut clean_differs = None;
+        let mut untouched = None;
+        for (number, way) in (0_u32..).zip(ways) {
+            let Some(tag) = way.tag() else {
+                continue;
+            };
+            let line = self.geometry.line_addr(tag, set);
+            let touched = self.memory.touched_bytes(line);
+            if between_accesses && clean_differs.is_none() {
+                if let Slot::Valid {
+                    dirty: Dirtiness::Clean,
+                    data,
+                    ..
+                } = &way.slot
+                {
+                    // An untouched line reads as its configuration's initial
+                    // contents; falling back to that keeps a clean way whose
+                    // data differs from it reporting I6, not I8.
+                    let differs = match touched {
+                        Some(bytes) => bytes != data.as_slice(),
+                        None => !self.memory.holds(line, data),
+                    };
+                    if differs {
+                        clean_differs = Some(number);
+                    }
+                }
+            }
+            if untouched.is_none() && touched.is_none() {
+                untouched = Some(number);
+            }
+        }
+        (clean_differs, untouched)
+    }
+}
+
+/// I1: whether `ways`' ranks are a permutation of `0..count`, without
+/// allocating. There are exactly `count` of them, and folding each rank
+/// into a bit of a `u64` finds any that repeats or falls outside `0..count`;
+/// since both conditions are ruled out and there are exactly `count` ways,
+/// the ranks found can only be `0..count` itself. A set has at most
+/// [`MAX_LINES`] ways, so every rank that belongs fits the bitmask; a
+/// `checked_shl` keeps one that does not from ever shifting out of range.
+fn ranks_are_permutation(ways: &[Way], count: u32) -> bool {
+    if u32::try_from(ways.len()) != Ok(count) {
+        return false;
+    }
+    let mut seen: u64 = 0;
+    for way in ways {
+        if way.rank >= count {
+            return false;
+        }
+        let Some(bit) = 1_u64.checked_shl(way.rank) else {
+            return false;
+        };
+        if seen & bit != 0 {
+            return false;
+        }
+        seen |= bit;
+    }
+    true
+}
+
+/// I3: whether two valid ways of `ways` hold the same tag. A pairwise scan
+/// for the small sets most caches have; above 8 ways, the valid tags are
+/// copied into a fixed-size array and sorted instead, since a sort finds a
+/// repeat in fewer comparisons than the pairwise scan does once there are
+/// enough of them. The array holds at most [`MAX_LINES`] tags, the most a
+/// set can have; I1 has already confirmed `ways` holds no more than that.
+fn has_duplicate_tag(ways: &[Way]) -> bool {
+    if ways.len() <= 8 {
+        return ways.iter().enumerate().any(|(index, way)| {
+            way.tag().is_some_and(|tag| {
+                ways.iter()
+                    .take(index)
+                    .any(|other| other.tag() == Some(tag))
+            })
+        });
+    }
+    let mut tags = [0_u32; MAX_LINES as usize];
+    let mut valid = 0;
+    for (slot, tag) in tags.iter_mut().zip(ways.iter().filter_map(Way::tag)) {
+        *slot = tag.get();
+        valid += 1;
+    }
+    let tags = tags.get_mut(..valid).unwrap_or_default();
+    tags.sort_unstable();
+    tags.windows(2).any(|pair| matches!(pair, [a, b] if a == b))
 }
 
 /// I1 as its message states it for a set of `ways` ways: "the ranks in set 2
@@ -713,6 +788,18 @@ mod tests {
                 ways: 1
             })
         );
+        // A rank of 64 is out of range for any set, the widest a set gets;
+        // the bitmask I1 folds ranks into must refuse it rather than shift
+        // it out of range.
+        let mut machine = start(config(1024, 64, Replacement::Lru, WritePolicy::WriteBack));
+        machine.cache.way_mut(set(0), way(0)).unwrap().rank = 64;
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::RanksNotAPermutation {
+                set: set(0),
+                ways: 64
+            })
+        );
     }
 
     #[test]
@@ -791,6 +878,22 @@ mod tests {
         put(&mut machine, 1, 0, slot.clone(), 0);
         put(&mut machine, 2, 0, slot, 0);
         assert_eq!(machine.check_invariants(), Ok(()));
+        // Above 8 ways, I3 sorts a fixed-size array instead of scanning
+        // pairwise; a 64-way set with a distinct tag per way exercises that
+        // path once two of them collide.
+        let mut machine = start(config(1024, 64, Replacement::Lru, WritePolicy::WriteBack));
+        for way_index in 0..64 {
+            let slot = line(&machine, way_index, Dirtiness::Clean);
+            put(&mut machine, 0, way_index, slot, way_index);
+        }
+        assert_eq!(machine.check_invariants(), Ok(()));
+        // Way 63 takes way 0's tag; its rank is unaffected and stays valid.
+        let slot = line(&machine, 0, Dirtiness::Clean);
+        put(&mut machine, 0, 63, slot, 63);
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::DuplicateTag { set: set(0) })
+        );
     }
 
     #[test]
@@ -858,6 +961,42 @@ mod tests {
             *dirty = Dirtiness::Dirty;
         }
         assert_eq!(machine.check_invariants(), Ok(()));
+    }
+
+    #[test]
+    fn i6_reports_an_untouched_clean_line_that_differs_from_its_initial_bytes() {
+        // Zero memory: an untouched line reads as zero bytes. This way's
+        // data does not, so it must report I6, not I8, even though the line
+        // was never recorded as touched either.
+        let mut machine = start(Config::default());
+        let mut slot = line(&machine, 1, Dirtiness::Clean);
+        let Slot::Valid { data, .. } = &mut slot else {
+            panic!("way 0 holds a line");
+        };
+        data[0] ^= 0xFF;
+        machine.cache.way_mut(set(3), way(0)).unwrap().slot = slot;
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::CleanLineDiffersFromMemory {
+                set: set(3),
+                way: way(0)
+            })
+        );
+    }
+
+    #[test]
+    fn i7_is_reported_before_i8_when_a_set_breaks_both() {
+        let mut machine = start(config(128, 2, Replacement::Random, WritePolicy::WriteBack));
+        // An untouched line, which I8 alone would report.
+        machine.cache.way_mut(set(3), way(0)).unwrap().slot = line(&machine, 1, Dirtiness::Clean);
+        // A valid permutation (I1 holds) that is not the way numbers random
+        // replacement requires (I7).
+        machine.cache.way_mut(set(3), way(0)).unwrap().rank = 1;
+        machine.cache.way_mut(set(3), way(1)).unwrap().rank = 0;
+        assert_eq!(
+            machine.check_invariants(),
+            Err(InvariantViolation::RanksNotWayNumbers { set: set(3) })
+        );
     }
 
     #[test]

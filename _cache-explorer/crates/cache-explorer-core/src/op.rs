@@ -66,7 +66,7 @@ pub enum Op {
     /// Execute instructions until one memory access completes.
     StepAccess,
     /// Execute up to `n` instructions, from 1 to
-    /// [`MAX_RUN_STEPS`](crate::limits::MAX_RUN_STEPS).
+    /// [`MAX_RUN_STEPS`].
     Run {
         /// How many instructions at most.
         n: u32,

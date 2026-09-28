@@ -1,11 +1,12 @@
 #!/bin/sh
 # Prints the size of a release build's wasm, raw and gzipped at level 9, against
-# the spec's budget of 250,000 bytes gzipped. Above 200,000 bytes it also emits
-# a warning annotation, and above 250,000 an error annotation and a non-zero
-# exit. The annotations go to stderr, so that a step piping the report line
-# into the job summary copies that line alone. Such a step must set pipefail
-# (in GitHub Actions, `shell: bash`): without it the step's status is that of
-# the last command in the pipe, and a build over the budget passes.
+# the owner's budget of 300,000 bytes gzipped, a recorded departure from the
+# spec's 250,000. Above 280,000 bytes it also emits a warning annotation, and
+# above 300,000 an error annotation and a non-zero exit. The annotations go to
+# stderr, so that a step piping the report line into the job summary copies
+# that line alone. Such a step must set pipefail (in GitHub Actions, `shell:
+# bash`): without it the step's status is that of the last command in the
+# pipe, and a build over the budget passes.
 #
 # Usage: sh scripts/wasm-size.sh path/to/cache_explorer_bg.wasm
 set -eu
@@ -28,11 +29,11 @@ grouped() {
   }'
 }
 
-echo "$name: $(grouped "$raw") bytes, $(grouped "$gzipped") bytes gzip -9 (budget 250,000)"
-if [ "$gzipped" -gt 250000 ]; then
-  echo "::error::$name is $(grouped "$gzipped") bytes gzipped, over the budget of 250,000" >&2
+echo "$name: $(grouped "$raw") bytes, $(grouped "$gzipped") bytes gzip -9 (budget 300,000)"
+if [ "$gzipped" -gt 300000 ]; then
+  echo "::error::$name is $(grouped "$gzipped") bytes gzipped, over the budget of 300,000" >&2
   exit 1
 fi
-if [ "$gzipped" -gt 200000 ]; then
-  echo "::warning::$name is $(grouped "$gzipped") bytes gzipped, within 50,000 of the budget of 250,000" >&2
+if [ "$gzipped" -gt 280000 ]; then
+  echo "::warning::$name is $(grouped "$gzipped") bytes gzipped, within 20,000 of the budget of 300,000" >&2
 fi

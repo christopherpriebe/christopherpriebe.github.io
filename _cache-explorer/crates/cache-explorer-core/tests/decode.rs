@@ -1023,6 +1023,25 @@ fn geometry_follows_the_address_split() {
             address_bits
         );
     }
+    for preset in presets() {
+        let config = preset.config();
+        let geometry = config.validate().unwrap();
+        assert_eq!(
+            geometry.sets() * geometry.ways(),
+            geometry.lines(),
+            "{preset:?}"
+        );
+        assert_eq!(
+            geometry.words_per_line(),
+            geometry.line_bytes() / geometry.word_bytes(),
+            "{preset:?}"
+        );
+        assert_eq!(
+            geometry.tag_bits() + geometry.index_bits() + geometry.offset_bits(),
+            geometry.address_bits(),
+            "{preset:?}"
+        );
+    }
 }
 
 #[test]

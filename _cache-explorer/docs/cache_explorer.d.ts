@@ -2639,7 +2639,7 @@ export type StatKey = "accesses" | "hits" | "misses" | "hitRate" | "evictions" |
 /**
  * Which rule refused an edit.
  */
-export type RefusalReason = "sessionFull" | "linkFull" | "fileFull" | "midAccess" | "outOfRange" | "kindMismatch" | "badShape" | "valueTooWide" | "noChange" | "fieldsOnInvalidWay" | "missingLine" | "lineOutOfRange" | "duplicateLine" | "wrongSet" | "wrongSetFull" | "dirtyUnderWriteThrough" | "needsDirty" | "writeThroughMismatch" | "rankNotEditable" | "rankOutOfRange" | "misaligned";
+export type RefusalReason = "gated" | "sessionFull" | "linkFull" | "fileFull" | "midAccess" | "outOfRange" | "kindMismatch" | "badShape" | "valueTooWide" | "noChange" | "fieldsOnInvalidWay" | "missingLine" | "lineOutOfRange" | "duplicateLine" | "wrongSet" | "wrongSetFull" | "dirtyUnderWriteThrough" | "needsDirty" | "writeThroughMismatch" | "rankNotEditable" | "rankOutOfRange" | "misaligned";
 
 /**
  * Which way a miss evicts once every way of its set is valid.

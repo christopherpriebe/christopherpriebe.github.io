@@ -1457,7 +1457,14 @@ mod support {
                 let before = self.before();
                 let result = self.session.apply(Op::Edit { target, patch });
                 if self.checks.edits {
+                    // This harness never sets a gate, so `Gated` is unreached
+                    // here; it is listed alongside `SessionFull`, `LinkFull`
+                    // and `FileFull` because all four are op-level refusals
+                    // `plan_edit` reports before the rules on the machine
+                    // ever see the edit, so `apply` reports the same `OpError`
+                    // rather than wrapping it as `OpError::Edit`.
                     let expected = match refusal.reason {
+                        RefusalReason::Gated => OpError::Gated,
                         RefusalReason::SessionFull => OpError::SessionFull,
                         RefusalReason::LinkFull => OpError::LinkFull,
                         RefusalReason::FileFull => OpError::FileFull,

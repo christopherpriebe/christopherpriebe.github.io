@@ -140,6 +140,8 @@ impl Session {
     /// Appends `records` to the log's entries, noting for each the latest
     /// access of its run, at or before it, that reached its tag compare.
     pub(super) fn extend_entries(&mut self, records: Vec<EntryRecord>) {
+        self.entries.reserve(records.len());
+        self.last_accesses.reserve(records.len());
         for record in records {
             let latest = if completed(&record).is_some() {
                 u32::try_from(self.entries.len()).ok()

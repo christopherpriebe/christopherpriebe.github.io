@@ -350,7 +350,7 @@ impl Counters {
     /// cost can read far below AMAT; the Stats region therefore takes both
     /// from the counters of the last completed access. `None` before the
     /// run's first access.
-    #[allow(
+    #[expect(
         clippy::cast_precision_loss,
         reason = "a run's cycle count stays far below 2^52, where an f64 is still exact"
     )]

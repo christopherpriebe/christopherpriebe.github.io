@@ -1434,12 +1434,14 @@ mod share_load {
 /// `ModuleRun`: a guided module on a session.
 #[cfg(test)]
 mod module_run {
-    use cache_explorer_core::{self as model, MicroEvents, Module};
+    use cache_explorer_core::{
+        self as model, EditOutcome, EditPatch, EditTarget, MicroEvents, Module,
+    };
     use cache_explorer_wasm::{ModuleRun, Session};
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    use super::support::{apply_both, get, has, items, message, same, text, LOAD_0X0A4};
+    use super::support::{apply_both, get, has, items, message, rust, same, text, ts, LOAD_0X0A4};
 
     /// A module with every step kind: explain, instruct, observe, predict.
     const MISS_THEN_HIT: &str = include_str!(
@@ -1619,6 +1621,48 @@ mod module_run {
         assert_eq!(session.to_json(), before);
         let state = same(session.state().unwrap(), &core.state());
         assert!(!has(&get(&state, "controls"), "seekLimit"));
+    }
+
+    #[wasm_bindgen_test]
+    fn plan_edit_and_draft_edit_refuse_under_the_gate() {
+        let (mut core_run, mut core, mut run, mut session) = started(MISS_THEN_HIT);
+        same(run.next(&mut session).unwrap(), &core_run.next(&mut core));
+        same(
+            run.show_me(&mut session).unwrap(),
+            &core_run.show_me(&mut core),
+        );
+        same(
+            run.show_me(&mut session).unwrap(),
+            &core_run.show_me(&mut core),
+        );
+        same(run.sync(&mut session).unwrap(), &core_run.sync(&mut core));
+        let state: JsValue = session.state().unwrap().into();
+        assert!(has(&get(&state, "controls"), "seekLimit"));
+
+        let target = r#"{"kind":"memory","addr":0}"#;
+        let patch = r#"{"kind":"memory","value":0}"#;
+        let expected = EditOutcome::from(
+            core.plan_edit(&rust::<EditTarget>(target), &rust::<EditPatch>(patch)),
+        );
+        let outcome = same(
+            session.plan_edit(&ts(target), &ts(patch)).unwrap(),
+            &expected,
+        );
+        assert_eq!(text(&outcome, "outcome"), "refusal");
+        assert_eq!(text(&outcome, "reason"), "gated");
+        assert!(!has(&outcome, "suggestion"));
+
+        let set = "0";
+        let way = "0";
+        let form = r#"{"valid":false,"lineText":"","wordTexts":[],"dirty":false}"#;
+        let expected = core.draft_edit(rust(set), rust(way), &rust(form));
+        let draft = same(
+            session.draft_edit(&ts(set), &ts(way), &ts(form)).unwrap(),
+            &expected,
+        );
+        let draft_outcome = get(&draft, "outcome");
+        assert_eq!(text(&draft_outcome, "outcome"), "refusal");
+        assert_eq!(text(&draft_outcome, "reason"), "gated");
     }
 }
 

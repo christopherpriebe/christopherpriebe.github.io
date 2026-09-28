@@ -19,7 +19,7 @@ use thiserror::Error;
 use crate::de::deserialize_unit_enum;
 use crate::explain;
 use crate::format;
-use crate::geometry::{Geometry, Placement};
+use crate::geometry::{log2, Geometry, Placement};
 use crate::limits::{
     MAX_ADDRESS_BITS, MAX_CYCLES, MAX_LINES, MAX_SEED, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS,
     MIN_CYCLES,
@@ -573,17 +573,10 @@ impl Config {
         if !(MIN_ADDRESS_BITS..=MAX_ADDRESS_BITS).contains(&address_bits) {
             return Err(ConfigError::AddressBits { got: address_bits });
         }
-        let (sets, ways, lines) = self.cache.organisation(self.word_bytes)?;
+        let (sets, ways, _lines) = self.cache.organisation(self.word_bytes)?;
         let word = self.word_bytes.bytes();
         let line = self.cache.line_bytes;
-        let offset_bits = log2(line);
-        let index_bits = log2(sets);
-        // Computed signed: 8-bit addresses with a 512 B direct-mapped cache of
-        // 32 B lines leave 8 − 4 − 5 = −1 tag bits.
-        let tag_bits = i32::from(address_bits) - i32::from(index_bits) - i32::from(offset_bits);
-        let tag_bits = u8::try_from(tag_bits)
-            .ok()
-            .filter(|&bits| bits >= 1)
+        let geometry = Geometry::new(address_bits, word, line, sets, ways)
             .ok_or(ConfigError::NoTagBits { bits: address_bits })?;
         if let Some(timing) = self.timing {
             check_cycles(ConfigNumberField::HitCycles, timing.hit_cycles)?;
@@ -592,19 +585,7 @@ impl Config {
         if self.seed > MAX_SEED {
             return Err(ConfigError::SeedTooLarge { got: self.seed });
         }
-        Ok(Geometry {
-            address_bits,
-            word_bytes: word,
-            line_bytes: line,
-            ways,
-            sets,
-            lines,
-            words_per_line: line / word,
-            offset_bits,
-            index_bits,
-            tag_bits,
-            placement: Placement::of(sets, ways),
-        })
+        Ok(geometry)
     }
 
     /// The nearest valid configuration, for "Open with 2-way instead"; `None`
@@ -1362,15 +1343,6 @@ fn clamp_cycles(cycles: u32) -> u32 {
 /// The largest power of two not above `n`; 1 for 0.
 fn floor_power_of_two(n: u32) -> u32 {
     n.checked_ilog2().map_or(1, |bits| 1 << bits)
-}
-
-/// The base-2 logarithm of a power of two.
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "a u32 has at most 32 trailing zeros, which fits a u8"
-)]
-fn log2(power_of_two: u32) -> u8 {
-    power_of_two.trailing_zeros() as u8
 }
 
 /// Step 5 of [`Config::repair`]: the largest power-of-two size, not above

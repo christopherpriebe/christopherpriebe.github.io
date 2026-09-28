@@ -14,8 +14,6 @@
 //! target: at most about [`CHECKPOINT_INTERVAL`] events plus the rest of an
 //! entry. Checkpoints change no result, only how fast it is reached.
 
-use std::collections::BTreeMap;
-
 use crate::engine::OpProgress;
 use crate::limits::CHECKPOINT_INTERVAL;
 use crate::machine::Machine;
@@ -33,13 +31,18 @@ pub(crate) struct Checkpoint {
 }
 
 /// A log's checkpoints: the machine at position 0, which is the start of op
-/// 0, and those taken since, by position.
+/// 0, and those taken since, in increasing order of position. There are at
+/// most `SESSION_EVENT_LIMIT / CHECKPOINT_INTERVAL` of them, always inserted
+/// in that order, so a sorted list serves the same lookups as an ordered map
+/// without its per-entry allocation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Checkpoints {
     /// The machine at position 0, before the first op.
     origin: Machine,
-    /// The later checkpoints, by position.
-    later: BTreeMap<EventPos, Checkpoint>,
+    /// The later checkpoints, sorted by position with no duplicates. Every
+    /// mutator keeps this order; nothing outside this module may see or
+    /// break it.
+    later: Vec<(EventPos, Checkpoint)>,
 }
 
 impl Checkpoints {
@@ -48,16 +51,17 @@ impl Checkpoints {
     pub(crate) fn new(origin: Machine) -> Self {
         Self {
             origin,
-            later: BTreeMap::new(),
+            later: Vec::new(),
         }
     }
 
     /// The checkpoint nearest before `pos`, or at it: its position, and the
     /// checkpoint. Position 0 always has one.
     pub(crate) fn at_or_before(&self, pos: EventPos) -> (EventPos, CheckpointRef<'_>) {
-        match self.later.range(..=pos).next_back() {
-            Some((&at, checkpoint)) => (
-                at,
+        let after = self.later.partition_point(|(at, _)| *at <= pos);
+        match after.checked_sub(1).and_then(|index| self.later.get(index)) {
+            Some((at, checkpoint)) => (
+                *at,
                 CheckpointRef {
                     machine: &checkpoint.machine,
                     op: checkpoint.op,
@@ -83,13 +87,19 @@ impl Checkpoints {
     /// Drops the checkpoints after `pos`, as a truncation of the log there
     /// does.
     pub(crate) fn truncate_after(&mut self, pos: EventPos) {
-        let after = EventPos::new_unchecked(pos.get().saturating_add(1));
-        self.later.split_off(&after);
+        self.later
+            .truncate(self.later.partition_point(|(at, _)| *at <= pos));
     }
 
-    /// Adds `checkpoint` at `pos`.
+    /// Adds `checkpoint` at `pos`, replacing one already there. Keeps
+    /// `later` sorted regardless of insertion order, matching the ordered
+    /// map this replaced.
     pub(crate) fn insert(&mut self, pos: EventPos, checkpoint: Checkpoint) {
-        self.later.insert(pos, checkpoint);
+        let at = self.later.partition_point(|(existing, _)| *existing < pos);
+        match self.later.get_mut(at) {
+            Some((existing, slot)) if *existing == pos => *slot = checkpoint,
+            _ => self.later.insert(at, (pos, checkpoint)),
+        }
     }
 
     /// How many checkpoints there are after position 0.
@@ -173,5 +183,40 @@ mod tests {
         checkpoints.truncate_after(pos(0));
         assert_eq!(checkpoints.len(), 0);
         assert_eq!(at(&checkpoints, 25), (0, 0, 0));
+    }
+
+    #[test]
+    fn insert_after_truncate_keeps_positions_increasing() {
+        let machine = Machine::start(Preset::DirectMapped8.config()).unwrap();
+        let mut checkpoints = Checkpoints::new(machine.clone());
+        let checkpoint_at = |op| Checkpoint {
+            machine: machine.clone(),
+            op: OpIndex::new_unchecked(op),
+            progress: OpProgress::START,
+        };
+        let at = |checkpoints: &Checkpoints, value| {
+            let (at, checkpoint) = checkpoints.at_or_before(pos(value));
+            (at.get(), checkpoint.op.get())
+        };
+        for (value, op) in [(10, 1), (20, 2), (30, 3)] {
+            checkpoints.insert(pos(value), checkpoint_at(op));
+        }
+        // Undoing past position 15 and committing a new op past position 20
+        // truncates after 15, then inserts a fresh checkpoint at 20: the
+        // same position a since-dropped checkpoint held.
+        checkpoints.truncate_after(pos(15));
+        checkpoints.insert(pos(20), checkpoint_at(4));
+        checkpoints.insert(pos(25), checkpoint_at(5));
+        assert_eq!(checkpoints.len(), 3);
+        assert_eq!(at(&checkpoints, 9), (0, 0));
+        assert_eq!(at(&checkpoints, 10), (10, 1));
+        assert_eq!(at(&checkpoints, 19), (10, 1));
+        assert_eq!(at(&checkpoints, 20), (20, 4));
+        assert_eq!(at(&checkpoints, 24), (20, 4));
+        assert_eq!(at(&checkpoints, 25), (25, 5));
+        // Inserting again at an existing position replaces it in place.
+        checkpoints.insert(pos(20), checkpoint_at(6));
+        assert_eq!(checkpoints.len(), 3);
+        assert_eq!(at(&checkpoints, 20), (20, 6));
     }
 }

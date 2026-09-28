@@ -25,27 +25,27 @@ use crate::units::{Addr, LineAddr, SetIndex, Tag, WayIndex, Word, WordIndex};
 #[serde(rename_all = "camelCase")]
 pub struct Geometry {
     /// Width of a byte address.
-    pub(crate) address_bits: u8,
+    address_bits: u8,
     /// Bytes per word.
-    pub(crate) word_bytes: u32,
+    word_bytes: u32,
     /// Bytes per line.
-    pub(crate) line_bytes: u32,
+    line_bytes: u32,
     /// Ways per set: the associativity.
-    pub(crate) ways: u32,
+    ways: u32,
     /// Sets in the cache.
-    pub(crate) sets: u32,
+    sets: u32,
     /// Lines in the cache: `sets × ways`.
-    pub(crate) lines: u32,
+    lines: u32,
     /// Words per line.
-    pub(crate) words_per_line: u32,
+    words_per_line: u32,
     /// Width of the offset field: `log2(line_bytes)`.
-    pub(crate) offset_bits: u8,
+    offset_bits: u8,
     /// Width of the index field: `log2(sets)`, 0 when fully associative.
-    pub(crate) index_bits: u8,
+    index_bits: u8,
     /// Width of the tag field: the address bits left over; at least 1.
-    pub(crate) tag_bits: u8,
+    tag_bits: u8,
     /// How lines are placed.
-    pub(crate) placement: Placement,
+    placement: Placement,
 }
 
 /// The bits of one address field, inclusive at both ends: bit `hi` down to
@@ -233,6 +233,43 @@ impl Placement {
 }
 
 impl Geometry {
+    /// The geometry of a cache with `sets` sets of `ways` ways, `line_bytes`-byte
+    /// lines of `word_bytes`-byte words, addressed with `address_bits` bits.
+    /// `None` when the address does not leave the tag at least one bit;
+    /// `Config::validate` is the only caller, and maps that to
+    /// [`crate::config::ConfigError::NoTagBits`].
+    ///
+    /// `sets`, `ways`, `line_bytes` and `word_bytes` must already be non-zero
+    /// powers of two with `sets × ways` fitting a `u32`; `Config::validate`
+    /// establishes that before calling this.
+    pub(crate) fn new(
+        address_bits: u8,
+        word_bytes: u32,
+        line_bytes: u32,
+        sets: u32,
+        ways: u32,
+    ) -> Option<Geometry> {
+        let offset_bits = log2(line_bytes);
+        let index_bits = log2(sets);
+        // Computed signed: 8-bit addresses with a 512 B direct-mapped cache of
+        // 32 B lines leave 8 − 4 − 5 = −1 tag bits.
+        let tag_bits = i32::from(address_bits) - i32::from(index_bits) - i32::from(offset_bits);
+        let tag_bits = u8::try_from(tag_bits).ok().filter(|&bits| bits >= 1)?;
+        Some(Geometry {
+            address_bits,
+            word_bytes,
+            line_bytes,
+            ways,
+            sets,
+            lines: sets * ways,
+            words_per_line: line_bytes / word_bytes,
+            offset_bits,
+            index_bits,
+            tag_bits,
+            placement: Placement::of(sets, ways),
+        })
+    }
+
     /// Width of a byte address.
     pub const fn address_bits(&self) -> u8 {
         self.address_bits
@@ -453,6 +490,15 @@ impl BitRange {
             None => None,
         }
     }
+}
+
+/// The base-2 logarithm of a power of two.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a u32 has at most 32 trailing zeros, which fits a u8"
+)]
+pub(crate) fn log2(power_of_two: u32) -> u8 {
+    power_of_two.trailing_zeros() as u8
 }
 
 /// The highest address `address_bits` bits can hold.

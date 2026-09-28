@@ -387,7 +387,7 @@ impl<'s> Operands<'_, '_, 's> {
         };
         fit_word(negative, magnitude, bytes)
             .map(|word| Operand::Immediate(word.get()))
-            .map_err(|message| Problem::at(&token, message))
+            .map_err(|error| Problem::at(&token, error.to_string()))
     }
 
     /// The instruction's own example, at `token`, or at the mnemonic when an

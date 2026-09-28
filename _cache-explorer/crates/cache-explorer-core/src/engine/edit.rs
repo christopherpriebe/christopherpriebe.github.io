@@ -186,6 +186,9 @@ pub enum Consequence {
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum RefusalReason {
+    /// A guided module's prediction is unanswered, so every op, edits
+    /// included, is refused until it is answered.
+    Gated,
     /// The session's log has no room for another entry where the edit would
     /// go, so the edit would be refused as an op.
     SessionFull,
@@ -734,6 +737,10 @@ fn way_form(
 /// Why the session refuses any edit at its cursor before the rules see it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Blocked {
+    /// A guided module's prediction is unanswered, so the edit would be
+    /// refused as an op, as any op would, before the log or the cursor are
+    /// even checked.
+    Gated,
     /// The log has no room for another entry where the edit would go, so
     /// the edit would be refused as an op, as any op would.
     Full,
@@ -760,6 +767,12 @@ impl Blocked {
         patch: &EditPatch,
     ) -> EditRefusal {
         let (reason, tone, title, text) = match self {
+            Blocked::Gated => (
+                RefusalReason::Gated,
+                Tone::Refused,
+                explain::edit_refused(),
+                OpError::Gated.to_string(),
+            ),
             Blocked::Full => (
                 RefusalReason::SessionFull,
                 Tone::Refused,

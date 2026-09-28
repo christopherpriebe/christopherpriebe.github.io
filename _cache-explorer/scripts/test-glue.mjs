@@ -66,6 +66,27 @@ for (let i = 0; i < 10_000; i += 1) deep = { not: deep };
 throws(() => evalPredicate(session, deep), /^invalid Predicate: predicates nest at most /);
 throws(() => session.findEvent(deep), /^invalid Predicate: predicates nest at most /);
 
+// A getter that throws while a predicate nested inside a `not` chain is read leaves no nesting
+// depth behind: afterwards, a predicate nested exactly as deep as the limit allows still reads,
+// and so does a module whose steps hold predicates. A throw mid-argument leaves the session
+// passed alongside the predicate borrowed, as `borrowed` below shows, so this uses one of its own.
+const poisonedSession = new Session();
+let poisoned = { get counter() { throw new Error('boom'); } };
+for (let i = 0; i < 5; i += 1) poisoned = { not: poisoned };
+const errorLog = console.error;
+console.error = () => {}; // the glue logs the exception the getter threw
+try {
+  throws(() => evalPredicate(poisonedSession, poisoned), /^boom$/);
+} finally {
+  console.error = errorLog;
+}
+// 128, the core's MAX_PREDICATE_DEPTH: the JavaScript API has no constant for it, so the limit is
+// spelled out here.
+let deepest = { counter: 'accesses', op: '==', value: 0 };
+for (let i = 0; i < 128; i += 1) deepest = { not: deepest };
+assert.equal(typeof evalPredicate(session, deepest), 'boolean');
+assert.ok(parseModule(moduleJson));
+
 // The page passes only plain data: an exception thrown while an argument is read leaves the
 // object borrowed, and it refuses every later call. Other objects keep working.
 const borrowed = new Session();
