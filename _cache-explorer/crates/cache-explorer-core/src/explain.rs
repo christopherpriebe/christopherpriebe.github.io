@@ -24,8 +24,6 @@
 //! widths, and values follow the data rule. No line depends on the cursor or
 //! on Basics and Advanced, so the same event always reads the same.
 
-use std::collections::BTreeMap;
-
 use crate::cache::Dirtiness;
 use crate::config::{
     AllocatePolicy, CacheConfig, Config, ConfigError, Replacement, WordBytes, WritePolicy,
@@ -2363,7 +2361,8 @@ pub(crate) fn changed_summary(geometry: &Geometry, changes: &[ChangeRef]) -> Str
     const DIRTY: usize = 3;
     const RANK: usize = 4;
     const FIELDS: [&str; 5] = ["valid", "tag", "data", "dirty", "rank"];
-    let mut ways: BTreeMap<(SetIndex, WayIndex), [bool; 5]> = BTreeMap::new();
+    // Each way once, in ascending order, kept sorted as it grows.
+    let mut ways: Vec<((SetIndex, WayIndex), [bool; 5])> = Vec::new();
     let mut memory = Vec::new();
     let mut registers = Vec::new();
     let mut counters = Vec::new();
@@ -2375,7 +2374,7 @@ pub(crate) fn changed_summary(geometry: &Geometry, changes: &[ChangeRef]) -> Str
             ChangeRef::Dirty { set, way } => ((set, way), DIRTY),
             ChangeRef::Rank { set, way } => ((set, way), RANK),
             ChangeRef::Memory { addr } => {
-                memory.push(addr);
+                memory.push(addr.get());
                 continue;
             }
             ChangeRef::Register { register } => {
@@ -2388,14 +2387,28 @@ pub(crate) fn changed_summary(geometry: &Geometry, changes: &[ChangeRef]) -> Str
             }
             ChangeRef::Pc => continue,
         };
-        if let Some(flag) = ways.entry(place).or_default().get_mut(field) {
+        let index = ways
+            .binary_search_by_key(&place, |&(place, _)| place)
+            .unwrap_or_else(|index| {
+                ways.insert(index, (place, [false; 5]));
+                index
+            });
+        if let Some(flag) = ways
+            .get_mut(index)
+            .and_then(|(_, fields)| fields.get_mut(field))
+        {
             *flag = true;
         }
     }
+    // The addresses sort as plain numbers and the registers go in the order
+    // of `Register::ALL`, which is theirs, so that neither type needs a sort,
+    // nor the ways a map, of its own in the wasm.
     memory.sort_unstable();
     memory.dedup();
-    registers.sort_unstable();
-    registers.dedup();
+    let registers: Vec<Register> = Register::ALL
+        .into_iter()
+        .filter(|register| registers.contains(register))
+        .collect();
     counters.dedup();
     let mut parts: Vec<String> = ways
         .into_iter()
@@ -2414,10 +2427,7 @@ pub(crate) fn changed_summary(geometry: &Geometry, changes: &[ChangeRef]) -> Str
         })
         .collect();
     if !memory.is_empty() {
-        let addrs: Vec<String> = memory
-            .iter()
-            .map(|addr| address(geometry, addr.get()))
-            .collect();
+        let addrs: Vec<String> = memory.iter().map(|&addr| address(geometry, addr)).collect();
         parts.push(format!("memory {}", addrs.join(", ")));
     }
     if !registers.is_empty() {
