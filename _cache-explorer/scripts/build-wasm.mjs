@@ -18,11 +18,13 @@ const run = (cmd, args) => execFileSync(cmd, args, { cwd: web, env, stdio: 'inhe
 // --out-dir is relative to the crate, so ../../web/pkg is _cache-explorer/web/pkg.
 run('wasm-pack', ['build', '../crates/cache-explorer-wasm', '--target', 'web', '--release',
                   '--out-dir', '../../web/pkg', '--out-name', 'cache_explorer', '--', '--locked']);
+// --converge repeats -Oz while the module keeps shrinking, which doubles the time wasm-opt takes.
 // --low-memory-unused lets wasm-opt fold a constant below 1,024 that is added to an address into the
 // load's or store's offset. The two differ only when the addition wraps past 2^32, and no address
 // the Rust code computes does.
 // --reorder-functions-by-name sorts the functions by their mangled names, which puts the
 // instantiations of one generic function side by side, where gzip finds their common bytes. It only
 // moves functions; it runs before --strip-debug removes the names.
-run('wasm-opt', ['pkg/cache_explorer_bg.wasm', '-Oz', '--low-memory-unused', '--reorder-functions-by-name',
-                 '--strip-debug', '--strip-producers', '-o', 'pkg/cache_explorer_bg.wasm']);
+run('wasm-opt', ['pkg/cache_explorer_bg.wasm', '-Oz', '--converge', '--low-memory-unused',
+                 '--reorder-functions-by-name', '--strip-debug', '--strip-producers',
+                 '-o', 'pkg/cache_explorer_bg.wasm']);
