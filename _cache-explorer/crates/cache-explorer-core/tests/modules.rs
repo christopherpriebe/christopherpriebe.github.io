@@ -21,7 +21,9 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use cache_explorer_core::limits::{MAX_EVENTS_PER_ENTRY, MAX_PREDICATE_DEPTH, SESSION_EVENT_LIMIT};
+use cache_explorer_core::limits::{
+    MAX_EVENTS_PER_ENTRY, MAX_PREDICATE_DEPTH, MAX_SHARE_OPS, SESSION_EVENT_LIMIT,
+};
 use cache_explorer_core::{
     parse_module_index, Boundary, Callout, CalloutArea, CellRef, Config, EventKind, FeedbackTone,
     Module, ModuleActionKind, ModuleError, ModuleRun, ModuleStepKind, Op, OpError, OptionState,
@@ -31,8 +33,8 @@ use cache_explorer_core::{
 use serde_json::{json, Value};
 
 use support::{
-    actions, edited, load, pos, predicate, refused_with, session, shape_refused, show_me_path,
-    started, text, walk, with,
+    actions, edited, fill, load, pos, predicate, refused_with, session, shape_refused,
+    show_me_path, started, text, walk, with,
 };
 
 /// Flow A's module: explain, instruct, an observe step waiting for the tag
@@ -122,6 +124,15 @@ mod support {
     /// A load of `addr` issued by hand.
     pub(crate) fn load(addr: u32) -> Op {
         serde_json::from_value(json!({"op": "issue", "kind": "read", "addr": addr})).unwrap()
+    }
+
+    /// Fills `session`'s log with loads of `addr` by hand until it holds
+    /// `count` ops. `addr` should be one no fixture step's predicate checks,
+    /// so filling a running module's session does not complete its step.
+    pub(crate) fn fill(session: &mut Session, addr: u32, count: u32) {
+        while session.op_count() < count {
+            session.apply(load(addr)).unwrap();
+        }
     }
 
     /// Position `pos`.
@@ -1882,6 +1893,7 @@ fn ops_the_state_refuses_leave_the_step_waiting() {
     let waiting = run.show_me(&mut session);
     assert_eq!(waiting.step_index, instruct.step_index);
     assert_eq!(session.op_count(), ops);
+    assert_eq!(waiting.notice, Some(OpError::NoProgram.to_string()));
     // Done by hand, the step completes.
     session.apply(load(0x0A4)).unwrap();
     run.sync(&mut session);
@@ -1898,7 +1910,52 @@ fn ops_the_state_refuses_leave_the_step_waiting() {
     assert!(session.gate().is_none());
     assert_eq!(session.op_count(), ops);
     assert_eq!(session.position(), before);
+    assert_eq!(answered.notice, Some(OpError::NoProgram.to_string()));
     assert_eq!(run.next(&mut session).kind, ModuleStepKind::Instruct);
+}
+
+#[test]
+fn show_me_refused_at_the_link_limit_leaves_a_notice() {
+    let (mut run, mut session) = started(MISS_THEN_HIT);
+    let instruct = run.next(&mut session);
+    fill(&mut session, 0x400, MAX_SHARE_OPS);
+    let ops = session.op_count();
+    let waiting = run.show_me(&mut session);
+    assert_eq!(waiting.step_index, instruct.step_index);
+    assert_eq!(session.op_count(), ops);
+    assert_eq!(waiting.notice, Some(OpError::LinkFull.to_string()));
+}
+
+#[test]
+fn restart_refused_at_the_link_limit_leaves_a_notice() {
+    let (mut run, mut session) = started(MISS_THEN_HIT);
+    show_me_path(&mut run, &mut session);
+    assert_eq!(run.view(&session).kind, ModuleStepKind::Done);
+    fill(&mut session, 0x400, MAX_SHARE_OPS);
+    let ops = session.op_count();
+    let restarted = run.next(&mut session);
+    assert_eq!(restarted.kind, ModuleStepKind::Done);
+    assert_eq!(session.op_count(), ops);
+    assert_eq!(restarted.notice, Some(OpError::LinkFull.to_string()));
+}
+
+#[test]
+fn a_correct_answers_then_ops_refused_at_the_link_limit_leave_a_notice() {
+    // Room for the switch's opening `Config` and `Program`, the instruct
+    // step's `run 4`, and one more op, but not the two the prediction's
+    // `then` needs.
+    let mut session = session();
+    fill(&mut session, 0x400, MAX_SHARE_OPS - 4);
+    let mut run = ModuleRun::new(Module::parse(SWITCH_CONFIG).unwrap());
+    run.start(&mut session).unwrap();
+    run.show_me(&mut session);
+    let ops = session.op_count();
+    run.select(0);
+    let answered = run.check(&mut session);
+    assert_eq!(answered.feedback.unwrap().tone, FeedbackTone::Correct);
+    assert!(session.gate().is_none());
+    assert_eq!(session.op_count(), ops);
+    assert_eq!(answered.notice, Some(OpError::LinkFull.to_string()));
 }
 
 #[test]

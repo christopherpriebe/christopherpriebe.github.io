@@ -674,6 +674,11 @@ export interface ModuleView {
      */
     callout?: Callout;
     /**
+     * Why the last "Show me", Restart or prediction `then` was refused,
+     * such as at the session's limit; the step keeps waiting.
+     */
+    notice?: string;
+    /**
      * The panel's buttons, in order; a button not listed is not shown.
      */
     actions: ModuleAction[];

@@ -33,6 +33,9 @@ pub struct ModuleRun {
     since: u64,
     /// The current step's prediction, when it is a predict step.
     predict: Option<Prediction>,
+    /// The message of the last "Show me", Restart or prediction `then` the
+    /// state refused on the current step; cleared once a new step begins.
+    notice: Option<String>,
 }
 
 /// A prediction in progress.
@@ -98,6 +101,10 @@ pub struct ModuleView {
     /// The region the step points at.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub callout: Option<Callout>,
+    /// Why the last "Show me", Restart or prediction `then` was refused,
+    /// such as at the session's limit; the step keeps waiting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
     /// The panel's buttons, in order; a button not listed is not shown.
     pub actions: Vec<ModuleAction>,
     /// The picker's line while the module runs: "Running 04 · Tracking LRU
@@ -210,6 +217,7 @@ impl ModuleRun {
             step: 0,
             since: 0,
             predict: None,
+            notice: None,
         }
     }
 
@@ -346,15 +354,21 @@ impl ModuleRun {
     /// once a wrong answer has been checked, reveals the answer, lifts the
     /// gate and applies the step's `then` ops where the prediction began.
     /// Then re-evaluates, as [`ModuleRun::sync`] does.
+    ///
+    /// Ops the state refuses (an instruct step's, or a predict step's
+    /// revealed `then`) leave a notice on the view and the step waiting.
     pub fn show_me(&mut self, session: &mut Session) -> ModuleView {
         match self.current() {
             Some(Step::Instruct {
                 show_me: Some(ops), ..
             }) => {
                 // The ops were checked when the module was read; one the
-                // state refuses, such as at the session's limit, does
-                // nothing, and the step waits for the student.
-                let _ = session.apply_all(ops.clone());
+                // state refuses, such as at the session's limit, leaves a
+                // notice, and the step waits for the student.
+                self.notice = session
+                    .apply_all(ops.clone())
+                    .err()
+                    .map(|error| error.to_string());
             }
             Some(Step::Observe { until, .. }) => {
                 if let Some(pos) = session.find_event_since(until, self.since) {
@@ -375,6 +389,9 @@ impl ModuleRun {
     /// Next: on an explanation, or on a prediction answered or revealed,
     /// goes on to the next step; on the done screen, starts the module
     /// again, as [`ModuleRun::start`] does. Nothing happens anywhere else.
+    ///
+    /// A restart the state refuses leaves a notice on the view and the done
+    /// screen as it is.
     pub fn next(&mut self, session: &mut Session) -> ModuleView {
         match self.current() {
             Some(Step::Explain { .. }) => self.advance(session),
@@ -386,8 +403,8 @@ impl ModuleRun {
             Some(_) => {}
             None => {
                 // A restart the session refuses, at its limit, leaves the
-                // done screen as it is.
-                let _ = self.start(session);
+                // done screen as it is, with a notice why.
+                self.notice = self.start(session).err().map(|error| error.to_string());
             }
         }
         self.view(session)
@@ -458,6 +475,7 @@ impl ModuleRun {
             options,
             feedback,
             callout: step.and_then(Step::callout),
+            notice: self.notice.clone(),
             actions: self.actions(),
             drawer_summary: explain::module_running(
                 module.number(),
@@ -481,13 +499,14 @@ impl ModuleRun {
 
     /// Begins the current step on `session`: an op made from now on is made
     /// since it began, and a prediction begins at the cursor, which the
-    /// gate then holds it to.
+    /// gate then holds it to. Clears any notice the previous step left.
     fn enter(&mut self, session: &mut Session) {
         self.since = session.last_serial();
         self.predict = match self.current() {
             Some(Step::Predict { .. }) => Some(Prediction::new(session.cursor_position())),
             _ => None,
         };
+        self.notice = None;
         self.gate(session);
     }
 
@@ -503,8 +522,9 @@ impl ModuleRun {
     /// Once the current prediction is answered or revealed: lifts the gate
     /// and applies the step's `then` ops where the prediction began, so they
     /// go on from the state it asked about, even if the student has moved
-    /// the cursor back since.
-    fn answered(&self, session: &mut Session) {
+    /// the cursor back since. Ops the state refuses leave a notice, the
+    /// cursor included.
+    fn answered(&mut self, session: &mut Session) {
         session.clear_gate();
         let (
             Some(Step::Predict {
@@ -517,11 +537,13 @@ impl ModuleRun {
         };
         let back = session.cursor_position();
         session.seek(predict.limit);
-        // As for "Show me": checked when the module was read, and nothing
-        // happens if the state refuses them, the cursor included.
-        if session.apply_all(ops.clone()).is_err() {
+        // As for "Show me": checked when the module was read, and refused
+        // only if the state has no room left, the cursor included.
+        let outcome = session.apply_all(ops.clone());
+        if outcome.is_err() {
             session.seek(back);
         }
+        self.notice = outcome.err().map(|error| error.to_string());
     }
 
     /// The panel's buttons: Next on an explanation; Show me on an instruct

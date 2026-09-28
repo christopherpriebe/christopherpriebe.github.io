@@ -1434,6 +1434,7 @@ mod share_load {
 /// `ModuleRun`: a guided module on a session.
 #[cfg(test)]
 mod module_run {
+    use cache_explorer_core::limits::MAX_SHARE_OPS;
     use cache_explorer_core::{
         self as model, EditOutcome, EditPatch, EditTarget, MicroEvents, Module,
     };
@@ -1447,6 +1448,10 @@ mod module_run {
     const MISS_THEN_HIT: &str = include_str!(
         "../../cache-explorer-core/tests/fixtures/modules/01-fixture-miss-then-hit.json"
     );
+
+    /// A load of an address no fixture step's predicate checks, so filling a
+    /// running module's session with it does not complete a step.
+    const LOAD_0X400: &str = r#"{"op":"issue","kind":"read","addr":1024}"#;
 
     /// A module with a program and a prediction whose answer applies a
     /// configuration.
@@ -1592,6 +1597,22 @@ mod module_run {
         assert_eq!(text(&view, "kind"), "predict");
         let options = items(&get(&view, "options"));
         assert_eq!(options.len(), 2);
+    }
+
+    #[wasm_bindgen_test]
+    fn show_me_refused_at_the_link_limit_carries_a_notice() {
+        let (mut core_run, mut core, mut run, mut session) = started(MISS_THEN_HIT);
+        same(run.next(&mut session).unwrap(), &core_run.next(&mut core));
+        while core.op_count() < MAX_SHARE_OPS {
+            apply_both(&mut core, &mut session, LOAD_0X400);
+        }
+        let ops = core.op_count();
+        let view = same(
+            run.show_me(&mut session).unwrap(),
+            &core_run.show_me(&mut core),
+        );
+        assert_eq!(session.op_count(), ops);
+        assert_eq!(text(&view, "notice"), model::OpError::LinkFull.to_string());
     }
 
     #[wasm_bindgen_test]
