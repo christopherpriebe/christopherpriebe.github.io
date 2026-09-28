@@ -727,13 +727,18 @@ impl<'m> MemoryRows<'m> {
     /// The rows of `machine`'s memory table with the lines of `watch`.
     pub(crate) fn new(machine: &'m Machine, watch: &BTreeSet<LineAddr>) -> Self {
         let geometry = &machine.geometry;
-        Self {
-            memory: &machine.memory,
-            watched: watch
+        // Extended rather than collected: collecting sorts the lines first,
+        // with a sort the wasm would carry for this type alone.
+        let mut watched = BTreeSet::new();
+        watched.extend(
+            watch
                 .iter()
                 .filter_map(|line| geometry.addr(line.get()))
-                .map(|addr| geometry.locate(addr).line)
-                .collect(),
+                .map(|addr| geometry.locate(addr).line),
+        );
+        Self {
+            memory: &machine.memory,
+            watched,
         }
     }
 

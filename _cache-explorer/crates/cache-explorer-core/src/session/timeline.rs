@@ -20,7 +20,7 @@
 //! The views count steps, the events other than setups, since only those
 //! have a place on the scrubber and a tick.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use serde::Serialize;
 
@@ -323,11 +323,15 @@ impl EntryBase {
     /// The base of the entry whose first event is at `first` and whose
     /// events are `events`, from `start`, the machine before that event.
     pub(crate) fn from_start(first: EventPos, events: &[MicroEvent], start: &Machine) -> Self {
-        let before = events
-            .iter()
-            .flat_map(|event| event.changed.iter().copied())
-            .map(|cell| (cell, start.cell(cell)))
-            .collect();
+        // Extended rather than collected: collecting sorts the pairs first,
+        // with a sort the wasm would carry for this type alone.
+        let mut before = BTreeMap::new();
+        before.extend(
+            events
+                .iter()
+                .flat_map(|event| event.changed.iter().copied())
+                .map(|cell| (cell, start.cell(cell))),
+        );
         Self { first, before }
     }
 }
@@ -529,7 +533,8 @@ pub(crate) fn net_change(
     cells: impl Iterator<Item = (ChangeRef, Option<u64>, Option<u64>)>,
 ) -> Vec<ChangeRef> {
     let cells: Vec<(ChangeRef, Option<u64>, Option<u64>)> = cells.collect();
-    let moved: BTreeSet<(SetIndex, WayIndex)> = cells
+    // A few ways at most, so a list, which needs no sort.
+    let moved: Vec<(SetIndex, WayIndex)> = cells
         .iter()
         .filter_map(|&(cell, before, after)| match cell {
             ChangeRef::Tag { set, way } if before != after => Some((set, way)),
@@ -700,11 +705,15 @@ impl Session {
         else {
             return Vec::new();
         };
-        let cells: BTreeSet<ChangeRef> = self
+        let mut cells: Vec<ChangeRef> = self
             .events_between(record.first, self.cursor)
             .iter()
             .flat_map(|event| event.changed.iter().copied())
             .collect();
+        // In order and each once, as a set would give them, with the sort
+        // the engine already has for these.
+        cells.sort_unstable();
+        cells.dedup();
         net_change(cells.into_iter().map(|cell| {
             let before = base
                 .before
@@ -792,6 +801,8 @@ fn count(n: usize) -> u32 {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+
+    use std::collections::BTreeSet;
 
     use super::*;
     use crate::config::{AllocatePolicy, Config, Preset, Timing, WritePolicy};

@@ -386,7 +386,10 @@ impl Session {
     /// the displayed run's addresses, from the start of its line, whether
     /// the run has touched it or not.
     pub fn set_memory_watch(&mut self, lines: &[LineAddr]) {
-        self.watch = lines.iter().copied().collect();
+        // Extended rather than collected: collecting sorts the lines first,
+        // with a sort the wasm would carry for this type alone.
+        self.watch.clear();
+        self.watch.extend(lines.iter().copied());
     }
 
     /// `addr` split into its tag, index and offset under the displayed run's
