@@ -17,6 +17,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize, Serializer};
 
+use crate::de::deserialize_unit_enum;
 use crate::format;
 
 /// Hex digits of the width-free form of an address or a tag.
@@ -91,7 +92,7 @@ pub struct Word(u64);
 
 /// One of the eight 64-bit registers. `r0` reads 0, and writes to it are
 /// dropped.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum Register {
@@ -112,6 +113,17 @@ pub enum Register {
     /// `r7`.
     R7 = 7,
 }
+
+deserialize_unit_enum!(Register {
+    "r0" => R0,
+    "r1" => R1,
+    "r2" => R2,
+    "r3" => R3,
+    "r4" => R4,
+    "r5" => R5,
+    "r6" => R6,
+    "r7" => R7,
+});
 
 impl Addr {
     /// Wraps an address the caller has already checked against the geometry.

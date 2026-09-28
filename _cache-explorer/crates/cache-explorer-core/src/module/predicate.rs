@@ -27,6 +27,7 @@ use thiserror::Error;
 use super::{addr_or_hex, optional_addr_or_hex, ModuleError, ModuleProblem};
 use crate::cache::Way;
 use crate::config::{AllocatePolicy, Config, Replacement, WritePolicy};
+use crate::de::deserialize_unit_enum;
 use crate::event::{Counter, EventKind, MicroEvent};
 use crate::format;
 use crate::geometry::{AccessError, Geometry};
@@ -284,7 +285,7 @@ pub struct AddrLoc {
 }
 
 /// How a counter predicate compares.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 pub enum CmpOp {
     /// `==`: equal.
@@ -297,6 +298,12 @@ pub enum CmpOp {
     #[serde(rename = "<=")]
     AtMost,
 }
+
+deserialize_unit_enum!(CmpOp {
+    "==" => Equal,
+    ">=" => AtLeast,
+    "<=" => AtMost,
+});
 
 /// What a predicate is evaluated against: the machine at a position of a
 /// session's log, the event there, and the serial of the last op made

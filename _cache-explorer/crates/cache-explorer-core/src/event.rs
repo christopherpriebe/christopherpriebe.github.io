@@ -5,8 +5,9 @@
 //! configuration group responsible for it, and every cell or counter whose
 //! value it changed, so the page can highlight exactly those.
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
+use crate::de::deserialize_unit_enum;
 use crate::units::{Addr, Cycle, OpIndex, Register, SetIndex, WayIndex, WordIndex};
 
 /// One step of an op, as the log shows it.
@@ -64,7 +65,7 @@ pub struct MicroEvent {
 pub struct MicroEvents(pub Vec<MicroEvent>);
 
 /// What an event did.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum EventKind {
@@ -107,6 +108,25 @@ pub enum EventKind {
     /// kinds: it gives those ops a place in the log.
     Setup,
 }
+
+deserialize_unit_enum!(EventKind {
+    "decode" => Decode,
+    "hit" => Hit,
+    "miss" => Miss,
+    "victim" => Victim,
+    "writeBack" => WriteBack,
+    "writeThrough" => WriteThrough,
+    "fill" => Fill,
+    "write" => Write,
+    "rank" => Rank,
+    "memWrite" => MemWrite,
+    "stall" => Stall,
+    "complete" => Complete,
+    "edit" => Edit,
+    "error" => Error,
+    "evict" => Evict,
+    "setup" => Setup,
+});
 
 /// The configuration group responsible for an event, which the log's "why:"
 /// link flashes.
@@ -199,7 +219,7 @@ pub enum ChangeRef {
 }
 
 /// One of the run's counters.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum Counter {
@@ -233,6 +253,23 @@ pub enum Counter {
     /// The remaining misses, caused by where lines may go.
     Conflict,
 }
+
+deserialize_unit_enum!(Counter {
+    "accesses" => Accesses,
+    "loads" => Loads,
+    "stores" => Stores,
+    "hits" => Hits,
+    "misses" => Misses,
+    "evictions" => Evictions,
+    "writebacks" => Writebacks,
+    "writethroughs" => Writethroughs,
+    "writearounds" => Writearounds,
+    "fills" => Fills,
+    "cycles" => Cycles,
+    "compulsory" => Compulsory,
+    "capacity" => Capacity,
+    "conflict" => Conflict,
+});
 
 #[cfg(test)]
 mod tests {

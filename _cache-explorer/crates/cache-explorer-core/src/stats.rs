@@ -34,9 +34,10 @@
 
 use std::collections::VecDeque;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::config::Timing;
+use crate::de::deserialize_unit_enum;
 use crate::event::{ChangeRef, Counter};
 use crate::explain;
 use crate::format;
@@ -173,7 +174,7 @@ pub struct StatRow {
 /// Whether an access found its line: one mark of the hit and miss
 /// sparkline. It also deserializes, because a module's `lastAccess`
 /// predicate names one.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum Outcome {
@@ -182,6 +183,11 @@ pub enum Outcome {
     /// The access missed.
     Miss,
 }
+
+deserialize_unit_enum!(Outcome {
+    "hit" => Hit,
+    "miss" => Miss,
+});
 
 /// What the Stats region shows at one point of a run.
 #[derive(Clone, Debug, PartialEq, Serialize)]

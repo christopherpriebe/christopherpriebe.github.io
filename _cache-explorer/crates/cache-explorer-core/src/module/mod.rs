@@ -45,6 +45,7 @@ pub use text::{Markdown, MarkupError, TextSegment, TextStyle};
 pub(crate) use text::{code_spans, Segments};
 
 use crate::config::{Config, ConfigError};
+use crate::de::deserialize_unit_enum;
 use crate::engine;
 use crate::explain;
 use crate::format;
@@ -163,7 +164,7 @@ pub enum Callout {
 }
 
 /// An area of the workbench a callout outlines.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum CalloutArea {
@@ -184,6 +185,17 @@ pub enum CalloutArea {
     /// The transport: Issue, Step and the rest.
     Transport,
 }
+
+deserialize_unit_enum!(CalloutArea {
+    "addressStrip" => AddressStrip,
+    "cache" => Cache,
+    "memory" => Memory,
+    "log" => Log,
+    "stats" => Stats,
+    "config" => Config,
+    "cpu" => Cpu,
+    "transport" => Transport,
+});
 
 /// A set row of the cache, or with `way` one way cell of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -921,8 +933,7 @@ struct RawStep {
 }
 
 /// The kinds of step, as the `kind` field names them.
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Copy)]
 enum StepName {
     /// `instruct`.
     Instruct,
@@ -933,6 +944,13 @@ enum StepName {
     /// `explain`.
     Explain,
 }
+
+deserialize_unit_enum!(StepName {
+    "instruct" => Instruct,
+    "predict" => Predict,
+    "observe" => Observe,
+    "explain" => Explain,
+});
 
 impl StepName {
     /// The name the `kind` field gives it.

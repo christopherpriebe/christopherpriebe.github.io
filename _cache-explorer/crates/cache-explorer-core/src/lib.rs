@@ -23,6 +23,7 @@ pub mod limits;
 mod cache;
 mod config;
 mod cpu;
+mod de;
 mod engine;
 mod error;
 mod event;

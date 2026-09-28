@@ -16,6 +16,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::de::deserialize_unit_enum;
 use crate::explain;
 use crate::format;
 use crate::geometry::{Geometry, Placement};
@@ -103,7 +104,7 @@ pub enum WordBytes {
 }
 
 /// Which way a miss evicts once every way of its set is valid.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum Replacement {
@@ -115,8 +116,14 @@ pub enum Replacement {
     Random,
 }
 
+deserialize_unit_enum!(Replacement {
+    "lru" => Lru,
+    "fifo" => Fifo,
+    "random" => Random,
+});
+
 /// What a store that hits does to memory.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum WritePolicy {
@@ -127,8 +134,13 @@ pub enum WritePolicy {
     WriteThrough,
 }
 
+deserialize_unit_enum!(WritePolicy {
+    "writeBack" => WriteBack,
+    "writeThrough" => WriteThrough,
+});
+
 /// Whether a store that misses brings its line into the cache.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum AllocatePolicy {
@@ -138,8 +150,13 @@ pub enum AllocatePolicy {
     WriteNoAllocate,
 }
 
+deserialize_unit_enum!(AllocatePolicy {
+    "writeAllocate" => WriteAllocate,
+    "writeNoAllocate" => WriteNoAllocate,
+});
+
 /// Contents of memory no run has written yet.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum MemoryInit {
@@ -151,8 +168,13 @@ pub enum MemoryInit {
     Pattern,
 }
 
+deserialize_unit_enum!(MemoryInit {
+    "zero" => Zero,
+    "pattern" => Pattern,
+});
+
 /// One of the two timing numbers: the hit time or the miss penalty.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum ConfigNumberField {
@@ -161,6 +183,11 @@ pub enum ConfigNumberField {
     /// `Timing::miss_cycles`.
     MissCycles,
 }
+
+deserialize_unit_enum!(ConfigNumberField {
+    "hitCycles" => HitCycles,
+    "missCycles" => MissCycles,
+});
 
 /// The nearest valid configuration to an invalid one, and the label of the
 /// action that opens it.

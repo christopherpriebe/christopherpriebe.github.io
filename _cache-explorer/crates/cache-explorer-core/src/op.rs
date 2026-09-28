@@ -10,6 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use crate::config::{Config, ConfigError};
+use crate::de::deserialize_unit_enum;
 use crate::engine::EditRefusal;
 use crate::format;
 use crate::geometry::{highest_word, AccessError};
@@ -160,7 +161,7 @@ pub struct WayPatch {
 }
 
 /// Whether an access reads or writes memory.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum AccessKind {
@@ -170,8 +171,13 @@ pub enum AccessKind {
     Write,
 }
 
+deserialize_unit_enum!(AccessKind {
+    "read" => Read,
+    "write" => Write,
+});
+
 /// How a program's source is written.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum ProgramFormat {
@@ -180,6 +186,11 @@ pub enum ProgramFormat {
     /// A trace: one `R addr` or `W addr value` access per line.
     Trace,
 }
+
+deserialize_unit_enum!(ProgramFormat {
+    "asm" => Asm,
+    "trace" => Trace,
+});
 
 /// The text of the program drawer and its format, which Space and
 /// Shift+Space pass so the session can tell whether the drawer holds a
@@ -379,14 +390,18 @@ struct RawEditPatch {
 }
 
 /// The kinds of edit target and patch, as their `kind` field names them.
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Copy)]
 enum EditKind {
     /// `way`.
     Way,
     /// `memory`.
     Memory,
 }
+
+deserialize_unit_enum!(EditKind {
+    "way" => Way,
+    "memory" => Memory,
+});
 
 impl EditKind {
     /// The name the `kind` field gives it.
@@ -436,8 +451,7 @@ impl<T> Field<T> {
 }
 
 /// The kinds of op, as the `op` field names them.
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Copy)]
 enum OpName {
     /// `config`.
     Config,
@@ -454,6 +468,16 @@ enum OpName {
     /// `edit`.
     Edit,
 }
+
+deserialize_unit_enum!(OpName {
+    "config" => Config,
+    "issue" => Issue,
+    "program" => Program,
+    "step" => Step,
+    "stepAccess" => StepAccess,
+    "run" => Run,
+    "edit" => Edit,
+});
 
 /// Why a flat op, edit target or edit patch does not have the fields of its
 /// kind. Lower case and unterminated, like serde's own messages, since it
