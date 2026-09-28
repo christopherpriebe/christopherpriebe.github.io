@@ -12,7 +12,7 @@ license = "MIT"
 
 [workspace.dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+serde_json = { version = "1.0.151", default-features = false, features = ["alloc"] }   # no "std": it adds io error code the core never uses
 serde-wasm-bindgen = "0.6.5"
 thiserror = "2.0.21"
 miniz_oxide = "0.9.1"
