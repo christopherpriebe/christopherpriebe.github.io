@@ -567,7 +567,7 @@ fn write(
             WriteNote::Through
         };
         let wrote = explain::write(&machine.geometry, addr, location.word, way, word, note);
-        format!("{}{wrote}", truncation(machine, value, word))
+        with_truncation(machine, value, word, wrote)
     })?;
     if write_back {
         return Ok(());
@@ -621,7 +621,7 @@ fn write_around(
     };
     out.emit(machine, draft, || {
         let wrote = explain::write_around(&machine.geometry, addr, word);
-        format!("{}{wrote}", truncation(machine, value, word))
+        with_truncation(machine, value, word, wrote)
     })
 }
 
@@ -769,6 +769,18 @@ fn truncation(machine: &Machine, value: u64, word: Word) -> String {
             explain::truncated(register, value, machine.geometry.word_bytes(), word)
         }
         _ => String::new(),
+    }
+}
+
+/// `wrote` after the truncation sentence, if any: `wrote` itself, with no
+/// allocation, when there is none to prepend.
+fn with_truncation(machine: &Machine, value: u64, word: Word, wrote: String) -> String {
+    let mut prefix = truncation(machine, value, word);
+    if prefix.is_empty() {
+        wrote
+    } else {
+        prefix.push_str(&wrote);
+        prefix
     }
 }
 

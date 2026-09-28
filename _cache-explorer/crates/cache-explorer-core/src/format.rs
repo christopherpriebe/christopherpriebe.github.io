@@ -1,22 +1,56 @@
 //! Every rule by which a number becomes text the student reads. Messages,
 //! labels and views call these functions; nothing else in the crate turns a
 //! number into text.
+//!
+//! [`Data`], [`Setting`], [`Hex`] and [`Bit`] are `Display` adapters: they
+//! write straight into the caller's formatter, so a line built with `write!`
+//! or `format!` pays no allocation for a number that does not need grouping.
+//! [`data`], [`setting`], [`hex`], [`address`], [`tag`] and [`bit`] are thin
+//! `String` wrappers around them for the places a value is stored rather
+//! than written straight into a line.
+
+use std::fmt;
+
+/// A data value, register value or count, written as [`data`] describes it:
+/// plain digits below 10,000 (`53`, `4096`), comma-grouped from there on
+/// (`10,000`). The grouped form is the only allocation.
+pub(crate) struct Data(pub(crate) u64);
+
+impl fmt::Display for Data {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0 < 10_000 {
+            write!(f, "{}", self.0)
+        } else {
+            f.write_str(&grouped(self.0))
+        }
+    }
+}
 
 /// A data value, register value or count: plain digits below 10,000 (`53`,
 /// `4096`), comma-grouped from there on (`10,000`).
 pub(crate) fn data(n: impl Into<u64>) -> String {
-    let n = n.into();
-    if n < 10_000 {
-        n.to_string()
-    } else {
-        grouped(n)
+    Data(n.into()).to_string()
+}
+
+/// A configuration value or a limit, written as [`setting`] describes it:
+/// plain digits below 1,000, comma-grouped from there on (`1,000`,
+/// `9,007,199,254,740,991`). The grouped form is the only allocation.
+pub(crate) struct Setting(pub(crate) u64);
+
+impl fmt::Display for Setting {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0 < 1_000 {
+            write!(f, "{}", self.0)
+        } else {
+            f.write_str(&grouped(self.0))
+        }
     }
 }
 
 /// A configuration value or a limit, as a sentence or a label states it:
 /// comma-grouped from 1,000 on (`1,000`, `9,007,199,254,740,991`).
 pub(crate) fn setting(n: impl Into<u64>) -> String {
-    grouped(n.into())
+    Setting(n.into()).to_string()
 }
 
 /// A data value with its sign: [`data`] of `magnitude`, after a minus sign
@@ -35,10 +69,26 @@ pub(crate) fn negative_setting(magnitude: u64) -> String {
     format!("\u{2212}{}", setting(magnitude))
 }
 
+/// `0x` and upper-case hex digits, zero-padded to at least `digits` digits,
+/// written as [`hex`] describes it.
+pub(crate) struct Hex {
+    pub(crate) value: u64,
+    pub(crate) digits: usize,
+}
+
+impl fmt::Display for Hex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{:0width$X}", self.value, width = self.digits)
+    }
+}
+
 /// `0x` and upper-case hex digits, zero-padded to at least `digits` digits.
 pub(crate) fn hex(value: impl Into<u64>, digits: usize) -> String {
-    let value = value.into();
-    format!("0x{value:0digits$X}")
+    Hex {
+        value: value.into(),
+        digits,
+    }
+    .to_string()
 }
 
 /// An address or a line address as the student reads it: hex padded to
@@ -133,10 +183,20 @@ pub(crate) fn percent(numerator: u64, denominator: u64) -> Option<String> {
 /// from, such as the hit rate before the run's first access: an em dash.
 pub(crate) const NO_FIGURE: &str = "\u{2014}";
 
+/// A valid or dirty bit, written as [`bit`] describes it: `1` when set, `0`
+/// when clear.
+pub(crate) struct Bit(pub(crate) bool);
+
+impl fmt::Display for Bit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(if self.0 { "1" } else { "0" })
+    }
+}
+
 /// A valid or dirty bit as the cache table and an edit's preview show it:
 /// `1` when set, `0` when clear.
 pub(crate) fn bit(on: bool) -> String {
-    u8::from(on).to_string()
+    Bit(on).to_string()
 }
 
 /// An event's label, `{entry}.{seq}` as in `5.3`. Plain digits, never
@@ -258,6 +318,20 @@ mod tests {
     }
 
     #[test]
+    fn data_adapter_matches_the_data_function() {
+        for n in [0_u64, 9_999, 10_000, u64::MAX] {
+            assert_eq!(Data(n).to_string(), data(n), "{n}");
+        }
+    }
+
+    #[test]
+    fn setting_adapter_matches_the_setting_function() {
+        for n in [0_u64, 999, 1_000, u64::MAX] {
+            assert_eq!(Setting(n).to_string(), setting(n), "{n}");
+        }
+    }
+
+    #[test]
     fn signed_values_take_a_minus_sign() {
         assert_eq!(signed_data(false, 300), "300");
         assert_eq!(signed_data(true, 3), "\u{2212}3");
@@ -275,6 +349,17 @@ mod tests {
         assert_eq!(hex(0x5_u32, 2), "0x05");
         assert_eq!(hex(0xABCD_u32, 2), "0xABCD");
         assert_eq!(hex(u32::MAX, 8), "0xFFFFFFFF");
+    }
+
+    #[test]
+    fn hex_adapter_matches_the_hex_function() {
+        for (value, digits) in [(0_u64, 2), (0xA4, 3), (0xABCD, 2), (u64::from(u32::MAX), 8)] {
+            assert_eq!(
+                Hex { value, digits }.to_string(),
+                hex(value, digits),
+                "{value:#X}"
+            );
+        }
     }
 
     #[test]
@@ -308,6 +393,13 @@ mod tests {
         assert_eq!(tag(0xA, 8), "0x0A");
         assert_eq!(tag(0x1, 9), "0x001");
         assert_eq!(tag(0x1, 25), "0x0000001");
+    }
+
+    #[test]
+    fn bit_adapter_matches_the_bit_function() {
+        for on in [false, true] {
+            assert_eq!(Bit(on).to_string(), bit(on), "{on}");
+        }
     }
 
     #[test]

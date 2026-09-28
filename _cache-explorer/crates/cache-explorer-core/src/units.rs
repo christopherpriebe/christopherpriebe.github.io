@@ -294,61 +294,79 @@ impl Serialize for Word {
 
 impl fmt::Display for Addr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format::hex(self.0, HEX_DIGITS))
+        fmt::Display::fmt(
+            &format::Hex {
+                value: u64::from(self.0),
+                digits: HEX_DIGITS,
+            },
+            f,
+        )
     }
 }
 
 impl fmt::Display for LineAddr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format::hex(self.0, HEX_DIGITS))
+        fmt::Display::fmt(
+            &format::Hex {
+                value: u64::from(self.0),
+                digits: HEX_DIGITS,
+            },
+            f,
+        )
     }
 }
 
 impl fmt::Display for Tag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format::hex(self.0, HEX_DIGITS))
+        fmt::Display::fmt(
+            &format::Hex {
+                value: u64::from(self.0),
+                digits: HEX_DIGITS,
+            },
+            f,
+        )
     }
 }
 
 impl fmt::Display for SetIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format::data(self.0))
+        fmt::Display::fmt(&format::Data(u64::from(self.0)), f)
     }
 }
 
 impl fmt::Display for WayIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format::data(self.0))
+        fmt::Display::fmt(&format::Data(u64::from(self.0)), f)
     }
 }
 
 impl fmt::Display for WordIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format::data(self.0))
+        fmt::Display::fmt(&format::Data(u64::from(self.0)), f)
     }
 }
 
 impl fmt::Display for Cycle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format::data(self.0))
+        fmt::Display::fmt(&format::Data(self.0), f)
     }
 }
 
 impl fmt::Display for EventPos {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format::data(self.0))
+        fmt::Display::fmt(&format::Data(u64::from(self.0)), f)
     }
 }
 
 impl fmt::Display for OpIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format::data(self.0))
+        fmt::Display::fmt(&format::Data(u64::from(self.0)), f)
     }
 }
 
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format::data(self.0))
+        fmt::Display::fmt(&format::Data(self.0), f)
     }
 }
 

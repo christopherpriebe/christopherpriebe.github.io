@@ -24,6 +24,8 @@
 //! widths, and values follow the data rule. No line depends on the cursor or
 //! on Basics and Advanced, so the same event always reads the same.
 
+use std::fmt::Write as _;
+
 use crate::cache::Dirtiness;
 use crate::config::{
     AllocatePolicy, CacheConfig, Config, ConfigError, Replacement, WordBytes, WritePolicy,
@@ -372,22 +374,35 @@ pub(crate) fn rank(
         .and_then(|index| ranks.get(index))
         .copied()
         .unwrap_or(0);
-    let others: Vec<String> = (0_u32..)
-        .zip(ranks)
-        .filter(|(other, _)| *other != way.get())
-        .map(|(other, rank)| format!("way {} is {}", format::data(other), format::data(*rank)))
-        .collect();
-    let moved = format!(
+    // The opening clause plus one "; way N is R" or ", way N is R" per other
+    // way, sized so the loop below never has to grow the buffer.
+    let mut line = String::with_capacity(48 + ranks.len() * 16);
+    // Writing to a `String` cannot fail: `String` never returns `Err` from
+    // `write_str`, so the only way this could is a formatting argument that
+    // panics, and none of these do.
+    let _ = write!(
+        line,
         "{order} in set {}: way {} becomes {} ({front})",
-        format::data(set.get()),
-        format::data(way.get()),
-        format::data(promoted)
+        format::Data(u64::from(set.get())),
+        format::Data(u64::from(way.get())),
+        format::Data(u64::from(promoted))
     );
-    if others.is_empty() {
-        format!("{moved}.")
-    } else {
-        format!("{moved}; {}.", others.join(", "))
+    let mut joined_any = false;
+    for (other, &rank) in (0_u32..).zip(ranks) {
+        if other == way.get() {
+            continue;
+        }
+        line.push_str(if joined_any { ", " } else { "; " });
+        joined_any = true;
+        let _ = write!(
+            line,
+            "way {} is {}",
+            format::Data(u64::from(other)),
+            format::Data(u64::from(rank))
+        );
     }
+    line.push('.');
+    line
 }
 
 /// A load's `Complete` line: "Read word 1 of way 1 (68) into r3." A load into
@@ -1914,9 +1929,9 @@ pub(crate) fn edited_way(
                 to,
             } => others.push(format!(
                 "way {}: {} \u{2192} {}",
-                format::data(moved.get()),
-                format::data(from),
-                format::data(to)
+                format::Data(u64::from(moved.get())),
+                format::Data(u64::from(from)),
+                format::Data(u64::from(to))
             )),
             item => parts.push(way_item(geometry, item)),
         }
@@ -1924,21 +1939,21 @@ pub(crate) fn edited_way(
     match own {
         Some((from, to)) if others.is_empty() => parts.push(format!(
             "rank {} \u{2192} {}",
-            format::data(from),
-            format::data(to)
+            format::Data(u64::from(from)),
+            format::Data(u64::from(to))
         )),
         Some((from, to)) => parts.push(format!(
             "rank {} \u{2192} {} ({})",
-            format::data(from),
-            format::data(to),
+            format::Data(u64::from(from)),
+            format::Data(u64::from(to)),
             others.join(", ")
         )),
         None => parts.extend(others.iter().map(|other| format!("rank {other}"))),
     }
     format!(
         "Edited set {}, way {}: {}.",
-        format::data(set.get()),
-        format::data(way.get()),
+        format::Data(u64::from(set.get())),
+        format::Data(u64::from(way.get())),
         parts.join("; ")
     )
 }
@@ -2420,8 +2435,8 @@ pub(crate) fn changed_summary(geometry: &Geometry, changes: &[ChangeRef]) -> Str
                 .collect();
             format!(
                 "set {} way {} {}",
-                format::data(set.get()),
-                format::data(way.get()),
+                format::Data(u64::from(set.get())),
+                format::Data(u64::from(way.get())),
                 names.join(", ")
             )
         })
@@ -2880,6 +2895,18 @@ mod tests {
             "LRU ranks in set 3: way 2 becomes 0 (most recent); way 0 is 1, way 1 is 3, way 3 \
              is 2."
         );
+    }
+
+    #[test]
+    fn a_rank_line_lists_every_other_way_of_a_64_way_set() {
+        let ranks: Vec<u32> = (0..64).map(|index| (index + 1) % 64).collect();
+        let others = (1..64_u32)
+            .map(|other| format!("way {other} is {}", (other + 1) % 64))
+            .collect::<Vec<String>>()
+            .join(", ");
+        let expected = format!("LRU ranks in set 5: way 0 becomes 1 (most recent); {others}.");
+
+        assert_eq!(rank(Replacement::Lru, set(5), way(0), &ranks), expected);
     }
 
     #[test]
