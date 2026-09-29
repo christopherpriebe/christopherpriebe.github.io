@@ -12,12 +12,11 @@
 //! bottom of this file check both, so a value moved too far fails here,
 //! naming what needs it, before any other test does.
 
-/// The narrowest byte address, in bits. Not tunable: the spec's range starts
-/// here, and repair's smallest cache relies on it to keep a tag bit.
+/// The narrowest byte address, in bits. Not tunable: repair's smallest cache
+/// relies on it to keep a tag bit.
 pub const MIN_ADDRESS_BITS: u8 = 8;
 
-/// The widest byte address, in bits. Not tunable: the spec's range ends here,
-/// and an address is a `u32`.
+/// The widest byte address, in bits. Not tunable: an address is a `u32`.
 pub const MAX_ADDRESS_BITS: u8 = 32;
 
 /// The most lines a cache may have, and so the most ways of a fully
@@ -141,8 +140,7 @@ pub const MAX_SHARE_JSON_BYTES: u32 = 1024 * 1024;
 /// byte from every saved file's room: see [`MAX_SHARE_JSON_BYTES`].
 pub const MAX_SHARE_OPS: u32 = 10_000;
 
-/// The access outcomes the hit and miss sparkline shows. Tunable; the design
-/// shows 24.
+/// The access outcomes the hit and miss sparkline shows. Tunable.
 pub const RECENT_OUTCOMES: u32 = 24;
 
 /// The deepest predicates may nest inside `all`, `any` and `not`, so reading
@@ -332,7 +330,7 @@ mod tests {
         );
         assert!(
             MAX_LABEL_CHARS >= 5,
-            "the design's first-visit program labels its first line `start`"
+            "the page's first-visit program labels its first line `start`"
         );
     }
 

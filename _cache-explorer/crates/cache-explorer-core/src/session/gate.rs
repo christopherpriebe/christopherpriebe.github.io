@@ -101,7 +101,7 @@ impl Session {
     }
 
     /// Whether `predicate` holds at the cursor, every op of the log counting
-    /// as made since a step began: the spec's `evalPredicate`.
+    /// as made since a step began.
     pub fn eval_predicate(&self, predicate: &Predicate) -> bool {
         predicate.eval(&EvalContext::new(self))
     }

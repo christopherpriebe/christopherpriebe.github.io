@@ -24,7 +24,7 @@ use crate::units::{EventPos, OpIndex};
 pub struct Position {
     /// The position: 0 before the first event, `k` after the `k`-th.
     pub pos: EventPos,
-    /// How many ops are complete here: the spec's `cursor()`.
+    /// How many ops are complete at this position (the facade's `cursor()`).
     pub ops_done: u32,
     /// The op holding the position; none at position 0.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -187,7 +187,7 @@ mod placed {
 pub(super) use placed::Cursor;
 
 impl Session {
-    /// How many ops are complete at the cursor: the spec's `cursor()`.
+    /// How many ops are complete at the cursor.
     pub fn cursor(&self) -> u32 {
         self.log.ops_done(self.cursor.pos())
     }

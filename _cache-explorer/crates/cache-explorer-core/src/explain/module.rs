@@ -4,8 +4,8 @@
 use crate::format;
 use crate::module::{FeedbackTone, ModuleStepKind};
 
-/// The module panel's label for a step of `kind`, in the design's words:
-/// "Explain", "Do this", "Predict", "Watch", and "Done" on the done screen.
+/// The module panel's label for a step of `kind`: "Explain", "Do this",
+/// "Predict", "Watch", and "Done" on the done screen.
 pub(crate) fn module_step_kind(kind: ModuleStepKind) -> String {
     match kind {
         ModuleStepKind::Explain => "Explain",

@@ -8,10 +8,10 @@
 //! that cannot be opened.
 //! [`Config::repair`] finds the nearest valid configuration for the "Open
 //! with … instead" action, and [`Config::summary`] is the configuration's
-//! one-line description. The named configurations, the design's three
-//! geometries, live here too, and so do the configuration bar's options:
-//! [`Session::config_controls`] gives each option the whole configuration a
-//! click on it produces, so the page never builds or checks one itself.
+//! one-line description. The three named configurations live here too, and
+//! so do the configuration bar's options: [`Session::config_controls`] gives
+//! each option the whole configuration a click on it produces, so the page
+//! never builds or checks one itself.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -34,8 +34,7 @@ use crate::text::{Segments, TextSegment};
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
     /// Width of a byte address, from [`MIN_ADDRESS_BITS`] to
-    /// [`MAX_ADDRESS_BITS`]. `Config::default()` uses 12, the width of every
-    /// design frame, where the spec's default is 16.
+    /// [`MAX_ADDRESS_BITS`]. `Config::default()` uses 12.
     pub address_bits: u8,
     /// Bytes per word.
     pub word_bytes: WordBytes,
@@ -160,10 +159,10 @@ deserialize_unit_enum!(AllocatePolicy {
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum MemoryInit {
-    /// Every byte reads 0, as the spec says.
+    /// Every byte reads 0.
     #[default]
     Zero,
-    /// The design's filler: the word at address `a` reads
+    /// A filler pattern: the word at address `a` reads
     /// `(a / word_bytes × 13 + 5) mod 97`, so a fill brings in visible values.
     Pattern,
 }
@@ -202,8 +201,8 @@ pub struct Repair {
     pub label: String,
 }
 
-/// One of the named configurations: the design's three geometries, kept for
-/// the golden fixtures, the tests and the page's first visit.
+/// One of the three named configurations, kept for the golden fixtures, the
+/// tests and the page's first visit.
 ///
 /// All use `Config::default()`'s address width, word size and seed, pattern
 /// memory, and Basics.
@@ -535,22 +534,19 @@ pub struct ConfigControls {
 }
 
 /// The timing timed mode starts with when the log has none to offer: a
-/// 1-cycle hit and a 20-cycle miss penalty, the design's.
+/// 1-cycle hit and a 20-cycle miss penalty.
 pub(crate) const FALLBACK_TIMING: Timing = Timing {
     hit_cycles: 1,
     miss_cycles: 20,
 };
 
-/// The cache sizes the configuration bar offers, in bytes, as the design
-/// does.
+/// The cache sizes the configuration bar offers, in bytes.
 const SIZE_OPTIONS: [u32; 4] = [64, 128, 256, 512];
 
-/// The line sizes the configuration bar offers, in bytes, as the design
-/// does.
+/// The line sizes the configuration bar offers, in bytes.
 const LINE_OPTIONS: [u32; 3] = [8, 16, 32];
 
-/// The associativities the configuration bar offers besides Full, as the
-/// design does.
+/// The associativities the configuration bar offers besides Full.
 const WAY_OPTIONS: [u32; 4] = [1, 2, 4, 8];
 
 /// The error of reading a word size that is not 1, 2, 4 or 8 bytes.
@@ -649,7 +645,7 @@ impl Config {
         }
     }
 
-    /// The design's summary line: the size, the line size and the placement,
+    /// The summary line: the size, the line size and the placement,
     /// then the replacement policy unless the cache is direct-mapped, as in
     /// "128 B · 16 B lines · 2-way · LRU"; in Advanced, then the write and
     /// allocate policies, " · write-back · allocate". Timing is not part of it.
@@ -730,11 +726,11 @@ impl Config {
 }
 
 impl Default for Config {
-    /// The spec's defaults, except the address width: 12 bits, as in every
-    /// design frame. The cache is `direct-mapped-8`'s geometry: 128 B of
-    /// 16 B lines, direct-mapped, so 8 sets and 5 tag bits. Memory is zero, as
-    /// the spec says; the page's first visit opens this configuration with
-    /// pattern memory instead, as [`Config::first_visit`].
+    /// A 12-bit address and 4-byte words. The cache is `direct-mapped-8`'s
+    /// geometry: 128 B of 16 B lines, direct-mapped, so 8 sets and 5 tag bits,
+    /// with LRU, write-back and write-allocate. The run is untimed, in Basics,
+    /// with seed 12345, and memory is zero; the page's first visit opens this
+    /// configuration with pattern memory instead, as [`Config::first_visit`].
     fn default() -> Self {
         Config {
             address_bits: 12,
@@ -899,7 +895,7 @@ impl Preset {
     }
 }
 
-/// The named configurations, in the design's order.
+/// The named configurations, in the order of [`Preset`]'s variants.
 pub fn presets() -> [Preset; 3] {
     [
         Preset::DirectMapped8,

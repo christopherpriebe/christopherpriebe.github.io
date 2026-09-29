@@ -31,8 +31,7 @@ export type Addr = number;
 export interface Config {
     /**
      * Width of a byte address, from [`MIN_ADDRESS_BITS`] to
-     * [`MAX_ADDRESS_BITS`]. `Config::default()` uses 12, the width of every
-     * design frame, where the spec's default is 16.
+     * [`MAX_ADDRESS_BITS`]. `Config::default()` uses 12.
      */
     addressBits: number;
     /**
@@ -75,10 +74,10 @@ export type ChangeRef = { cell: "valid"; set: SetIndex; way: WayIndex } | { cell
 /**
  * A condition on the machine or the log at a position of the session.
  *
- * Serialized as the spec shapes it, keyed by which field it has: a way
- * predicate as `{"way":{"set":2,"way":0},"valid":true}`, a counter
- * predicate as `{"counter":"misses","op":">=","value":2}`. Read through a
- * flat form with every key optional, as an op is, and nested at most
+ * Serialized keyed by which field it has: a way predicate as
+ * `{"way":{"set":2,"way":0},"valid":true}`, a counter predicate as
+ * `{"counter":"misses","op":">=","value":2}`. Read through a flat form with
+ * every key optional, as an op is, and nested at most
  * [`MAX_PREDICATE_DEPTH`] deep.
  */
 export type Predicate = WayPredicate | LinePredicate | MemoryPredicate | CounterPredicate | RegisterPredicate | AllPredicate | AnyPredicate | NotPredicate | EventPredicate | LastAccessPredicate | ConfigPredicate;
@@ -647,8 +646,8 @@ export interface ModuleView {
      */
     kind: ModuleStepKind;
     /**
-     * The kind in the design's words: "Do this", "Predict", "Watch",
-     * "Explain", or "Done".
+     * The kind's label: "Do this", "Predict", "Watch", "Explain", or
+     * "Done".
      */
     kindLabel: string;
     /**
@@ -2190,8 +2189,8 @@ export interface ConfigPredicate {
 /**
  * True when the displayed run's most recent completed access at or before
  * the cursor was made by an op made since the step began, and matches
- * every field given: the design's instruct steps, which wait for an access
- * made after they began.
+ * every field given: what an instruct step waits for, an access made after
+ * it began.
  */
 export interface LastAccessPredicate {
     /**
@@ -2202,9 +2201,9 @@ export interface LastAccessPredicate {
 
 /**
  * True when the event the cursor rests on is of the kind, and, when an
- * entry is given, belongs to that entry of the displayed run: flow A's
- * "drag the timeline back to step 1.2, the tag compare" is `{"event":
- * {"kind": "miss", "entry": 1}}`.
+ * entry is given, belongs to that entry of the displayed run: a step that
+ * asks the student to drag the timeline back to step 1.2, the tag compare,
+ * waits for `{"event": {"kind": "miss", "entry": 1}}`.
  */
 export interface EventPredicate {
     /**
@@ -2553,7 +2552,7 @@ export interface Position {
      */
     pos: EventPos;
     /**
-     * How many ops are complete here: the spec's `cursor()`.
+     * How many ops are complete at this position (the facade's `cursor()`).
      */
     opsDone: number;
     /**

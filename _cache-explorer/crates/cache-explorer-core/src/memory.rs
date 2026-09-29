@@ -188,7 +188,7 @@ impl Memory {
     }
 
     /// What the word at `addr` reads before the run writes it: 0, or the
-    /// design's filler, `(addr / word_bytes × 13 + 5) mod 97`, which fits
+    /// filler pattern, `(addr / word_bytes × 13 + 5) mod 97`, which fits
     /// every word size.
     fn initial_word(&self, addr: u32) -> u64 {
         match self.init {

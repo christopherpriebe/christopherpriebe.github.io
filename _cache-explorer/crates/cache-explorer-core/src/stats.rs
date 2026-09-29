@@ -313,8 +313,8 @@ impl Counters {
     }
 
     /// The average memory access time `timing` predicts from the miss rate:
-    /// `hit + (misses / accesses) × miss`. Its text is the design's, "AMAT =
-    /// 1 + 0.40 × 20 = 9.0 cycles", and is true as printed: the miss rate is
+    /// `hit + (misses / accesses) × miss`. Its text reads "AMAT =
+    /// 1 + 0.40 × 20 = 9.0 cycles" and is true as printed: the miss rate is
     /// rounded half up to two decimals, and the result is computed from the
     /// printed rate and rounded half up to one, so 1 miss in 3 accesses reads
     /// "AMAT = 1 + 0.33 × 20 = 7.6 cycles" although the value is 7.67. `None`

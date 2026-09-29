@@ -17,12 +17,11 @@
 //! type, next to that type. The drawer shares three of those: an address out
 //! of range or misaligned, and a value the word cannot hold.
 //!
-//! An access's lines keep the design's wording where it has one, as in "Way 1
-//! chosen: least recently used (rank 1).", and the lines it does not draw
-//! follow its voice: short declarative sentences that give the number that
-//! matters. Addresses, lines and tags are padded to the configuration's
-//! widths, and values follow the data rule. No line depends on the cursor or
-//! on Basics and Advanced, so the same event always reads the same.
+//! An access's lines are short declarative sentences that give the number
+//! that matters, as in "Way 1 chosen: least recently used (rank 1)."
+//! Addresses, lines and tags are padded to the configuration's widths, and
+//! values follow the data rule. No line depends on the cursor or on Basics
+//! and Advanced, so the same event always reads the same.
 
 mod access;
 mod config;
@@ -76,9 +75,9 @@ use crate::geometry::Geometry;
 use crate::op::ProgramFormat;
 use crate::units::Tag;
 
-/// What an entry is, as the CPU status names it. The design calls every
-/// entry an access; here an instruction without a memory access, an edit and
-/// an error that ends an op are named for what they are.
+/// What an entry is, as the CPU status names it. A load or store is an
+/// access; an instruction without a memory access, an edit and an error that
+/// ends an op are named for what they are.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EntryNoun {
     /// A load or store, issued by hand or executed by a program.

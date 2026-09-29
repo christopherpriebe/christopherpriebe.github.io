@@ -100,12 +100,11 @@ pub enum EventKind {
     /// A fault, the end of the instruction budget or of the session's room,
     /// or an internal error ended the op.
     Error,
-    /// The victim's line left the cache. Not one of the spec's kinds: it gives
-    /// the moment between the old line leaving and the new one arriving its
-    /// own step.
+    /// The victim's line left the cache, which gives the moment between the
+    /// old line leaving and the new one arriving its own step.
     Evict,
-    /// A new run started, or a program was loaded. Not one of the spec's
-    /// kinds: it gives those ops a place in the log.
+    /// A new run started, or a program was loaded, which gives those ops a
+    /// place in the log.
     Setup,
 }
 

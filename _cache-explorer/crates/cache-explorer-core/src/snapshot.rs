@@ -593,8 +593,7 @@ impl CacheView {
     }
 }
 
-/// The most ways a set shows side by side, as the design draws them; more
-/// wrap onto rows.
+/// The most ways a set shows side by side; more wrap onto rows.
 const WAYS_IN_A_ROW: u32 = 4;
 
 /// The view of `way`, way `index` of `set`.

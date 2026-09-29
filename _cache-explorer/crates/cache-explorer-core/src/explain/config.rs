@@ -8,12 +8,11 @@ use crate::format;
 use crate::geometry::{Geometry, Placement};
 use crate::limits::MIN_CYCLES;
 
-/// The configuration's summary line, as the design's `cfgSummary` writes
-/// it: the size, the line size and the placement, then the replacement
-/// policy unless the cache is direct-mapped: "128 B · 16 B lines · 2-way ·
-/// LRU". With `advanced`, then the write and allocate policies: " ·
-/// write-back · allocate". The placement is read from the numbers as given,
-/// so an invalid configuration has a summary too.
+/// The configuration's summary line: the size, the line size and the
+/// placement, then the replacement policy unless the cache is direct-mapped:
+/// "128 B · 16 B lines · 2-way · LRU". With `advanced`, then the write and
+/// allocate policies: " · write-back · allocate". The placement is read from
+/// the numbers as given, so an invalid configuration has a summary too.
 pub(crate) fn config_summary(config: &Config, advanced: bool) -> String {
     let cache = &config.cache;
     let mut text = format!(

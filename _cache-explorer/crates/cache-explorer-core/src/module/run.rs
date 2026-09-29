@@ -82,8 +82,8 @@ pub struct ModuleView {
     pub step_count: u32,
     /// The current step's kind, or the done screen.
     pub kind: ModuleStepKind,
-    /// The kind in the design's words: "Do this", "Predict", "Watch",
-    /// "Explain", or "Done".
+    /// The kind's label: "Do this", "Predict", "Watch", "Explain", or
+    /// "Done".
     pub kind_label: String,
     /// "Step 3 of 6", or "6 of 6" on the done screen.
     pub progress_text: String,

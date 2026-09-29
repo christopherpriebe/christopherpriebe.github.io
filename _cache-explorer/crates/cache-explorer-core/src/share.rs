@@ -56,9 +56,8 @@ const DEFLATE_LEVEL: u8 = 9;
 
 /// A session's log as a link or a file holds it.
 ///
-/// Its own keys are spelled as the spec spells them, `schema_version`,
-/// `config`, `ops` and `at`; what they hold is camelCase, as everywhere
-/// else.
+/// Its own keys are `schema_version`, `config`, `ops` and `at`, in snake_case;
+/// what they hold is camelCase, as everywhere else.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ShareDoc {

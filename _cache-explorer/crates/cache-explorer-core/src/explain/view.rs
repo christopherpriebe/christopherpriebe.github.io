@@ -34,10 +34,9 @@ pub(crate) fn stalled(remaining: u32) -> String {
     format!("Stalled: {}", format::cycles(remaining))
 }
 
-/// The AMAT line, as the design writes it: "AMAT = 1 + 0.40 × 20 = 9.0
-/// cycles", from the hit time `hit`, the miss rate `rate` in hundredths, the
-/// miss penalty `miss` and the result `amat` in tenths of a cycle, both
-/// already rounded.
+/// The AMAT line, "AMAT = 1 + 0.40 × 20 = 9.0 cycles", from the hit time
+/// `hit`, the miss rate `rate` in hundredths, the miss penalty `miss` and the
+/// result `amat` in tenths of a cycle, both already rounded.
 pub(crate) fn amat(hit: u32, rate: u64, miss: u32, amat: u64) -> String {
     format!(
         "AMAT = {} + {} \u{d7} {} = {} cycles",

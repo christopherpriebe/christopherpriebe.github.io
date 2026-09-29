@@ -3,7 +3,7 @@
 //! read, and evaluated against the machine at a position of the session's
 //! log.
 //!
-//! A predicate is keyed by which field it has, as the spec shapes it:
+//! A predicate is keyed by which field it has:
 //! `{"way": {…}, "valid": true}`, `{"counter": "misses", "op": ">=",
 //! "value": 2}`. It is read through a flat form with every key optional,
 //! which then requires exactly one of the keys that name a kind, and only
@@ -42,10 +42,10 @@ use crate::units::{Addr, EventPos, Register, Tag, Word};
 
 /// A condition on the machine or the log at a position of the session.
 ///
-/// Serialized as the spec shapes it, keyed by which field it has: a way
-/// predicate as `{"way":{"set":2,"way":0},"valid":true}`, a counter
-/// predicate as `{"counter":"misses","op":">=","value":2}`. Read through a
-/// flat form with every key optional, as an op is, and nested at most
+/// Serialized keyed by which field it has: a way predicate as
+/// `{"way":{"set":2,"way":0},"valid":true}`, a counter predicate as
+/// `{"counter":"misses","op":">=","value":2}`. Read through a flat form with
+/// every key optional, as an op is, and nested at most
 /// [`MAX_PREDICATE_DEPTH`] deep.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
@@ -181,9 +181,9 @@ pub struct NotPredicate {
 }
 
 /// True when the event the cursor rests on is of the kind, and, when an
-/// entry is given, belongs to that entry of the displayed run: flow A's
-/// "drag the timeline back to step 1.2, the tag compare" is `{"event":
-/// {"kind": "miss", "entry": 1}}`.
+/// entry is given, belongs to that entry of the displayed run: a step that
+/// asks the student to drag the timeline back to step 1.2, the tag compare,
+/// waits for `{"event": {"kind": "miss", "entry": 1}}`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
@@ -206,8 +206,8 @@ pub struct EventMatch {
 
 /// True when the displayed run's most recent completed access at or before
 /// the cursor was made by an op made since the step began, and matches
-/// every field given: the design's instruct steps, which wait for an access
-/// made after they began.
+/// every field given: what an instruct step waits for, an access made after
+/// it began.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
@@ -324,7 +324,7 @@ pub struct EvalContext<'a> {
 
 impl<'a> EvalContext<'a> {
     /// The session's cursor, with every op of its log counting as made
-    /// since the step began: what the spec's `evalPredicate` evaluates
+    /// since the step began: what [`Session::eval_predicate`] evaluates
     /// against.
     pub fn new(session: &'a Session) -> Self {
         Self {
