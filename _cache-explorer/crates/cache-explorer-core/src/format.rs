@@ -319,6 +319,10 @@ mod tests {
 
     #[test]
     fn data_adapter_matches_the_data_function() {
+        assert_eq!(Data(0).to_string(), "0");
+        assert_eq!(Data(9_999).to_string(), "9999");
+        assert_eq!(Data(10_000).to_string(), "10,000");
+        assert_eq!(Data(u64::MAX).to_string(), "18,446,744,073,709,551,615");
         for n in [0_u64, 9_999, 10_000, u64::MAX] {
             assert_eq!(Data(n).to_string(), data(n), "{n}");
         }
@@ -326,6 +330,10 @@ mod tests {
 
     #[test]
     fn setting_adapter_matches_the_setting_function() {
+        assert_eq!(Setting(0).to_string(), "0");
+        assert_eq!(Setting(999).to_string(), "999");
+        assert_eq!(Setting(1_000).to_string(), "1,000");
+        assert_eq!(Setting(u64::MAX).to_string(), "18,446,744,073,709,551,615");
         for n in [0_u64, 999, 1_000, u64::MAX] {
             assert_eq!(Setting(n).to_string(), setting(n), "{n}");
         }
@@ -353,6 +361,22 @@ mod tests {
 
     #[test]
     fn hex_adapter_matches_the_hex_function() {
+        assert_eq!(
+            Hex {
+                value: 0,
+                digits: 2
+            }
+            .to_string(),
+            "0x00"
+        );
+        assert_eq!(
+            Hex {
+                value: u64::from(u32::MAX),
+                digits: 8
+            }
+            .to_string(),
+            "0xFFFFFFFF"
+        );
         for (value, digits) in [(0_u64, 2), (0xA4, 3), (0xABCD, 2), (u64::from(u32::MAX), 8)] {
             assert_eq!(
                 Hex { value, digits }.to_string(),
@@ -397,6 +421,8 @@ mod tests {
 
     #[test]
     fn bit_adapter_matches_the_bit_function() {
+        assert_eq!(Bit(true).to_string(), "1");
+        assert_eq!(Bit(false).to_string(), "0");
         for on in [false, true] {
             assert_eq!(Bit(on).to_string(), bit(on), "{on}");
         }
