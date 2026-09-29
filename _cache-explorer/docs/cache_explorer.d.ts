@@ -524,8 +524,7 @@ export interface EditRefusal {
 }
 
 /**
- * An index into the session's ops. Output-only: the boundary never reads
- * one back in.
+ * An index into the session's ops.
  */
 export type OpIndex = number;
 

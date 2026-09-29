@@ -72,8 +72,7 @@ pub struct Cycle(u64);
 #[serde(transparent)]
 pub struct EventPos(u32);
 
-/// An index into the session's ops. Output-only: the boundary never reads
-/// one back in.
+/// An index into the session's ops.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(transparent)]
