@@ -4,9 +4,10 @@
 //!
 //! # Arithmetic in the core
 //!
-//! A release build does not check overflow and a debug build panics on it, so
-//! no operator in the core may be able to overflow. Each one is in a class
-//! below, and a new one must be too, since no lint checks it:
+//! A release build does not check overflow and a debug build panics on it, and
+//! a division by zero panics in every build, so no operator in the core may be
+//! able to overflow or divide by zero unless it is meant to wrap. Each one is
+//! in a class below, and a new one must be too, since no lint checks it:
 //!
 //! - **Checked, saturating or wrapping** (`checked_*`, `saturating_*`,
 //!   `wrapping_*`), for a value that a session, a link, a file or a program
