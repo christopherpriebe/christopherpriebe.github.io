@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/golden.rs
-description: "The design's flow B on two-way-lru: 0x000 and 0x040 fill set 0, a hit makes way 0 the most recent, then 0x080 evicts way 1 (victim row 4.3) and 0x0C0 evicts way 0 (cases 2, 1 and 3)."
+description: "Flow B on two-way-lru: 0x000 and 0x040 fill set 0, a hit makes way 0 the most recent, then 0x080 evicts way 1 (victim row 4.3) and 0x0C0 evicts way 0 (cases 2, 1 and 3)."
 ---
 1.1 | decode | lineSize | - | - | Load 0x000: tag 0x00, set 0, offset 0 (word 0).
 1.2 | miss | associativity | accesses, loads, misses, compulsory | - | Set 0: no valid way holds tag 0x00. Miss.

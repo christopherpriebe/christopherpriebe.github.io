@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/golden.rs
-description: "Ways edited at the end of frame 3b's access #4: editor state 4a, word 1 of set 2, way 0 set to 9 with its dirty bit and rank 1, so way 1 moves to rank 0 and 0x0A4 becomes stale; set 0, way 0 made valid with 0x0C0, which it takes from memory, clean, at rank 0; and the dirty set 3, way 0 given 0x1B0, which discards the 5 at 0x0B0. Loads then hit on the edited words."
+description: "Ways edited at the end of frame 3b's access #4: word 1 of set 2, way 0 set to 9 with its dirty bit and rank 1, so way 1 moves to rank 0 and 0x0A4 becomes stale; set 0, way 0 made valid with 0x0C0, which it takes from memory, clean, at rank 0; and the dirty set 3, way 0 given 0x1B0, which discards the 5 at 0x0B0. Loads then hit on the edited words."
 ---
 1.1 | decode | lineSize | - | - | Store 0x0B0: tag 0x02, set 3, offset 0 (word 0).
 1.2 | miss | associativity | accesses, stores, misses, compulsory | - | Set 3: no valid way holds tag 0x02. Miss.

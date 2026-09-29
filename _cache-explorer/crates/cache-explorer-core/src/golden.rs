@@ -10,13 +10,28 @@
 //! Each fixture is a configuration and what a student could do on it, in
 //! order: loads and stores issued by hand, program and trace loads, single
 //! steps of the loaded program and steps to its next access, and edits.
-//! Together they cover the ten access cases, the design's flows A and B, the
-//! dirty eviction of frame 3b, untimed and timed and as a program, every
-//! kind of stall, the widths that change how numbers are written, programs:
-//! loops, branches, `r0`, a store that truncates a register, a fault, the
-//! end of the instruction budget, a trace, and a load issued by hand beside
-//! a program; and each rule that applies an edit, of a way or of a memory
+//! Together they cover the ten access cases, flows A and B, the dirty
+//! eviction of frame 3b, untimed and timed and as a program, every kind of
+//! stall, the widths that change how numbers are written, programs: loops,
+//! branches, `r0`, a store that truncates a register, a fault, the end of
+//! the instruction budget, a trace, and a load issued by hand beside a
+//! program; and each rule that applies an edit, of a way or of a memory
 //! word.
+//!
+//! Three runs recur under short names. Flow A is two loads on
+//! `direct-mapped-8`: 0x0A4 misses in an empty set and brings in its whole
+//! line, then 0x0A8, in the same line, hits. Flow B is five loads on
+//! `two-way-lru`: 0x000 and 0x040 fill the two ways of set 0, 0x000 hits and
+//! becomes the most recent, and 0x080 and 0x0C0 each evict a way.
+//!
+//! Frame 3b is [`FRAME_3B`] on `two-way-lru`, six instructions that each make
+//! an access, numbered from 1: a store that dirties 0x0B0 in way 0 of set 3,
+//! a load that fills way 0 of set 2, a store that dirties 0x1A0 in way 1 of
+//! set 2, a load that hits in way 0 and makes it the most recent, a load of
+//! 0x2A4 into set 2 that evicts the dirty 0x1A0 from way 1 and writes it back
+//! (access #5, the dirty eviction), and a load that misses again. The
+//! fixtures named for it issue its first five accesses by hand or run its
+//! program; the timed ones charge 1 cycle for a hit and 20 for a miss.
 
 use serde::Serialize;
 use thiserror::Error;
@@ -266,7 +281,7 @@ pub fn fixtures() -> Vec<Fixture> {
     fixtures
 }
 
-/// The design's flows, frame 3b's accesses and a direct-mapped conflict:
+/// Flows A and B, frame 3b's accesses and a direct-mapped conflict:
 /// loads under each replacement policy, and a dirty eviction.
 fn flows() -> Vec<Fixture> {
     let flow_b = [
@@ -279,7 +294,7 @@ fn flows() -> Vec<Fixture> {
     vec![
         Fixture {
             name: "flow-a",
-            description: "The design's flow A on direct-mapped-8: a load misses in an empty \
+            description: "Flow A on direct-mapped-8: a load misses in an empty \
                           one-way set and brings in the whole line, so a load of its neighbour \
                           hits (cases 2 and 1).",
             config: Preset::DirectMapped8.config(),
@@ -287,7 +302,7 @@ fn flows() -> Vec<Fixture> {
         },
         Fixture {
             name: "flow-b-lru",
-            description: "The design's flow B on two-way-lru: 0x000 and 0x040 fill set 0, a hit \
+            description: "Flow B on two-way-lru: 0x000 and 0x040 fill set 0, a hit \
                           makes way 0 the most recent, then 0x080 evicts way 1 (victim row \
                           4.3) and 0x0C0 evicts way 0 (cases 2, 1 and 3).",
             config: Preset::TwoWayLru.config(),
@@ -509,8 +524,8 @@ fn timed() -> Vec<Fixture> {
                           stalls once its victim is chosen, and the dirty eviction stalls for 40 \
                           cycles, 20 for the write-back and 20 for the fill. Cycles are charged \
                           where the time is spent, so the write-back row reads 85 and the fill \
-                          105, where the design charges the whole miss at the Miss row (cases 7, \
-                          2, 7, 1 and 4).",
+                          105, rather than the whole miss at the Miss row (cases 7, 2, 7, 1 and \
+                          4).",
             config: timed_config(Preset::TwoWayLru.config(), 1, 20),
             issues: vec![
                 store(0x0B0, 5),
@@ -557,7 +572,7 @@ fn timed() -> Vec<Fixture> {
     ]
 }
 
-/// Frame 3b's program, as the design writes it.
+/// Frame 3b's program.
 pub const FRAME_3B: &str = concat!(
     "  st  [0x0B0], #5\n",
     "  ld  r1, [0x0A4]\n",
@@ -567,7 +582,7 @@ pub const FRAME_3B: &str = concat!(
     "  ld  r4, [0x1A4]",
 );
 
-/// The trace the design's drawer shows when switched to Trace.
+/// The sample trace: four reads and a write.
 const SAMPLE_TRACE: &str = "R 0x0A4\nR 0x0A8\nW 0x0A4 7\nR 0x1A4\nR 0x0A4";
 
 /// A loop that counts `r1` down from 3, storing each value, then writes to
@@ -609,8 +624,8 @@ const TRUNCATION: &str = concat!(
     "        st [0x0A4], r2   ; hits",
 );
 
-/// Programs and traces: frame 3b's program, untimed and timed; the design's
-/// sample trace; a loop that finishes, one that faults and one that uses its
+/// Programs and traces: frame 3b's program, untimed and timed; the sample
+/// trace; a loop that finishes, one that faults and one that uses its
 /// budget; a store that truncates a register; and loads issued by hand beside
 /// a program.
 fn programs() -> Vec<Fixture> {
@@ -620,8 +635,8 @@ fn programs() -> Vec<Fixture> {
             description: "Frame 3b's program on two-way-lru, untimed, loaded and stepped to its \
                           end one instruction per op, as Space steps it. The load is a setup \
                           without a number or a label; each instruction's last event moves the \
-                          pc, after the rank update when there is one; and access #5 reads as \
-                          the design's table, into r3 (cases 7, 2, 7, 1, 4 and 3).",
+                          pc, after the rank update when there is one; and access #5, the \
+                          dirty eviction, loads into r3 (cases 7, 2, 7, 1, 4 and 3).",
             config: Preset::TwoWayLru.config(),
             issues: [vec![program(FRAME_3B)], steps(6)].concat(),
         },
@@ -635,7 +650,7 @@ fn programs() -> Vec<Fixture> {
         },
         Fixture {
             name: "sample-trace",
-            description: "The design's sample trace on direct-mapped-8: each R loads into r1 and \
+            description: "The sample trace on direct-mapped-8: each R loads into r1 and \
                           each W stores its value, and the log counts accesses, not \
                           instructions (cases 2, 1, 5, 4 and 3).",
             config: Preset::DirectMapped8.config(),
@@ -735,12 +750,12 @@ fn edits() -> Vec<Fixture> {
         },
         Fixture {
             name: "edit-way",
-            description: "Ways edited at the end of frame 3b's access #4: editor state 4a, \
-                          word 1 of set 2, way 0 set to 9 with its dirty bit and rank 1, so way \
-                          1 moves to rank 0 and 0x0A4 becomes stale; set 0, way 0 made valid \
-                          with 0x0C0, which it takes from memory, clean, at rank 0; and the \
-                          dirty set 3, way 0 given 0x1B0, which discards the 5 at 0x0B0. Loads \
-                          then hit on the edited words.",
+            description: "Ways edited at the end of frame 3b's access #4: word 1 of set 2, \
+                          way 0 set to 9 with its dirty bit and rank 1, so way 1 moves to rank \
+                          0 and 0x0A4 becomes stale; set 0, way 0 made valid with 0x0C0, which \
+                          it takes from memory, clean, at rank 0; and the dirty set 3, way 0 \
+                          given 0x1B0, which discards the 5 at 0x0B0. Loads then hit on the \
+                          edited words.",
             config,
             issues: after(vec![
                 edit_way(
@@ -791,9 +806,9 @@ fn edits() -> Vec<Fixture> {
         },
         Fixture {
             name: "edit-memory-dirty",
-            description: "Editor state 4e applied: 0x0B0, which the dirty line in set 3, way 0 \
-                          holds as 5, edited to 12 at the end of frame 3b's access #4. Memory \
-                          changes and the word stays stale; a load still reads the line's 5.",
+            description: "0x0B0, which the dirty line in set 3, way 0 holds as 5, edited to 12 \
+                          at the end of frame 3b's access #4. Memory changes and the word \
+                          stays stale; a load still reads the line's 5.",
             config,
             issues: after(vec![edit_memory(0x0B0, 12), load(0x0B0)]),
         },

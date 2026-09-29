@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/golden.rs
-description: "Frame 3b's accesses as in frame-3b-accesses, timed 1/20: each miss stalls once its victim is chosen, and the dirty eviction stalls for 40 cycles, 20 for the write-back and 20 for the fill. Cycles are charged where the time is spent, so the write-back row reads 85 and the fill 105, where the design charges the whole miss at the Miss row (cases 7, 2, 7, 1 and 4)."
+description: "Frame 3b's accesses as in frame-3b-accesses, timed 1/20: each miss stalls once its victim is chosen, and the dirty eviction stalls for 40 cycles, 20 for the write-back and 20 for the fill. Cycles are charged where the time is spent, so the write-back row reads 85 and the fill 105, rather than the whole miss at the Miss row (cases 7, 2, 7, 1 and 4)."
 ---
 1.1 | decode | lineSize | - | 0 | Store 0x0B0: tag 0x02, set 3, offset 0 (word 0).
 1.2 | miss | associativity | accesses, stores, misses, cycles, compulsory | 1 | Set 3: no valid way holds tag 0x02. Miss.

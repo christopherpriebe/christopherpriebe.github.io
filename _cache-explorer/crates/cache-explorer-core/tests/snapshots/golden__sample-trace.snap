@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/golden.rs
-description: "The design's sample trace on direct-mapped-8: each R loads into r1 and each W stores its value, and the log counts accesses, not instructions (cases 2, 1, 5, 4 and 3)."
+description: "The sample trace on direct-mapped-8: each R loads into r1 and each W stores its value, and the log counts accesses, not instructions (cases 2, 1, 5, 4 and 3)."
 ---
 - | setup | - | - | - | Loaded a trace of 5 accesses. Registers and the pc are reset; the cache and memory keep their contents.
 1.1 | decode | lineSize | - | - | Load 0x0A4: tag 0x01, set 2, offset 4 (word 1).

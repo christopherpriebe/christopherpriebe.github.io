@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/golden.rs
-description: "Editor state 4e applied: 0x0B0, which the dirty line in set 3, way 0 holds as 5, edited to 12 at the end of frame 3b's access #4. Memory changes and the word stays stale; a load still reads the line's 5."
+description: "0x0B0, which the dirty line in set 3, way 0 holds as 5, edited to 12 at the end of frame 3b's access #4. Memory changes and the word stays stale; a load still reads the line's 5."
 ---
 1.1 | decode | lineSize | - | - | Store 0x0B0: tag 0x02, set 3, offset 0 (word 0).
 1.2 | miss | associativity | accesses, stores, misses, compulsory | - | Set 3: no valid way holds tag 0x02. Miss.

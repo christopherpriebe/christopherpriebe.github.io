@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/golden.rs
-description: "The design's flow A on direct-mapped-8: a load misses in an empty one-way set and brings in the whole line, so a load of its neighbour hits (cases 2 and 1)."
+description: "Flow A on direct-mapped-8: a load misses in an empty one-way set and brings in the whole line, so a load of its neighbour hits (cases 2 and 1)."
 ---
 1.1 | decode | lineSize | - | - | Load 0x0A4: tag 0x01, set 2, offset 4 (word 1).
 1.2 | miss | associativity | accesses, loads, misses, compulsory | - | Set 2 is invalid. Miss.

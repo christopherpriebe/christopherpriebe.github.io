@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/golden.rs
-description: "Frame 3b's program on two-way-lru, untimed, loaded and stepped to its end one instruction per op, as Space steps it. The load is a setup without a number or a label; each instruction's last event moves the pc, after the rank update when there is one; and access #5 reads as the design's table, into r3 (cases 7, 2, 7, 1, 4 and 3)."
+description: "Frame 3b's program on two-way-lru, untimed, loaded and stepped to its end one instruction per op, as Space steps it. The load is a setup without a number or a label; each instruction's last event moves the pc, after the rank update when there is one; and access #5, the dirty eviction, loads into r3 (cases 7, 2, 7, 1, 4 and 3)."
 ---
 - | setup | - | - | - | Loaded a program of 6 instructions. Registers and the pc are reset; the cache and memory keep their contents.
 1.1 | decode | lineSize | - | - | Store 0x0B0: tag 0x02, set 3, offset 0 (word 0).
