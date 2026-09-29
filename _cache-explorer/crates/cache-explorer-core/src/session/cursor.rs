@@ -162,7 +162,7 @@ impl Session {
             .find(|&op| self.is_undo_stop(op))
             .and_then(|op| self.op_end(op))
             .unwrap_or(EventPos::new_unchecked(0));
-        self.move_to(target).is_ok()
+        self.move_or_stay(target)
     }
 
     /// Moves the cursor to the next undo stop after it: from inside an op,
@@ -172,7 +172,7 @@ impl Session {
     pub fn redo(&mut self) -> bool {
         self.redo_target()
             .filter(|&target| self.within_gate(target))
-            .is_some_and(|target| self.move_to(target).is_ok())
+            .is_some_and(|target| self.move_or_stay(target))
     }
 
     /// Where [`Session::redo`] moves the cursor: the end of the first op
@@ -197,16 +197,14 @@ impl Session {
             .and_then(|last| self.op_end(OpIndex::new_unchecked(last)))
             .unwrap_or(EventPos::new_unchecked(0));
         let target = self.clamp_to_gate(target);
-        // A replay of accepted ops cannot fail; if it did, the cursor stays.
-        let _ = self.move_to(target);
+        self.move_or_stay(target);
     }
 
     /// Moves the cursor to position `pos`, or to the end of the log if `pos`
     /// is past it; while a gate is set, to its limit if `pos` is beyond it.
     pub fn seek(&mut self, pos: EventPos) {
         let target = self.clamp_to_gate(pos.min(self.end()));
-        // A replay of accepted ops cannot fail; if it did, the cursor stays.
-        let _ = self.move_to(target);
+        self.move_or_stay(target);
     }
 
     /// Space. Before the end of the log, moves the cursor one event on. At
@@ -256,8 +254,8 @@ impl Session {
                 op: step,
                 progress: OpProgress::START,
             };
-            // A replay of the op just accepted cannot fail; if it did, the
-            // cursor stays at the op's end.
+            // As in [`Session::move_or_stay`], the cursor stays at the op's
+            // end if the replay fails.
             if let Ok(machine) = super::replay_quietly(start, &self.ops, first) {
                 self.current = machine;
                 self.cursor = first;

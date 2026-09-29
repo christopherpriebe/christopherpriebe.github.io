@@ -11,7 +11,7 @@
 //! always names the same state.
 
 use super::timeline::EntryAccess;
-use super::{resume_into, EntryKind, EntryOutcome, EntryRecord, Session, Start};
+use super::{resume_into, EntryKind, EntryOutcome, EntryRecord, ReplayError, Session, Start};
 use crate::engine::{EventSink, Flow};
 use crate::event::MicroEvent;
 use crate::machine::Machine;
@@ -171,14 +171,32 @@ impl Session {
 
     /// [`Session::find_event`], counting only the ops whose serial is above
     /// `since` as made since the step began.
+    ///
+    /// The replay is of ops the session accepted, so it does not fail; if
+    /// it did, the run is taken to hold no such position, where
+    /// [`Session::move_or_stay`] leaves the cursor where it is.
     pub(crate) fn find_event_since(&self, predicate: &Predicate, since: u64) -> Option<EventPos> {
+        self.search_run(predicate, since).ok().flatten()
+    }
+
+    /// [`Session::find_event_since`], with the error of the replay.
+    ///
+    /// # Errors
+    ///
+    /// The [`ReplayError`] of a replay of ops the session has accepted,
+    /// which only a bug could cause.
+    fn search_run(
+        &self,
+        predicate: &Predicate,
+        since: u64,
+    ) -> Result<Option<EventPos>, ReplayError> {
         let (origin, end) = self.run_bounds(self.current.run);
-        let at_origin = self.machine_at(origin).ok()?;
+        let at_origin = self.machine_at(origin)?;
         if predicate.eval(&EvalContext::at(self, &at_origin, origin, since)) {
-            return Some(origin);
+            return Ok(Some(origin));
         }
         if end <= origin {
-            return None;
+            return Ok(None);
         }
         // Replays from the checkpoint at or before the origin, looking at
         // each event after the origin, until the predicate holds or the run
@@ -208,9 +226,8 @@ impl Session {
             &mut finder,
             None,
             |finder| finder.done,
-        )
-        .ok()?;
-        finder.found
+        )?;
+        Ok(finder.found)
     }
 }
 

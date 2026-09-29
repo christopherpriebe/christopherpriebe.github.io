@@ -867,6 +867,19 @@ impl Session {
         Ok(())
     }
 
+    /// Moves the cursor to `pos` as [`Session::move_to`] does, and says
+    /// whether it moved.
+    ///
+    /// Every replay the session makes is of ops it accepted, each checked
+    /// against the machine it applies to when it was appended, so one that
+    /// fails could only be caused by a bug, which the core can neither log
+    /// nor panic on. Whatever moves the cursor without being able to report
+    /// why it did not, as Undo, Redo, seeking and scrubbing cannot, goes
+    /// through here: a replay that fails leaves the session as it was.
+    fn move_or_stay(&mut self, pos: EventPos) -> bool {
+        self.move_to(pos).is_ok()
+    }
+
     /// The position after the last event.
     fn end(&self) -> EventPos {
         position(self.events.len())

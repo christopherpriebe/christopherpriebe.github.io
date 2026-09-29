@@ -199,9 +199,7 @@ impl Loader {
             last_start: None,
             end: machine,
         });
-        // A replay of the ops just loaded cannot fail; if it did, the cursor
-        // stays at the end of the log.
-        let _ = session.move_to(cursor.min(session.end()));
+        session.move_or_stay(cursor.min(session.end()));
         // The session opens where the document says, not after a step, so
         // the live region reads the entry whole.
         session.stepped = false;
