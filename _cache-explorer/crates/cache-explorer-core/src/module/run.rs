@@ -522,8 +522,8 @@ impl ModuleRun {
     /// Once the current prediction is answered or revealed: lifts the gate
     /// and applies the step's `then` ops where the prediction began, so they
     /// go on from the state it asked about, even if the student has moved
-    /// the cursor back since. Ops the state refuses leave a notice, the
-    /// cursor included.
+    /// the cursor back since. A refused `then` appends nothing, puts the
+    /// cursor back where the student left it, and is kept as the notice.
     fn answered(&mut self, session: &mut Session) {
         session.clear_gate();
         let (
@@ -537,8 +537,9 @@ impl ModuleRun {
         };
         let back = session.cursor_position();
         session.seek(predict.limit);
-        // As for "Show me": checked when the module was read, and refused
-        // only if the state has no room left, the cursor included.
+        // As for "Show me": checked when the module was read, and a refused
+        // `then` appends nothing and puts the cursor back where the student
+        // left it.
         let outcome = session.apply_all(ops.clone());
         if outcome.is_err() {
             session.seek(back);
