@@ -3,6 +3,11 @@
 //! patch that makes the way or the word what the editor shows is built from
 //! it, and the patch is planned or refused.
 
+use super::wording::word_marks;
+use super::{
+    bytes_of, fields_of, line_words, plan_edit, propose, tag_of, Blocked, EditDraft, EditOutcome,
+    EditRefusal, FieldInput, Fields, MemoryEditDraft, RefusalReason, Tone, WayForm,
+};
 use crate::cache::{Dirtiness, Slot, Way};
 use crate::explain;
 use crate::format;
@@ -12,12 +17,6 @@ use crate::machine::Machine;
 use crate::op::{EditPatch, EditTarget, WayPatch};
 use crate::snapshot::{self, WayView};
 use crate::units::{Addr, LineAddr, SetIndex, WayIndex, Word, WordIndex};
-
-use super::wording::word_marks;
-use super::{
-    bytes_of, fields_of, line_words, plan_edit, propose, tag_of, Blocked, EditDraft, EditOutcome,
-    EditRefusal, FieldInput, Fields, MemoryEditDraft, RefusalReason, Tone, WayForm,
-};
 
 /// The way editor's draft for `form` on way `way` of set `set`: each field
 /// read, the smallest patch that makes the way what the form shows, and
@@ -62,8 +61,8 @@ pub(crate) fn draft_way(
     };
     let before = fields_of(machine, set, current);
     let read = FormRead::read(machine, &before, form);
-    let patch = EditPatch::Way(read.patch(machine, &before, form));
-    let invalid = unread_field(read.typed.invalid, read.texts.invalid);
+    let patch = EditPatch::Way(read.patch(machine));
+    let invalid = field_refusal(read.typed.invalid, read.texts.invalid);
     let reads = invalid.is_none();
     EditDraft {
         line: read.typed.input,
@@ -192,7 +191,7 @@ fn result_view(
 /// The refusal of a field of the way editor's form that does not read: the
 /// line address, `line`, or else the first data input, `word`, as the rule,
 /// the status bar's title and the message.
-fn unread_field(
+fn field_refusal(
     line: Option<String>,
     word: Option<(WordIndex, String)>,
 ) -> Option<(RefusalReason, String, String)> {
@@ -215,7 +214,11 @@ fn unread_field(
 }
 
 /// The way editor's form, read against the way it edits.
-struct FormRead {
+struct FormRead<'a> {
+    /// The fields of the way the form edits.
+    before: &'a Fields,
+    /// The form as the student left it.
+    form: &'a WayForm,
     /// The line address, read.
     typed: TypedLine,
     /// The data inputs, read.
@@ -227,9 +230,9 @@ struct FormRead {
     moved: bool,
 }
 
-impl FormRead {
+impl<'a> FormRead<'a> {
     /// Reads `form` against a way whose fields are `before`.
-    fn read(machine: &Machine, before: &Fields, form: &WayForm) -> Self {
+    fn read(machine: &Machine, before: &'a Fields, form: &'a WayForm) -> Self {
         let geometry = &machine.geometry;
         let typed = TypedLine::read(geometry, &form.line_text);
         let line = if form.valid {
@@ -245,6 +248,8 @@ impl FormRead {
         };
         let texts = WordTexts::read(geometry, form, &shown);
         Self {
+            before,
+            form,
             typed,
             texts,
             shown,
@@ -252,9 +257,10 @@ impl FormRead {
         }
     }
 
-    /// The smallest patch that makes a way whose fields are `before` what
-    /// `form` shows, as [`draft_way`] describes.
-    fn patch(&self, machine: &Machine, before: &Fields, form: &WayForm) -> WayPatch {
+    /// The smallest patch that makes the way the form was read against what
+    /// the form shows, as [`draft_way`] describes.
+    fn patch(&self, machine: &Machine) -> WayPatch {
+        let (before, form) = (self.before, self.form);
         let mut patch = WayPatch::default();
         if form.valid != before.line.is_some() {
             patch.valid = Some(form.valid);

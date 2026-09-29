@@ -31,11 +31,11 @@
 mod draft;
 mod wording;
 
+use serde::{Deserialize, Serialize};
+
 pub(crate) use draft::{draft_memory, draft_way};
 
 use wording::{cells, items, memory_plan, refusal, way_plan, word_marks};
-
-use serde::{Deserialize, Serialize};
 
 use crate::cache::{Dirtiness, Set, Slot, Way};
 use crate::config::{Replacement, WritePolicy};

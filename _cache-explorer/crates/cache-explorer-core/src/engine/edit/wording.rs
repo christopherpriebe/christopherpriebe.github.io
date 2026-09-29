@@ -3,6 +3,11 @@
 //! items and consequences an edit lists; and the marks of the way editor's
 //! data inputs.
 
+use super::{
+    check_shape, editable, fields_of, line_words, plan_edit, propose, tag_of, Consequence,
+    EditPlan, EditRefusal, FieldChange, Fields, Holder, Malformed, MemoryChange, RefusalReason,
+    Refused, Suggestion, Tone, WayChange, WordMark,
+};
 use crate::event::ChangeRef;
 use crate::explain::{self, EditAction, WayItem};
 use crate::format;
@@ -10,12 +15,6 @@ use crate::geometry::{AccessError, Geometry};
 use crate::machine::Machine;
 use crate::op::{self, EditPatch, EditTarget, WayPatch};
 use crate::units::{Addr, SetIndex, Word, WordIndex};
-
-use super::{
-    check_shape, editable, fields_of, line_words, plan_edit, propose, tag_of, Consequence,
-    EditPlan, EditRefusal, FieldChange, Fields, Holder, Malformed, MemoryChange, RefusalReason,
-    Refused, Suggestion, Tone, WayChange, WordMark,
-};
 
 /// The plan of `change`, an edit of `target` the rules accept.
 pub(super) fn way_plan(machine: &Machine, target: EditTarget, change: &WayChange) -> EditPlan {
