@@ -850,9 +850,10 @@ impl Session {
     /// Every replay the session makes is of ops it accepted, each checked
     /// against the machine it applies to when it was appended, so one that
     /// fails could only be caused by a bug, which the core can neither log
-    /// nor panic on. Whatever moves the cursor without being able to report
-    /// why it did not, as Undo, Redo, seeking and scrubbing cannot, goes
-    /// through here: a replay that fails leaves the session as it was.
+    /// nor panic on. Whatever moves the cursor with [`Session::move_to`]
+    /// without being able to report why it did not, as Undo, Redo, seeking
+    /// and scrubbing cannot, goes through here: a replay that fails leaves
+    /// the session as it was.
     fn move_or_stay(&mut self, pos: EventPos) -> bool {
         self.move_to(pos).is_ok()
     }
@@ -1063,7 +1064,7 @@ fn resume_into(
                 error: room.into(),
             })?;
         }
-        let mut out = Emitter::new(sink.as_sink(), index, next_id);
+        let mut out = Emitter::new(&mut *sink, index, next_id);
         engine::resume(&mut machine, op, progress, &mut out)
             .map_err(|error| ReplayError::Op { index, error })?;
         next_id = out.next_id();
@@ -1078,10 +1079,7 @@ fn resume_into(
 /// A sink that [`resume_into`] hands the events of a replay to, and that says
 /// after each op whether it has what it waits for. One replay serves every
 /// such sink, rather than one copy of it for each.
-trait Waiting {
-    /// The sink itself.
-    fn as_sink(&mut self) -> &mut dyn EventSink;
-
+trait Waiting: EventSink {
     /// Whether the replay has what the sink waits for, and may end.
     fn finished(&self) -> bool;
 }
@@ -1179,10 +1177,6 @@ impl EventSink for Recorder {
 }
 
 impl Waiting for Recorder {
-    fn as_sink(&mut self) -> &mut dyn EventSink {
-        self
-    }
-
     fn finished(&self) -> bool {
         false
     }
@@ -1286,10 +1280,6 @@ impl EventSink for Stopper {
 }
 
 impl Waiting for Stopper {
-    fn as_sink(&mut self) -> &mut dyn EventSink {
-        self
-    }
-
     fn finished(&self) -> bool {
         self.remaining == 0
     }

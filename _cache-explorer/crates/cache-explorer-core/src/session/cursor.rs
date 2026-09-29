@@ -244,8 +244,10 @@ impl Session {
         if let Some(machine) = last_start {
             let first = EventPos::new_unchecked(step_base.get().saturating_add(1));
             let start = Start::before_op(step_base, &machine, step);
-            // As in [`Session::move_or_stay`], the cursor stays at the op's
-            // end if the replay fails.
+            // This resumes from the op-start machine the plan kept, which
+            // `move_to` would not use, so it replays here itself. As in
+            // [`Session::move_or_stay`], the cursor stays at the op's end if
+            // the replay fails.
             if let Ok(machine) = super::replay_quietly(start, &self.ops, first) {
                 self.current = machine;
                 self.cursor = first;

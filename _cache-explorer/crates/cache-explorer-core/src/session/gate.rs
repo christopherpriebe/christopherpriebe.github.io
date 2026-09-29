@@ -281,10 +281,6 @@ impl EventSink for Finder<'_> {
 }
 
 impl Waiting for Finder<'_> {
-    fn as_sink(&mut self) -> &mut dyn EventSink {
-        self
-    }
-
     fn finished(&self) -> bool {
         self.done
     }
