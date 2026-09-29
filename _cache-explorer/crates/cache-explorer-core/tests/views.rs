@@ -1259,8 +1259,12 @@ fn a_window_of_events_covers_the_log_undone_events_included() {
     assert_eq!(ids, [20, 21, 22, 23]);
     assert_eq!(session.events_range(26..100).len(), 2);
     assert!(session.events_range(30..40).is_empty());
-    let (start, end) = (5, 2);
-    assert!(session.events_range(start..end).is_empty());
+    #[expect(
+        clippy::reversed_empty_ranges,
+        reason = "a reversed range is the case under test"
+    )]
+    let reversed = session.events_range(5..2);
+    assert!(reversed.is_empty());
 }
 
 #[test]
