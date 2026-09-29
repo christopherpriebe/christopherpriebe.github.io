@@ -59,11 +59,12 @@ pub struct Fixture {
     pub issues: Vec<Issue>,
 }
 
-/// One op a student could apply by hand: a load or store issued by hand, a
-/// program or trace loaded, one instruction of the loaded program executed,
-/// as Space executes it at the end of the log, its instructions up to the
-/// next access, as Shift+Space executes them there, or an edit. A
-/// hand-issued load writes `r1`.
+/// One op a student could apply by hand.
+///
+/// A load or store issued by hand, a program or trace loaded, one
+/// instruction of the loaded program executed, as Space executes it at the
+/// end of the log, its instructions up to the next access, as Shift+Space
+/// executes them there, or an edit. A hand-issued load writes `r1`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Issue {
     /// A load of the word at `addr`.
@@ -201,10 +202,11 @@ impl From<&Issue> for Op {
     }
 }
 
-/// The canonical text of `events`, which the snapshots hold: one line per
-/// event with its label, kind, cause, changed cells and counters, cycle and
-/// explain line, in that order and separated by ` | `, and `-` for a field
-/// that is absent or empty.
+/// The canonical text of `events`, which the snapshots hold.
+///
+/// It is one line per event with its label, kind, cause, changed cells and
+/// counters, cycle and explain line, in that order and separated by ` | `,
+/// and `-` for a field that is absent or empty.
 ///
 /// Kinds, causes and counters are written as they serialize (`writeBack`,
 /// `writePolicy`, `writebacks`). A cell is its kind and place: `valid 2/0`

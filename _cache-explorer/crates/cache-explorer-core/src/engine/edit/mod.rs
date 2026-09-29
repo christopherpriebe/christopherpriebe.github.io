@@ -382,10 +382,11 @@ pub enum FieldInput {
     },
 }
 
-/// Everything the way editor draws for its form: each field read, the
-/// swatches under the line address, what the untouched data inputs show,
-/// the smallest patch that makes the way what the form shows, its plan or
-/// refusal, and the way as it would be.
+/// Everything the way editor draws for its form.
+///
+/// It holds each field read, the swatches under the line address, what the
+/// untouched data inputs show, the smallest patch that makes the way what the
+/// form shows, its plan or refusal, and the way as it would be.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]

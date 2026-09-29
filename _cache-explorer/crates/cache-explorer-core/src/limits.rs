@@ -67,19 +67,21 @@ pub const MAX_LABEL_CHARS: u32 = 32;
 /// an error for every line. Tunable.
 pub const MAX_PARSE_ERRORS: u32 = 20;
 
-/// The instructions one program load may execute before it is stopped, so a
-/// loop without an exit ends with a message instead of running forever.
+/// The instructions one program load may execute before it is stopped.
+///
+/// A loop without an exit ends with a message instead of running forever.
 /// Counted per `Program` load and reset by a new run. Tunable.
 pub const INSTRUCTION_BUDGET: u32 = 10_000;
 
-/// The most micro-events one session stores, over the whole log. The main
-/// lever on memory use and on the time a shared link takes to load. Tunable.
-/// Set so that the heaviest logs measured stay under 64 MB at their peak:
-/// runs of accesses that each move every rank of a set of `MAX_LINES` ways,
-/// where one event in four is a `Rank` of about 2 KB that lists every way in
-/// its changed cells and in its log line; and runs that touch a new 128-byte
-/// line every few events. Kept below 65,536, past which the events a share
-/// load gathers double their room to 131,072 before they move into the
+/// The most micro-events one session stores, over the whole log.
+///
+/// The main lever on memory use and on the time a shared link takes to load.
+/// Tunable. Set so that the heaviest logs measured stay under 64 MB at their
+/// peak: runs of accesses that each move every rank of a set of `MAX_LINES`
+/// ways, where one event in four is a `Rank` of about 2 KB that lists every
+/// way in its changed cells and in its log line; and runs that touch a new
+/// 128-byte line every few events. Kept below 65,536, past which the events a
+/// share load gathers double their room to 131,072 before they move into the
 /// session.
 ///
 /// A saved file keeps room for a cursor this many events into an op, so a
@@ -101,11 +103,13 @@ pub const CHECKPOINT_INTERVAL: u32 = 2_000;
 pub const LOAD_SLICE_EVENTS: u32 = 2_000;
 
 /// Bytes of program source that take about as long to parse as one event
-/// takes to replay. A sliced share load counts the parsing an op does as
-/// this many bytes an event: a `Program` op parses its source, and a
-/// `Config` op parses the loaded program again under its configuration,
-/// work its one `Setup` event does not measure. So a slice of such ops is no
-/// longer than a slice of events. Tunable, after measuring both.
+/// takes to replay.
+///
+/// A sliced share load counts the parsing an op does as this many bytes an
+/// event: a `Program` op parses its source, and a `Config` op parses the
+/// loaded program again under its configuration, work its one `Setup` event
+/// does not measure. So a slice of such ops is no longer than a slice of
+/// events. Tunable, after measuring both.
 pub const PARSE_BYTES_PER_EVENT: u32 = 64;
 
 /// The largest share string, in bytes (64 KiB), so decoding a link is bounded
@@ -113,7 +117,9 @@ pub const PARSE_BYTES_PER_EVENT: u32 = 64;
 pub const MAX_SHARE_TEXT_BYTES: u32 = 64 * 1024;
 
 /// The largest inflated share document, and the largest loaded file, in bytes
-/// (1 MiB). It is also the limit of the inflate itself, so a short link cannot
+/// (1 MiB).
+///
+/// It is also the limit of the inflate itself, so a short link cannot
 /// decompress into unbounded memory; and the most a session's saved file may
 /// hold, so every session can be saved and opened again: the session refuses
 /// an op that could take its file past it
@@ -130,10 +136,11 @@ pub const MAX_SHARE_TEXT_BYTES: u32 = 64 * 1024;
 /// such a raise.
 pub const MAX_SHARE_JSON_BYTES: u32 = 1024 * 1024;
 
-/// The most ops one share document may hold, so reading and checking a link
-/// or a file is bounded before any of it replays; and the most ops a
-/// session's log may hold, so every session's log fits a link. Tunable,
-/// within the relations tested below.
+/// The most ops one share document, and one session's log, may hold.
+///
+/// Bounding a document's ops keeps reading and checking a link or a file
+/// bounded before any of it replays, and bounding a log's ops keeps every
+/// session's log within a link. Tunable, within the relations tested below.
 ///
 /// A saved file keeps room for a cursor in its last op, whose index is one
 /// less than this, so a raise that gives that index another digit takes a
@@ -143,12 +150,14 @@ pub const MAX_SHARE_OPS: u32 = 10_000;
 /// The access outcomes the hit and miss sparkline shows. Tunable.
 pub const RECENT_OUTCOMES: u32 = 24;
 
-/// The deepest predicates may nest inside `all`, `any` and `not`, so reading
-/// a predicate is bounded work, and a bounded depth of recursion, whatever it
-/// comes from: `serde_json` stops module JSON nested deeper than 128, but a
-/// predicate from JavaScript is read with no such limit, and one nested a few
-/// thousand deep would exhaust the stack. Tunable, down to 128, so that no
-/// module JSON meets this limit before `serde_json`'s.
+/// The deepest predicates may nest inside `all`, `any` and `not`.
+///
+/// Reading a predicate is then bounded work, and a bounded depth of
+/// recursion, whatever it comes from: `serde_json` stops module JSON nested
+/// deeper than 128, but a predicate from JavaScript is read with no such
+/// limit, and one nested a few thousand deep would exhaust the stack.
+/// Tunable, down to 128, so that no module JSON meets this limit before
+/// `serde_json`'s.
 pub const MAX_PREDICATE_DEPTH: u32 = 128;
 
 #[cfg(test)]

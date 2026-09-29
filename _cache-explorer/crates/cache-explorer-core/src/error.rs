@@ -14,7 +14,9 @@ use std::fmt;
 use thiserror::Error;
 
 /// A value from JavaScript that could not be read as the argument it was
-/// passed as. `Display` is the message thrown, the argument's type then the
+/// passed as.
+///
+/// `Display` is the message thrown, the argument's type then the
 /// deserializer's detail, passed through as it is worded: ``invalid Op:
 /// unknown variant `stpe`, expected one of `config`, `issue`, …``.
 ///

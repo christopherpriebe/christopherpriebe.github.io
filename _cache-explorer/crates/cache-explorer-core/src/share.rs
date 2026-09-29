@@ -151,12 +151,13 @@ pub enum TooLarge {
     },
 }
 
-/// Why a session's run cannot be written as a link: its share string would
-/// be longer than [`MAX_SHARE_TEXT_BYTES`], so no link could open it. Its
-/// JSON is never the reason: the session keeps its saved file, the same
-/// JSON a link unpacks to, within [`MAX_SHARE_JSON_BYTES`], so a saved file
-/// always holds the run. `Display` is what Share says instead of copying a
-/// link, and offers that file.
+/// Why a session's run cannot be written as a link.
+///
+/// Its share string would be longer than [`MAX_SHARE_TEXT_BYTES`], so no link
+/// could open it. Its JSON is never the reason: the session keeps its saved
+/// file, the same JSON a link unpacks to, within [`MAX_SHARE_JSON_BYTES`], so
+/// a saved file always holds the run. `Display` is what Share says instead of
+/// copying a link, and offers that file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
 #[error(
     "This run is too long for a link: its link would be {} bytes long, and at most {} bytes can \

@@ -180,10 +180,12 @@ pub struct NotPredicate {
     pub not: Box<Predicate>,
 }
 
-/// True when the event the cursor rests on is of the kind, and, when an
-/// entry is given, belongs to that entry of the displayed run: a step that
-/// asks the student to drag the timeline back to step 1.2, the tag compare,
-/// waits for `{"event": {"kind": "miss", "entry": 1}}`.
+/// True when the event the cursor rests on is of the kind, and of the entry
+/// if one is given.
+///
+/// The entry is the displayed run's: a step that asks the student to drag the
+/// timeline back to step 1.2, the tag compare, waits for
+/// `{"event": {"kind": "miss", "entry": 1}}`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
@@ -204,10 +206,12 @@ pub struct EventMatch {
     pub entry: Option<u32>,
 }
 
-/// True when the displayed run's most recent completed access at or before
-/// the cursor was made by an op made since the step began, and matches
-/// every field given: what an instruct step waits for, an access made after
-/// it began.
+/// True when the displayed run's last completed access at the cursor matches
+/// every field given and was made since the step began.
+///
+/// The access is the most recent completed one at or before the cursor, and
+/// it counts only when an op made since the step began made it: what an
+/// instruct step waits for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
@@ -306,10 +310,11 @@ deserialize_unit_enum!(CmpOp {
     "<=" => AtMost,
 });
 
-/// What a predicate is evaluated against: the machine at a position of a
-/// session's log, the event there, and the serial of the last op made
-/// before the current step began, so that only an op with a greater serial
-/// counts as made since.
+/// What a predicate is evaluated against.
+///
+/// The machine at a position of a session's log, the event there, and the
+/// serial of the last op made before the current step began, so that only an
+/// op with a greater serial counts as made since.
 #[derive(Clone, Copy, Debug)]
 pub struct EvalContext<'a> {
     /// The session whose log the position is in.

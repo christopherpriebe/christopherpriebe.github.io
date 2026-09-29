@@ -45,10 +45,12 @@ use crate::request::Request;
 use crate::stats::{Counters, Recent, Shadow};
 use crate::units::{Cycle, LineAddr, SetIndex, Tag, WayIndex};
 
-/// The state of a run at one point: its configuration and geometry, the
-/// cache, memory, registers and counters, the loaded program and the CPU's
-/// place in it, what the classification of misses and the sparkline
-/// remember, the access in progress, and the run's generator.
+/// The state of a run at one point.
+///
+/// It holds the run's configuration and geometry, the cache, memory,
+/// registers and counters, the loaded program and the CPU's place in it, what
+/// the classification of misses and the sparkline remember, the access in
+/// progress, and the run's generator.
 ///
 /// There is no way to obtain one from outside the core other than by replaying
 /// a run, so every machine is one a sequence of ops can reach. Not
@@ -159,10 +161,11 @@ pub(crate) struct Lookup {
     pub(crate) tags: Vec<Option<Tag>>,
 }
 
-/// A machine invariant that no longer holds, and where. `Display` names the
-/// invariant as the internal-error message quotes it: "Internal error:
-/// invariant I3 (no two valid ways in set 2 hold the same tag) no longer
-/// holds."
+/// A machine invariant that no longer holds, and where.
+///
+/// `Display` names the invariant as the internal-error message quotes it:
+/// "Internal error: invariant I3 (no two valid ways in set 2 hold the same
+/// tag) no longer holds."
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
 pub enum InvariantViolation {
     /// I1: a set's ranks are not a permutation of `0..ways`.

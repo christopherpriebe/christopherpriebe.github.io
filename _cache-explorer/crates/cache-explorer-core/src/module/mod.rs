@@ -230,10 +230,11 @@ pub struct ModuleCard {
     pub advanced: bool,
 }
 
-/// Why a module or the module index cannot be read. `Display` is the
-/// message an author reads: serde's, with its line and column, for JSON
-/// that does not have the format's shape, and otherwise the place in the
-/// module, as a JSON path, then what is wrong there:
+/// Why a module or the module index cannot be read.
+///
+/// `Display` is the message an author reads: serde's, with its line and
+/// column, for JSON that does not have the format's shape, and otherwise the
+/// place in the module, as a JSON path, then what is wrong there:
 /// `steps[2].until.event.entry: entry must be at least 1.`
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum ModuleError {
@@ -715,10 +716,12 @@ impl InForce {
     }
 }
 
-/// Reads the module index, `index.json`: one row per module, in the order
-/// the picker lists them, each with the module's id, title, description and
-/// `advanced`. The ids must be unique and of the form `04-tracking-lru`, and
-/// the descriptions in the inline markdown module text uses.
+/// Reads the module index, `index.json`: one row per module.
+///
+/// The rows are in the order the picker lists them, each with the module's
+/// id, title, description and `advanced`. The ids must be unique and of the
+/// form `04-tracking-lru`, and the descriptions in the inline markdown module
+/// text uses.
 ///
 /// # Errors
 ///

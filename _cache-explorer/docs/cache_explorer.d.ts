@@ -766,10 +766,11 @@ export interface State {
 }
 
 /**
- * Everything the way editor draws for its form: each field read, the
- * swatches under the line address, what the untouched data inputs show,
- * the smallest patch that makes the way what the form shows, its plan or
- * refusal, and the way as it would be.
+ * Everything the way editor draws for its form.
+ *
+ * It holds each field read, the swatches under the line address, what the
+ * untouched data inputs show, the smallest patch that makes the way what the
+ * form shows, its plan or refusal, and the way as it would be.
  */
 export interface EditDraft {
     /**
@@ -1677,10 +1678,12 @@ export interface ConfigMatch {
 }
 
 /**
- * The fields of a way an edit changes; a field left out keeps its value,
- * or takes the one the edit implies. A way is given the line it holds by
- * an address, from which the tag follows: a bare tag has no index bits, so
- * it could not be checked against the way's set.
+ * The fields of a way an edit changes.
+ *
+ * A field left out keeps its value, or takes the one the edit implies. A way
+ * is given the line it holds by an address, from which the tag follows: a
+ * bare tag has no index bits, so it could not be checked against the way's
+ * set.
  */
 export interface WayPatch {
     /**
@@ -2187,10 +2190,12 @@ export interface ConfigPredicate {
 }
 
 /**
- * True when the displayed run's most recent completed access at or before
- * the cursor was made by an op made since the step began, and matches
- * every field given: what an instruct step waits for, an access made after
- * it began.
+ * True when the displayed run's last completed access at the cursor matches
+ * every field given and was made since the step began.
+ *
+ * The access is the most recent completed one at or before the cursor, and
+ * it counts only when an op made since the step began made it: what an
+ * instruct step waits for.
  */
 export interface LastAccessPredicate {
     /**
@@ -2200,10 +2205,12 @@ export interface LastAccessPredicate {
 }
 
 /**
- * True when the event the cursor rests on is of the kind, and, when an
- * entry is given, belongs to that entry of the displayed run: a step that
- * asks the student to drag the timeline back to step 1.2, the tag compare,
- * waits for `{"event": {"kind": "miss", "entry": 1}}`.
+ * True when the event the cursor rests on is of the kind, and of the entry
+ * if one is given.
+ *
+ * The entry is the displayed run's: a step that asks the student to drag the
+ * timeline back to step 1.2, the tag compare, waits for
+ * `{"event": {"kind": "miss", "entry": 1}}`.
  */
 export interface EventPredicate {
     /**

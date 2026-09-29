@@ -134,10 +134,12 @@ pub enum EditPatch {
     },
 }
 
-/// The fields of a way an edit changes; a field left out keeps its value,
-/// or takes the one the edit implies. A way is given the line it holds by
-/// an address, from which the tag follows: a bare tag has no index bits, so
-/// it could not be checked against the way's set.
+/// The fields of a way an edit changes.
+///
+/// A field left out keeps its value, or takes the one the edit implies. A way
+/// is given the line it holds by an address, from which the tag follows: a
+/// bare tag has no index bits, so it could not be checked against the way's
+/// set.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
