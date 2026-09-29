@@ -117,8 +117,12 @@ impl Loader {
             self.builder.op = index;
             let first = self.builder.next_id();
             if self.progress == OpProgress::START {
-                let json = check_room(first, index, &mut self.file, op)
-                    .map_err(|error| ReplayError::Op { index, error })?;
+                let json = check_room(first, index, &mut self.file, op).map_err(|room| {
+                    ReplayError::Op {
+                        index,
+                        error: room.into(),
+                    }
+                })?;
                 self.ops_json.push(json);
             }
             let mut sink = Slice {

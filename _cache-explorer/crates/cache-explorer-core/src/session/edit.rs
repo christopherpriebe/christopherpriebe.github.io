@@ -11,11 +11,10 @@
 //! would take its saved file past what a file can hold with the edit. Then
 //! the machine's own rules decide.
 
-use super::{slot_of, EntryKind, EntryRecord, Session};
+use super::{EntryKind, EntryRecord, Session};
 use crate::engine::{self, Blocked, EditDraft, EditPlan, EditRefusal, MemoryEditDraft, WayForm};
 use crate::explain::Unfinished;
 use crate::op::{EditPatch, EditTarget, Op};
-use crate::share;
 use crate::snapshot;
 use crate::units::{Addr, EventPos, OpIndex, SetIndex, WayIndex};
 
@@ -73,25 +72,14 @@ impl Session {
         if self.gate.is_some() {
             return Some(Blocked::Gated);
         }
-        let (base, kept) = self.base();
-        if !engine::has_room(u64::from(base.get())) {
-            return Some(Blocked::Full);
-        }
-        if !engine::has_op_room(kept) {
-            return Some(Blocked::LinkFull);
-        }
         let op = Op::Edit {
             target: *target,
             patch: patch.clone(),
         };
-        if !self
-            .saved
-            .room_after(slot_of(kept))
-            .fits(&share::op_json(&op))
-        {
-            return Some(Blocked::FileFull);
+        match self.room(&op) {
+            Err(room) => Some(room.into()),
+            Ok(()) => self.unfinished().map(Blocked::Unfinished),
         }
-        self.unfinished().map(Blocked::Unfinished)
     }
 
     /// What the cursor must finish before an edit, when it is inside an op:

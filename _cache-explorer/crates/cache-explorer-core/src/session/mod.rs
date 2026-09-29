@@ -68,7 +68,7 @@ use checkpoints::{due, Checkpoint, Checkpoints};
 use timeline::{Entries, EntryBase};
 
 use crate::config::{Config, ConfigError, Timing};
-use crate::engine::{self, Emitter, EventSink, Flow, OpProgress};
+use crate::engine::{self, Blocked, Emitter, EventSink, Flow, OpProgress};
 use crate::event::{EventKind, MicroEvent};
 use crate::explain;
 use crate::geometry::{AccessError, Decoded};
@@ -239,8 +239,10 @@ impl Session {
         for (index, op) in (0_u32..).zip(ops) {
             let index = OpIndex::new_unchecked(index);
             let first = u64::try_from(sink.events.len()).unwrap_or(u64::MAX);
-            check_room(first, index, &mut file, op)
-                .map_err(|error| ReplayError::Op { index, error })?;
+            check_room(first, index, &mut file, op).map_err(|room| ReplayError::Op {
+                index,
+                error: room.into(),
+            })?;
             let mut out = Emitter::new(&mut sink, index, first);
             engine::apply(&mut machine, op, &mut out)
                 .map_err(|error| ReplayError::Op { index, error })?;
@@ -727,13 +729,13 @@ impl Session {
     /// Whether the log has room for `op` where a new op would go, as
     /// [`Session::apply`] checks after the gate: under the session's event
     /// limit, then under the ops a link can hold, then under the bytes a
-    /// saved file can hold, counting the ops kept before it.
+    /// saved file can hold, counting the ops kept before it. The editors ask
+    /// the same, so that they refuse as `apply` does.
     ///
     /// # Errors
     ///
-    /// [`OpError::SessionFull`], [`OpError::LinkFull`] or
-    /// [`OpError::FileFull`], the first that fails.
-    fn room(&self, op: &Op) -> Result<(), OpError> {
+    /// The [`Room`] that is lacking, the first that fails.
+    fn room(&self, op: &Op) -> Result<(), Room> {
         let (base, kept) = self.base();
         let mut file = self.saved.room_after(slot_of(kept));
         check_room(
@@ -1035,8 +1037,10 @@ fn resume_into<S: EventSink>(
     for (index, op) in (0_u32..).zip(ops).skip(first) {
         let index = OpIndex::new_unchecked(index);
         if let Some(file) = file.as_mut().filter(|_| progress == OpProgress::START) {
-            check_room(next_id, index, file, op)
-                .map_err(|error| ReplayError::Op { index, error })?;
+            check_room(next_id, index, file, op).map_err(|room| ReplayError::Op {
+                index,
+                error: room.into(),
+            })?;
         }
         let mut out = Emitter::new(&mut *sink, index, next_id);
         engine::resume(machine, op, progress, &mut out)
@@ -1065,6 +1069,38 @@ fn slot_of(ops: u32) -> usize {
     usize::try_from(ops).unwrap_or(usize::MAX)
 }
 
+/// Which limit of the log an op finds no room under, in the order they are
+/// checked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Room {
+    /// The session's events leave no room for another entry.
+    Events,
+    /// The log already holds as many ops as a link can.
+    Ops,
+    /// The op's JSON does not fit in what is left of a saved file.
+    File,
+}
+
+impl From<Room> for OpError {
+    fn from(room: Room) -> OpError {
+        match room {
+            Room::Events => OpError::SessionFull,
+            Room::Ops => OpError::LinkFull,
+            Room::File => OpError::FileFull,
+        }
+    }
+}
+
+impl From<Room> for Blocked {
+    fn from(room: Room) -> Blocked {
+        match room {
+            Room::Events => Blocked::Full,
+            Room::Ops => Blocked::LinkFull,
+            Room::File => Blocked::FileFull,
+        }
+    }
+}
+
 /// Checks that a log of `events` events whose ops before it number `index`
 /// has room for `op`, as every op is checked before the machine's rules:
 /// room for one more entry, then for one more op a link can hold, then for
@@ -1073,17 +1109,16 @@ fn slot_of(ops: u32) -> usize {
 ///
 /// # Errors
 ///
-/// [`OpError::SessionFull`], [`OpError::LinkFull`] or [`OpError::FileFull`],
-/// the first that fails; nothing is taken.
-fn check_room(
-    events: u64,
-    index: OpIndex,
-    file: &mut FileRoom,
-    op: &Op,
-) -> Result<String, OpError> {
-    engine::room(events, index.get())?;
+/// The [`Room`] that is lacking, the first that fails; nothing is taken.
+fn check_room(events: u64, index: OpIndex, file: &mut FileRoom, op: &Op) -> Result<String, Room> {
+    if !engine::has_room(events) {
+        return Err(Room::Events);
+    }
+    if !engine::has_op_room(index.get()) {
+        return Err(Room::Ops);
+    }
     let json = share::op_json(op);
-    file.take(&json)?;
+    file.take(&json).map_err(|_| Room::File)?;
     Ok(json)
 }
 
