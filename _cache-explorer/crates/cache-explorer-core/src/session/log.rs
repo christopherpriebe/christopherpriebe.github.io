@@ -27,6 +27,57 @@ use crate::share::{FileRoom, SavedOps};
 use crate::stats::Outcome;
 use crate::units::{Addr, EventPos, OpIndex};
 
+/// The work the lookups of a last access do, counted for the thread they run
+/// on, for a test to read before and after a search: it bounds the work of
+/// the search, not its time.
+#[cfg(test)]
+pub(super) mod lookup_work {
+    use std::cell::Cell;
+
+    /// What the lookups have done so far on this thread.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub(in crate::session) struct Work {
+        /// The lookups made.
+        pub(in crate::session) lookups: u64,
+        /// The entries they looked at, an entry each time it is compared or
+        /// read.
+        pub(in crate::session) entries: u64,
+    }
+
+    thread_local! {
+        static WORK: Cell<Work> = const {
+            Cell::new(Work { lookups: 0, entries: 0 })
+        };
+    }
+
+    /// What the lookups on this thread have done so far.
+    pub(in crate::session) fn so_far() -> Work {
+        WORK.with(Cell::get)
+    }
+
+    /// Notes a lookup begun.
+    pub(super) fn lookup() {
+        WORK.with(|work| {
+            let so_far = work.get();
+            work.set(Work {
+                lookups: so_far.lookups + 1,
+                ..so_far
+            });
+        });
+    }
+
+    /// Notes an entry looked at.
+    pub(super) fn entry() {
+        WORK.with(|work| {
+            let so_far = work.get();
+            work.set(Work {
+                entries: so_far.entries + 1,
+                ..so_far
+            });
+        });
+    }
+}
+
 /// The ops of a session and everything recorded of running them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Log {
@@ -291,14 +342,24 @@ impl Log {
     /// appended, so finding it costs a search of the entries, however long
     /// the run.
     pub(super) fn last_access(&self, pos: EventPos, run: u32) -> Option<LastAccess> {
-        let done = self.entries.partition_point(|record| record.last <= pos);
+        #[cfg(test)]
+        lookup_work::lookup();
+        let done = self.entries.partition_point(|record| {
+            #[cfg(test)]
+            lookup_work::entry();
+            record.last <= pos
+        });
         let latest = done.checked_sub(1)?;
         // The latest entry done is an earlier run's while this run has none
         // done yet.
+        #[cfg(test)]
+        lookup_work::entry();
         if self.entries.get(latest)?.run != run {
             return None;
         }
         let index = (*self.last_accesses.get(latest)?)?;
+        #[cfg(test)]
+        lookup_work::entry();
         let record = self.entries.get(usize::try_from(index).ok()?)?;
         let (access, outcome) = completed(record)?;
         let op = self.event_at(record.first)?.op_index;

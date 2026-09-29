@@ -220,8 +220,10 @@ impl Waiting for Finder<'_> {
 mod tests {
     #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
+    use super::super::log::lookup_work;
     use super::*;
     use crate::config::Preset;
+    use crate::limits::{MAX_EVENTS_PER_ENTRY, SESSION_EVENT_LIMIT};
     use crate::op::{AccessKind, Op, ProgramFormat};
     use crate::stats::Outcome;
     use crate::units::Addr;
@@ -296,5 +298,54 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A loop without an exit and without a memory access: one event per
+    /// instruction until the budget or the session's limit stops it.
+    const ENDLESS: &str = "        add r1, r0, #1\nloop:   bnez r1, loop";
+
+    #[test]
+    fn a_search_along_a_full_run_looks_up_each_position_once_by_binary_search() {
+        // One load, then a run as long as the session holds of instructions
+        // that access nothing: `lastAccess` at every position of the run has
+        // the load to find, and the run's every entry to pass on the way if
+        // it were to look back along it.
+        let mut session = session();
+        session.apply(load(0x0A4)).unwrap();
+        let loaded = session.cursor.pos();
+        let endless = Op::Program {
+            source: ENDLESS.to_owned(),
+            format: ProgramFormat::Asm,
+        };
+        while session.apply(endless.clone()).is_ok() && session.apply(Op::StepAccess).is_ok() {}
+        let events = session.cursor.pos().get();
+        assert!(
+            events + MAX_EVENTS_PER_ENTRY > SESSION_EVENT_LIMIT,
+            "{events}"
+        );
+        let entries = session.log.run_entries(1).len();
+        let never: Predicate =
+            serde_json::from_str(r#"{"lastAccess": {"addr": "0x0A8"}}"#).unwrap();
+        let first: Predicate =
+            serde_json::from_str(r#"{"lastAccess": {"addr": "0x0A4"}}"#).unwrap();
+
+        let before = lookup_work::so_far();
+        let found = session.find_event(&never);
+        let work = lookup_work::so_far();
+
+        assert_eq!(found, None);
+        // One lookup for the run's origin and one for each event after it.
+        let lookups = work.lookups - before.lookups;
+        assert_eq!(lookups, u64::from(events) + 1);
+        // Each lookup is a binary search of the entries: twice its depth,
+        // and a few reads, is room enough, where a walk back along the run
+        // looks at all of them.
+        let depth = u64::from(entries.ilog2()) + 1;
+        let looked_at = work.entries - before.entries;
+        assert!(
+            looked_at <= lookups * (2 * depth + 4),
+            "{looked_at} entries looked at for {lookups} lookups over {entries} entries"
+        );
+        assert_eq!(session.find_event(&first), Some(loaded));
     }
 }

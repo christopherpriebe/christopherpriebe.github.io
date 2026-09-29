@@ -8,7 +8,7 @@
 //! deep, a limit module JSON never meets before `serde_json`'s; the
 //! predicates mean what they say, `event`, `lastAccess` across a truncation
 //! and a new run, and `config` included, and a search for `lastAccess` along
-//! a full session is one replay;
+//! a full session that finds the load or finds nothing;
 //! "Show me" on a prediction comes only after a wrong answer, and a right
 //! or revealed answer applies the `then` ops where the prediction began;
 //! ops the state refuses leave the step waiting; replacing the session ends
@@ -16,10 +16,6 @@
 //! read; and the panel's view says where the run is.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
-
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
 
 use cache_explorer_core::limits::{
     MAX_EVENTS_PER_ENTRY, MAX_PREDICATE_DEPTH, MAX_SHARE_OPS, SESSION_EVENT_LIMIT,
@@ -60,11 +56,6 @@ const FIXTURES: [&str; 3] = [MISS_THEN_HIT, SWITCH_CONFIG, STALE_MEMORY];
 /// A loop without an exit and without a memory access: one event per
 /// instruction until the budget or the session's limit stops it.
 const ENDLESS: &str = "        add r1, r0, #1\nloop:   bnez r1, loop";
-
-/// How long searches along a full session may take, in a debug build: many
-/// times what one quiet replay of it takes, and far less than a search
-/// that looks back along the run at every position.
-const SEARCH_BOUND: Duration = Duration::from_secs(20);
 
 /// The tests' helpers. They sit in a module compiled for tests only, where a
 /// failed `unwrap` is a failed test, as in the tests themselves.
@@ -954,12 +945,11 @@ fn the_last_access_follows_undo_truncation_and_new_runs() {
 }
 
 #[test]
-fn the_search_for_the_last_access_along_a_full_run_is_one_replay() {
+fn the_search_for_the_last_access_along_a_full_run_finds_or_misses_it() {
     // One load, then a run as long as the session holds of instructions
     // that access nothing. The search evaluates `lastAccess` at every
-    // position of the run: each evaluation must find the run's latest
-    // access without looking back along the run, or the search takes
-    // minutes instead of one quiet replay.
+    // position of the run; the work it takes is bounded by a test of the
+    // session, which counts it.
     let mut session = session();
     session.apply(load(0x0A4)).unwrap();
     let loaded = session.position().pos;
@@ -970,19 +960,12 @@ fn the_search_for_the_last_access_along_a_full_run_is_one_replay() {
     while session.apply(endless.clone()).is_ok() && session.apply(Op::StepAccess).is_ok() {}
     let full = session.position().pos.get();
     assert!(full + MAX_EVENTS_PER_ENTRY > SESSION_EVENT_LIMIT, "{full}");
-    let (sender, receiver) = mpsc::channel();
-    thread::spawn(move || {
-        let found = |value| session.find_event(&predicate(value));
-        let _ = sender.send((
-            found(json!({"lastAccess": {"addr": "0x0A8"}})),
-            found(json!({"lastAccess": {"addr": "0x0A4"}})),
-        ));
-    });
-    let (never, first) = receiver
-        .recv_timeout(SEARCH_BOUND)
-        .expect("the searches end in time");
-    assert_eq!(never, None);
-    assert_eq!(first, Some(loaded));
+    let found = |value| session.find_event(&predicate(value));
+    assert_eq!(found(json!({"lastAccess": {"addr": "0x0A8"}})), None);
+    assert_eq!(
+        found(json!({"lastAccess": {"addr": "0x0A4"}})),
+        Some(loaded)
+    );
 }
 
 #[test]
