@@ -655,7 +655,7 @@ impl TryFrom<RawEditPatch> for EditPatch {
                 rank: raw.rank.value(),
             }),
             EditKind::Memory => EditPatch::Memory {
-                value: raw.value.value().ok_or(ShapeError::Missing {
+                value: raw.value.value().ok_or_else(|| ShapeError::Missing {
                     form: "patch",
                     kind: kind.name(),
                     field: "value",

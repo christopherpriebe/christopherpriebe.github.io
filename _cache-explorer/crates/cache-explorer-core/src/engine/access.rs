@@ -768,10 +768,10 @@ fn word_start(machine: &Machine, word: WordIndex) -> u32 {
 /// without all its ways breaks I1; if the invariant check finds an earlier
 /// problem, that one is named instead.
 pub(crate) fn lost(machine: &Machine, set: SetIndex) -> Halt {
-    Halt::Broken(machine.check_invariants().err().unwrap_or(
+    Halt::Broken(machine.check_invariants().err().unwrap_or_else(|| {
         InvariantViolation::RanksNotAPermutation {
             set,
             ways: machine.geometry.ways(),
-        },
-    ))
+        }
+    }))
 }

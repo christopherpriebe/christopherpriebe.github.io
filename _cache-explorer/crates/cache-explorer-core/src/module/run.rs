@@ -456,7 +456,7 @@ impl ModuleRun {
                 }),
                 predict,
             ) => {
-                let predict = predict.unwrap_or(Prediction::new(session.cursor_position()));
+                let predict = predict.unwrap_or_else(|| Prediction::new(session.cursor_position()));
                 let options = (0_u32..)
                     .zip(options)
                     .map(|(index, text)| OptionView {

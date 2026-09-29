@@ -1007,7 +1007,7 @@ fn check_memory(
     let named = differing
         .iter()
         .find(|&&index| moved || before.words.get(index) != after.words.get(index))
-        .or(differing.first())
+        .or_else(|| differing.first())
         .copied()
         .unwrap_or(0);
     Err(Refused::NeedsDirty {

@@ -359,7 +359,7 @@ impl Geometry {
     /// [`AccessError::OutOfRange`] if `addr` does not fit `address_bits`; such
     /// an address has no decoding.
     pub fn decode(&self, addr: u32) -> Result<Decoded, AccessError> {
-        let addr = self.addr(addr).ok_or(AccessError::OutOfRange {
+        let addr = self.addr(addr).ok_or_else(|| AccessError::OutOfRange {
             addr: u64::from(addr),
             address_bits: self.address_bits,
         })?;
