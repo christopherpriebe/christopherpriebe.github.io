@@ -653,6 +653,21 @@ fn start_appends_the_preset_and_the_program_and_sets_the_mode() {
 }
 
 #[test]
+fn start_reports_the_events_of_the_ops_it_appended_over_an_undone_op() {
+    let mut session = session();
+    session.apply(load(0x0A4)).unwrap();
+    session.apply(load(0x0A8)).unwrap();
+    assert!(session.undo());
+    let from = session.position().pos;
+    let mut run = ModuleRun::new(Module::parse(SWITCH_CONFIG).unwrap());
+    let reported = run.start(&mut session).unwrap().clone();
+    let kinds: Vec<EventKind> = reported.iter().map(|event| event.kind).collect();
+    assert_eq!(kinds, [EventKind::Setup, EventKind::Setup], "{reported:?}");
+    let to = u32::try_from(session.events_range(0..u32::MAX).len()).unwrap();
+    assert_eq!(reported, session.events_range(from.get()..to));
+}
+
+#[test]
 fn the_view_says_where_the_run_is() {
     let (mut run, mut session) = started(MISS_THEN_HIT);
     let first = run.view(&session);
