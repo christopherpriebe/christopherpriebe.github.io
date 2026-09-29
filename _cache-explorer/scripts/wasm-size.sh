@@ -1,12 +1,12 @@
 #!/bin/sh
-# Prints the size of a release build's wasm, raw and gzipped at level 9, against
-# the owner's budget of 300,000 bytes gzipped, a recorded departure from the
-# spec's 250,000. Above 280,000 bytes it also emits a warning annotation, and
-# above 300,000 an error annotation and a non-zero exit. The annotations go to
-# stderr, so that a step piping the report line into the job summary copies
-# that line alone. Such a step must set pipefail (in GitHub Actions, `shell:
-# bash`): without it the step's status is that of the last command in the
-# pipe, and a build over the budget passes.
+# Prints the size of a release build's wasm, raw and gzipped at level 9,
+# against a budget of 300,000 bytes gzipped. Above 280,000 bytes it also
+# emits a warning annotation, and above 300,000 an error annotation and a
+# non-zero exit. The annotations go to stderr, so that a step piping the
+# report line into the job summary copies that line alone. Such a step must
+# set pipefail (in GitHub Actions, `shell: bash`): without it the step's
+# status is that of the last command in the pipe, and a build over the
+# budget passes.
 #
 # Usage: sh scripts/wasm-size.sh path/to/cache_explorer_bg.wasm
 set -eu
