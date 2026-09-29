@@ -11,7 +11,9 @@
 //! always names the same state.
 
 use super::timeline::EntryAccess;
-use super::{resume_into, EntryKind, EntryOutcome, EntryRecord, ReplayError, Session, Start};
+use super::{
+    resume_into, EntryKind, EntryOutcome, EntryRecord, ReplayError, Session, Start, Waiting,
+};
 use crate::engine::{EventSink, Flow};
 use crate::event::MicroEvent;
 use crate::machine::Machine;
@@ -201,32 +203,18 @@ impl Session {
         // Replays from the checkpoint at or before the origin, looking at
         // each event after the origin, until the predicate holds or the run
         // ends.
-        let (at, checkpoint) = self.checkpoints.at_or_before(origin);
-        let start = Start {
-            pos: at,
-            machine: checkpoint.machine,
-            op: checkpoint.op,
-            progress: checkpoint.progress,
-        };
-        let mut machine = checkpoint.machine.clone();
+        let start = Start::from(self.checkpoints.at_or_before(origin));
         let mut finder = Finder {
             session: self,
             predicate,
             since,
-            pos: at.get(),
+            pos: start.pos.get(),
             origin: origin.get(),
             end: end.get(),
             found: None,
             done: false,
         };
-        resume_into(
-            &mut machine,
-            start,
-            &self.ops,
-            &mut finder,
-            None,
-            |finder| finder.done,
-        )?;
+        resume_into(start, &self.ops, &mut finder, None)?;
         Ok(finder.found)
     }
 }
@@ -289,6 +277,16 @@ impl EventSink for Finder<'_> {
         } else {
             Flow::Continue
         }
+    }
+}
+
+impl Waiting for Finder<'_> {
+    fn as_sink(&mut self) -> &mut dyn EventSink {
+        self
+    }
+
+    fn finished(&self) -> bool {
+        self.done
     }
 }
 

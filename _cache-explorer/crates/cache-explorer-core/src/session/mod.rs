@@ -64,7 +64,7 @@ pub use timeline::{EntryKind, EntryOutcome, EntryView, EntryViews, EventRow, Ten
 pub(crate) use load::{position_in_op, Loader};
 pub(crate) use timeline::EntryRecord;
 
-use checkpoints::{due, Checkpoint, Checkpoints};
+use checkpoints::{due, Checkpoint, CheckpointRef, Checkpoints};
 use timeline::{Entries, EntryBase};
 
 use crate::config::{Config, ConfigError, Timing};
@@ -233,20 +233,15 @@ impl Session {
     /// limit leaves no room for, an op past the most a link can hold, and
     /// an op a saved file has no room for.
     pub fn replay(initial: &Config, ops: &[Op]) -> Result<Replay, ReplayError> {
-        let mut machine = Machine::start(initial.clone())?;
-        let mut file = FileRoom::new(initial);
+        let origin = Machine::start(initial.clone())?;
+        let start = Start::before_op(
+            EventPos::new_unchecked(0),
+            &origin,
+            OpIndex::new_unchecked(0),
+        );
+        let file = Some(FileRoom::new(initial));
         let mut sink = Recorder::default();
-        for (index, op) in (0_u32..).zip(ops) {
-            let index = OpIndex::new_unchecked(index);
-            let first = u64::try_from(sink.events.len()).unwrap_or(u64::MAX);
-            check_room(first, index, &mut file, op).map_err(|room| ReplayError::Op {
-                index,
-                error: room.into(),
-            })?;
-            let mut out = Emitter::new(&mut sink, index, first);
-            engine::apply(&mut machine, op, &mut out)
-                .map_err(|error| ReplayError::Op { index, error })?;
-        }
+        let machine = resume_into(start, ops, &mut sink, file)?;
         Ok(Replay {
             machine,
             events: sink.events,
@@ -264,12 +259,11 @@ impl Session {
     /// reaches before it stops.
     pub fn replay_to(initial: &Config, ops: &[Op], pos: EventPos) -> Result<Machine, ReplayError> {
         let origin = Machine::start(initial.clone())?;
-        let start = Start {
-            pos: EventPos::new_unchecked(0),
-            machine: &origin,
-            op: OpIndex::new_unchecked(0),
-            progress: OpProgress::START,
-        };
+        let start = Start::before_op(
+            EventPos::new_unchecked(0),
+            &origin,
+            OpIndex::new_unchecked(0),
+        );
         let file = Some(FileRoom::new(initial));
         replay_capturing(start, ops, pos, None, file).map(|(machine, _)| machine)
     }
@@ -760,6 +754,19 @@ impl Session {
         }
     }
 
+    /// Where a quiet replay to `target` starts: the cursor, when it is at
+    /// the end of an op and lies after the nearest checkpoint at or before
+    /// `target` without passing `target`, and otherwise that checkpoint.
+    fn replay_start(&self, target: EventPos) -> Start<'_> {
+        let checkpoint = Start::from(self.checkpoints.at_or_before(target));
+        if checkpoint.pos < self.cursor && self.cursor <= target && self.is_op_end(self.cursor) {
+            let done = OpIndex::new_unchecked(self.ops_done(self.cursor));
+            Start::before_op(self.cursor, &self.current, done)
+        } else {
+            checkpoint
+        }
+    }
+
     /// The machine at `pos`, replayed quietly from the nearest point before
     /// it that the session holds a machine for: a checkpoint, or the cursor
     /// when it is at the end of an op.
@@ -767,23 +774,7 @@ impl Session {
         if pos == self.cursor {
             return Ok(self.current.clone());
         }
-        let (at, checkpoint) = self.checkpoints.at_or_before(pos);
-        let start = if at < self.cursor && self.cursor < pos && self.is_op_end(self.cursor) {
-            Start {
-                pos: self.cursor,
-                machine: &self.current,
-                op: OpIndex::new_unchecked(self.ops_done(self.cursor)),
-                progress: OpProgress::START,
-            }
-        } else {
-            Start {
-                pos: at,
-                machine: checkpoint.machine,
-                op: checkpoint.op,
-                progress: checkpoint.progress,
-            }
-        };
-        replay_quietly(start, &self.ops, pos)
+        replay_quietly(self.replay_start(pos), &self.ops, pos)
     }
 
     /// The machines at `capture` and at `pos`, `capture` not after `pos`,
@@ -794,22 +785,7 @@ impl Session {
         capture: EventPos,
         pos: EventPos,
     ) -> Result<(Machine, Machine), ReplayError> {
-        let (at, checkpoint) = self.checkpoints.at_or_before(capture);
-        let start = if at < self.cursor && self.cursor <= capture && self.is_op_end(self.cursor) {
-            Start {
-                pos: self.cursor,
-                machine: &self.current,
-                op: OpIndex::new_unchecked(self.ops_done(self.cursor)),
-                progress: OpProgress::START,
-            }
-        } else {
-            Start {
-                pos: at,
-                machine: checkpoint.machine,
-                op: checkpoint.op,
-                progress: checkpoint.progress,
-            }
-        };
+        let start = self.replay_start(capture);
         let (machine, captured) = replay_capturing(start, &self.ops, pos, Some(capture), None)?;
         let captured = captured.unwrap_or_else(|| machine.clone());
         Ok((captured, machine))
@@ -990,6 +966,31 @@ struct Start<'m> {
     progress: OpProgress,
 }
 
+impl<'m> Start<'m> {
+    /// The start of a replay that goes on with op `op` from its start, at
+    /// `pos`, where `machine` is.
+    fn before_op(pos: EventPos, machine: &'m Machine, op: OpIndex) -> Self {
+        Start {
+            pos,
+            machine,
+            op,
+            progress: OpProgress::START,
+        }
+    }
+}
+
+impl<'m> From<(EventPos, CheckpointRef<'m>)> for Start<'m> {
+    /// The start of a replay from a checkpoint and the position it is at.
+    fn from((pos, checkpoint): (EventPos, CheckpointRef<'m>)) -> Self {
+        Start {
+            pos,
+            machine: checkpoint.machine,
+            op: checkpoint.op,
+            progress: checkpoint.progress,
+        }
+    }
+}
+
 /// Replays `ops` quietly from `start` and returns the machine after the
 /// event at `target`, or after the last op if the ops end first.
 fn replay_quietly(start: Start<'_>, ops: &[Op], target: EventPos) -> Result<Machine, ReplayError> {
@@ -1008,13 +1009,12 @@ fn replay_capturing(
     capture: Option<EventPos>,
     file: Option<FileRoom>,
 ) -> Result<(Machine, Option<Machine>), ReplayError> {
-    let mut machine = start.machine.clone();
     let at_start = capture
         .filter(|&capture| capture == start.pos)
-        .map(|_| machine.clone());
+        .map(|_| start.machine.clone());
     let remaining = target.get().saturating_sub(start.pos.get());
     if remaining == 0 {
-        return Ok((machine, at_start));
+        return Ok((start.machine.clone(), at_start));
     }
     let mut sink = Stopper {
         remaining,
@@ -1024,26 +1024,23 @@ fn replay_capturing(
             .filter(|&events| events > 0),
         captured: at_start,
     };
-    resume_into(&mut machine, start, ops, &mut sink, file, |sink| {
-        sink.remaining == 0
-    })?;
+    let machine = resume_into(start, ops, &mut sink, file)?;
     Ok((machine, sink.captured))
 }
 
-/// Replays `ops` into `machine`, the machine of `start`, from `start`'s op
-/// and progress, handing each event to `sink`, until the ops end or, after
-/// an op, `finished` says the sink has what it waits for; a sink stops the
-/// op it wants to end inside. With `file`, the room a saved file has at
-/// `start`, each op started is first checked for room, as the fold checks
-/// it.
-fn resume_into<S: EventSink>(
-    machine: &mut Machine,
+/// Replays `ops` from `start`, on a copy of its machine, from its op and
+/// progress, handing each event to `sink`, until the ops end or the sink
+/// is finished after an op; a sink stops the op it wants to end inside.
+/// Gives the machine the replay ends on. With `file`, the room a saved file
+/// has at `start`, each op started is first checked for room, as the fold
+/// checks it.
+fn resume_into(
     start: Start<'_>,
     ops: &[Op],
-    sink: &mut S,
+    sink: &mut dyn Waiting,
     mut file: Option<FileRoom>,
-    finished: impl Fn(&S) -> bool,
-) -> Result<(), ReplayError> {
+) -> Result<Machine, ReplayError> {
+    let mut machine = start.machine.clone();
     let mut next_id = u64::from(start.pos.get());
     let mut progress = start.progress;
     let first = usize::try_from(start.op.get()).unwrap_or(usize::MAX);
@@ -1055,16 +1052,27 @@ fn resume_into<S: EventSink>(
                 error: room.into(),
             })?;
         }
-        let mut out = Emitter::new(&mut *sink, index, next_id);
-        engine::resume(machine, op, progress, &mut out)
+        let mut out = Emitter::new(sink.as_sink(), index, next_id);
+        engine::resume(&mut machine, op, progress, &mut out)
             .map_err(|error| ReplayError::Op { index, error })?;
         next_id = out.next_id();
         progress = OpProgress::START;
-        if finished(sink) {
+        if sink.finished() {
             break;
         }
     }
-    Ok(())
+    Ok(machine)
+}
+
+/// A sink that [`resume_into`] hands the events of a replay to, and that says
+/// after each op whether it has what it waits for. One replay serves every
+/// such sink, rather than one copy of it for each.
+trait Waiting {
+    /// The sink itself.
+    fn as_sink(&mut self) -> &mut dyn EventSink;
+
+    /// Whether the replay has what the sink waits for, and may end.
+    fn finished(&self) -> bool;
 }
 
 /// The position after `count` events.
@@ -1150,6 +1158,16 @@ impl EventSink for Recorder {
     fn event(&mut self, event: Option<MicroEvent>, _after: &Machine) -> Flow {
         self.events.extend(event);
         Flow::Continue
+    }
+}
+
+impl Waiting for Recorder {
+    fn as_sink(&mut self) -> &mut dyn EventSink {
+        self
+    }
+
+    fn finished(&self) -> bool {
+        false
     }
 }
 
@@ -1247,6 +1265,16 @@ impl EventSink for Stopper {
         } else {
             Flow::Continue
         }
+    }
+}
+
+impl Waiting for Stopper {
+    fn as_sink(&mut self) -> &mut dyn EventSink {
+        self
+    }
+
+    fn finished(&self) -> bool {
+        self.remaining == 0
     }
 }
 
