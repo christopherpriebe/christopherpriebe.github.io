@@ -63,7 +63,7 @@ pub use gate::Gate;
 pub use timeline::{EntryKind, EntryOutcome, EntryView, EntryViews, EventRow, Tense, Timeline};
 
 pub(crate) use load::{position_in_op, Loader};
-pub(crate) use timeline::EntryRecord;
+pub(crate) use timeline::{EntryRecord, FIRST_TICK, MISS_TICK};
 
 use checkpoints::{due, Checkpoint, CheckpointRef, Checkpoints};
 use cursor::Cursor;

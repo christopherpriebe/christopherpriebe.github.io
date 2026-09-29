@@ -32,6 +32,14 @@ use crate::machine::Machine;
 use crate::op::{AccessKind, ProgramFormat};
 use crate::units::{Addr, EventPos, Register, SetIndex, WayIndex};
 
+/// The bit of a tick set on an entry's first step. A tick is the byte the
+/// scrubber draws for one step of a run; the ticks of the displayed run and
+/// those of a run still loading are built from this bit and [`MISS_TICK`].
+pub(crate) const FIRST_TICK: u8 = 1;
+
+/// The bit of a tick set on every step of an entry that missed.
+pub(crate) const MISS_TICK: u8 = 2;
+
 /// The log of the displayed run: which run it is, where it starts and ends,
 /// the step the cursor is on, the log's header, the live region's sentence,
 /// and the cursor's entry with its events.
@@ -620,11 +628,14 @@ impl Session {
             .iter()
             .flat_map(|record| {
                 let miss = if record.outcome == EntryOutcome::Miss {
-                    2
+                    MISS_TICK
                 } else {
                     0
                 };
-                (0..record.steps()).map(move |step| miss | u8::from(step == 0))
+                (0..record.steps()).map(move |step| {
+                    let first = if step == 0 { FIRST_TICK } else { 0 };
+                    first | miss
+                })
             })
             .collect()
     }

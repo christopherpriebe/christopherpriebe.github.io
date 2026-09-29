@@ -1623,6 +1623,31 @@ fn loading_in_slices_gives_the_session_one_slice_gives() {
 }
 
 #[test]
+fn the_ticks_a_load_reports_are_the_ticks_of_the_session_it_opens() {
+    // The cursor is in the first run, whose entries miss, hit and execute
+    // instructions; a second run follows it in the log, so the first run
+    // has replayed in full before the last slice.
+    let mut original = varied();
+    original.seek(pos(3));
+    let mut load = ShareLoad::from_share_string(&original.to_share_string().unwrap());
+
+    let progress = loaded(&mut load, 1);
+
+    let ticks = load.take_session().unwrap().ticks();
+    for tick in [0, 1, 2, 3] {
+        assert!(ticks.contains(&tick), "no tick {tick} in {ticks:?}");
+    }
+    let Some((LoadProgress::Done { summary: done }, replaying)) = progress.split_last() else {
+        panic!("{:?}", progress.last());
+    };
+    assert_eq!(done.ticks, ticks);
+    let Some(LoadProgress::Replaying { summary: last }) = replaying.last() else {
+        panic!("{replaying:?}");
+    };
+    assert_eq!(last.ticks, ticks);
+}
+
+#[test]
 fn a_session_is_taken_once_the_load_is_done_and_only_once() {
     let link = varied().to_share_string().unwrap();
     let mut load = ShareLoad::from_share_string(&link);

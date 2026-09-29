@@ -42,7 +42,7 @@ use crate::limits::{
 };
 use crate::module::{code_spans, Segments, TextSegment};
 use crate::op::{Op, OpError};
-use crate::session::{position_in_op, Loader, ReplayError, Session};
+use crate::session::{position_in_op, Loader, ReplayError, Session, FIRST_TICK, MISS_TICK};
 use crate::units::EventPos;
 
 /// The format version of the share documents this crate writes, and the
@@ -834,12 +834,6 @@ impl Opening {
         )
     }
 }
-
-/// The bit of a tick set on an entry's first step.
-const FIRST_TICK: u8 = 1;
-
-/// The bit of a tick set on every step of an entry that missed.
-const MISS_TICK: u8 = 2;
 
 impl ShareSummary {
     /// The summary of a log of `runs` runs and `op_count` ops whose opening
