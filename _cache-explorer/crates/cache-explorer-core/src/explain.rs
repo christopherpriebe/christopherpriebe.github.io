@@ -225,8 +225,8 @@ pub(crate) fn decode(
     };
     let addr = address(geometry, addr.get());
     let tag = tag(geometry, location.tag);
-    let offset = format::data(location.offset);
-    let word = format::data(location.word.get());
+    let offset = format::Data(u64::from(location.offset));
+    let word = format::Data(u64::from(location.word.get()));
     match geometry.placement() {
         Placement::FullyAssociative => format!(
             "{verb} {addr}: tag {tag}, offset {offset} (word {word}). Fully associative: one \
@@ -234,7 +234,7 @@ pub(crate) fn decode(
         ),
         Placement::DirectMapped | Placement::SetAssociative => format!(
             "{verb} {addr}: tag {tag}, set {}, offset {offset} (word {word}).",
-            format::data(location.set.get())
+            format::Data(u64::from(location.set.get()))
         ),
     }
 }
@@ -243,8 +243,8 @@ pub(crate) fn decode(
 pub(crate) fn hit(geometry: &Geometry, set: SetIndex, way: WayIndex, tag: Tag) -> String {
     format!(
         "Set {}, way {}: valid, and tag {} matches. Hit.",
-        format::data(set.get()),
-        format::data(way.get()),
+        format::Data(u64::from(set.get())),
+        format::Data(u64::from(way.get())),
         self::tag(geometry, tag)
     )
 }
@@ -254,7 +254,7 @@ pub(crate) fn hit(geometry: &Geometry, set: SetIndex, way: WayIndex, tag: Tag) -
 /// it was compared against: "Set 2 holds tag 0x01, not 0x03. Miss.", or "Set
 /// 2 is invalid. Miss." when it held nothing.
 pub(crate) fn miss(geometry: &Geometry, set: SetIndex, tag: Tag, held: Option<Tag>) -> String {
-    let set = format::data(set.get());
+    let set = format::Data(u64::from(set.get()));
     let tag = self::tag(geometry, tag);
     if geometry.ways() > 1 {
         return format!("Set {set}: no valid way holds tag {tag}. Miss.");
@@ -270,11 +270,11 @@ pub(crate) fn miss(geometry: &Geometry, set: SetIndex, tag: Tag, held: Option<Ta
 
 /// The `Victim` line: the way a miss chose, and why that one.
 pub(crate) fn victim(geometry: &Geometry, set: SetIndex, choice: VictimChoice) -> String {
-    let way = format::data(choice.way.get());
+    let way = format::Data(u64::from(choice.way.get()));
     match choice.reason {
         VictimReason::Empty if geometry.ways() == 1 => format!(
             "Set {} has one way; the line goes there.",
-            format::data(set.get())
+            format::Data(u64::from(set.get()))
         ),
         VictimReason::Empty => format!("Way {way} chosen: it is invalid (empty)."),
         // A one-line cache also has a single way, but it is fully associative,
@@ -290,7 +290,7 @@ pub(crate) fn victim(geometry: &Geometry, set: SetIndex, choice: VictimChoice) -
         },
         VictimReason::LeastRecentlyUsed { rank } => format!(
             "Way {way} chosen: least recently used (rank {}).",
-            format::data(rank)
+            format::Data(u64::from(rank))
         ),
         VictimReason::FirstIn { .. } => format!("Way {way} chosen: filled earliest (FIFO)."),
         VictimReason::Random => format!("Way {way} chosen at random."),
@@ -310,7 +310,7 @@ pub(crate) fn stall(geometry: &Geometry, miss: u32, wait: StallFor) -> String {
             address(geometry, line.get())
         ),
         StallFor::WriteBackThenFill { victim, line } => {
-            let each = format::setting(miss);
+            let each = format::Setting(u64::from(miss));
             format!(
                 "The CPU stalls for {total}: {each} to write line {} back, then {each} to fetch \
                  line {}.",
@@ -329,7 +329,7 @@ pub(crate) fn stall(geometry: &Geometry, miss: u32, wait: StallFor) -> String {
 pub(crate) fn write_back(geometry: &Geometry, way: WayIndex, line: LineAddr) -> String {
     format!(
         "Way {} is dirty: write line {} back to memory first.",
-        format::data(way.get()),
+        format::Data(u64::from(way.get())),
         address(geometry, line.get())
     )
 }
@@ -340,7 +340,7 @@ pub(crate) fn evict(geometry: &Geometry, way: WayIndex, line: LineAddr, tag: Tag
         "Evict line {} (tag {}) from way {}.",
         address(geometry, line.get()),
         self::tag(geometry, tag),
-        format::data(way.get())
+        format::Data(u64::from(way.get()))
     )
 }
 
@@ -348,7 +348,7 @@ pub(crate) fn evict(geometry: &Geometry, way: WayIndex, line: LineAddr, tag: Tag
 pub(crate) fn fill(geometry: &Geometry, way: WayIndex, line: LineAddr) -> String {
     format!(
         "Fill way {} with line {} from memory.",
-        format::data(way.get()),
+        format::Data(u64::from(way.get())),
         format::line_range(line.get(), geometry.line_bytes(), geometry.address_bits())
     )
 }
@@ -377,9 +377,9 @@ pub(crate) fn rank(
     // The opening clause plus one "; way N is R" or ", way N is R" per other
     // way, sized so the loop below never has to grow the buffer.
     let mut line = String::with_capacity(48 + ranks.len() * 16);
-    // Writing to a `String` cannot fail: `String` never returns `Err` from
-    // `write_str`, so the only way this could is a formatting argument that
-    // panics, and none of these do.
+    // Writing to a `String` cannot fail: `String::write_str` never errs, and
+    // `format::Data`'s `Display` impl only ever passes on the writer's
+    // result, so it cannot return `Err` either.
     let _ = write!(
         line,
         "{order} in set {}: way {} becomes {} ({front})",
@@ -417,11 +417,11 @@ pub(crate) fn load(
     into: Register,
     beside_program: bool,
 ) -> String {
-    let shown = format::data(value);
+    let shown = format::Data(value);
     let read = format!(
         "Read word {} of way {} ({shown})",
-        format::data(word.get()),
-        format::data(way.get())
+        format::Data(u64::from(word.get())),
+        format::Data(u64::from(way.get()))
     );
     if into == Register::R0 {
         format!("{read}; r0 always reads 0, so the value is dropped.")
@@ -444,11 +444,11 @@ pub(crate) fn write(
     value: Word,
     note: WriteNote,
 ) -> String {
-    let value = format::data(value.get());
+    let value = format::Data(value.get());
     let wrote = format!(
         "Write {value} into word {} of way {}",
-        format::data(word.get()),
-        format::data(way.get())
+        format::Data(u64::from(word.get())),
+        format::Data(u64::from(way.get()))
     );
     let (before, stale) = match note {
         WriteNote::Through => return format!("{wrote}."),
@@ -471,7 +471,7 @@ pub(crate) fn write(
 pub(crate) fn write_through(geometry: &Geometry, addr: Addr, value: Word) -> String {
     format!(
         "Write-through: {} also goes to memory at {}.",
-        format::data(value.get()),
+        format::Data(value.get()),
         address(geometry, addr.get())
     )
 }
@@ -482,7 +482,7 @@ pub(crate) fn write_through(geometry: &Geometry, addr: Addr, value: Word) -> Str
 pub(crate) fn write_around(geometry: &Geometry, addr: Addr, value: Word) -> String {
     format!(
         "Write-no-allocate: {} goes straight to memory at {}. The cache is unchanged.",
-        format::data(value.get()),
+        format::Data(value.get()),
         address(geometry, addr.get())
     )
 }
@@ -803,7 +803,7 @@ fn operands(geometry: &Geometry, mnemonic: Mnemonic) -> String {
 fn example_address(geometry: &Geometry) -> String {
     const DESIGN_EXAMPLE: u32 = 0x0A4;
     let word_bytes = geometry.word_bytes().max(1);
-    address(geometry, DESIGN_EXAMPLE - DESIGN_EXAMPLE % word_bytes)
+    address(geometry, DESIGN_EXAMPLE - DESIGN_EXAMPLE % word_bytes).to_string()
 }
 
 /// "program" or "trace".
@@ -1885,7 +1885,10 @@ pub(crate) fn way_item(geometry: &Geometry, item: WayItem) -> String {
         WayItem::Valid { to } => format!("valid {} \u{2192} {}", format::bit(!to), format::bit(to)),
         WayItem::Tag { from, to } => format!(
             "tag {} \u{2192} {}",
-            from.map_or_else(|| format::NO_FIGURE.to_owned(), |from| tag(geometry, from)),
+            from.map_or_else(
+                || format::NO_FIGURE.to_owned(),
+                |from| tag(geometry, from).to_string()
+            ),
             tag(geometry, to)
         ),
         WayItem::Word { word, from, to } => format!(
@@ -2442,7 +2445,10 @@ pub(crate) fn changed_summary(geometry: &Geometry, changes: &[ChangeRef]) -> Str
         })
         .collect();
     if !memory.is_empty() {
-        let addrs: Vec<String> = memory.iter().map(|&addr| address(geometry, addr)).collect();
+        let addrs: Vec<String> = memory
+            .iter()
+            .map(|&addr| address(geometry, addr).to_string())
+            .collect();
         parts.push(format!("memory {}", addrs.join(", ")));
     }
     if !registers.is_empty() {
@@ -2499,14 +2505,23 @@ fn replacement_name(replacement: Replacement) -> &'static str {
     }
 }
 
-/// An address or a line address, padded to the address width.
-fn address(geometry: &Geometry, value: u32) -> String {
-    format::address(value, geometry.address_bits())
+/// An address or a line address, padded to the address width. A `Display`
+/// adapter, like [`format::Hex`] itself, so a per-event line can interpolate
+/// it without allocating a `String` first.
+fn address(geometry: &Geometry, value: u32) -> format::Hex {
+    format::Hex {
+        value: u64::from(value),
+        digits: usize::from(geometry.address_bits()).div_ceil(4),
+    }
 }
 
-/// A tag, padded to the tag width.
-fn tag(geometry: &Geometry, tag: Tag) -> String {
-    format::tag(tag.get(), geometry.tag_bits())
+/// A tag, padded to the tag width. A `Display` adapter, for the same reason
+/// as [`address`].
+fn tag(geometry: &Geometry, tag: Tag) -> format::Hex {
+    format::Hex {
+        value: u64::from(tag.get()),
+        digits: usize::from(geometry.tag_bits()).div_ceil(4).max(2),
+    }
 }
 
 #[cfg(test)]
