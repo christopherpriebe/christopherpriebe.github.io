@@ -23,6 +23,7 @@ impl Driven {
     /// the machine after each. After every event the invariants that hold
     /// mid-access hold, the counters add up, and the pc is never past the
     /// program's end.
+    #[track_caller]
     fn apply(
         &mut self,
         op: impl FnOnce(&mut Machine, &mut Emitter<'_>) -> Flow,
@@ -52,6 +53,7 @@ impl Driven {
     }
 
     /// Loads `source` as `format`.
+    #[track_caller]
     fn load_as(&mut self, source: &str, format: ProgramFormat) -> Vec<(MicroEvent, Machine)> {
         let program = Program::parse(&self.run.machine.geometry, source, format).unwrap();
         let (flow, trace) = self.apply(|machine, out| load_program(machine, program, out));
@@ -60,12 +62,14 @@ impl Driven {
     }
 
     /// Executes the next instruction, which there is.
+    #[track_caller]
     fn step(&mut self) -> Vec<(MicroEvent, Machine)> {
         assert_eq!(ready(&self.run.machine), Ok(()));
         self.apply(step).1
     }
 
     /// Steps until the program cannot go on, and returns every event.
+    #[track_caller]
     fn finish(&mut self) -> Vec<(MicroEvent, Machine)> {
         let mut trace = Vec::new();
         while ready(&self.run.machine).is_ok() {
@@ -75,6 +79,7 @@ impl Driven {
     }
 
     /// A load or store issued by hand.
+    #[track_caller]
     fn issue(&mut self, request: Request) -> Vec<(MicroEvent, Machine)> {
         let (flow, trace) = self.apply(|machine, out| access(machine, request, out));
         assert_eq!(flow, Flow::Continue);
@@ -631,6 +636,7 @@ impl EventSink for Boundaries {
 }
 
 /// A machine on `direct-mapped-8` with the assembly program `source` loaded.
+#[track_caller]
 fn loaded(source: &str) -> Machine {
     let mut machine = Machine::start(preset(Preset::DirectMapped8)).unwrap();
     let op = Op::Program {

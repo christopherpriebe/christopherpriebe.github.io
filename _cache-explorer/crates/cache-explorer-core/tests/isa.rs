@@ -79,6 +79,7 @@ fn errors_under(
 
 /// The only error of `source` parsed as `format` under `config`, as its
 /// line, column, length and message. Its text is checked against them.
+#[track_caller]
 fn only_error(config: &Config, source: &str, format: ProgramFormat) -> Result<Place, String> {
     let errors = errors_under(config, source, format)?;
     let [error] = errors.as_slice() else {

@@ -194,6 +194,7 @@ mod support {
     /// again over `config`, which runs the properties over whole sessions
     /// as many times as those over single values; a runner of their own
     /// keeps their share of the cases.
+    #[track_caller]
     pub(crate) fn check<S: Strategy>(
         config: ProptestConfig,
         strategy: &S,
@@ -1916,6 +1917,7 @@ mod support {
     /// them, so that its events number `events`; a loop that has used its
     /// budget is loaded again, and the last op loads it, so that whatever
     /// follows has all its budget.
+    #[track_caller]
     fn spread(mut session: Session, ops: u32, events: u32) -> Session {
         let mut left = 0;
         while session.op_count() < ops - 1 {
@@ -1983,6 +1985,7 @@ mod support {
 
     impl Limits {
         /// The sessions near each limit.
+        #[track_caller]
         pub(crate) fn new() -> Self {
             let short = LAST_OPEN - EVENTS_SHORT;
             let events = spread(warmed(), 80, short);

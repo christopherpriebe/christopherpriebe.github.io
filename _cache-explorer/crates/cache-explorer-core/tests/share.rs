@@ -223,6 +223,7 @@ mod support {
     /// initial configuration is the mode once the session is opened. The
     /// live region's sentence is left out: an opened session announces its
     /// entry whole, whatever the step that led there.
+    #[track_caller]
     pub(crate) fn same(loaded: &Session, original: &Session, context: &str) {
         let flagged = |config: &Config| Config {
             advanced: false,
@@ -260,6 +261,7 @@ mod support {
     }
 
     /// The failure a load of `s` reports on its first advance.
+    #[track_caller]
     pub(crate) fn link_failure(s: &str) -> LoadFailure {
         match ShareLoad::from_share_string(s).advance(LOAD_SLICE_EVENTS) {
             LoadProgress::Failed { failure } => failure,
@@ -269,6 +271,7 @@ mod support {
 
     /// The failure a load of the saved file `json` reports on its first
     /// advance.
+    #[track_caller]
     pub(crate) fn file_failure(json: &str) -> LoadFailure {
         match ShareLoad::from_json(json).advance(LOAD_SLICE_EVENTS) {
             LoadProgress::Failed { failure } => failure,
@@ -278,6 +281,7 @@ mod support {
 
     /// The failure a load of the share string `s` reaches, however many
     /// slices that takes, with the error `take_session` then gives.
+    #[track_caller]
     pub(crate) fn failure_of(s: &str) -> (LoadFailure, LoadError) {
         let mut load = ShareLoad::from_share_string(s);
         let progress = loaded(&mut load, LOAD_SLICE_EVENTS);

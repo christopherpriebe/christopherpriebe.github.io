@@ -193,6 +193,7 @@ mod logs {
     }
 
     /// The log named `name`.
+    #[track_caller]
     fn log(name: &str) -> Log {
         let hits = |access: &'static str| {
             let program: fn(u32) -> String = match access {
@@ -505,6 +506,7 @@ mod logs {
 
     /// Builds the log `name` to the session's limit and measures it; fails
     /// if the module's memory or a seek passes its budget.
+    #[track_caller]
     fn measure(name: &str) {
         let log = log(name);
         let (mut session, build_ms) = timed(|| build(&log, FULL));
@@ -721,6 +723,7 @@ mod logs {
     /// accesses as a document may hold stops at the session's limit, and
     /// its failure offers the link of the actions before it, which is the
     /// log built by hand to the limit, and which opens.
+    #[track_caller]
     fn open_by_hand(name: &str) {
         let log = log(name);
         let Plan::ByHand { store, addrs } = &log.plan else {

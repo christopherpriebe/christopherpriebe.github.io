@@ -1020,6 +1020,7 @@ const CLASSES: [Counter; 3] = [Counter::Compulsory, Counter::Capacity, Counter::
 
 /// The class of each access of `requests`, as the counter its `Miss` event
 /// moved; `None` for a hit.
+#[track_caller]
 fn classes(run: &mut Run, requests: &[Request]) -> Vec<Option<Counter>> {
     requests
         .iter()
@@ -1665,6 +1666,7 @@ fn stopping_after_any_event_leaves_the_machine_as_the_full_run_has_it_there() {
 
 /// Stops frame 3b's access #5 after each of its events in turn, with a
 /// recording and a quiet sink, on `config`.
+#[track_caller]
 fn stop_after_each_event_of_frame_3b_access_5(config: Config) {
     let mut run = Run::new(config);
     run.load(0x0A4);
@@ -1970,6 +1972,7 @@ fn case_sequences() -> Vec<Vec<EventKind>> {
 /// `sequences` in timed mode: each of the 17 that miss has a `Stall`, after
 /// `Victim` when the miss allocates and after `Miss` when it writes around
 /// the cache.
+#[track_caller]
 fn with_stalls(sequences: &[Vec<EventKind>]) -> Vec<Vec<EventKind>> {
     let timed: Vec<Vec<EventKind>> = sequences
         .iter()
@@ -2180,6 +2183,7 @@ const TWO_TRANSFERS: Option<(u32, u32)> = Some((40, 40));
 /// after each. The events that move the cycle counter, and only those, list
 /// it among their changes: the compare, the write-back, the fill and the
 /// write-around.
+#[track_caller]
 fn check_timed(case: u8, config: Config, setup: &[Request], request: Request, expected: &[Timed]) {
     let mut run = Run::new(timed(config, 2, 20));
     for earlier in setup {

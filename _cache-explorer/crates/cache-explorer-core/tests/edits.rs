@@ -115,6 +115,7 @@ mod support {
 
     /// The plan of `patch` on `target` at the cursor, which must plan. Its
     /// normalised patch plans the same way again.
+    #[track_caller]
     pub(crate) fn plan(session: &Session, target: EditTarget, patch: &EditPatch) -> EditPlan {
         let plan = session.plan_edit(&target, patch).unwrap();
         let again = session.plan_edit(&plan.target, &plan.patch).unwrap();
@@ -126,6 +127,7 @@ mod support {
     /// The refusal of `patch` on `target` at the cursor, which must be
     /// refused. Its offer, if any, plans with the preview it shows, and
     /// applies, leaving the machine's invariants whole.
+    #[track_caller]
     pub(crate) fn refusal(session: &Session, target: EditTarget, patch: &EditPatch) -> EditRefusal {
         let refusal = session.plan_edit(&target, patch).unwrap_err();
         if let Some(offer) = &refusal.suggestion {
@@ -143,6 +145,7 @@ mod support {
     }
 
     /// `session` after `op`, which must be accepted.
+    #[track_caller]
     pub(crate) fn applied(session: &Session, op: Op) -> Session {
         let mut session = session.clone();
         session.apply(op).unwrap();
@@ -151,6 +154,7 @@ mod support {
     }
 
     /// The way editor's draft of `form` for way `way` of set `set`.
+    #[track_caller]
     pub(crate) fn draft(session: &Session, set: u32, way: u32, form: &WayForm) -> EditDraft {
         let EditTarget::Way { set, way } = self::way(set, way) else {
             panic!("a way target is a way");

@@ -99,6 +99,7 @@ mod support {
     }
 
     /// The message `Module::parse` gives for `json`.
+    #[track_caller]
     pub(crate) fn parse_error(json: &str) -> String {
         match Module::parse(json) {
             Ok(_) => panic!("the module parses"),
@@ -140,6 +141,7 @@ mod support {
     /// explanation, "Show me" on an instruct or observe step, and on a
     /// prediction a wrong answer checked, then "Show me" and Next. Returns the
     /// view of every step on the way, the done screen last.
+    #[track_caller]
     pub(crate) fn show_me_path(run: &mut ModuleRun, session: &mut Session) -> Vec<ModuleView> {
         let mut views = Vec::new();
         let mut view = run.sync(session);
@@ -175,6 +177,7 @@ mod support {
 
     /// The fixture `json` with the value at `pointer` set to `value`, added if
     /// the object there does not have it yet.
+    #[track_caller]
     pub(crate) fn with(json: &str, pointer: &str, value: Value) -> String {
         edited(json, |module| {
             let (parent, key) = pointer.rsplit_once('/').unwrap();
@@ -190,6 +193,7 @@ mod support {
 
     /// Checks that each module of `cases` is refused with a message that
     /// starts as given.
+    #[track_caller]
     pub(crate) fn refused_with(cases: &[(String, &str)]) {
         for (json, expected) in cases {
             let message = parse_error(json);
@@ -202,6 +206,7 @@ mod support {
 
     /// Checks that each module of `cases` is refused for its JSON's shape,
     /// with a message that starts as given and ends with serde's place.
+    #[track_caller]
     pub(crate) fn shape_refused(cases: &[(String, &str)]) {
         for (json, expected) in cases {
             let Err(ModuleError::Json { message }) = Module::parse(json) else {

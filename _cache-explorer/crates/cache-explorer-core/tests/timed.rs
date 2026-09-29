@@ -34,6 +34,7 @@ const CYCLE_FLOOR: u32 = 20;
 
 /// `config` in timed mode, with `hit`-cycle hits and `miss`-cycle misses,
 /// neither above the floor under `MAX_CYCLES`.
+#[track_caller]
 fn timed(config: Config, hit: u32, miss: u32) -> Config {
     assert!(
         hit.max(miss) <= CYCLE_FLOOR,

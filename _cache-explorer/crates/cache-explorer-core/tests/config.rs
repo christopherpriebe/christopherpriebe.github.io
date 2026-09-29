@@ -21,6 +21,7 @@ mod common;
 
 /// `config` fails with `error`, whose message is `message`, and repairs to a
 /// valid configuration under `label`.
+#[track_caller]
 fn check_rule(config: &Config, error: &ConfigError, message: &str, label: &str) {
     assert_eq!(config.validate().err().as_ref(), Some(error), "{config:?}");
     assert_eq!(error.to_string(), message);

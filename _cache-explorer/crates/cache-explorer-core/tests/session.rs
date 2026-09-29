@@ -112,6 +112,7 @@ mod support {
     /// A session whose saved file is as large as a file can hold, to the
     /// byte: padded programs, the last of them the longest the session
     /// accepts, found by bisection, so that no op of any kind fits after it.
+    #[track_caller]
     pub(crate) fn as_large_as_a_file() -> Session {
         let most = MAX_PROGRAM_BYTES as usize - PADDED.len();
         let fits = |session: &Session, letters| session.clone().apply(padded(letters)).is_ok();
@@ -140,6 +141,7 @@ mod support {
     /// refused on `session` with `error`, rather than asked about, and
     /// changes nothing: agreeing would append a `Config` op, which `error`
     /// refuses.
+    #[track_caller]
     pub(crate) fn change_refused(session: &mut Session, error: &OpError) {
         let before = session.clone();
         assert_eq!(
@@ -169,6 +171,7 @@ mod support {
     /// room in its log, for `reason`, saying `message` and offering nothing:
     /// the plan of [`edit_word`], and the drafts of that word and of way 0
     /// of set 0 made valid.
+    #[track_caller]
     pub(crate) fn editors_refuse_for_room(session: &Session, reason: RefusalReason, message: &str) {
         let Op::Edit { target, patch } = edit_word() else {
             panic!("an edit op");
@@ -272,6 +275,7 @@ mod support {
 
     /// Checks that `op`, applied to `session`, is refused with `error` and
     /// changes nothing: the log, the undone ops, the cursor and the machine.
+    #[track_caller]
     pub(crate) fn refused(session: &mut Session, op: &Op, error: &OpError) {
         let before = session.clone();
         assert_eq!(session.apply(op.clone()).as_ref(), Err(error), "{op:?}");
@@ -284,6 +288,7 @@ mod support {
 
     /// The module with a prediction in the middle of the log, taken to its
     /// prediction on a new session.
+    #[track_caller]
     pub(crate) fn gated_mid_log() -> (ModuleRun, Session) {
         let mut session = session();
         let mut run = ModuleRun::new(Module::parse(super::PREDICT_MID_LOG).unwrap());
@@ -297,6 +302,7 @@ mod support {
 
     /// The module whose first step is a prediction, started on a new session:
     /// the prediction begins at the end of the log.
+    #[track_caller]
     pub(crate) fn gated_at_end() -> (ModuleRun, Session) {
         let mut session = session();
         let mut run = ModuleRun::new(Module::parse(super::PREDICT_AT_END).unwrap());

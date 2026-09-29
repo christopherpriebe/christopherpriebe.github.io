@@ -302,6 +302,7 @@ fn decoding_follows_the_address_table() {
 /// geometry: the fields cover the address, most significant first, their
 /// ranges follow the widths, and their values put back together give the
 /// address.
+#[track_caller]
 fn check_decoded(geometry: &Geometry, addr: u32, decoded: &Decoded) {
     let context = format!("{geometry:?} {addr:#x}");
     let (address_bits, tag_bits, index_bits, offset_bits) = (

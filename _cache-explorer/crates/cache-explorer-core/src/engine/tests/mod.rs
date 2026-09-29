@@ -107,6 +107,7 @@ impl Run {
     /// each miss stalls once, and the access costs the hit time, plus the
     /// miss penalty for a miss and again for a write-back; untimed, nothing
     /// is stamped, nothing stalls and no cycle is counted.
+    #[track_caller]
     fn trace(&mut self, request: Request) -> Vec<(MicroEvent, Machine)> {
         let before = self.machine.counters;
         let mut recorder = Recorder::default();
@@ -162,6 +163,7 @@ impl Run {
         recorder.events.into_iter().zip(recorder.after).collect()
     }
 
+    #[track_caller]
     fn events(&mut self, request: Request) -> Vec<MicroEvent> {
         self.trace(request)
             .into_iter()
@@ -170,10 +172,12 @@ impl Run {
     }
 
     /// A load of `addr` into r1, as a hand-issued load makes it.
+    #[track_caller]
     fn load(&mut self, addr: u32) -> Vec<MicroEvent> {
         self.events(load(addr, Register::R1))
     }
 
+    #[track_caller]
     fn store(&mut self, addr: u32, value: u64) -> Vec<MicroEvent> {
         self.events(store(addr, value))
     }
@@ -260,6 +264,7 @@ const CYCLE_FLOOR: u32 = 20;
 
 /// Timed mode with `hit`-cycle hits and `miss`-cycle misses, neither above
 /// the floor under `MAX_CYCLES`.
+#[track_caller]
 fn timing(hit: u32, miss: u32) -> Timing {
     assert!(
         hit.max(miss) <= CYCLE_FLOOR,
@@ -370,6 +375,7 @@ fn line_change(s: u32, w: u32, extra: &[ChangeRef]) -> Vec<ChangeRef> {
 }
 
 /// The one event of `kind` in `events`.
+#[track_caller]
 fn event(events: &[MicroEvent], kind: EventKind) -> &MicroEvent {
     let mut found = events.iter().filter(|event| event.kind == kind);
     let first = found.next().unwrap_or_else(|| panic!("no {kind:?} event"));
