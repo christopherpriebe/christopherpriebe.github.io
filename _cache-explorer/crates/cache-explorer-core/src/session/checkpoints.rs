@@ -33,8 +33,7 @@ pub(crate) struct Checkpoint {
 /// A log's checkpoints: the machine at position 0, which is the start of op
 /// 0, and those taken since, in increasing order of position. There are at
 /// most `SESSION_EVENT_LIMIT / CHECKPOINT_INTERVAL` of them, always inserted
-/// in that order, so a sorted list serves the same lookups as an ordered map
-/// without its per-entry allocation.
+/// in that order, kept as a sorted list with no per-entry allocation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Checkpoints {
     /// The machine at position 0, before the first op.
@@ -92,8 +91,7 @@ impl Checkpoints {
     }
 
     /// Adds `checkpoint` at `pos`, replacing one already there. Keeps
-    /// `later` sorted regardless of insertion order, matching the ordered
-    /// map this replaced.
+    /// `later` sorted regardless of insertion order.
     pub(crate) fn insert(&mut self, pos: EventPos, checkpoint: Checkpoint) {
         let at = self.later.partition_point(|(existing, _)| *existing < pos);
         match self.later.get_mut(at) {
@@ -218,5 +216,13 @@ mod tests {
         checkpoints.insert(pos(20), checkpoint_at(6));
         assert_eq!(checkpoints.len(), 3);
         assert_eq!(at(&checkpoints, 20), (20, 6));
+        // Inserting out of order still leaves `later` sorted: 40 added
+        // before 35 lands after it.
+        checkpoints.insert(pos(40), checkpoint_at(7));
+        checkpoints.insert(pos(35), checkpoint_at(8));
+        assert_eq!(checkpoints.len(), 5);
+        assert_eq!(at(&checkpoints, 34), (25, 5));
+        assert_eq!(at(&checkpoints, 39), (35, 8));
+        assert_eq!(at(&checkpoints, 40), (40, 7));
     }
 }
