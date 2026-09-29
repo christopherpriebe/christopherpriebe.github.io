@@ -12,6 +12,7 @@
 //! escapes. Code is literal and cannot be empty; emphasis cannot hold code,
 //! nor start or end with a space.
 
+use std::borrow::Cow;
 use std::fmt;
 
 use serde::Serialize;
@@ -68,25 +69,29 @@ impl Segments {
     }
 
     /// These segments, then `segments`, joined as [`Segments::push`] joins
-    /// them.
+    /// them. Each segment's text moves in; it is copied only where it joins
+    /// the last segment.
     #[must_use]
     pub(crate) fn then(mut self, segments: Vec<TextSegment>) -> Self {
         for segment in segments {
-            self.push(segment.style, &segment.text);
+            self.push(segment.style, segment.text);
         }
         self
     }
 
     /// Adds `text` in `style`: to the last segment when it has that style,
-    /// and as a new segment otherwise; nothing when `text` is empty.
-    pub(crate) fn push(&mut self, style: TextStyle, text: &str) {
+    /// and as a new segment otherwise; nothing when `text` is empty. A
+    /// `String` becomes the new segment's text as it is, and a `&str` is
+    /// copied into it.
+    pub(crate) fn push<'a>(&mut self, style: TextStyle, text: impl Into<Cow<'a, str>>) {
+        let text = text.into();
         if text.is_empty() {
             return;
         }
         match self.0.last_mut() {
-            Some(last) if last.style == style => last.text.push_str(text),
+            Some(last) if last.style == style => last.text.push_str(&text),
             _ => self.0.push(TextSegment {
-                text: text.to_owned(),
+                text: text.into_owned(),
                 style,
             }),
         }
@@ -282,8 +287,8 @@ pub(crate) fn markup(text: &str) -> Result<Vec<TextSegment>, MarkupError> {
                 if let Some(line) = code.iter().position(|&c| is_line_break(c)) {
                     return Err(unsupported(Markdown::LineBreak, i.saturating_add(1) + line));
                 }
-                segments.push(TextStyle::Plain, &std::mem::take(&mut plain));
-                segments.push(TextStyle::Code, &code.iter().collect::<String>());
+                segments.push(TextStyle::Plain, std::mem::take(&mut plain));
+                segments.push(TextStyle::Code, code.iter().collect::<String>());
                 i = close.saturating_add(1);
             }
             '*' => {
@@ -302,8 +307,8 @@ pub(crate) fn markup(text: &str) -> Result<Vec<TextSegment>, MarkupError> {
                 for index in i.saturating_add(1)..close {
                     inline(&chars, index)?;
                 }
-                segments.push(TextStyle::Plain, &std::mem::take(&mut plain));
-                segments.push(TextStyle::Emphasis, &stressed.iter().collect::<String>());
+                segments.push(TextStyle::Plain, std::mem::take(&mut plain));
+                segments.push(TextStyle::Emphasis, stressed.iter().collect::<String>());
                 i = close.saturating_add(1);
             }
             _ => {
@@ -313,7 +318,7 @@ pub(crate) fn markup(text: &str) -> Result<Vec<TextSegment>, MarkupError> {
             }
         }
     }
-    segments.push(TextStyle::Plain, &plain);
+    segments.push(TextStyle::Plain, plain);
     Ok(segments.into_vec())
 }
 
