@@ -535,8 +535,8 @@ impl ShareLoad {
         self.progress()
     }
 
-    /// Replays the next slice of about [`LOAD_SLICE_EVENTS`] events, once per
-    /// animation frame, as [`ShareLoad::advance`] does.
+    /// Replays the next slice as [`ShareLoad::advance`] does, within
+    /// [`LOAD_SLICE_EVENTS`] events.
     pub fn advance_slice(&mut self) -> LoadProgress {
         self.advance(LOAD_SLICE_EVENTS)
     }
