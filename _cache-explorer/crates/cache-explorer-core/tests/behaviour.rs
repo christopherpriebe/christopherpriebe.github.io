@@ -16,7 +16,7 @@ use cache_explorer_core::{
 };
 
 use common::{load, pos, session, store};
-use support::{cells, check_case, check_store_around, memory, two_way, victims};
+use support::{cases, cells, check_case, check_store_around, memory, two_way, victims};
 use EventKind::{Evict, WriteBack};
 
 #[cfg(test)]
@@ -526,7 +526,7 @@ mod support {
 }
 
 cases! {
-    check_case;
+    check_case, RUN_CASES: u8;
     case_1_a_load_hit_reports_events_changes_counters_and_state => (1),
     case_2_a_load_miss_into_an_invalid_way_reports_events_changes_counters_and_state => (2),
     case_3_a_load_miss_over_a_clean_victim_reports_events_changes_counters_and_state => (3),
@@ -537,6 +537,12 @@ cases! {
     case_8_a_store_miss_allocating_under_write_through_reports_events_changes_counters_and_state => (8),
     case_9_a_store_miss_around_the_cache_under_write_back_reports_events_changes_counters_and_state => (9),
     case_10_a_store_miss_around_the_cache_under_write_through_reports_events_changes_counters_and_state => (10),
+}
+
+#[test]
+fn every_access_case_has_a_test() {
+    let numbers: Vec<u8> = cases().iter().map(|case| case.number).collect();
+    assert_eq!(numbers, RUN_CASES);
 }
 
 #[test]

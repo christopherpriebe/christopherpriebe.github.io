@@ -30,6 +30,11 @@ use crate::units::{Addr, EventPos, OpIndex};
 /// The work the lookups of a last access do, counted for the thread they run
 /// on, for a test to read before and after a search: it bounds the work of
 /// the search, not its time.
+///
+/// It counts the entries the lookup reads through [`Log::entry_looked_at`]
+/// and the comparisons of its search, and no others: a read of `entries` in
+/// `last_access` that goes around them is not counted, and a look back along
+/// a run written that way passes the test that bounds the work.
 #[cfg(test)]
 pub(super) mod lookup_work {
     use std::cell::Cell;
@@ -352,15 +357,11 @@ impl Log {
         let latest = done.checked_sub(1)?;
         // The latest entry done is an earlier run's while this run has none
         // done yet.
-        #[cfg(test)]
-        lookup_work::entry();
-        if self.entries.get(latest)?.run != run {
+        if self.entry_looked_at(latest)?.run != run {
             return None;
         }
         let index = (*self.last_accesses.get(latest)?)?;
-        #[cfg(test)]
-        lookup_work::entry();
-        let record = self.entries.get(usize::try_from(index).ok()?)?;
+        let record = self.entry_looked_at(usize::try_from(index).ok()?)?;
         let (access, outcome) = completed(record)?;
         let op = self.event_at(record.first)?.op_index;
         Some(LastAccess {
@@ -369,6 +370,16 @@ impl Log {
             outcome,
             serial: self.serial(op)?,
         })
+    }
+
+    /// The entry at `index`, as a lookup of a last access reads one: a test
+    /// build counts each read, so a lookup that reads entries along a run is
+    /// seen doing it. `last_access` reads entries only through this and the
+    /// comparisons of its own search.
+    fn entry_looked_at(&self, index: usize) -> Option<&EntryRecord> {
+        #[cfg(test)]
+        lookup_work::entry();
+        self.entries.get(index)
     }
 
     /// Drops every op after the first `kept`, with their serials, JSON,

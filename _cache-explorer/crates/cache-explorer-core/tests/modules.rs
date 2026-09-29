@@ -237,6 +237,7 @@ mod support {
     /// Checks that the module `json` is refused for its JSON's shape, with
     /// exactly the message `expected`: the reason and serde's place, its line
     /// and column, the JSON being compact and so all on line 1.
+    #[track_caller]
     pub(crate) fn shape_refused(json: &str, expected: &str) {
         let Err(ModuleError::Json { message }) = Module::parse(json) else {
             panic!("{json}");
@@ -309,10 +310,21 @@ fn every_fixture_parses_and_serializes_back() {
 }
 
 cases! {
-    check_show_me_completion;
+    check_show_me_completion, SHOW_ME_FIXTURES: &str;
     the_miss_then_hit_fixture_completes_through_its_show_me_path => (MISS_THEN_HIT),
     the_switch_config_fixture_completes_through_its_show_me_path => (SWITCH_CONFIG),
     the_stale_memory_fixture_completes_through_its_show_me_path => (STALE_MEMORY),
+}
+
+#[test]
+fn every_fixture_has_a_show_me_test() {
+    let ids = |fixtures: &[&str]| -> Vec<String> {
+        fixtures
+            .iter()
+            .map(|json| Module::parse(json).unwrap().id().to_owned())
+            .collect()
+    };
+    assert_eq!(ids(SHOW_ME_FIXTURES), ids(&FIXTURES));
 }
 
 #[test]

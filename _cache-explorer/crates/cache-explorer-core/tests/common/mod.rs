@@ -139,6 +139,12 @@ pub(crate) fn golden_settings(description: &str) -> Settings {
 /// named `name` that passes the arguments to `check`, so a failure names the
 /// case it is in and the cases after it still run. The tests take after
 /// `snapshots!` in `tests/golden.rs`.
+///
+/// A table whose cases are the rows of another list, one argument each, names
+/// a constant and its type after `check`: the constant lists the arguments the
+/// tests pass, in order, for a test to compare with that list, so a row added
+/// to the list without a case fails it instead of running nowhere, as
+/// `SNAPSHOTS` does in `tests/golden.rs`.
 #[macro_export]
 macro_rules! cases {
     ($check:path; $($name:ident => ($($argument:expr),* $(,)?),)*) => {
@@ -148,5 +154,14 @@ macro_rules! cases {
                 $check($($argument),*);
             }
         )*
+    };
+    ($check:path, $covered:ident: $type:ty; $($name:ident => ($argument:expr),)*) => {
+        /// The arguments the tests of this table pass to `check`, in order.
+        const $covered: &[$type] = &[$($argument),*];
+
+        $crate::cases! {
+            $check;
+            $($name => ($argument),)*
+        }
     };
 }
