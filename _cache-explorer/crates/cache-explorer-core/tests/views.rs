@@ -1105,9 +1105,9 @@ fn the_state_does_not_depend_on_how_the_cursor_got_there() {
         .collect();
     // ... reads the same when reached one event at a time from the start ...
     session.seek(pos(0));
-    for expected in sought.iter().skip(1) {
-        assert_eq!(session.step_event(None), StepOutcome::Moved);
-        assert_eq!(&session.state(), expected);
+    for (at, expected) in sought.iter().enumerate().skip(1) {
+        assert_eq!(session.step_event(None), StepOutcome::Moved, "to {at}");
+        assert_eq!(&session.state(), expected, "at {at}");
     }
     // ... and backwards, one seek at a time.
     for at in (0..=end).rev() {

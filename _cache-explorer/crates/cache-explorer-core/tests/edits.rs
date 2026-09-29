@@ -19,8 +19,9 @@ use cache_explorer_core::{
 
 use common::{addr, line, program, session, word};
 use support::{
-    applied, draft, draft_of_line, draft_outcome, edit, form, frame_3b_at_access_4, memory, offer,
-    plan, ranks, refusal, said, set, two_way, value, way, way_index, way_patch,
+    applied, check_idle_way_edit, check_out_of_range_edit, draft, draft_of_line, draft_outcome,
+    edit, form, frame_3b_at_access_4, memory, offer, plan, ranks, refusal, said, set, two_way,
+    value, way, way_index, way_patch,
 };
 
 #[cfg(test)]
@@ -33,7 +34,8 @@ mod support {
     use cache_explorer_core::golden::FRAME_3B;
     use cache_explorer_core::{
         AccessKind, CacheConfig, Config, EditDraft, EditOutcome, EditPatch, EditPlan, EditRefusal,
-        EditTarget, Op, Preset, Replacement, Session, SetIndex, WayForm, WayIndex, WritePolicy,
+        EditTarget, Op, Preset, RefusalReason, Replacement, Session, SetIndex, Tone, WayForm,
+        WayIndex, WritePolicy,
     };
     use serde_json::{json, Value};
 
@@ -151,6 +153,32 @@ mod support {
         session.apply(op).unwrap();
         assert_eq!(session.machine().check_invariants(), Ok(()));
         session
+    }
+
+    /// Checks that an edit of `target` with `patch`, on frame 3b's program
+    /// at access #4, is refused as out of range, saying `text`.
+    pub(crate) fn check_out_of_range_edit(target: EditTarget, patch: &EditPatch, text: &str) {
+        let session = frame_3b_at_access_4();
+        let refused = refusal(&session, target, patch);
+        assert_eq!(refused.reason, RefusalReason::OutOfRange, "{target:?}");
+        assert_eq!(refused.tone, Tone::Refused, "{target:?}");
+        assert_eq!(said(&refused), ("Refused", text), "{target:?}");
+        assert!(refused.word_marks.is_empty(), "{target:?}");
+    }
+
+    /// Checks that the way patch `fields`, a JSON object, edits way 0 of set 2
+    /// of frame 3b's program at access #4 to nothing: refused as no change,
+    /// as idle.
+    pub(crate) fn check_idle_way_edit(fields: &Value) {
+        let session = frame_3b_at_access_4();
+        let refused = refusal(&session, way(2, 0), &way_patch(fields.clone()));
+        assert_eq!(refused.reason, RefusalReason::NoChange, "{fields}");
+        assert_eq!(refused.tone, Tone::Idle, "{fields}");
+        assert_eq!(
+            said(&refused),
+            ("No changes", "Edit a field to preview what will change."),
+            "{fields}"
+        );
     }
 
     /// The way editor's draft of `form` for way `way` of set `set`.
@@ -695,44 +723,39 @@ fn a_new_run_whose_program_no_longer_fits_waits_for_the_error_that_unloads_it() 
 
 // ── The target and the patch's shape ────────────────────────────────────
 
+cases! {
+    check_out_of_range_edit;
+    a_way_edit_of_a_set_past_the_last_is_refused => (
+        way(4, 0),
+        &way_patch(serde_json::json!({"dirty": true})),
+        "This cache has no set 4; its sets are 0\u{2013}3.",
+    ),
+    a_way_edit_of_a_way_past_the_last_is_refused => (
+        way(2, 2),
+        &way_patch(serde_json::json!({"dirty": true})),
+        "Set 2 has no way 2; its ways are 0\u{2013}1.",
+    ),
+    a_memory_edit_of_a_way_target_past_the_last_set_is_refused => (
+        way(4, 0),
+        &value(1),
+        "This cache has no set 4; its sets are 0\u{2013}3.",
+    ),
+    a_memory_value_at_an_address_past_the_width_is_refused => (
+        memory(0x1000),
+        &value(1),
+        "0x1000 does not fit a 12-bit address (0x000\u{2013}0xFFF).",
+    ),
+    a_way_patch_at_an_address_past_the_width_is_refused => (
+        memory(0x1000),
+        &way_patch(serde_json::json!({"dirty": true})),
+        "0x1000 does not fit a 12-bit address (0x000\u{2013}0xFFF).",
+    ),
+}
+
 #[test]
-fn an_edit_of_a_way_or_word_that_does_not_exist_is_refused() {
+fn a_way_that_does_not_exist_or_a_patch_of_the_wrong_kind_is_refused() {
     let session = frame_3b_at_access_4();
     let patch = way_patch(serde_json::json!({"dirty": true}));
-    let cases = [
-        (
-            way(4, 0),
-            patch.clone(),
-            "This cache has no set 4; its sets are 0\u{2013}3.",
-        ),
-        (
-            way(2, 2),
-            patch.clone(),
-            "Set 2 has no way 2; its ways are 0\u{2013}1.",
-        ),
-        (
-            way(4, 0),
-            value(1),
-            "This cache has no set 4; its sets are 0\u{2013}3.",
-        ),
-        (
-            memory(0x1000),
-            value(1),
-            "0x1000 does not fit a 12-bit address (0x000\u{2013}0xFFF).",
-        ),
-        (
-            memory(0x1000),
-            patch.clone(),
-            "0x1000 does not fit a 12-bit address (0x000\u{2013}0xFFF).",
-        ),
-    ];
-    for (target, patch, text) in cases {
-        let refused = refusal(&session, target, &patch);
-        assert_eq!(refused.reason, RefusalReason::OutOfRange);
-        assert_eq!(refused.tone, Tone::Refused);
-        assert_eq!(said(&refused), ("Refused", text));
-        assert!(refused.word_marks.is_empty());
-    }
     let direct = self::session(Preset::DirectMapped8.config(), []);
     assert_eq!(
         refusal(&direct, way(0, 1), &patch).text,
@@ -796,24 +819,21 @@ fn a_patch_of_the_wrong_shape_or_a_value_too_wide_is_refused() {
 
 // ── Ways ────────────────────────────────────────────────────────────────
 
+cases! {
+    check_idle_way_edit;
+    an_empty_patch_changes_nothing => (&serde_json::json!({})),
+    a_patch_that_restates_the_way_changes_nothing => (
+        &serde_json::json!({"valid": true, "line": 0x0A4, "dirty": false, "rank": 0}),
+    ),
+    a_patch_of_the_words_the_way_holds_changes_nothing => (
+        &serde_json::json!({"data": [40, 53, 66, 79]}),
+    ),
+}
+
 #[test]
-fn an_edit_that_changes_nothing_is_idle() {
+fn an_empty_way_kept_empty_changes_nothing_whatever_rank_comes_with_it() {
     let session = frame_3b_at_access_4();
-    for patch in [
-        serde_json::json!({}),
-        serde_json::json!({"valid": true, "line": 0x0A4, "dirty": false, "rank": 0}),
-        serde_json::json!({"data": [40, 53, 66, 79]}),
-    ] {
-        let refused = refusal(&session, way(2, 0), &way_patch(patch));
-        assert_eq!(refused.reason, RefusalReason::NoChange);
-        assert_eq!(refused.tone, Tone::Idle);
-        assert_eq!(
-            said(&refused),
-            ("No changes", "Edit a field to preview what will change.")
-        );
-    }
-    // An empty way kept empty changes nothing either, whatever rank comes
-    // with it: an empty way has none to change.
+    // Whatever rank comes with it: an empty way has none to change.
     for (index, rank) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
         for patch in [
             serde_json::json!({"rank": rank}),
@@ -833,7 +853,7 @@ fn an_edit_that_changes_nothing_is_idle() {
             "way {index}: {:?}",
             drafted.outcome
         );
-        assert!(!drafted.result.valid);
+        assert!(!drafted.result.valid, "way {index}");
     }
 }
 
@@ -1277,7 +1297,10 @@ fn validating_and_invalidating_leave_ranks_alone_under_random_and_in_one_way_set
                     .all(|consequence| !matches!(consequence, Consequence::Rerank { .. })),
                 "{config:?}"
             );
-            assert_eq!(plan.text, "This is recorded as a step, so Undo reverts it.");
+            assert_eq!(
+                plan.text, "This is recorded as a step, so Undo reverts it.",
+                "{config:?}"
+            );
         }
         for session in [&empty, &filled] {
             let event = session.events().last().unwrap();
@@ -1290,16 +1313,20 @@ fn validating_and_invalidating_leave_ranks_alone_under_random_and_in_one_way_set
             );
             // The rank column is hidden, and the machine keeps the ranks
             // equal to the way numbers, which its invariants check.
-            assert!(session.state().cache.sets[2]
-                .ways
-                .iter()
-                .all(|way| way.rank.is_none()));
-            assert_eq!(session.machine().check_invariants(), Ok(()));
+            assert!(
+                session.state().cache.sets[2]
+                    .ways
+                    .iter()
+                    .all(|way| way.rank.is_none()),
+                "{config:?}"
+            );
+            assert_eq!(session.machine().check_invariants(), Ok(()), "{config:?}");
         }
-        assert!(!empty.state().cache.sets[2].ways[0].valid);
+        assert!(!empty.state().cache.sets[2].ways[0].valid, "{config:?}");
         assert_eq!(
             filled.state().cache.sets[2].ways[0].line_text.as_deref(),
-            Some("0x3A0")
+            Some("0x3A0"),
+            "{config:?}"
         );
     }
 }
@@ -1856,14 +1883,22 @@ fn edits_leave_every_invariant_whole_through_the_editor_states() {
         edit(memory(0x0B0), value(12)),
         edit(way(3, 0), way_patch(serde_json::json!({"valid": false}))),
     ];
-    for step in steps {
+    for (index, step) in steps.into_iter().enumerate() {
         session.apply(step).unwrap();
-        assert_eq!(session.machine().check_invariants(), Ok(()));
+        assert_eq!(
+            session.machine().check_invariants(),
+            Ok(()),
+            "after edit {index}"
+        );
     }
     // Running the rest of frame 3b's program over the edited cache.
-    for _ in 0..2 {
+    for index in 0..2 {
         session.apply(Op::Step).unwrap();
-        assert_eq!(session.machine().check_invariants(), Ok(()));
+        assert_eq!(
+            session.machine().check_invariants(),
+            Ok(()),
+            "after step {index}"
+        );
     }
     assert!(session
         .events()

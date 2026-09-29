@@ -17,9 +17,28 @@ use serde_json::json;
 
 use bar::{bar, labels, option, options, shape};
 use common::{grouped, with_cache};
+use support::check_rule_field;
 
 #[cfg(test)]
 mod common;
+
+/// The tests' helpers other than the bar's. They sit in a module compiled
+/// for tests only, where a failed `unwrap` is a failed test.
+#[cfg(test)]
+mod support {
+    use cache_explorer_core::{ConfigError, ConfigField};
+    use serde_json::json;
+
+    /// Checks that `error` names `field`, which serializes as `name`.
+    pub(crate) fn check_rule_field(error: &ConfigError, field: ConfigField, name: &str) {
+        assert_eq!(error.field(), field, "{error:?}");
+        assert_eq!(
+            serde_json::to_value(field).unwrap(),
+            json!(name),
+            "{error:?}"
+        );
+    }
+}
 
 /// The configuration bar's helpers. They sit in a module compiled for
 /// tests only, where a failed `unwrap` is a failed test.
@@ -373,10 +392,16 @@ fn every_option_is_disabled_exactly_when_its_configuration_is_invalid() {
                         option.label,
                         shown
                     );
-                    assert_eq!(option.title, error.map(|error| error.to_string()));
+                    assert_eq!(
+                        option.title,
+                        error.map(|error| error.to_string()),
+                        "{} {:?}",
+                        option.label,
+                        shown
+                    );
                 }
                 if option.pressed {
-                    assert_eq!(option.config, shown);
+                    assert_eq!(option.config, shown, "{} {:?}", option.label, shown);
                 }
             }
         }
@@ -589,90 +614,88 @@ fn a_configuration_checked_on_its_own_gives_its_summary_or_its_error() {
     );
 }
 
+cases! {
+    check_rule_field;
+    an_address_width_error_names_the_address_bits_field => (
+        &ConfigError::AddressBits { got: 7 },
+        ConfigField::AddressBits,
+        "addressBits",
+    ),
+    a_cache_size_error_names_the_size_field => (
+        &ConfigError::SizeNotPowerOfTwo { got: 100 },
+        ConfigField::SizeBytes,
+        "sizeBytes",
+    ),
+    a_line_size_error_names_the_line_size_field => (
+        &ConfigError::LineNotPowerOfTwo { got: 12 },
+        ConfigField::LineBytes,
+        "lineBytes",
+    ),
+    a_line_smaller_than_a_word_names_the_line_size_field => (
+        &ConfigError::LineSmallerThanWord { line: 2, word: 4 },
+        ConfigField::LineBytes,
+        "lineBytes",
+    ),
+    a_line_larger_than_the_cache_names_the_size_field => (
+        &ConfigError::LineLargerThanCache { line: 32, size: 16 },
+        ConfigField::SizeBytes,
+        "sizeBytes",
+    ),
+    too_many_lines_name_the_size_field => (
+        &ConfigError::TooManyLines {
+            lines: MAX_LINES * 2,
+            size: MAX_LINES * 32,
+            line: 16,
+        },
+        ConfigField::SizeBytes,
+        "sizeBytes",
+    ),
+    too_many_words_name_the_line_size_field => (
+        &ConfigError::TooManyWords {
+            words: MAX_WORDS_PER_LINE * 2,
+            line: MAX_WORDS_PER_LINE * 2,
+            word: 1,
+        },
+        ConfigField::LineBytes,
+        "lineBytes",
+    ),
+    zero_ways_name_the_associativity_field => (
+        &ConfigError::AssociativityZero,
+        ConfigField::Associativity,
+        "associativity",
+    ),
+    ways_that_are_not_a_power_of_two_name_the_associativity_field => (
+        &ConfigError::AssociativityNotPowerOfTwo { got: 3, lines: 8 },
+        ConfigField::Associativity,
+        "associativity",
+    ),
+    more_ways_than_lines_name_the_associativity_field => (
+        &ConfigError::AssociativityTooLarge { got: 16, lines: 8 },
+        ConfigField::Associativity,
+        "associativity",
+    ),
+    a_cache_with_no_tag_bits_names_the_size_field => (
+        &ConfigError::NoTagBits { bits: 8 },
+        ConfigField::SizeBytes,
+        "sizeBytes",
+    ),
+    a_timing_error_names_the_timing_field => (
+        &ConfigError::Timing {
+            field: ConfigNumberField::HitCycles,
+            got: 0,
+        },
+        ConfigField::Timing,
+        "timing",
+    ),
+    a_seed_error_names_the_seed_field => (
+        &ConfigError::SeedTooLarge { got: MAX_SEED + 1 },
+        ConfigField::Seed,
+        "seed",
+    ),
+}
+
 #[test]
-fn each_rule_names_the_field_its_repair_changes() {
-    let cases = [
-        (
-            ConfigError::AddressBits { got: 7 },
-            ConfigField::AddressBits,
-            "addressBits",
-        ),
-        (
-            ConfigError::SizeNotPowerOfTwo { got: 100 },
-            ConfigField::SizeBytes,
-            "sizeBytes",
-        ),
-        (
-            ConfigError::LineNotPowerOfTwo { got: 12 },
-            ConfigField::LineBytes,
-            "lineBytes",
-        ),
-        (
-            ConfigError::LineSmallerThanWord { line: 2, word: 4 },
-            ConfigField::LineBytes,
-            "lineBytes",
-        ),
-        (
-            ConfigError::LineLargerThanCache { line: 32, size: 16 },
-            ConfigField::SizeBytes,
-            "sizeBytes",
-        ),
-        (
-            ConfigError::TooManyLines {
-                lines: MAX_LINES * 2,
-                size: MAX_LINES * 32,
-                line: 16,
-            },
-            ConfigField::SizeBytes,
-            "sizeBytes",
-        ),
-        (
-            ConfigError::TooManyWords {
-                words: MAX_WORDS_PER_LINE * 2,
-                line: MAX_WORDS_PER_LINE * 2,
-                word: 1,
-            },
-            ConfigField::LineBytes,
-            "lineBytes",
-        ),
-        (
-            ConfigError::AssociativityZero,
-            ConfigField::Associativity,
-            "associativity",
-        ),
-        (
-            ConfigError::AssociativityNotPowerOfTwo { got: 3, lines: 8 },
-            ConfigField::Associativity,
-            "associativity",
-        ),
-        (
-            ConfigError::AssociativityTooLarge { got: 16, lines: 8 },
-            ConfigField::Associativity,
-            "associativity",
-        ),
-        (
-            ConfigError::NoTagBits { bits: 8 },
-            ConfigField::SizeBytes,
-            "sizeBytes",
-        ),
-        (
-            ConfigError::Timing {
-                field: ConfigNumberField::HitCycles,
-                got: 0,
-            },
-            ConfigField::Timing,
-            "timing",
-        ),
-        (
-            ConfigError::SeedTooLarge { got: MAX_SEED + 1 },
-            ConfigField::Seed,
-            "seed",
-        ),
-    ];
-    for (error, field, name) in cases {
-        assert_eq!(error.field(), field, "{error:?}");
-        assert_eq!(serde_json::to_value(field).unwrap(), json!(name));
-    }
+fn the_word_size_field_is_named_word_bytes() {
     assert_eq!(
         serde_json::to_value(ConfigField::WordBytes).unwrap(),
         json!("wordBytes")

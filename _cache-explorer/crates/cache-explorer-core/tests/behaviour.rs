@@ -16,8 +16,8 @@ use cache_explorer_core::{
 };
 
 use common::{load, pos, session, store};
-use support::{cases, cells, memory, moved, short, two_way, victims};
-use EventKind::{Evict, Miss, WriteBack};
+use support::{cells, check_case, check_store_around, memory, two_way, victims};
+use EventKind::{Evict, WriteBack};
 
 #[cfg(test)]
 mod common;
@@ -31,7 +31,7 @@ mod support {
         WritePolicy,
     };
 
-    use super::common::{load, store};
+    use super::common::{load, session, store};
 
     use EventKind::{
         Complete, Decode, Evict, Fill, Hit, MemWrite, Miss, Rank, Victim, Write, WriteBack,
@@ -468,11 +468,15 @@ mod support {
             .map(|event| event.way.unwrap().get())
             .collect()
     }
-}
 
-#[test]
-fn each_access_case_has_its_events_what_each_changed_its_counters_and_result() {
-    for case in cases() {
+    /// Checks access case `number`: its events in order with the cells and
+    /// counters each lists as changed, the counters it moves, and the state it
+    /// leaves.
+    pub(crate) fn check_case(number: u8) {
+        let case = cases()
+            .into_iter()
+            .find(|case| case.number == number)
+            .unwrap();
         let mut session = session(case.config, case.setup);
         let before = session.state();
         let events = session.apply(case.access).unwrap();
@@ -502,6 +506,37 @@ fn each_access_case_has_its_events_what_each_changed_its_counters_and_result() {
             counters.misses
         );
     }
+
+    /// Checks that a store around the cache, under `write_policy`, changes only
+    /// memory: it counts as a write-around, and the next load of the line misses.
+    pub(crate) fn check_store_around(write_policy: WritePolicy) {
+        let around = session(
+            two_way(write_policy, AllocatePolicy::WriteNoAllocate),
+            [store(0x0A4, 9)],
+        );
+        assert_eq!(memory(&around, 0, 1), ("9".to_owned(), false));
+        let counters = around.stats().counters;
+        assert_eq!((counters.writearounds, counters.writethroughs), (1, 0));
+        // The next load of the line misses: nothing was allocated.
+        let mut around = around;
+        let events = around.apply(load(0x0A4)).unwrap();
+        assert_eq!(events[1].kind, Miss);
+        assert_eq!(around.state().cpu.registers[1].text, "9");
+    }
+}
+
+cases! {
+    check_case;
+    case_1_a_load_hit_reports_events_changes_counters_and_state => (1),
+    case_2_a_load_miss_into_an_invalid_way_reports_events_changes_counters_and_state => (2),
+    case_3_a_load_miss_over_a_clean_victim_reports_events_changes_counters_and_state => (3),
+    case_4_a_load_miss_over_a_dirty_victim_reports_events_changes_counters_and_state => (4),
+    case_5_a_store_hit_under_write_back_reports_events_changes_counters_and_state => (5),
+    case_6_a_store_hit_under_write_through_reports_events_changes_counters_and_state => (6),
+    case_7_a_store_miss_allocating_under_write_back_reports_events_changes_counters_and_state => (7),
+    case_8_a_store_miss_allocating_under_write_through_reports_events_changes_counters_and_state => (8),
+    case_9_a_store_miss_around_the_cache_under_write_back_reports_events_changes_counters_and_state => (9),
+    case_10_a_store_miss_around_the_cache_under_write_through_reports_events_changes_counters_and_state => (10),
 }
 
 #[test]
@@ -518,25 +553,20 @@ fn stores_leave_memory_as_their_write_policy_says() {
         [load(0x0A4), store(0x0A4, 9)],
     );
     assert_eq!(memory(&through, 0, 1), ("9".to_owned(), false));
-    // Around the cache, under either write policy: only memory changes.
-    for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
-        let around = session(
-            two_way(write_policy, AllocatePolicy::WriteNoAllocate),
-            [store(0x0A4, 9)],
-        );
-        assert_eq!(memory(&around, 0, 1), ("9".to_owned(), false));
-        let counters = around.stats().counters;
-        assert_eq!((counters.writearounds, counters.writethroughs), (1, 0));
-        // The next load of the line misses: nothing was allocated.
-        let mut around = around;
-        let events = around.apply(load(0x0A4)).unwrap();
-        assert_eq!(events[1].kind, Miss);
-        assert_eq!(around.state().cpu.registers[1].text, "9");
-    }
     // A write-through store that hits counts as a write-through, never a
     // write-around.
     let counters = through.stats().counters;
     assert_eq!((counters.writethroughs, counters.writearounds), (1, 0));
+}
+
+#[test]
+fn a_store_around_the_cache_under_write_back_changes_only_memory() {
+    check_store_around(WritePolicy::WriteBack);
+}
+
+#[test]
+fn a_store_around_the_cache_under_write_through_changes_only_memory() {
+    check_store_around(WritePolicy::WriteThrough);
 }
 
 #[test]

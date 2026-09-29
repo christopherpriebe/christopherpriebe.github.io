@@ -443,7 +443,12 @@ mod session {
                 .unwrap_err()
                 .to_string();
             let error = Session::from_share_string(broken).unwrap_err();
-            assert_eq!(message(error), expected);
+            assert_eq!(
+                message(error),
+                expected,
+                "{}",
+                broken.chars().take(20).collect::<String>()
+            );
         }
     }
 
@@ -573,7 +578,7 @@ mod session {
         ];
         for (pos, detail) in refused {
             let thrown = message(facade.seek(&ts(pos)).unwrap_err());
-            assert_eq!(thrown, format!("invalid EventPos: {detail}"));
+            assert_eq!(thrown, format!("invalid EventPos: {detail}"), "{pos}");
             same_place(&core, &facade);
         }
     }
@@ -908,7 +913,11 @@ mod session {
         // Past the 12-bit width, and -1 from JavaScript.
         for addr in [0x1000, u32::MAX] {
             let expected = core.decode(addr).unwrap_err().to_string();
-            assert_eq!(message(facade.decode(addr).unwrap_err()), expected);
+            assert_eq!(
+                message(facade.decode(addr).unwrap_err()),
+                expected,
+                "{addr:#x}"
+            );
         }
     }
 
@@ -1059,14 +1068,18 @@ mod session {
                 .unwrap()
                 .into();
             assert_eq!(text(&outcome, "outcome"), "plan", "{expected}");
-            assert_eq!(get(&get(&outcome, "patch"), "value"), big(expected));
+            assert_eq!(
+                get(&get(&outcome, "patch"), "value"),
+                big(expected),
+                "{expected}"
+            );
             let consequences = items(&get(&outcome, "consequences"));
             let written = consequences
                 .iter()
                 .find(|consequence| text(consequence, "consequence") == "memoryWrite")
                 .unwrap();
-            assert!(get(written, "to").is_bigint());
-            assert_eq!(get(written, "to"), big(expected));
+            assert!(get(written, "to").is_bigint(), "{expected}");
+            assert_eq!(get(written, "to"), big(expected), "{expected}");
         }
     }
 
@@ -1481,7 +1494,11 @@ mod module_run {
         );
         for broken in ["[]", "{", r#"{"id":"01-x"}"#] {
             let expected = model::ModuleRun::from_json(broken).unwrap_err().to_string();
-            assert_eq!(message(ModuleRun::from_json(broken).unwrap_err()), expected);
+            assert_eq!(
+                message(ModuleRun::from_json(broken).unwrap_err()),
+                expected,
+                "{broken}"
+            );
         }
     }
 
@@ -1720,7 +1737,12 @@ mod functions {
         let broken = MISS_THEN_HIT.replacen("\"answer\": 0", "\"answer\": 5", 1);
         for broken in ["[]", "{", broken.as_str()] {
             let expected = Module::parse(broken).unwrap_err().to_string();
-            assert_eq!(message(parse_module(broken).unwrap_err()), expected);
+            assert_eq!(
+                message(parse_module(broken).unwrap_err()),
+                expected,
+                "{}",
+                broken.chars().take(20).collect::<String>()
+            );
         }
     }
 
@@ -1737,7 +1759,11 @@ mod functions {
         let duplicate = INDEX.replace("02-fixture-switch-config", "01-fixture-miss-then-hit");
         for broken in ["{}", duplicate.as_str()] {
             let expected = model::parse_module_index(broken).unwrap_err().to_string();
-            assert_eq!(message(parse_module_index(broken).unwrap_err()), expected);
+            assert_eq!(
+                message(parse_module_index(broken).unwrap_err()),
+                expected,
+                "{broken}"
+            );
         }
     }
 

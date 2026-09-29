@@ -124,18 +124,30 @@ impl Run {
             assert_ne!(event.kind, EventKind::Error, "{}", event.explain);
             assert_eq!(after.check_invariants(), Ok(()), "after {}", event.label);
             let counters = after.counters;
-            assert_eq!(counters.hits + counters.misses, counters.accesses);
-            assert_eq!(counters.loads + counters.stores, counters.accesses);
+            assert_eq!(
+                counters.hits + counters.misses,
+                counters.accesses,
+                "after {}",
+                event.label
+            );
+            assert_eq!(
+                counters.loads + counters.stores,
+                counters.accesses,
+                "after {}",
+                event.label
+            );
             assert_eq!(
                 counters.compulsory + counters.capacity + counters.conflict,
-                counters.misses
+                counters.misses,
+                "after {}",
+                event.label
             );
             let cache = &after.config.cache;
             if cache.write_policy == WritePolicy::WriteBack {
-                assert_eq!(counters.writethroughs, 0);
+                assert_eq!(counters.writethroughs, 0, "after {}", event.label);
             }
             if cache.allocate_policy == AllocatePolicy::WriteAllocate {
-                assert_eq!(counters.writearounds, 0);
+                assert_eq!(counters.writearounds, 0, "after {}", event.label);
             }
             let stamp = after.config.timing.map(|_| counters.cycles);
             assert_eq!(event.cycle, stamp, "{}", event.label);
@@ -528,6 +540,21 @@ fn way_edit(s: u32, w: u32, patch: WayPatch) -> Op {
         },
         patch: EditPatch::Way(patch),
     }
+}
+
+/// One test per case of a table: each `name => (arguments)` becomes a test
+/// named `name` that passes the arguments to `check`, so a failure names the
+/// case it is in and the cases after it still run. The integration tests
+/// have a macro of the same name and shape in `tests/common`.
+macro_rules! cases {
+    ($check:path; $($name:ident => ($($argument:expr),* $(,)?),)*) => {
+        $(
+            #[test]
+            fn $name() {
+                $check($($argument),*);
+            }
+        )*
+    };
 }
 
 mod access;

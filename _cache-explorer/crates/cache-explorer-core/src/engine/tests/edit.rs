@@ -93,20 +93,20 @@ fn an_edit_lists_every_cell_it_changes_and_moves_no_counter() {
         let [event] = events.as_slice() else {
             panic!("one event: {events:?}");
         };
-        assert_eq!(event.kind, EventKind::Edit);
-        assert_eq!(event.cause, None);
+        assert_eq!(event.kind, EventKind::Edit, "{op:?}");
+        assert_eq!(event.cause, None, "{op:?}");
         assert_eq!(event.changed, diff(&before, &machine), "{op:?}");
         assert_eq!(machine.check_invariants(), Ok(()), "{op:?}");
-        assert_eq!(machine.counters, before.counters);
-        assert_eq!(machine.prng, before.prng);
-        assert_eq!(machine.access, None);
-        assert_eq!(machine.entries_in_run, before.entries_in_run + 1);
+        assert_eq!(machine.counters, before.counters, "{op:?}");
+        assert_eq!(machine.prng, before.prng, "{op:?}");
+        assert_eq!(machine.access, None, "{op:?}");
+        assert_eq!(machine.entries_in_run, before.entries_in_run + 1, "{op:?}");
         // A quiet sink reaches the same machine, and gets no event.
         let mut quiet_machine = before.clone();
         let mut quiet = Quiet::default();
         let mut out = Emitter::new(&mut quiet, OpIndex::new_unchecked(1), 0);
-        assert_eq!(apply(&mut quiet_machine, &op, &mut out), Ok(()));
-        assert_eq!((quiet_machine, quiet.seen), (machine.clone(), 1));
+        assert_eq!(apply(&mut quiet_machine, &op, &mut out), Ok(()), "{op:?}");
+        assert_eq!((quiet_machine, quiet.seen), (machine.clone(), 1), "{op:?}");
     }
 }
 

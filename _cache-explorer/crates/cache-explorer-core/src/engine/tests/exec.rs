@@ -37,9 +37,14 @@ impl Driven {
         for (event, after) in recorder.events.iter().zip(&recorder.after) {
             assert_eq!(after.check_invariants(), Ok(()), "after {}", event.label);
             let counters = after.counters;
-            assert_eq!(counters.hits + counters.misses, counters.accesses);
+            assert_eq!(
+                counters.hits + counters.misses,
+                counters.accesses,
+                "after {}",
+                event.label
+            );
             let length = after.program.as_deref().map_or(0, Program::len);
-            assert!(after.cpu.pc <= length);
+            assert!(after.cpu.pc <= length, "after {}", event.label);
         }
         (
             flow,
@@ -179,43 +184,58 @@ fn a_program_load_resets_the_cpu_and_keeps_the_cache() {
     assert_eq!(kinds, [Decode, Hit, Complete]);
 }
 
-#[test]
-fn each_instruction_retires_at_its_last_event() {
-    for (config, source) in [
+/// Checks that each instruction of `source`, on `config`, retires at its
+/// last event: the pc moves there and not before, the executed count goes up
+/// by one, and the entry is numbered as the instruction's.
+fn check_instruction_retirement(config: Config, source: &str) {
+    let mut driven = Driven::new(config);
+    driven.load(source);
+    let mut entries = 0;
+    while ready(driven.machine()).is_ok() {
+        let before = driven.machine().clone();
+        let trace = driven.step();
+        entries += 1;
+        let (last, after) = trace.last().unwrap();
+        // In flight, the instruction is the one at the pc.
+        for (event, during) in &trace[..trace.len() - 1] {
+            assert_eq!(during.cpu, before.cpu, "{}", event.label);
+            assert!(!event.changed.contains(&ChangeRef::Pc), "{}", event.label);
+        }
+        assert_eq!(
+            after.cpu.executed,
+            before.cpu.executed + 1,
+            "instruction {entries}"
+        );
+        assert_eq!(
+            last.changed.contains(&ChangeRef::Pc),
+            after.cpu.pc != before.cpu.pc,
+            "instruction {entries}"
+        );
+        assert!(!after.in_flight(), "instruction {entries}");
+        assert_eq!(after.entries_in_run, entries, "instruction {entries}");
+        assert!(
+            trace.iter().all(|(event, _)| event.entry == Some(entries)),
+            "instruction {entries}"
+        );
+    }
+    let program = driven.machine().program.as_ref().unwrap();
+    assert_eq!(driven.machine().cpu.pc, program.len());
+    assert_eq!(ready(driven.machine()), Err(OpError::Finished));
+}
+
+cases! {
+    check_instruction_retirement;
+    each_instruction_of_frame_3b_retires_at_its_last_event_on_two_way_lru =>
         (preset(Preset::TwoWayLru), FRAME_3B),
+    each_instruction_of_a_strided_loop_retires_at_its_last_event_on_two_way_fifo =>
         (two_way(Replacement::Fifo), STRIDED),
+    each_instruction_of_a_strided_loop_retires_at_its_last_event_under_write_no_allocate =>
         (
             direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteNoAllocate),
             STRIDED,
         ),
+    each_instruction_of_frame_3b_retires_at_its_last_event_when_timed =>
         (timed(preset(Preset::TwoWayLru), 1, 20), FRAME_3B),
-    ] {
-        let mut driven = Driven::new(config);
-        driven.load(source);
-        let mut entries = 0;
-        while ready(driven.machine()).is_ok() {
-            let before = driven.machine().clone();
-            let trace = driven.step();
-            entries += 1;
-            let (last, after) = trace.last().unwrap();
-            // In flight, the instruction is the one at the pc.
-            for (event, during) in &trace[..trace.len() - 1] {
-                assert_eq!(during.cpu, before.cpu, "{}", event.label);
-                assert!(!event.changed.contains(&ChangeRef::Pc), "{}", event.label);
-            }
-            assert_eq!(after.cpu.executed, before.cpu.executed + 1);
-            assert_eq!(
-                last.changed.contains(&ChangeRef::Pc),
-                after.cpu.pc != before.cpu.pc
-            );
-            assert!(!after.in_flight());
-            assert_eq!(after.entries_in_run, entries);
-            assert!(trace.iter().all(|(event, _)| event.entry == Some(entries)));
-        }
-        let program = driven.machine().program.as_ref().unwrap();
-        assert_eq!(driven.machine().cpu.pc, program.len());
-        assert_eq!(ready(driven.machine()), Err(OpError::Finished));
-    }
 }
 
 #[test]
@@ -290,8 +310,12 @@ fn stopping_after_any_event_of_an_instruction_leaves_the_machine_as_the_full_ste
             };
             let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(9), 0);
             // The sink stops the step, even at its last event.
-            assert_eq!(step(&mut machine, &mut out), Flow::Stop);
-            assert_eq!(recorder.events.len(), stop);
+            assert_eq!(
+                step(&mut machine, &mut out),
+                Flow::Stop,
+                "stopped after {stop}"
+            );
+            assert_eq!(recorder.events.len(), stop, "stopped after {stop}");
             assert_eq!(machine, full[stop - 1].1, "stopped after {stop}");
 
             let mut quiet_machine = base.clone();
@@ -301,63 +325,68 @@ fn stopping_after_any_event_of_an_instruction_leaves_the_machine_as_the_full_ste
             };
             let mut out = Emitter::new(&mut quiet, OpIndex::new_unchecked(9), 0);
             step(&mut quiet_machine, &mut out);
-            assert_eq!(quiet.seen, stop);
+            assert_eq!(quiet.seen, stop, "stopped after {stop}");
             assert_eq!(quiet_machine, machine, "quietly stopped after {stop}");
         }
     }
 }
 
-#[test]
-fn a_register_address_that_does_not_fit_faults_where_it_is() {
-    let cases = [
-        // r2 holds 4096, one past the last 12-bit address.
-        ("add r2, r0, #0xFFF\nadd r2, r2, #1\nld r1, [r2]", None),
-        // r2 holds 166, within the width but not a multiple of 4.
-        ("add r2, r0, #0x0A6\nst [r2], #1", Some(addr(0x0A6))),
-        // A register wider than every address width.
-        ("add r3, r0, #-1\nst [r3], r3", None),
-    ];
-    for (source, at) in cases {
-        let mut driven = Driven::new(preset(Preset::DirectMapped8));
-        driven.load(source);
-        let lines = source.lines().count();
-        for _ in 1..lines {
-            driven.step();
-        }
-        let before = driven.machine().clone();
-        let (flow, trace) = driven.apply(step);
-        assert_eq!(flow, Flow::Stop);
-        let [(error, after)] = trace.as_slice() else {
-            panic!("one event: {trace:?}");
-        };
-        assert_eq!(error.kind, EventKind::Error);
-        assert_eq!(error.entry, Some(before.entries_in_run + 1));
-        assert_eq!((error.addr, error.cause), (at, None));
-        assert!(error.changed.is_empty());
-        assert!(
-            error.explain.starts_with(&format!("Line {lines}: ")),
-            "{}",
-            error.explain
-        );
-        assert!(
-            error.explain.ends_with(" The program stopped."),
-            "{}",
-            error.explain
-        );
-        // Only the program's status and the entry count change: the pc stays
-        // at the instruction, which does not count against the budget.
-        let expected = Machine {
-            cpu: Cpu {
-                halted: Some(Halted::Faulted),
-                ..before.cpu
-            },
-            entries_in_run: before.entries_in_run + 1,
-            ..before.clone()
-        };
-        assert_eq!(after, &expected);
-        let line = u32::try_from(lines).unwrap();
-        assert_eq!(ready(after), Err(OpError::Stopped { line }));
+/// Checks that the program `source`, whose last instruction's address in a
+/// register does not fit, faults there with an error at `at` (or none), and
+/// changes only the program's status and the entry count.
+fn check_register_address_fault(source: &str, at: Option<Addr>) {
+    let mut driven = Driven::new(preset(Preset::DirectMapped8));
+    driven.load(source);
+    let lines = source.lines().count();
+    for _ in 1..lines {
+        driven.step();
     }
+    let before = driven.machine().clone();
+    let (flow, trace) = driven.apply(step);
+    assert_eq!(flow, Flow::Stop);
+    let [(error, after)] = trace.as_slice() else {
+        panic!("one event: {trace:?}");
+    };
+    assert_eq!(error.kind, EventKind::Error);
+    assert_eq!(error.entry, Some(before.entries_in_run + 1));
+    assert_eq!((error.addr, error.cause), (at, None));
+    assert!(error.changed.is_empty());
+    assert!(
+        error.explain.starts_with(&format!("Line {lines}: ")),
+        "{}",
+        error.explain
+    );
+    assert!(
+        error.explain.ends_with(" The program stopped."),
+        "{}",
+        error.explain
+    );
+    // Only the program's status and the entry count change: the pc stays
+    // at the instruction, which does not count against the budget.
+    let expected = Machine {
+        cpu: Cpu {
+            halted: Some(Halted::Faulted),
+            ..before.cpu
+        },
+        entries_in_run: before.entries_in_run + 1,
+        ..before.clone()
+    };
+    assert_eq!(after, &expected);
+    let line = u32::try_from(lines).unwrap();
+    assert_eq!(ready(after), Err(OpError::Stopped { line }));
+}
+
+cases! {
+    check_register_address_fault;
+    // r2 holds 4096, one past the last 12-bit address.
+    a_register_address_past_the_width_faults_where_it_is =>
+        ("add r2, r0, #0xFFF\nadd r2, r2, #1\nld r1, [r2]", None),
+    // r2 holds 166, within the width but not a multiple of 4.
+    a_misaligned_register_address_faults_where_it_is =>
+        ("add r2, r0, #0x0A6\nst [r2], #1", Some(addr(0x0A6))),
+    // A register wider than every address width.
+    a_register_wider_than_every_address_faults_where_it_is =>
+        ("add r3, r0, #-1\nst [r3], r3", None),
 }
 
 #[test]
@@ -664,8 +693,8 @@ fn an_op_needs_room_for_one_more_entry_in_the_log() {
     for op in [issue.clone(), Op::Step, Op::Run { n: 0 }] {
         let (result, events) = apply_op(&mut machine, &op, limit - room + 1);
         assert_eq!(result, Err(OpError::SessionFull), "{op:?}");
-        assert!(events.is_empty());
-        assert_eq!(machine, before);
+        assert!(events.is_empty(), "{op:?}");
+        assert_eq!(machine, before, "{op:?}");
     }
     let (result, events) = apply_op(&mut machine, &issue, limit - room);
     assert_eq!(result, Ok(()));
@@ -694,11 +723,11 @@ fn an_op_needs_room_for_one_more_op_a_link_can_hold() {
     for op in [issue.clone(), Op::Step, Op::Run { n: 0 }] {
         let (result, events) = apply_as(&mut machine, &op, MAX_SHARE_OPS, 0);
         assert_eq!(result, Err(OpError::LinkFull), "{op:?}");
-        assert!(events.is_empty());
-        assert_eq!(machine, before);
+        assert!(events.is_empty(), "{op:?}");
+        assert_eq!(machine, before, "{op:?}");
         let (result, _) = apply_as(&mut machine, &op, MAX_SHARE_OPS, limit - room + 1);
         assert_eq!(result, Err(OpError::SessionFull), "{op:?}");
-        assert_eq!(machine, before);
+        assert_eq!(machine, before, "{op:?}");
     }
     let (result, events) = apply_as(&mut machine, &issue, MAX_SHARE_OPS - 1, 0);
     assert_eq!(result, Ok(()));
@@ -713,19 +742,19 @@ fn a_loop_that_runs_out_of_room_stops_with_an_error() {
         let mut machine = loaded(ENDLESS);
         // Room for the first instruction's entry, and no more.
         let (result, events) = apply_op(&mut machine, &op, limit - room);
-        assert_eq!(result, Ok(()));
+        assert_eq!(result, Ok(()), "{op:?}");
         let kinds: Vec<EventKind> = events.iter().map(|event| event.kind).collect();
         assert_eq!(kinds, [Complete, EventKind::Error], "{op:?}");
         let error = events.last().unwrap();
-        assert_eq!(error.explain, explain::session_limit());
-        assert_eq!((error.entry, error.seq), (Some(2), 1));
-        assert!(error.changed.is_empty());
-        assert_eq!(machine.cpu.halted, Some(Halted::OutOfBudget));
+        assert_eq!(error.explain, explain::session_limit(), "{op:?}");
+        assert_eq!((error.entry, error.seq), (Some(2), 1), "{op:?}");
+        assert!(error.changed.is_empty(), "{op:?}");
+        assert_eq!(machine.cpu.halted, Some(Halted::OutOfBudget), "{op:?}");
         assert_eq!(
             machine.cpu.pc, 1,
             "the pc stays at the instruction not executed"
         );
-        assert_eq!(ready(&machine), Err(OpError::Stopped { line: 2 }));
+        assert_eq!(ready(&machine), Err(OpError::Stopped { line: 2 }), "{op:?}");
     }
 }
 
@@ -752,7 +781,8 @@ fn a_run_stops_at_its_count_and_a_step_access_after_an_access() {
     for n in [0, MAX_RUN_STEPS + 1] {
         assert_eq!(
             apply_op(&mut empty, &Op::Run { n }, 0).0,
-            Err(OpError::RunSteps)
+            Err(OpError::RunSteps),
+            "n {n}"
         );
     }
     assert_eq!(
@@ -777,18 +807,23 @@ fn an_op_resumed_from_a_boundary_inside_it_goes_on_as_it_would_have() {
         if op == Op::StepAccess {
             // Past the loop, to the two adds before the store.
             let (result, _) = apply_op(&mut whole, &Op::Run { n: 10 }, 1);
-            assert_eq!(result, Ok(()));
+            assert_eq!(result, Ok(()), "{op:?}");
         }
         let start = whole.clone();
         let mut sink = Boundaries::default();
         let mut out = Emitter::new(&mut sink, OpIndex::new_unchecked(1), 0);
-        assert_eq!(apply(&mut whole, &op, &mut out), Ok(()));
+        assert_eq!(apply(&mut whole, &op, &mut out), Ok(()), "{op:?}");
         assert!(sink.boundaries.len() >= 2, "{op:?}");
         for (machine, progress, next_id) in &sink.boundaries {
             let mut resumed = machine.clone();
             let mut recorder = Recorder::default();
             let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(1), *next_id);
-            assert_eq!(resume(&mut resumed, &op, *progress, &mut out), Ok(()));
+            assert_eq!(
+                resume(&mut resumed, &op, *progress, &mut out),
+                Ok(()),
+                "{op:?} from {}",
+                progress.get()
+            );
             assert_eq!(resumed, whole, "{op:?} from {}", progress.get());
             let before = sink
                 .events
@@ -805,8 +840,12 @@ fn an_op_resumed_from_a_boundary_inside_it_goes_on_as_it_would_have() {
         let mut again = start.clone();
         let mut recorder = Recorder::default();
         let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(1), 0);
-        assert_eq!(resume(&mut again, &op, OpProgress::START, &mut out), Ok(()));
-        assert_eq!(again, whole);
+        assert_eq!(
+            resume(&mut again, &op, OpProgress::START, &mut out),
+            Ok(()),
+            "{op:?}"
+        );
+        assert_eq!(again, whole, "{op:?}");
     }
 }
 
@@ -866,16 +905,28 @@ fn an_op_stopped_at_a_boundary_goes_on_from_there_when_resumed() {
             stopped: None,
         };
         let mut out = Emitter::new(&mut sink, OpIndex::new_unchecked(1), 0);
-        assert_eq!(apply(&mut machine, &op, &mut out), Ok(()));
+        assert_eq!(
+            apply(&mut machine, &op, &mut out),
+            Ok(()),
+            "stopped at boundary {stop_at}"
+        );
         let progress = sink.stopped.unwrap();
-        assert_eq!(progress.get() as usize, stop_at + 1);
+        assert_eq!(
+            progress.get() as usize,
+            stop_at + 1,
+            "stopped at boundary {stop_at}"
+        );
         // Stopped at an entry boundary: its last event ends an entry.
         let next = events.get(sink.events.len()).unwrap();
         assert_eq!(next.seq, 1, "stopped at boundary {stop_at}");
         let mut recorder = Recorder::default();
         let first = sink.events.len() as u64;
         let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(1), first);
-        assert_eq!(resume(&mut machine, &op, progress, &mut out), Ok(()));
+        assert_eq!(
+            resume(&mut machine, &op, progress, &mut out),
+            Ok(()),
+            "stopped at boundary {stop_at}"
+        );
         assert_eq!(machine, whole, "stopped at boundary {stop_at}");
         assert_eq!(
             [sink.events, recorder.events].concat(),
@@ -888,8 +939,8 @@ fn an_op_stopped_at_a_boundary_goes_on_from_there_when_resumed() {
 #[test]
 fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
     let mut machine = loaded("ld r1, [0x0A4]\nst [0x0A8], #7");
-    for op in [Op::Step, Op::Step] {
-        assert_eq!(apply_op(&mut machine, &op, 0).0, Ok(()));
+    for (index, op) in [Op::Step, Op::Step].into_iter().enumerate() {
+        assert_eq!(apply_op(&mut machine, &op, 0).0, Ok(()), "step {index}");
     }
     assert_eq!(machine.entries_in_run, 2);
     let config = preset(Preset::TwoWayLru);

@@ -185,13 +185,19 @@ mod support {
         };
         let set = serde_json::from_value(0.into()).unwrap();
         let way = serde_json::from_value(0.into()).unwrap();
-        for outcome in [
-            session.plan_edit(&target, &patch).into(),
-            session.draft_memory_edit(addr(0x0A4), "1").outcome,
-            session.draft_edit(set, way, &validate).outcome,
+        for (editor, outcome) in [
+            ("the plan", session.plan_edit(&target, &patch).into()),
+            (
+                "the memory draft",
+                session.draft_memory_edit(addr(0x0A4), "1").outcome,
+            ),
+            (
+                "the way draft",
+                session.draft_edit(set, way, &validate).outcome,
+            ),
         ] {
             let EditOutcome::Refusal(refusal) = outcome else {
-                panic!("a full session plans no edit: {outcome:?}");
+                panic!("a full session plans no edit, {editor}: {outcome:?}");
             };
             assert_eq!(
                 (
@@ -200,9 +206,10 @@ mod support {
                     refusal.title.as_str(),
                     refusal.text.as_str()
                 ),
-                (reason, Tone::Refused, "Refused", message)
+                (reason, Tone::Refused, "Refused", message),
+                "{editor}"
             );
-            assert_eq!(refusal.suggestion, None);
+            assert_eq!(refusal.suggestion, None, "{editor}");
         }
     }
 
@@ -451,7 +458,7 @@ fn every_position_has_its_op_entry_event_and_boundary() {
     for (at, ops_done, op, entry, seq, entry_length, label, boundary) in rows {
         session.seek(pos(at));
         let position = session.position();
-        assert_eq!(position.pos, pos(at));
+        assert_eq!(position.pos, pos(at), "at {at}");
         assert_eq!(position.ops_done, ops_done, "at {at}");
         assert_eq!(session.cursor(), ops_done, "at {at}");
         assert_eq!(position.op.map(OpIndex::get), op, "at {at}");
@@ -462,7 +469,7 @@ fn every_position_has_its_op_entry_event_and_boundary() {
         assert_eq!(position.label, label, "at {at}");
         assert_eq!(position.boundary, boundary, "at {at}");
         assert_eq!(position.at_run_origin, at == 0, "at {at}");
-        assert_eq!(session.events().len(), at as usize);
+        assert_eq!(session.events().len(), at as usize, "at {at}");
     }
     // A seek past the end rests at the end.
     session.seek(pos(99));
@@ -547,8 +554,12 @@ fn space_moves_one_event_and_at_the_end_executes_one_instruction() {
     assert_eq!((position.pos, position.label.as_str()), (pos(3), "2.1"));
     assert_eq!(position.boundary, Boundary::MidEntry);
     for at in 4..=7 {
-        assert_eq!(session.step_event(Some(&sample)), StepOutcome::Moved);
-        assert_eq!(session.position().pos, pos(at));
+        assert_eq!(
+            session.step_event(Some(&sample)),
+            StepOutcome::Moved,
+            "to {at}"
+        );
+        assert_eq!(session.position().pos, pos(at), "to {at}");
     }
     assert_eq!(session.position().boundary, Boundary::LogEnd);
     assert_eq!(
@@ -752,7 +763,7 @@ fn a_refused_op_of_each_kind_leaves_the_log_the_undone_ops_and_the_cursor_as_the
         );
         for (op, message) in &issue_errors {
             let error = session.apply(op.clone()).unwrap_err();
-            assert_eq!(error.to_string(), *message);
+            assert_eq!(error.to_string(), *message, "{at:?}: {op:?}");
             refused(&mut session, op, &error);
         }
         let error = session.apply(program("lw r1, [0x0A4]")).unwrap_err();
@@ -766,7 +777,7 @@ fn a_refused_op_of_each_kind_leaves_the_log_the_undone_ops_and_the_cursor_as_the
         }
         // The redo still reaches the same end.
         while session.redo() {}
-        assert_eq!(session.position().pos, pos(15));
+        assert_eq!(session.position().pos, pos(15), "{at:?}");
     }
     // Nothing to execute: no program at the base, a finished one, and a
     // stopped one.
@@ -852,9 +863,13 @@ fn a_change_on_an_empty_run_at_the_end_of_the_log_is_appended_at_once() {
             },
             ..config()
         };
-        assert_eq!(session.propose_config(config), Ok(ConfigChange::Applied));
-        assert_eq!(session.config(), &config);
-        assert!(session.position().at_run_origin);
+        assert_eq!(
+            session.propose_config(config),
+            Ok(ConfigChange::Applied),
+            "{size} B"
+        );
+        assert_eq!(session.config(), &config, "{size} B");
+        assert!(session.position().at_run_origin, "{size} B");
     }
     // Five changes are five ops, five runs and five undo stops; none
     // replaces another, and the first run's configuration is unchanged.
@@ -1210,7 +1225,7 @@ fn every_state_the_cursor_reaches_is_the_folds() {
             &Session::replay(&initial, prefix).unwrap().machine,
             "{done} ops done"
         );
-        assert_eq!(session.cursor(), done);
+        assert_eq!(session.cursor(), done, "{done} ops done");
     }
     // Undo from the end visits the stops in reverse, and redo restores them.
     session.scrub_to(session.op_count());
@@ -1220,9 +1235,9 @@ fn every_state_the_cursor_reaches_is_the_folds() {
     }
     assert_eq!(session.position().pos, pos(0));
     for (at, machine) in stops.iter().rev().skip(1) {
-        assert!(session.redo());
-        assert_eq!(session.position().pos, *at);
-        assert_eq!(session.machine(), machine);
+        assert!(session.redo(), "to {at:?}");
+        assert_eq!(session.position().pos, *at, "to {at:?}");
+        assert_eq!(session.machine(), machine, "to {at:?}");
     }
     assert!(!session.redo());
     // Replaying past the end gives the last state.
@@ -1238,24 +1253,32 @@ fn event_ids_and_labels_follow_the_log() {
     let events = log(&session);
     let mut previous: Option<&MicroEvent> = None;
     for (index, event) in events.iter().enumerate() {
-        assert_eq!(event.id, index as u64);
+        assert_eq!(event.id, index as u64, "event {index}");
         if let Some(entry) = event.entry {
-            assert_eq!(event.label, format!("{entry}.{}", event.seq));
+            assert_eq!(
+                event.label,
+                format!("{entry}.{}", event.seq),
+                "event {index}"
+            );
         } else {
-            assert_eq!(event.kind, EventKind::Setup);
-            assert_eq!(event.label, "");
+            assert_eq!(event.kind, EventKind::Setup, "event {index}");
+            assert_eq!(event.label, "", "event {index}");
         }
         if let Some(previous) = previous {
-            assert!(event.op_index >= previous.op_index);
-            assert!(event.run >= previous.run);
+            assert!(event.op_index >= previous.op_index, "event {index}");
+            assert!(event.run >= previous.run, "event {index}");
             // An event either continues its entry or starts the next one.
             if event.seq > 1 {
-                assert_eq!(event.seq, previous.seq + 1);
-                assert_eq!(event.entry, previous.entry);
-                assert_eq!(event.op_index, previous.op_index);
+                assert_eq!(event.seq, previous.seq + 1, "event {index}");
+                assert_eq!(event.entry, previous.entry, "event {index}");
+                assert_eq!(event.op_index, previous.op_index, "event {index}");
             }
             if event.run > previous.run {
-                assert_eq!((event.kind, event.entry), (EventKind::Setup, None));
+                assert_eq!(
+                    (event.kind, event.entry),
+                    (EventKind::Setup, None),
+                    "event {index}"
+                );
             }
         }
         previous = Some(event);
@@ -1331,11 +1354,11 @@ fn a_refused_edit_leaves_the_log_the_undone_ops_and_the_cursor_as_they_were() {
         for (op, message) in &edits {
             let error = session.apply(op.clone()).unwrap_err();
             assert!(matches!(error, OpError::Edit(_)), "{error:?}");
-            assert_eq!(error.to_string(), *message);
+            assert_eq!(error.to_string(), *message, "{at:?}: {op:?}");
             refused(&mut session, op, &error);
         }
         while session.redo() {}
-        assert_eq!(session.position().pos, pos(15));
+        assert_eq!(session.position().pos, pos(15), "{at:?}");
     }
 }
 
@@ -1545,7 +1568,11 @@ fn a_log_as_large_as_a_file_can_hold_refuses_every_op_until_undo_makes_room() {
     // The file is within its limit wherever the cursor is and in either
     // mode, at the size the session keeps without writing it.
     for advanced in [true, false] {
-        assert_eq!(session.set_advanced(advanced), ConfigChange::Applied);
+        assert_eq!(
+            session.set_advanced(advanced),
+            ConfigChange::Applied,
+            "advanced {advanced}"
+        );
         for at in [0, 1, end / 2, end] {
             session.seek(pos(at));
             let json = session.to_json();

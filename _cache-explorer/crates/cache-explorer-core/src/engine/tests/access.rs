@@ -224,7 +224,8 @@ fn case_3_with_a_choice_of_victims_the_policy_is_the_cause() {
         let event = event(&events, kind);
         assert_eq!(
             (event.way, event.cause),
-            (Some(way(0)), Some(Cause::Replacement))
+            (Some(way(0)), Some(Cause::Replacement)),
+            "{kind:?}"
         );
     }
     assert_eq!(event(&events, Rank).changed, [rank_of(2, 0), rank_of(2, 1)]);
@@ -610,44 +611,52 @@ fn case_8_a_store_miss_under_write_allocate_and_write_through_fills_writes_and_w
     );
 }
 
-#[test]
-fn cases_9_and_10_a_store_miss_under_write_no_allocate_writes_around_the_cache() {
-    for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
-        let mut run = Run::new(direct_mapped(write_policy, AllocatePolicy::WriteNoAllocate));
-        let before = run.machine.cache.clone();
-        let events = run.store(0x0A4, 7);
-        assert_eq!(kinds(&events), [Decode, Miss, MemWrite], "{write_policy:?}");
-        assert_eq!(
-            shape(event(&events, MemWrite)),
-            (
-                Some(addr(0x0A4)),
-                Some(set(2)),
-                None,
-                &[memory(0x0A4), counter(Counter::Writearounds)][..],
-                Some(Cause::AllocatePolicy)
-            )
-        );
-        assert_eq!(run.machine.cache, before, "the cache is unchanged");
-        assert_eq!(run.memory(0x0A4), 7);
-        assert!(run.machine.memory.is_touched(line_addr(0x0A0)));
-        let counters = run.machine.counters;
-        assert_eq!(
-            (
-                counters.misses,
-                counters.writearounds,
-                counters.writethroughs,
-                counters.writebacks,
-                counters.fills
-            ),
-            (1, 1, 0, 0, 0),
-            "{write_policy:?}"
-        );
-        // A write-around of the value memory holds changes no cell.
-        assert_eq!(
-            event(&run.store(0x0A8, 66), MemWrite).changed,
-            [counter(Counter::Writearounds)]
-        );
-    }
+/// Checks that a store miss under `write_policy` and write-no-allocate
+/// writes around the cache: the cache is left as it was, and memory takes the
+/// value.
+fn check_store_miss_writes_around(write_policy: WritePolicy) {
+    let mut run = Run::new(direct_mapped(write_policy, AllocatePolicy::WriteNoAllocate));
+    let before = run.machine.cache.clone();
+    let events = run.store(0x0A4, 7);
+    assert_eq!(kinds(&events), [Decode, Miss, MemWrite], "{write_policy:?}");
+    assert_eq!(
+        shape(event(&events, MemWrite)),
+        (
+            Some(addr(0x0A4)),
+            Some(set(2)),
+            None,
+            &[memory(0x0A4), counter(Counter::Writearounds)][..],
+            Some(Cause::AllocatePolicy)
+        )
+    );
+    assert_eq!(run.machine.cache, before, "the cache is unchanged");
+    assert_eq!(run.memory(0x0A4), 7);
+    assert!(run.machine.memory.is_touched(line_addr(0x0A0)));
+    let counters = run.machine.counters;
+    assert_eq!(
+        (
+            counters.misses,
+            counters.writearounds,
+            counters.writethroughs,
+            counters.writebacks,
+            counters.fills
+        ),
+        (1, 1, 0, 0, 0),
+        "{write_policy:?}"
+    );
+    // A write-around of the value memory holds changes no cell.
+    assert_eq!(
+        event(&run.store(0x0A8, 66), MemWrite).changed,
+        [counter(Counter::Writearounds)]
+    );
+}
+
+cases! {
+    check_store_miss_writes_around;
+    case_9_a_store_miss_under_write_back_no_allocate_writes_around_the_cache =>
+        (WritePolicy::WriteBack),
+    case_10_a_store_miss_under_write_through_no_allocate_writes_around_the_cache =>
+        (WritePolicy::WriteThrough),
 }
 
 // ---------------------------------------------------------------------------
@@ -662,13 +671,14 @@ fn write_no_allocate_changes_only_store_misses() {
         let mut run = Run::new(direct_mapped(write_policy, AllocatePolicy::WriteNoAllocate));
         assert_eq!(
             kinds(&run.load(0x0A4)),
-            [Decode, Miss, Victim, Fill, Complete]
+            [Decode, Miss, Victim, Fill, Complete],
+            "{write_policy:?}"
         );
         let expected: &[EventKind] = match write_policy {
             WritePolicy::WriteBack => &[Decode, Hit, Write],
             WritePolicy::WriteThrough => &[Decode, Hit, Write, WriteThrough],
         };
-        assert_eq!(kinds(&run.store(0x0A4, 7)), expected);
+        assert_eq!(kinds(&run.store(0x0A4, 7)), expected, "{write_policy:?}");
         let counters = run.machine.counters;
         assert_eq!(counters.writearounds, 0, "{write_policy:?}");
     }
@@ -870,16 +880,19 @@ fn random_replacement_draws_from_the_seeded_generator_and_never_ranks() {
     let mut expected = Prng::new(config.seed);
     for &at in &lines {
         let trace = run.trace(load(at, Register::R1));
-        assert!(trace.iter().all(|(event, _)| event.kind != Rank));
+        assert!(
+            trace.iter().all(|(event, _)| event.kind != Rank),
+            "load of {at:#x}"
+        );
         if let Some((_, after)) = trace.iter().find(|(event, _)| event.kind == Victim) {
             let choice = after.access.as_ref().unwrap().victim.unwrap();
             if choice.reason == VictimReason::Random {
-                assert_eq!(choice.way.get(), expected.draw_way(4));
+                assert_eq!(choice.way.get(), expected.draw_way(4), "load of {at:#x}");
                 let victim = trace
                     .iter()
                     .find(|(event, _)| event.kind == Victim)
                     .unwrap();
-                assert_eq!(victim.0.cause, Some(Cause::Replacement));
+                assert_eq!(victim.0.cause, Some(Cause::Replacement), "load of {at:#x}");
             }
         }
     }
@@ -1129,7 +1142,11 @@ fn a_store_miss_under_write_no_allocate_fills_nothing_so_the_next_miss_on_its_li
     );
     for write_policy in [WritePolicy::WriteBack, WritePolicy::WriteThrough] {
         let mut run = Run::new(direct_mapped(write_policy, AllocatePolicy::WriteNoAllocate));
-        assert_eq!(classes(&mut run, &requests[..1]), [COMPULSORY]);
+        assert_eq!(
+            classes(&mut run, &requests[..1]),
+            [COMPULSORY],
+            "{write_policy:?}"
+        );
         assert!(run.machine.filled.is_empty(), "{write_policy:?}");
         assert!(run.machine.shadow.lines().is_empty(), "{write_policy:?}");
         assert_eq!(
@@ -1348,7 +1365,7 @@ fn every_miss_is_classed_by_the_lines_filled_and_a_fully_associative_cache_besid
                         .collect();
                     by_use.sort_unstable_by(|a, b| b.cmp(a));
                     let expected: Vec<u32> = by_use.into_iter().map(|(_, line)| line).collect();
-                    assert_eq!(shadow, expected);
+                    assert_eq!(shadow, expected, "{config:?}");
                     // Each stream has misses of the first two classes; the
                     // direct-mapped and two-way caches have conflicts too.
                     assert!(seen[0] > 0 && seen[1] > 0, "{seen:?}");
@@ -1396,8 +1413,8 @@ fn an_outcome_joins_the_sparkline_at_the_tag_compare() {
     let trace = run.trace(load(0x0A4, Register::R1));
     // Not yet at the decode, as the access is not yet counted.
     assert!(outcomes(&trace[0].1).is_empty());
-    for (_, after) in &trace[1..] {
-        assert_eq!(outcomes(after), [Outcome::Miss]);
+    for (index, (_, after)) in trace.iter().enumerate().skip(1) {
+        assert_eq!(outcomes(after), [Outcome::Miss], "after event {index}");
     }
     run.load(0x0A8);
     assert_eq!(outcomes(&run.machine), [Outcome::Miss, Outcome::Hit]);
@@ -1527,7 +1544,11 @@ fn nothing_is_stale_under_write_through() {
     ));
     for (at, value) in [(0x0A4, 7), (0x0A8, 8), (0x1A4, 9)] {
         run.store(at, value);
-        assert_eq!(run.machine.stale(addr(at)), None);
+        assert_eq!(
+            run.machine.stale(addr(at)),
+            None,
+            "store of {value} to {at:#x}"
+        );
     }
 }
 
@@ -1544,12 +1565,16 @@ fn events_are_numbered_by_log_position_entry_and_step() {
     assert_eq!(ids, (0..ids.len() as u64).collect::<Vec<_>>());
     for (entry, events) in [(1, &first), (2, &second)] {
         for (seq, event) in (1..).zip(events.iter()) {
-            assert_eq!(event.op_index, OpIndex::new_unchecked(entry - 1));
-            assert_eq!(event.run, 1);
-            assert_eq!(event.entry, Some(entry));
-            assert_eq!(event.seq, seq);
-            assert_eq!(event.label, format!("{entry}.{seq}"));
-            assert_eq!(event.cycle, None);
+            assert_eq!(
+                event.op_index,
+                OpIndex::new_unchecked(entry - 1),
+                "{entry}.{seq}"
+            );
+            assert_eq!(event.run, 1, "{entry}.{seq}");
+            assert_eq!(event.entry, Some(entry), "{entry}.{seq}");
+            assert_eq!(event.seq, seq, "{entry}.{seq}");
+            assert_eq!(event.label, format!("{entry}.{seq}"), "{entry}.{seq}");
+            assert_eq!(event.cycle, None, "{entry}.{seq}");
         }
     }
     assert_eq!(run.machine.entries_in_run, 2);
@@ -1566,9 +1591,13 @@ fn the_access_context_follows_the_access() {
         .iter()
         .map(|(_, after)| after.access.as_ref().unwrap())
         .collect();
-    for context in &contexts {
-        assert_eq!(context.request, load(0x2A4, Register::R3));
-        assert_eq!(context.location, run.machine.geometry.locate(addr(0x2A4)));
+    for (index, context) in contexts.iter().enumerate() {
+        assert_eq!(context.request, load(0x2A4, Register::R3), "event {index}");
+        assert_eq!(
+            context.location,
+            run.machine.geometry.locate(addr(0x2A4)),
+            "event {index}"
+        );
     }
     // Decode: nothing looked up yet.
     assert_eq!(contexts[0].lookup, None);
@@ -1609,49 +1638,50 @@ fn the_access_context_follows_the_access() {
     assert_eq!(context.way, Some(way(0)));
 }
 
-#[test]
-fn the_last_event_ends_the_access_whichever_it_is() {
-    // Complete, Write, WriteThrough, MemWrite and Rank can each be last.
-    let cases: [(Config, Vec<Request>, EventKind); 5] = [
-        (
-            preset(Preset::DirectMapped8),
-            vec![load(0x0A4, Register::R1)],
-            Complete,
-        ),
-        (
-            direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate),
-            vec![store(0x0A4, 1)],
-            Write,
-        ),
-        (
-            direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate),
-            vec![store(0x0A4, 1)],
-            WriteThrough,
-        ),
-        (
-            direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteNoAllocate),
-            vec![store(0x0A4, 1)],
-            MemWrite,
-        ),
-        (
-            preset(Preset::TwoWayLru),
-            vec![load(0x0A4, Register::R1), load(0x1A4, Register::R1)],
-            Rank,
-        ),
-    ];
-    for (config, requests, last) in cases {
-        let mut run = Run::new(config);
-        let mut trace = Vec::new();
-        for request in requests {
-            trace = run.trace(request);
-        }
-        let (event, after) = trace.last().unwrap();
-        assert_eq!(event.kind, last);
-        assert!(!after.in_flight());
-        assert!(trace[..trace.len() - 1]
-            .iter()
-            .all(|(_, after)| after.in_flight()));
+/// Checks that `last` is the last event of the access the `requests` make on
+/// `config`, and that the access is in flight until then.
+fn check_last_event(config: Config, requests: &[Request], last: EventKind) {
+    let mut run = Run::new(config);
+    let mut trace = Vec::new();
+    for &request in requests {
+        trace = run.trace(request);
     }
+    let (event, after) = trace.last().unwrap();
+    assert_eq!(event.kind, last);
+    assert!(!after.in_flight());
+    assert!(trace[..trace.len() - 1]
+        .iter()
+        .all(|(_, after)| after.in_flight()));
+}
+
+// Complete, Write, WriteThrough, MemWrite and Rank can each be last.
+cases! {
+    check_last_event;
+    a_load_hit_ends_at_its_complete => (
+        preset(Preset::DirectMapped8),
+        &[load(0x0A4, Register::R1)],
+        Complete,
+    ),
+    a_store_hit_under_write_back_ends_at_its_write => (
+        direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate),
+        &[store(0x0A4, 1)],
+        Write,
+    ),
+    a_store_under_write_through_ends_at_its_write_through => (
+        direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate),
+        &[store(0x0A4, 1)],
+        WriteThrough,
+    ),
+    a_store_around_the_cache_ends_at_its_memory_write => (
+        direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteNoAllocate),
+        &[store(0x0A4, 1)],
+        MemWrite,
+    ),
+    a_load_that_reorders_a_two_way_set_ends_at_its_rank => (
+        preset(Preset::TwoWayLru),
+        &[load(0x0A4, Register::R1), load(0x1A4, Register::R1)],
+        Rank,
+    ),
 }
 
 #[test]
@@ -1683,9 +1713,10 @@ fn stop_after_each_event_of_frame_3b_access_5(config: Config) {
         let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(3), 0);
         assert_eq!(
             access(&mut machine, load(0x2A4, Register::R3), &mut out),
-            Flow::Stop
+            Flow::Stop,
+            "stopped after {stop}"
         );
-        assert_eq!(recorder.events.len(), stop);
+        assert_eq!(recorder.events.len(), stop, "stopped after {stop}");
         assert_eq!(machine, full[stop - 1].1, "stopped after {stop}");
 
         // A quiet sink stops in the same state.
@@ -1696,7 +1727,7 @@ fn stop_after_each_event_of_frame_3b_access_5(config: Config) {
         };
         let mut out = Emitter::new(&mut quiet, OpIndex::new_unchecked(3), 0);
         access(&mut quiet_machine, load(0x2A4, Register::R3), &mut out);
-        assert_eq!(quiet_machine, machine);
+        assert_eq!(quiet_machine, machine, "stopped after {stop}");
     }
 }
 
@@ -1724,8 +1755,8 @@ fn quiet_and_recording_runs_reach_equal_machines() {
             let mut out = Emitter::new(&mut quiet, OpIndex::new_unchecked(0), 0);
             access(&mut quiet_machine, request, &mut out);
         }
-        assert_eq!(quiet_machine, recording);
-        assert_eq!(quiet.seen, recorder.events.len());
+        assert_eq!(quiet_machine, recording, "{timing:?}");
+        assert_eq!(quiet.seen, recorder.events.len(), "{timing:?}");
     }
 }
 
@@ -1758,7 +1789,11 @@ fn i2_is_checked_between_accesses_only() {
                 ..WayPatch::default()
             },
         );
-        assert_eq!(apply_op(&mut run.machine, &invalidate, 0).0, Ok(()));
+        assert_eq!(
+            apply_op(&mut run.machine, &invalidate, 0).0,
+            Ok(()),
+            "invalidating way {index}"
+        );
     }
     let ranks: Vec<u32> = run
         .machine
@@ -1826,10 +1861,10 @@ fn a_broken_invariant_at_an_entry_end_ends_the_op_with_an_error() {
     assert_eq!(machine.entries_in_run, 2);
 }
 
-#[test]
-fn a_lookup_that_finds_no_way_abandons_the_access_with_an_error() {
-    // The cache of a 64 B two-way geometry has only sets 0 and 1, so the
-    // lookup of 0x0A4 finds no set 2 where the configuration promises one.
+/// A machine on two-way LRU whose cache is that of a 64 B two-way geometry,
+/// which has only sets 0 and 1: the lookup of 0x0A4 finds no set 2 where the
+/// configuration promises one.
+fn machine_with_a_smaller_cache() -> Machine {
     let smaller = config(
         64,
         2,
@@ -1839,66 +1874,74 @@ fn a_lookup_that_finds_no_way_abandons_the_access_with_an_error() {
     )
     .validate()
     .unwrap();
-    let start = || {
-        let mut machine = Machine::start(two_way(Replacement::Lru)).unwrap();
-        machine.cache = Cache::new(&smaller);
-        machine
-    };
-    let rule = |invariant: &str| {
-        format!(
-            "Internal error: invariant {invariant} no longer holds. The run stopped here; please \
-             report it with a share link."
-        )
-    };
-    let cases = [
-        // Set 2 is missing, so it has no ranks to permute: I1.
-        (
-            start(),
-            rule("I1 (the ranks in set 2 are a permutation of 0 to 1)"),
-        ),
-        // An earlier set's broken invariant is named instead.
-        (
-            {
-                let mut machine = start();
-                for index in [0, 1] {
-                    machine.cache.way_mut(set(0), way(index)).unwrap().slot = Slot::Valid {
-                        tag: Tag::new_unchecked(1),
-                        dirty: Dirtiness::Clean,
-                        data: vec![0; 16],
-                    };
-                }
-                machine
-            },
-            rule("I3 (no two valid ways in set 0 hold the same tag)"),
-        ),
-    ];
-    for (mut machine, explain) in cases {
-        let before = machine.clone();
-        let mut recorder = Recorder::default();
-        let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(0), 10);
-        assert_eq!(
-            access(&mut machine, load(0x0A4, Register::R1), &mut out),
-            Flow::Stop
-        );
-        let events = recorder.events;
-        assert_eq!(kinds(&events), [Decode, EventKind::Error]);
-        // The access's entry ends at its Decode; the error is an entry of
-        // its own.
-        assert_eq!(events[0].label, "1.1");
-        let error = &events[1];
-        assert_eq!((error.id, error.entry, error.seq), (11, Some(2), 1));
-        assert_eq!(error.label, "2.1");
-        assert_eq!((error.addr, error.set, error.way), (None, None, None));
-        assert!(error.changed.is_empty());
-        assert_eq!(error.cause, None);
-        assert_eq!(error.explain, explain);
-        // The access is abandoned before its compare: nothing counted,
-        // nothing cached.
-        assert_eq!(machine.access, None);
-        assert_eq!(machine.entries_in_run, 2);
-        assert_eq!(machine.counters, before.counters);
-        assert_eq!(machine.cache, before.cache);
+    let mut machine = Machine::start(two_way(Replacement::Lru)).unwrap();
+    machine.cache = Cache::new(&smaller);
+    machine
+}
+
+/// The explanation of an internal error that names `invariant`.
+fn invariant_error(invariant: &str) -> String {
+    format!(
+        "Internal error: invariant {invariant} no longer holds. The run stopped here; please \
+         report it with a share link."
+    )
+}
+
+/// Checks that the load of 0x0A4 on `machine` abandons the access with an
+/// error whose explanation is `explain`.
+fn check_abandoned_access(mut machine: Machine, explain: &str) {
+    let before = machine.clone();
+    let mut recorder = Recorder::default();
+    let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(0), 10);
+    assert_eq!(
+        access(&mut machine, load(0x0A4, Register::R1), &mut out),
+        Flow::Stop
+    );
+    let events = recorder.events;
+    assert_eq!(kinds(&events), [Decode, EventKind::Error]);
+    // The access's entry ends at its Decode; the error is an entry of its
+    // own.
+    assert_eq!(events[0].label, "1.1");
+    let error = &events[1];
+    assert_eq!((error.id, error.entry, error.seq), (11, Some(2), 1));
+    assert_eq!(error.label, "2.1");
+    assert_eq!((error.addr, error.set, error.way), (None, None, None));
+    assert!(error.changed.is_empty());
+    assert_eq!(error.cause, None);
+    assert_eq!(error.explain, explain);
+    // The access is abandoned before its compare: nothing counted, nothing
+    // cached.
+    assert_eq!(machine.access, None);
+    assert_eq!(machine.entries_in_run, 2);
+    assert_eq!(machine.counters, before.counters);
+    assert_eq!(machine.cache, before.cache);
+}
+
+/// The smaller cache with two ways of set 0 valid and holding the same tag.
+fn machine_with_a_repeated_tag_in_set_0() -> Machine {
+    let mut machine = machine_with_a_smaller_cache();
+    for index in [0, 1] {
+        machine.cache.way_mut(set(0), way(index)).unwrap().slot = Slot::Valid {
+            tag: Tag::new_unchecked(1),
+            dirty: Dirtiness::Clean,
+            data: vec![0; 16],
+        };
     }
+    machine
+}
+
+cases! {
+    check_abandoned_access;
+    // Set 2 is missing, so it has no ranks to permute: I1.
+    a_lookup_in_a_missing_set_names_the_rank_invariant => (
+        machine_with_a_smaller_cache(),
+        &invariant_error("I1 (the ranks in set 2 are a permutation of 0 to 1)"),
+    ),
+    // An earlier set's broken invariant is named instead.
+    a_lookup_after_an_earlier_broken_set_names_that_sets_invariant => (
+        machine_with_a_repeated_tag_in_set_0(),
+        &invariant_error("I3 (no two valid ways in set 0 hold the same tag)"),
+    ),
 }
 
 // ---------------------------------------------------------------------------
@@ -2054,7 +2097,7 @@ fn every_event_lists_exactly_the_cells_and_counters_it_changed() {
             .iter()
             .map(|sequence| format!("{sequence:?}"))
             .collect();
-        assert_eq!(expected.len(), 23);
+        assert_eq!(expected.len(), 23, "sequences {index}");
         let missing: Vec<&String> = expected.difference(&checked[index]).collect();
         let unexpected: Vec<&String> = checked[index].difference(&expected).collect();
         assert!(
@@ -2339,48 +2382,49 @@ fn timed_write_arounds_stall_right_after_the_compare() {
     }
 }
 
-#[test]
-fn every_kind_of_stall_says_what_the_cpu_waits_for() {
-    let cases = [
-        (
-            direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate),
-            vec![],
-            load(0x0A4, Register::R1),
-            "The CPU stalls for 20 cycles while memory supplies line 0x0A0.",
-        ),
-        (
-            direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate),
-            vec![store(0x0A4, 7)],
-            load(0x1A4, Register::R1),
-            "The CPU stalls for 20 cycles while memory supplies line 0x1A0.",
-        ),
-        (
-            direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate),
-            vec![store(0x0A4, 7)],
-            store(0x1A4, 3),
-            "The CPU stalls for 40 cycles: 20 to write line 0x0A0 back, then 20 to fetch line \
-             0x1A0.",
-        ),
-        (
-            direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteNoAllocate),
-            vec![],
-            store(0x0A4, 7),
-            "The CPU stalls for 20 cycles while the store goes to memory.",
-        ),
-    ];
-    for (config, setup, request, line) in cases {
-        let mut run = Run::new(timed(config, 1, 20));
-        for earlier in setup {
-            run.events(earlier);
-        }
-        let events = run.events(request);
-        let stall = event(&events, Stall);
-        assert_eq!(stall.explain, line);
-        assert_eq!(
-            shape(stall),
-            (None, Some(set(2)), None, &[][..], Some(Cause::Timing))
-        );
+/// Checks that `request`, after the `setup` requests, stalls on `config`
+/// timed 1/20 for the reason `line` gives, in set 2 and caused by the timing.
+fn check_stall_line(config: Config, setup: &[Request], request: Request, line: &str) {
+    let mut run = Run::new(timed(config, 1, 20));
+    for &earlier in setup {
+        run.events(earlier);
     }
+    let events = run.events(request);
+    let stall = event(&events, Stall);
+    assert_eq!(stall.explain, line);
+    assert_eq!(
+        shape(stall),
+        (None, Some(set(2)), None, &[][..], Some(Cause::Timing))
+    );
+}
+
+cases! {
+    check_stall_line;
+    a_fill_stalls_while_memory_supplies_the_line => (
+        direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate),
+        &[],
+        load(0x0A4, Register::R1),
+        "The CPU stalls for 20 cycles while memory supplies line 0x0A0.",
+    ),
+    a_fill_under_write_through_stalls_while_memory_supplies_the_line => (
+        direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate),
+        &[store(0x0A4, 7)],
+        load(0x1A4, Register::R1),
+        "The CPU stalls for 20 cycles while memory supplies line 0x1A0.",
+    ),
+    a_dirty_eviction_stalls_for_the_write_back_and_the_fetch => (
+        direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteAllocate),
+        &[store(0x0A4, 7)],
+        store(0x1A4, 3),
+        "The CPU stalls for 40 cycles: 20 to write line 0x0A0 back, then 20 to fetch line \
+         0x1A0.",
+    ),
+    a_write_around_stalls_while_the_store_goes_to_memory => (
+        direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteNoAllocate),
+        &[],
+        store(0x0A4, 7),
+        "The CPU stalls for 20 cycles while the store goes to memory.",
+    ),
 }
 
 #[test]
@@ -2411,9 +2455,13 @@ fn the_access_context_holds_the_stall_window() {
     // After the access, and on a hit, nothing is stalled.
     assert_eq!(run.machine.stall(), None);
     let trace = run.trace(load(0x2A8, Register::R1));
-    for (_, after) in &trace {
-        assert_eq!(after.access.as_ref().unwrap().stall, None);
-        assert_eq!(after.stall(), None);
+    for (index, (_, after)) in trace.iter().enumerate() {
+        assert_eq!(
+            after.access.as_ref().unwrap().stall,
+            None,
+            "after event {index}"
+        );
+        assert_eq!(after.stall(), None, "after event {index}");
     }
 }
 
@@ -2463,8 +2511,12 @@ fn cycles_add_up_at_every_entry_boundary_and_only_there() {
                         short_mid_access |= after.counters.cycles.get() < identity(&after.counters);
                     }
                     let counters = run.machine.counters;
-                    assert_eq!(counters.cycles.get(), identity(&counters));
-                    assert_eq!(trace.last().unwrap().0.cycle, Some(counters.cycles));
+                    assert_eq!(counters.cycles.get(), identity(&counters), "{config:?}");
+                    assert_eq!(
+                        trace.last().unwrap().0.cycle,
+                        Some(counters.cycles),
+                        "{config:?}"
+                    );
                 }
             }
         }

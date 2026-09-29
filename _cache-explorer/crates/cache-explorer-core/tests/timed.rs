@@ -307,7 +307,11 @@ fn cycles_add_up_at_every_entry_boundary() -> Result<(), String> {
                         let expected =
                             accesses * u64::from(hit) + (misses + writebacks) * u64::from(miss);
                         let stamp = entry.last().and_then(|event| event.cycle);
-                        assert_eq!(stamp.map(Cycle::get), Some(expected));
+                        assert_eq!(
+                            stamp.map(Cycle::get),
+                            Some(expected),
+                            "{config:?}, access {accesses}"
+                        );
                     }
                 }
             }
@@ -361,8 +365,11 @@ fn timing_adds_its_stalls_and_its_stamps_and_nothing_else() -> Result<(), String
                 )
             })
             .collect();
-        assert_eq!(stripped, plain);
-        assert!(with_timing.iter().all(|event| event.cycle.is_some()));
+        assert_eq!(stripped, plain, "{config:?}");
+        assert!(
+            with_timing.iter().all(|event| event.cycle.is_some()),
+            "{config:?}"
+        );
     }
     Ok(())
 }
@@ -712,14 +719,15 @@ fn the_stats_add_up_the_cycles_at_every_entry_boundary() -> Result<(), String> {
         let expected = u64::from(counters.accesses) * 2
             + u64::from(counters.misses) * 7
             + u64::from(counters.writebacks) * 7;
-        assert_eq!(counters.cycles.get(), expected);
+        assert_eq!(counters.cycles.get(), expected, "at {end:?}");
         let cycles = stats
             .rows
             .iter()
             .find(|row| serde_json::to_value(row.key).ok() == Some(serde_json::json!("cycles")));
         assert_eq!(
             cycles.map(|row| row.text.clone()),
-            Some(expected.to_string())
+            Some(expected.to_string()),
+            "at {end:?}"
         );
     }
     Ok(())

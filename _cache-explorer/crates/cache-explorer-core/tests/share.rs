@@ -30,9 +30,9 @@ use serde_json::{json, Value};
 
 use common::{apply_all, grouped, load, pos, program};
 use support::{
-    as_long_as_a_link, code, config, counted, failure_of, file_failure, link, link_failure,
-    link_of, loaded, long_program, pathological, plain, pretty, same, session, unpacked, varied,
-    with_ops,
+    as_long_as_a_link, check_encoding_failure, code, config, counted, failure_of, file_failure,
+    link, link_failure, link_of, loaded, long_program, pathological, plain, pretty, same, session,
+    unpacked, varied, with_ops,
 };
 
 #[cfg(test)]
@@ -52,13 +52,13 @@ mod support {
         LOAD_SLICE_EVENTS, MAX_PROGRAM_BYTES, MAX_PROGRAM_LINES, MAX_SHARE_OPS,
     };
     use cache_explorer_core::{
-        Config, LoadError, LoadFailure, LoadProgress, Op, Preset, Session, ShareDoc, ShareLoad,
-        TextSegment, TextStyle,
+        Config, EncodingError, LoadError, LoadFailure, LoadProgress, Op, Preset, Session, ShareDoc,
+        ShareLoad, TextSegment, TextStyle,
     };
     use serde_json::{json, Value};
 
     use super::common::{apply_all, grouped, load, program, store};
-    use super::ENDLESS;
+    use super::{ENDLESS, LINK_LEAD};
 
     /// A loop that loads and stores a line at a time and counts `r3` down
     /// from 40, then finishes.
@@ -258,6 +258,23 @@ mod support {
             original.share_summary(),
             "{context}"
         );
+    }
+
+    /// Checks that `s` fails to decode as `error`, in every way it is loaded
+    /// (a session, a document, and a load's first advance), saying `message`,
+    /// and that the failure the page shows for it has no contents, repair or
+    /// prefix.
+    pub(crate) fn check_encoding_failure(s: &str, error: EncodingError, message: &str) {
+        let expected = LoadError::Encoding(error);
+        assert_eq!(Session::from_share_string(s).unwrap_err(), expected, "{s}");
+        assert_eq!(ShareDoc::from_share_string(s).unwrap_err(), expected, "{s}");
+        assert_eq!(expected.to_string(), message, "{s}");
+        let failure = link_failure(s);
+        assert_eq!(failure.title, "Could not open link", "{s}");
+        assert_eq!(failure.lead, LINK_LEAD, "{s}");
+        assert_eq!(failure.message, [plain(message)], "{s}");
+        assert_eq!(failure.contents, None, "{s}");
+        assert_eq!((failure.repair, failure.prefix), (None, None), "{s}");
     }
 
     /// The failure a load of `s` reports on its first advance.
@@ -577,40 +594,27 @@ fn a_format_below_1_or_none_is_not_a_document() {
     assert_eq!(message, "missing field `schema_version`");
 }
 
+cases! {
+    check_encoding_failure;
+    text_that_is_not_base64_fails_to_decode => (
+        "not a link!",
+        EncodingError::Base64,
+        "The link's text is not valid base64url; it may have been cut short or changed.",
+    ),
+    data_that_does_not_inflate_fails_to_decode => (
+        "AAECAwQFBgcICQ",
+        EncodingError::Deflate,
+        "The link's data does not unpack; it may have been cut short or changed.",
+    ),
+    data_that_is_not_utf8_fails_to_decode => (
+        &link_of(&[0xFF, 0xFE]),
+        EncodingError::Utf8,
+        "The link's data is not text; it may have been cut short or changed.",
+    ),
+}
+
 #[test]
-fn text_that_is_not_a_share_string_fails_to_decode() {
-    let base64 = "not a link!";
-    let deflate = "AAECAwQFBgcICQ";
-    let utf8 = link_of(&[0xFF, 0xFE]);
-    for (s, error, message) in [
-        (
-            base64,
-            EncodingError::Base64,
-            "The link's text is not valid base64url; it may have been cut short or changed.",
-        ),
-        (
-            deflate,
-            EncodingError::Deflate,
-            "The link's data does not unpack; it may have been cut short or changed.",
-        ),
-        (
-            utf8.as_str(),
-            EncodingError::Utf8,
-            "The link's data is not text; it may have been cut short or changed.",
-        ),
-    ] {
-        let expected = LoadError::Encoding(error);
-        assert_eq!(Session::from_share_string(s).unwrap_err(), expected, "{s}");
-        assert_eq!(ShareDoc::from_share_string(s).unwrap_err(), expected, "{s}");
-        assert_eq!(expected.to_string(), message);
-        let failure = link_failure(s);
-        assert_eq!(failure.title, "Could not open link");
-        assert_eq!(failure.lead, LINK_LEAD);
-        assert_eq!(failure.message, [plain(message)]);
-        assert_eq!(failure.contents, None, "{s}");
-        assert_eq!((failure.repair, failure.prefix), (None, None), "{s}");
-    }
-    // A link cut short.
+fn a_link_cut_short_fails_to_decode() {
     let whole = varied().to_share_string().unwrap();
     let cut = whole.get(..whole.len() / 2).unwrap();
     assert!(matches!(
@@ -1558,20 +1562,31 @@ fn loading_in_slices_gives_the_session_one_slice_gives() {
             };
             assert!(so_far.ticks.starts_with(ticks), "{max_events}");
             assert!(summary.ticks.starts_with(&so_far.ticks), "{max_events}");
-            assert_eq!(so_far.step_count as usize, so_far.ticks.len());
+            assert_eq!(
+                so_far.step_count as usize,
+                so_far.ticks.len(),
+                "{max_events}"
+            );
             assert_eq!(
                 so_far.opening_step,
                 so_far.step_count.min(summary.opening_step),
                 "{max_events}"
             );
-            assert_eq!(so_far.runs, summary.runs);
-            assert_eq!(so_far.op_count, summary.op_count);
-            assert_eq!(so_far.config_summary, summary.config_summary);
+            assert_eq!(so_far.runs, summary.runs, "{max_events}");
+            assert_eq!(so_far.op_count, summary.op_count, "{max_events}");
+            assert_eq!(
+                so_far.config_summary, summary.config_summary,
+                "{max_events}"
+            );
             ticks = &so_far.ticks;
         }
         let session = load.take_session().unwrap();
         same(&session, &whole, &format!("slices of {max_events}"));
-        assert_eq!(session.timeline().live_text, whole.timeline().live_text);
+        assert_eq!(
+            session.timeline().live_text,
+            whole.timeline().live_text,
+            "{max_events}"
+        );
     }
     // Small slices take many frames; the facade's take few.
     let mut load = ShareLoad::from_share_string(&link);

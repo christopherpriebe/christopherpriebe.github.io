@@ -338,7 +338,8 @@ fn an_immediate_must_fit_the_word_or_the_register() {
     ] {
         assert_eq!(
             only_error(&one_byte, source, Asm),
-            Ok(place(1, 13, length, &message))
+            Ok(place(1, 13, length, &message)),
+            "{source:?}"
         );
     }
     // A store's immediate fits as a signed or an unsigned word, and an add's
@@ -643,8 +644,12 @@ fn a_source_one_byte_over_the_limit_is_refused_where_it_crosses_it() {
     for (format, first) in [(Asm, "add r1, r1, #1 ;"), (Trace, "R 0x0A4 ;")] {
         let padding = "x".repeat(count(MAX_PROGRAM_BYTES) - first.len());
         let at_limit = format!("{first}{padding}");
-        assert_eq!(at_limit.len(), count(MAX_PROGRAM_BYTES));
-        assert_eq!(errors_under(&config(), &at_limit, format), Ok(Vec::new()));
+        assert_eq!(at_limit.len(), count(MAX_PROGRAM_BYTES), "{format:?}");
+        assert_eq!(
+            errors_under(&config(), &at_limit, format),
+            Ok(Vec::new()),
+            "{format:?}"
+        );
         let message = format!(
             "the {} is larger than {} bytes.",
             noun(format),
@@ -652,7 +657,8 @@ fn a_source_one_byte_over_the_limit_is_refused_where_it_crosses_it() {
         );
         assert_eq!(
             only_error(&config(), &format!("{at_limit}x"), format),
-            Ok(place(1, MAX_PROGRAM_BYTES + 1, 1, &message))
+            Ok(place(1, MAX_PROGRAM_BYTES + 1, 1, &message)),
+            "{format:?}"
         );
     }
 }
@@ -670,7 +676,11 @@ fn a_source_one_line_over_the_limit_is_refused_at_the_extra_line() {
             at_limit.len() <= count(MAX_PROGRAM_BYTES),
             "the lines fit the byte limit"
         );
-        assert_eq!(errors_under(&config(), &at_limit, format), Ok(Vec::new()));
+        assert_eq!(
+            errors_under(&config(), &at_limit, format),
+            Ok(Vec::new()),
+            "{format:?}"
+        );
         let message = format!(
             "the {} has more than {} lines.",
             noun(format),
@@ -678,7 +688,8 @@ fn a_source_one_line_over_the_limit_is_refused_at_the_extra_line() {
         );
         assert_eq!(
             only_error(&config(), &lines(count(MAX_PROGRAM_LINES) + 1), format),
-            Ok(place(MAX_PROGRAM_LINES + 1, 1, 6, &message))
+            Ok(place(MAX_PROGRAM_LINES + 1, 1, 6, &message)),
+            "{format:?}"
         );
     }
 }
@@ -851,19 +862,25 @@ fn an_address_held_in_a_register_faults_when_it_does_not_fit() {
         let error = events.last().unwrap();
         assert_eq!(
             (error.label.as_str(), error.kind, error.explain.as_str()),
-            ("3.1", EventKind::Error, message)
+            ("3.1", EventKind::Error, message),
+            "{source:?}"
         );
-        assert!(error.changed.is_empty());
+        assert!(error.changed.is_empty(), "{source:?}");
         // The program has stopped, so the next step is refused.
         assert_eq!(
             run(&config(), &load_and_step(source, 4)),
-            Err(FixtureError::Op(OpError::Stopped { line: 4 }))
+            Err(FixtureError::Op(OpError::Stopped { line: 4 })),
+            "{source:?}"
         );
         // Loading it again starts it over.
         let mut again = load_and_step(source, 3);
         again.extend(load_and_step(source, 1));
         let events = run(&config(), &again).unwrap();
-        assert_eq!(events.last().unwrap().kind, EventKind::Complete);
+        assert_eq!(
+            events.last().unwrap().kind,
+            EventKind::Complete,
+            "{source:?}"
+        );
     }
 }
 
@@ -973,18 +990,28 @@ fn a_load_issued_by_hand_beside_a_stopped_program_still_says_its_r1_changed() {
     };
     // A program that faulted, and one that used its budget, are loaded and
     // have not finished: the load writes the r1 they show.
-    for stopped in [
-        load_and_step("add r2, r0, #0xA6\nld r1, [r2]", 2),
-        vec![
-            program("add r1, r0, #1\nloop: bnez r1, loop"),
-            Issue::StepAccess,
-        ],
+    for (which, stopped) in [
+        (
+            "faulted",
+            load_and_step("add r2, r0, #0xA6\nld r1, [r2]", 2),
+        ),
+        (
+            "out of budget",
+            vec![
+                program("add r1, r0, #1\nloop: bnez r1, loop"),
+                Issue::StepAccess,
+            ],
+        ),
     ] {
         let events = run(&config(), &[stopped, vec![load.clone()]].concat()).unwrap();
-        assert!(events.iter().any(|event| event.kind == EventKind::Error));
+        assert!(
+            events.iter().any(|event| event.kind == EventKind::Error),
+            "{which}"
+        );
         assert_eq!(
             events.last().map(|event| event.explain.as_str()),
-            Some("Read word 1 of way 0 (53) into r1. A program is loaded, so its r1 now holds 53.")
+            Some("Read word 1 of way 0 (53) into r1. A program is loaded, so its r1 now holds 53."),
+            "{which}"
         );
     }
 }

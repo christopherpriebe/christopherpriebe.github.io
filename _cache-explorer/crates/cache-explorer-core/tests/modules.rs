@@ -34,8 +34,8 @@ use serde_json::{json, Value};
 
 use common::{load, pos};
 use support::{
-    actions, edited, fill, predicate, refused_with, session, shape_refused, show_me_path, started,
-    text, walk, with,
+    actions, check_show_me_completion, edited, fill, predicate, refused_with, session,
+    shape_refused, show_me_path, started, text, walk, with,
 };
 
 #[cfg(test)]
@@ -164,15 +164,54 @@ mod support {
                     };
                     run.select(u32::from(answer == 0));
                     let wrong = run.check(session);
-                    assert_eq!(wrong.feedback.unwrap().tone, FeedbackTone::Incorrect);
+                    assert_eq!(
+                        wrong.feedback.unwrap().tone,
+                        FeedbackTone::Incorrect,
+                        "{}",
+                        view.title
+                    );
                     let shown = run.show_me(session);
-                    assert_eq!(shown.feedback.unwrap().tone, FeedbackTone::Shown);
-                    assert!(session.gate().is_none());
+                    assert_eq!(
+                        shown.feedback.unwrap().tone,
+                        FeedbackTone::Shown,
+                        "{}",
+                        view.title
+                    );
+                    assert!(session.gate().is_none(), "{}", view.title);
                     run.next(session)
                 }
             };
         }
         panic!("the module did not finish");
+    }
+
+    /// Checks that the fixture module `json` completes through its "Show me"
+    /// path: a view for every step and the done screen last, in order, and
+    /// the done screen's text, its one action, and no gate left on the
+    /// session.
+    pub(crate) fn check_show_me_completion(json: &str) {
+        let (mut run, mut session) = started(json);
+        let views = show_me_path(&mut run, &mut session);
+        let id = run.module().id();
+        let count = run.module().steps().len();
+        assert_eq!(views.len(), count + 1, "{id}");
+        for (index, view) in views.iter().enumerate() {
+            assert_eq!(view.step_index as usize, index, "{id}");
+        }
+        let done = views.last().unwrap();
+        assert_eq!(done.kind, ModuleStepKind::Done, "{id}");
+        assert_eq!(done.kind_label, "Done", "{id}");
+        assert_eq!(done.progress_text, format!("{count} of {count}"), "{id}");
+        assert_eq!(
+            text(&done.text),
+            "Module complete. The workbench stays as you left it; keep experimenting or pick \
+             another module.",
+            "{id}"
+        );
+        assert_eq!(actions(done), [(ModuleActionKind::Restart, true)], "{id}");
+        assert!(done.callout.is_none() && done.options.is_none(), "{id}");
+        assert!(done.drawer_summary.ends_with(" \u{b7} complete"), "{id}");
+        assert!(session.gate().is_none(), "{id}");
     }
 
     /// The fixture `json` with the value at `pointer` set to `value`, added if
@@ -284,30 +323,11 @@ fn every_fixture_parses_and_serializes_back() {
     );
 }
 
-#[test]
-fn every_fixture_completes_through_its_show_me_paths() {
-    for json in FIXTURES {
-        let (mut run, mut session) = started(json);
-        let views = show_me_path(&mut run, &mut session);
-        let count = run.module().steps().len();
-        assert_eq!(views.len(), count + 1, "{}", run.module().id());
-        for (index, view) in views.iter().enumerate() {
-            assert_eq!(view.step_index as usize, index);
-        }
-        let done = views.last().unwrap();
-        assert_eq!(done.kind, ModuleStepKind::Done);
-        assert_eq!(done.kind_label, "Done");
-        assert_eq!(done.progress_text, format!("{count} of {count}"));
-        assert_eq!(
-            text(&done.text),
-            "Module complete. The workbench stays as you left it; keep experimenting or pick \
-             another module."
-        );
-        assert_eq!(actions(done), [(ModuleActionKind::Restart, true)]);
-        assert!(done.callout.is_none() && done.options.is_none());
-        assert!(done.drawer_summary.ends_with(" \u{b7} complete"));
-        assert!(session.gate().is_none());
-    }
+cases! {
+    check_show_me_completion;
+    the_miss_then_hit_fixture_completes_through_its_show_me_path => (MISS_THEN_HIT),
+    the_switch_config_fixture_completes_through_its_show_me_path => (SWITCH_CONFIG),
+    the_stale_memory_fixture_completes_through_its_show_me_path => (STALE_MEMORY),
 }
 
 #[test]
@@ -1731,7 +1751,7 @@ fn predicates_serialize_as_the_spec_shapes_them() {
     ];
     for shape in shapes {
         let read = predicate(shape.clone());
-        assert_eq!(serde_json::to_value(&read).unwrap(), shape);
+        assert_eq!(serde_json::to_value(&read).unwrap(), shape, "{shape}");
     }
     // Every counter name reads, the added ones included.
     for counter in [
@@ -1791,9 +1811,9 @@ fn the_index_lists_the_modules() {
     // The index agrees with the fixture files.
     for (row, json) in view.modules.iter().zip(FIXTURES) {
         let module = Module::parse(json).unwrap();
-        assert_eq!(row.id, module.id());
-        assert_eq!(row.title, module.title());
-        assert_eq!(row.advanced, module.advanced());
+        assert_eq!(row.id, module.id(), "{}", row.id);
+        assert_eq!(row.title, module.title(), "{}", row.id);
+        assert_eq!(row.advanced, module.advanced(), "{}", row.id);
     }
     let one = parse_module_index(&json!([index[0].clone()]).to_string()).unwrap();
     assert_eq!(one.summary, "1 module \u{b7} none running");
@@ -1890,10 +1910,13 @@ fn replacing_the_session_ends_the_module() {
         Session::from_json(&session.to_json()).unwrap(),
         Session::with_config(Config::first_visit()).unwrap(),
     ];
-    for mut replaced in opened {
-        assert!(replaced.gate().is_none());
+    for (index, mut replaced) in opened.into_iter().enumerate() {
+        assert!(replaced.gate().is_none(), "session {index}");
         let controls = replaced.state().controls;
-        assert!(controls.seek_limit.is_none() && controls.guard.is_none());
+        assert!(
+            controls.seek_limit.is_none() && controls.guard.is_none(),
+            "session {index}"
+        );
         replaced.apply(load(0x0A4)).unwrap();
     }
     // Progress is not in the share document: it holds the log alone.

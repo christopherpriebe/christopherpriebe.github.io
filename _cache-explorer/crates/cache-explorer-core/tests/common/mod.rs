@@ -134,3 +134,19 @@ pub(crate) fn golden_settings(description: &str) -> Settings {
     settings.set_comparator(Box::new(WithHeader));
     settings
 }
+
+/// One test per case of a table: each `name => (arguments)` becomes a test
+/// named `name` that passes the arguments to `check`, so a failure names the
+/// case it is in and the cases after it still run. The tests take after
+/// `snapshots!` in `tests/golden.rs`.
+#[macro_export]
+macro_rules! cases {
+    ($check:path; $($name:ident => ($($argument:expr),* $(,)?),)*) => {
+        $(
+            #[test]
+            fn $name() {
+                $check($($argument),*);
+            }
+        )*
+    };
+}

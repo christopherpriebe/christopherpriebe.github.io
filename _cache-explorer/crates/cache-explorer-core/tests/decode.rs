@@ -12,52 +12,42 @@ use cache_explorer_core::limits::{
 use std::collections::BTreeSet;
 
 use cache_explorer_core::{
-    presets, AccessError, Addr, AddressInput, BitRange, CacheConfig, Config, Decoded, FieldKind,
-    Geometry, Placement, SetIndex, Tag, WayIndex, WordBytes, WordIndex, WordInput,
+    presets, Addr, AddressInput, BitRange, CacheConfig, Config, Decoded, FieldKind, Geometry,
+    Placement, SetIndex, Tag, WayIndex, WordBytes, WordIndex, WordInput,
 };
 use serde_json::json;
 
 use common::with_cache;
+use support::{
+    check_address_split, check_misaligned_typed_address, check_not_a_number, check_out_of_range,
+    check_table_row,
+};
 
 #[cfg(test)]
 mod common;
 
-// Geometry
+/// The tests' helpers. They sit in a module compiled for tests only, where a
+/// failed `unwrap` is a failed test, as in the tests themselves.
+#[cfg(test)]
+mod support {
+    use cache_explorer_core::{AccessError, AddressInput, Config, Placement, WordBytes, WordInput};
 
-#[test]
-fn geometry_follows_the_address_split() {
-    // (address bits, word, size, line, associativity) → (tag, index, offset, placement)
-    let cases = [
-        (
-            (12, WordBytes::Four, 128, 16, 1),
-            (5, 3, 4, Placement::DirectMapped),
-        ),
-        (
-            (16, WordBytes::Four, 128, 16, 1),
-            (9, 3, 4, Placement::DirectMapped),
-        ),
-        (
-            (12, WordBytes::Four, 128, 16, 2),
-            (6, 2, 4, Placement::SetAssociative),
-        ),
-        (
-            (12, WordBytes::Four, 256, 16, 4),
-            (6, 2, 4, Placement::SetAssociative),
-        ),
-        (
-            (12, WordBytes::Four, 128, 16, 8),
-            (8, 0, 4, Placement::FullyAssociative),
-        ),
-        (
-            (8, WordBytes::One, 16, 1, 1),
-            (4, 4, 0, Placement::DirectMapped),
-        ),
-        (
-            (32, WordBytes::Eight, 1_024, 64, 4),
-            (24, 2, 6, Placement::SetAssociative),
-        ),
-    ];
-    for ((address_bits, word_bytes, size, line, associativity), expected) in cases {
+    use super::common::with_cache;
+    use super::{config_of, table_row, words_of};
+
+    /// Checks that a cache of `size` bytes in `line`-byte lines of
+    /// `associativity` ways, with `address_bits`-bit addresses and
+    /// `word_bytes`-byte words, splits an address into `expected`: the bits of
+    /// its tag, index and offset, and its placement; and that its counts of
+    /// lines, sets, ways and words agree.
+    pub(crate) fn check_address_split(
+        address_bits: u8,
+        word_bytes: WordBytes,
+        size: u32,
+        line: u32,
+        associativity: u32,
+        expected: (u8, u8, u8, Placement),
+    ) {
         let config = Config {
             address_bits,
             word_bytes,
@@ -74,14 +64,133 @@ fn geometry_follows_the_address_split() {
             expected,
             "{config:?}"
         );
-        assert_eq!(geometry.lines(), size / line);
-        assert_eq!(geometry.sets() * geometry.ways(), geometry.lines());
-        assert_eq!(geometry.words_per_line(), line / word_bytes.bytes());
+        assert_eq!(geometry.lines(), size / line, "{config:?}");
+        assert_eq!(
+            geometry.sets() * geometry.ways(),
+            geometry.lines(),
+            "{config:?}"
+        );
+        assert_eq!(
+            geometry.words_per_line(),
+            line / word_bytes.bytes(),
+            "{config:?}"
+        );
         assert_eq!(
             geometry.tag_bits() + geometry.index_bits() + geometry.offset_bits(),
-            address_bits
+            address_bits,
+            "{config:?}"
         );
     }
+
+    /// Checks that `addr` under `config` decodes to the row of the address
+    /// table given by its bits, its tag (range and text), and its index and
+    /// offset (each a range and a value, `None` for an empty field).
+    pub(crate) fn check_table_row(
+        config: Config,
+        addr: u32,
+        bits: &str,
+        tag: (u8, u8, &str),
+        index: Option<(u8, u8, u32)>,
+        offset: Option<(u8, u8, u32)>,
+    ) {
+        let decoded = config.validate().unwrap().decode(addr).unwrap();
+        let (tag_hi, tag_lo, tag_text) = tag;
+        assert_eq!(
+            table_row(&decoded),
+            (
+                bits.to_owned(),
+                (tag_hi, tag_lo, tag_text.to_owned()),
+                index,
+                offset
+            ),
+            "{config:?}"
+        );
+        assert_eq!(decoded.bits, bits.replace(' ', ""), "{config:?}");
+    }
+
+    /// Checks that `addr` does not decode under `address_bits`-bit addresses,
+    /// with the error saying `message`, while the last address that fits does.
+    pub(crate) fn check_out_of_range(address_bits: u8, addr: u32, message: &str) {
+        let geometry = config_of(address_bits, WordBytes::Four, 128, 16, 1)
+            .validate()
+            .unwrap();
+        let error = geometry.decode(addr).unwrap_err();
+        assert_eq!(
+            error,
+            AccessError::OutOfRange {
+                addr: u64::from(addr),
+                address_bits
+            }
+        );
+        assert_eq!(error.to_string(), message);
+        let last = u32::try_from((1_u64 << address_bits) - 1).unwrap();
+        assert!(geometry.decode(last).is_ok(), "{address_bits} bits");
+    }
+
+    /// Checks that the typed address `addr` is read as misaligned to
+    /// `word_bytes`-byte words under `address_bits`-bit addresses, decoded
+    /// all the same, and that the error for it says `message`.
+    pub(crate) fn check_misaligned_typed_address(
+        address_bits: u8,
+        word_bytes: WordBytes,
+        addr: u32,
+        message: &str,
+    ) {
+        let geometry = config_of(address_bits, word_bytes, 64, 16, 1)
+            .validate()
+            .unwrap();
+        let text = format!("{addr:x}");
+        assert_eq!(
+            geometry.read_address(&text),
+            AddressInput::Misaligned {
+                decoded: geometry.decode(addr).unwrap(),
+                message: message.to_owned(),
+            },
+            "{text}"
+        );
+        let error = AccessError::Misaligned {
+            addr: geometry.addr(addr).unwrap(),
+            address_bits,
+            word_bytes: word_bytes.bytes(),
+        };
+        assert_eq!(error.to_string(), message, "{text}");
+    }
+
+    /// Checks that a word of `word_bytes` bytes reads "seven" as invalid with
+    /// `message`.
+    pub(crate) fn check_not_a_number(word_bytes: WordBytes, message: &str) {
+        let geometry = words_of(word_bytes).validate().unwrap();
+        assert_eq!(
+            geometry.read_word("seven"),
+            WordInput::Invalid {
+                message: message.to_owned()
+            }
+        );
+    }
+}
+
+// Geometry
+
+cases! {
+    check_address_split;
+    address_split_of_a_12_bit_direct_mapped_cache =>
+        (12, WordBytes::Four, 128, 16, 1, (5, 3, 4, Placement::DirectMapped)),
+    address_split_of_a_16_bit_direct_mapped_cache =>
+        (16, WordBytes::Four, 128, 16, 1, (9, 3, 4, Placement::DirectMapped)),
+    address_split_of_a_12_bit_two_way_cache =>
+        (12, WordBytes::Four, 128, 16, 2, (6, 2, 4, Placement::SetAssociative)),
+    address_split_of_a_12_bit_four_way_cache =>
+        (12, WordBytes::Four, 256, 16, 4, (6, 2, 4, Placement::SetAssociative)),
+    address_split_of_a_12_bit_fully_associative_cache =>
+        (12, WordBytes::Four, 128, 16, 8, (8, 0, 4, Placement::FullyAssociative)),
+    address_split_of_an_8_bit_cache_of_one_byte_lines =>
+        (8, WordBytes::One, 16, 1, 1, (4, 4, 0, Placement::DirectMapped)),
+    address_split_of_a_32_bit_cache_of_eight_byte_words =>
+        (32, WordBytes::Eight, 1_024, 64, 4, (24, 2, 6, Placement::SetAssociative)),
+}
+
+#[test]
+fn geometry_follows_the_address_split_in_every_named_configuration() {
     for preset in presets() {
         let config = preset.config();
         let geometry = config.validate().unwrap();
@@ -128,10 +237,19 @@ fn fully_associative_caches_up_to_max_lines_ways_validate() {
         .unwrap();
         assert_eq!(
             (geometry.sets(), geometry.ways(), geometry.index_bits()),
-            (1, lines, 0)
+            (1, lines, 0),
+            "{lines} lines"
         );
-        assert_eq!(geometry.tag_bits(), config.address_bits - 4);
-        assert_eq!(geometry.placement(), Placement::FullyAssociative);
+        assert_eq!(
+            geometry.tag_bits(),
+            config.address_bits - 4,
+            "{lines} lines"
+        );
+        assert_eq!(
+            geometry.placement(),
+            Placement::FullyAssociative,
+            "{lines} lines"
+        );
     }
     // Even the widest lines at the narrowest addresses keep a tag bit.
     let widest_line = (MAX_WORDS_PER_LINE + 1).next_power_of_two() / 2 * 8;
@@ -239,63 +357,44 @@ fn table_row(decoded: &Decoded) -> TableRow {
     )
 }
 
-#[test]
-fn decoding_follows_the_address_table() {
-    let rows = [
-        // 12-bit, 128 B direct-mapped, 16 B lines
-        (
-            config_of(12, WordBytes::Four, 128, 16, 1),
-            0x0A4,
-            (
-                "00001 010 0100",
-                (11, 7, "0x01"),
-                Some((6, 4, 2)),
-                Some((3, 0, 4)),
-            ),
-        ),
-        // 16-bit, the spec's default width, same cache
-        (
-            config_of(16, WordBytes::Four, 128, 16, 1),
-            0x00A4,
-            (
-                "000000001 010 0100",
-                (15, 7, "0x001"),
-                Some((6, 4, 2)),
-                Some((3, 0, 4)),
-            ),
-        ),
-        // 12-bit, 128 B 2-way (4 sets)
-        (
-            config_of(12, WordBytes::Four, 128, 16, 2),
-            0x1A0,
-            (
-                "000110 10 0000",
-                (11, 6, "0x06"),
-                Some((5, 4, 2)),
-                Some((3, 0, 0)),
-            ),
-        ),
-        // 12-bit, 128 B fully associative
-        (
-            config_of(12, WordBytes::Four, 128, 16, 8),
-            0x0A4,
-            ("00001010 0100", (11, 4, "0x0A"), None, Some((3, 0, 4))),
-        ),
-    ];
-    for (config, addr, (bits, (tag_hi, tag_lo, tag_text), index, offset)) in rows {
-        let decoded = config.validate().unwrap().decode(addr).unwrap();
-        assert_eq!(
-            table_row(&decoded),
-            (
-                bits.to_owned(),
-                (tag_hi, tag_lo, tag_text.to_owned()),
-                index,
-                offset
-            ),
-            "{config:?}"
-        );
-        assert_eq!(decoded.bits, bits.replace(' ', ""));
-    }
+cases! {
+    check_table_row;
+    // 12-bit, 128 B direct-mapped, 16 B lines
+    the_address_table_row_of_a_12_bit_direct_mapped_cache => (
+        config_of(12, WordBytes::Four, 128, 16, 1),
+        0x0A4,
+        "00001 010 0100",
+        (11, 7, "0x01"),
+        Some((6, 4, 2)),
+        Some((3, 0, 4)),
+    ),
+    // 16-bit, the spec's default width, same cache
+    the_address_table_row_of_a_16_bit_direct_mapped_cache => (
+        config_of(16, WordBytes::Four, 128, 16, 1),
+        0x00A4,
+        "000000001 010 0100",
+        (15, 7, "0x001"),
+        Some((6, 4, 2)),
+        Some((3, 0, 4)),
+    ),
+    // 12-bit, 128 B 2-way (4 sets)
+    the_address_table_row_of_a_12_bit_two_way_cache => (
+        config_of(12, WordBytes::Four, 128, 16, 2),
+        0x1A0,
+        "000110 10 0000",
+        (11, 6, "0x06"),
+        Some((5, 4, 2)),
+        Some((3, 0, 0)),
+    ),
+    // 12-bit, 128 B fully associative
+    the_address_table_row_of_a_12_bit_fully_associative_cache => (
+        config_of(12, WordBytes::Four, 128, 16, 8),
+        0x0A4,
+        "00001010 0100",
+        (11, 4, "0x0A"),
+        None,
+        Some((3, 0, 4)),
+    ),
 }
 
 /// Checks `decoded`, the decoding of `addr` under `geometry`, against the
@@ -327,7 +426,11 @@ fn check_decoded(geometry: &Geometry, addr: u32, decoded: &Decoded) {
             usize::from(field.range.width),
             "{context}"
         );
-        assert_eq!(field.range.hi - field.range.lo + 1, field.range.width);
+        assert_eq!(
+            field.range.hi - field.range.lo + 1,
+            field.range.width,
+            "{context}"
+        );
     }
     let kinds: Vec<_> = decoded.fields.iter().map(|field| field.field).collect();
     let expected_kinds: Vec<_> = [
@@ -556,47 +659,22 @@ fn misaligned_addresses_decode_with_aligned_false() {
     }
 }
 
-#[test]
-fn addresses_beyond_the_width_do_not_decode() {
-    let cases = [
+cases! {
+    check_out_of_range;
+    address_0x100_does_not_decode_at_8_bits =>
         (8, 0x100, "0x100 does not fit an 8-bit address (0x00–0xFF)."),
-        (
-            12,
-            0x1000,
-            "0x1000 does not fit a 12-bit address (0x000–0xFFF).",
-        ),
-        (
-            12,
-            u32::MAX,
-            "0xFFFFFFFF does not fit a 12-bit address (0x000–0xFFF).",
-        ),
-        (
-            16,
-            0x1_0000,
-            "0x10000 does not fit a 16-bit address (0x0000–0xFFFF).",
-        ),
-        (
-            18,
-            0x4_0000,
-            "0x40000 does not fit an 18-bit address (0x00000–0x3FFFF).",
-        ),
-    ];
-    for (address_bits, addr, message) in cases {
-        let geometry = config_of(address_bits, WordBytes::Four, 128, 16, 1)
-            .validate()
-            .unwrap();
-        let error = geometry.decode(addr).unwrap_err();
-        assert_eq!(
-            error,
-            AccessError::OutOfRange {
-                addr: u64::from(addr),
-                address_bits
-            }
-        );
-        assert_eq!(error.to_string(), message);
-        let last = u32::try_from((1_u64 << address_bits) - 1).unwrap();
-        assert!(geometry.decode(last).is_ok(), "{address_bits} bits");
-    }
+    address_0x1000_does_not_decode_at_12_bits =>
+        (12, 0x1000, "0x1000 does not fit a 12-bit address (0x000–0xFFF)."),
+    the_largest_address_does_not_decode_at_12_bits =>
+        (12, u32::MAX, "0xFFFFFFFF does not fit a 12-bit address (0x000–0xFFF)."),
+    address_0x10000_does_not_decode_at_16_bits =>
+        (16, 0x1_0000, "0x10000 does not fit a 16-bit address (0x0000–0xFFFF)."),
+    address_0x40000_does_not_decode_at_18_bits =>
+        (18, 0x4_0000, "0x40000 does not fit an 18-bit address (0x00000–0x3FFFF)."),
+}
+
+#[test]
+fn the_widest_address_decodes_at_32_bits() {
     let widest = config_of(32, WordBytes::Four, 128, 16, 1)
         .validate()
         .unwrap();
@@ -727,67 +805,45 @@ fn typed_addresses_are_hex_with_or_without_0x() {
     }
 }
 
-#[test]
-fn misaligned_typed_addresses_name_the_aligned_ones() {
-    let cases = [
-        (
-            12,
-            WordBytes::Four,
-            0x0A6,
-            "0x0A6 is not aligned to a 4-byte word; use 0x0A4 or 0x0A8.",
-        ),
-        (
-            12,
-            WordBytes::Four,
-            0x0A5,
-            "0x0A5 is not aligned to a 4-byte word; use 0x0A4 or 0x0A8.",
-        ),
-        // The next word would not fit the width.
-        (
-            12,
-            WordBytes::Four,
-            0xFFE,
-            "0xFFE is not aligned to a 4-byte word; use 0xFFC.",
-        ),
-        (
-            16,
-            WordBytes::Two,
-            0x00A5,
-            "0x00A5 is not aligned to a 2-byte word; use 0x00A4 or 0x00A6.",
-        ),
-        (
-            12,
-            WordBytes::Eight,
-            0x0A4,
-            "0x0A4 is not aligned to an 8-byte word; use 0x0A0 or 0x0A8.",
-        ),
-        (
-            8,
-            WordBytes::Eight,
-            0xFC,
-            "0xFC is not aligned to an 8-byte word; use 0xF8.",
-        ),
-    ];
-    for (address_bits, word_bytes, addr, message) in cases {
-        let geometry = config_of(address_bits, word_bytes, 64, 16, 1)
-            .validate()
-            .unwrap();
-        let text = format!("{addr:x}");
-        assert_eq!(
-            geometry.read_address(&text),
-            AddressInput::Misaligned {
-                decoded: geometry.decode(addr).unwrap(),
-                message: message.to_owned(),
-            },
-            "{text}"
-        );
-        let error = AccessError::Misaligned {
-            addr: geometry.addr(addr).unwrap(),
-            address_bits,
-            word_bytes: word_bytes.bytes(),
-        };
-        assert_eq!(error.to_string(), message);
-    }
+cases! {
+    check_misaligned_typed_address;
+    a_typed_address_two_bytes_past_a_word_names_the_words_around_it => (
+        12,
+        WordBytes::Four,
+        0x0A6,
+        "0x0A6 is not aligned to a 4-byte word; use 0x0A4 or 0x0A8.",
+    ),
+    a_typed_address_one_byte_past_a_word_names_the_words_around_it => (
+        12,
+        WordBytes::Four,
+        0x0A5,
+        "0x0A5 is not aligned to a 4-byte word; use 0x0A4 or 0x0A8.",
+    ),
+    // The next word would not fit the width.
+    a_typed_address_in_the_last_word_names_only_the_word_before => (
+        12,
+        WordBytes::Four,
+        0xFFE,
+        "0xFFE is not aligned to a 4-byte word; use 0xFFC.",
+    ),
+    a_typed_address_misaligned_to_two_byte_words_names_the_words_around_it => (
+        16,
+        WordBytes::Two,
+        0x00A5,
+        "0x00A5 is not aligned to a 2-byte word; use 0x00A4 or 0x00A6.",
+    ),
+    a_typed_address_misaligned_to_eight_byte_words_names_the_words_around_it => (
+        12,
+        WordBytes::Eight,
+        0x0A4,
+        "0x0A4 is not aligned to an 8-byte word; use 0x0A0 or 0x0A8.",
+    ),
+    a_typed_address_in_the_last_eight_byte_word_names_only_the_word_before => (
+        8,
+        WordBytes::Eight,
+        0xFC,
+        "0xFC is not aligned to an 8-byte word; use 0xF8.",
+    ),
 }
 
 #[test]
@@ -1024,30 +1080,23 @@ fn text_that_is_not_a_number_gets_the_word_sizes_message() {
             "{text:?}"
         );
     }
-    let others = [
-        (
-            WordBytes::One,
-            "Type a whole number for a 1-byte word, −128 to 255.",
-        ),
-        (
-            WordBytes::Two,
-            "Type a whole number for a 2-byte word, −32,768 to 65,535.",
-        ),
-        (
-            WordBytes::Eight,
-            "Type a whole number for an 8-byte word, \
-             −9,223,372,036,854,775,808 to 18,446,744,073,709,551,615.",
-        ),
-    ];
-    for (word_bytes, message) in others {
-        let geometry = words_of(word_bytes).validate().unwrap();
-        assert_eq!(
-            geometry.read_word("seven"),
-            WordInput::Invalid {
-                message: message.to_owned()
-            }
-        );
-    }
+}
+
+cases! {
+    check_not_a_number;
+    text_that_is_not_a_number_gets_the_one_byte_word_message => (
+        WordBytes::One,
+        "Type a whole number for a 1-byte word, −128 to 255.",
+    ),
+    text_that_is_not_a_number_gets_the_two_byte_word_message => (
+        WordBytes::Two,
+        "Type a whole number for a 2-byte word, −32,768 to 65,535.",
+    ),
+    text_that_is_not_a_number_gets_the_eight_byte_word_message => (
+        WordBytes::Eight,
+        "Type a whole number for an 8-byte word, \
+         −9,223,372,036,854,775,808 to 18,446,744,073,709,551,615.",
+    ),
 }
 
 // Serialized shapes

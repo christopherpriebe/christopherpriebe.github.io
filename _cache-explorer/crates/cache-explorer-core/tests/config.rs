@@ -1068,7 +1068,8 @@ fn enum_values_are_camel_case_strings() {
         let json = serde_json::to_string(&replacement).unwrap();
         assert_eq!(
             serde_json::from_str::<Replacement>(&json).unwrap(),
-            replacement
+            replacement,
+            "{replacement:?}"
         );
     }
 }
@@ -1077,13 +1078,17 @@ fn enum_values_are_camel_case_strings() {
 fn word_bytes_is_one_of_four_numbers() {
     for word in WordBytes::ALL {
         let json = serde_json::to_string(&word).unwrap();
-        assert_eq!(json, word.bytes().to_string());
-        assert_eq!(serde_json::from_str::<WordBytes>(&json).unwrap(), word);
+        assert_eq!(json, word.bytes().to_string(), "{word:?}");
+        assert_eq!(
+            serde_json::from_str::<WordBytes>(&json).unwrap(),
+            word,
+            "{word:?}"
+        );
     }
     for got in [0, 3, 16] {
         let message = format!("word size must be 1, 2, 4 or 8 bytes; got {got}");
         let error = serde_json::from_str::<WordBytes>(&got.to_string()).unwrap_err();
-        assert_eq!(error.to_string(), message);
+        assert_eq!(error.to_string(), message, "{got}");
         let in_config = edited(r#""wordBytes":4"#, &format!(r#""wordBytes":{got}"#));
         let error = serde_json::from_str::<Config>(&in_config)
             .unwrap_err()
