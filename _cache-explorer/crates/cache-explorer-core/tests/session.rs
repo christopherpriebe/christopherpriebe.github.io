@@ -431,6 +431,44 @@ fn an_applied_op_is_appended_and_the_cursor_rests_on_its_last_event() {
 }
 
 #[test]
+fn an_applied_op_reports_the_events_the_log_holds_over_its_positions() {
+    let mut session = session();
+    for op in [
+        load(0x0A4),
+        store(0x0A8, 7),
+        program(WALK),
+        Op::Run { n: 4 },
+        Op::StepAccess,
+    ] {
+        let from = end_of(&session);
+        let reported = session.apply(op.clone()).unwrap().clone();
+        let to = end_of(&session);
+        assert!(!reported.is_empty(), "{op:?}");
+        assert_eq!(
+            reported,
+            session.events_range(from.get()..to.get()),
+            "{op:?}"
+        );
+    }
+}
+
+#[test]
+fn an_op_applied_after_undo_reports_the_events_that_replace_the_undone_ones() {
+    let mut session = table();
+    assert!(session.undo());
+    assert!(session.undo());
+    let from = session.position().pos;
+    assert_eq!(from, pos(5));
+    let reported = session.apply(store(0x0A4, 7)).unwrap().clone();
+    let to = end_of(&session);
+    assert_eq!(
+        to.get(),
+        from.get() + u32::try_from(reported.len()).unwrap()
+    );
+    assert_eq!(reported, session.events_range(from.get()..to.get()));
+}
+
+#[test]
 fn every_position_has_its_op_entry_event_and_boundary() {
     // pos, ops done, op, entry, seq, entry length, label, boundary
     type Row = (
