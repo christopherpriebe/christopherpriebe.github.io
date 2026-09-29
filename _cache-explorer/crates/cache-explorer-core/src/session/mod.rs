@@ -603,7 +603,7 @@ impl Session {
     ///
     /// The [`OpError`] refusing the first op refused; nothing changes.
     pub(crate) fn apply_all(&mut self, ops: Vec<Op>) -> Result<&[MicroEvent], OpError> {
-        let plan = self.plan(ops, false)?;
+        let plan = self.plan(ops, Keep::End)?;
         let first = slot(plan.base);
         self.commit(plan);
         Ok(self.events.get(first..).unwrap_or_default())
@@ -611,14 +611,14 @@ impl Session {
 
     /// Checks `ops` in turn, each against the machine the ones before it
     /// leave, from the end of the op holding the cursor, and executes them
-    /// there, without changing the session. With `keep_start`, the plan
-    /// keeps the machine at the start of the last op.
+    /// there, without changing the session. The plan keeps what `keep`
+    /// says besides the machine after the last op.
     ///
     /// # Errors
     ///
     /// [`OpError::Gated`] while a gate is set, and otherwise the
     /// [`OpError`] refusing the first op refused.
-    fn plan(&self, ops: Vec<Op>, keep_start: bool) -> Result<Plan, OpError> {
+    fn plan(&self, ops: Vec<Op>, keep: Keep) -> Result<Plan, OpError> {
         if self.gate.is_some() {
             return Err(OpError::Gated);
         }
@@ -635,10 +635,11 @@ impl Session {
         let mut file = self.saved.room_after(slot_of(kept));
         let mut ops_json = Vec::with_capacity(ops.len());
         let mut op_ends = Vec::with_capacity(ops.len());
+        let last = last_op(kept, ops.len());
         let mut last_start = None;
         for (index, op) in (kept..).zip(&ops) {
             let index = OpIndex::new_unchecked(index);
-            if keep_start {
+            if keep == Keep::LastOpStart && index == last {
                 last_start = Some(machine.clone());
             }
             builder.op = index;
@@ -924,6 +925,16 @@ impl ReplayError {
     }
 }
 
+/// What a plan keeps of the machine, besides the machine after its last op,
+/// which every plan keeps.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Keep {
+    /// Nothing more.
+    End,
+    /// The machine at the start of the last op.
+    LastOpStart,
+}
+
 /// Ops checked and executed from a point of the log, ready to be appended
 /// there.
 struct Plan {
@@ -1073,6 +1084,12 @@ trait Waiting {
 
     /// Whether the replay has what the sink waits for, and may end.
     fn finished(&self) -> bool;
+}
+
+/// The last of `count` ops appended after the `kept` the log keeps.
+fn last_op(kept: u32, count: usize) -> OpIndex {
+    let appended = u32::try_from(count).unwrap_or(u32::MAX);
+    OpIndex::new_unchecked(kept.saturating_add(appended).saturating_sub(1))
 }
 
 /// The position after `count` events.

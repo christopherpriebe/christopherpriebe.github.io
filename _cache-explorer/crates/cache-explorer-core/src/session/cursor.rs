@@ -11,7 +11,7 @@
 
 use serde::Serialize;
 
-use super::{ReplayError, Session, Start};
+use super::{last_op, Keep, ReplayError, Session, Start};
 use crate::explain;
 use crate::op::{Op, OpError, ProgramSource};
 use crate::units::{EventPos, OpIndex};
@@ -227,7 +227,7 @@ impl Session {
         }
         let mut ops: Vec<Op> = self.load_first(program).into_iter().collect();
         ops.push(Op::Step);
-        let mut plan = match self.plan(ops, true) {
+        let mut plan = match self.plan(ops, Keep::LastOpStart) {
             Ok(plan) => plan,
             Err(error) => return idle(error),
         };
@@ -238,11 +238,7 @@ impl Session {
             .nth(1)
             .copied()
             .unwrap_or(plan.base);
-        let step = OpIndex::new_unchecked(
-            plan.kept
-                .saturating_add(u32::try_from(plan.ops.len()).unwrap_or(u32::MAX))
-                .saturating_sub(1),
-        );
+        let step = last_op(plan.kept, plan.ops.len());
         let last_start = plan.last_start.take();
         self.commit(plan);
         if let Some(machine) = last_start {
@@ -286,7 +282,7 @@ impl Session {
         }
         let mut ops: Vec<Op> = self.load_first(program).into_iter().collect();
         ops.push(Op::StepAccess);
-        match self.plan(ops, false) {
+        match self.plan(ops, Keep::End) {
             Ok(plan) => {
                 self.commit(plan);
                 StepOutcome::Applied
