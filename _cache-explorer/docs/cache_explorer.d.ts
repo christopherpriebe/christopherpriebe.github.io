@@ -2190,33 +2190,31 @@ export interface ConfigPredicate {
 }
 
 /**
- * True when the displayed run's last completed access at the cursor matches
- * every field given and was made since the step began.
+ * True when the event at the cursor is of the kind and, if given, the entry.
  *
- * The access is the most recent completed one at or before the cursor, and
- * it counts only when an op made since the step began made it: what an
- * instruct step waits for.
- */
-export interface LastAccessPredicate {
-    /**
-     * The access wanted.
-     */
-    lastAccess: AccessMatch;
-}
-
-/**
- * True when the event the cursor rests on is of the kind, and of the entry
- * if one is given.
- *
- * The entry is the displayed run's: a step that asks the student to drag the
- * timeline back to step 1.2, the tag compare, waits for
- * `{"event": {"kind": "miss", "entry": 1}}`.
+ * The event is the one the cursor rests on. The entry is the displayed run's:
+ * a step that asks the student to drag the timeline back to step 1.2, the tag
+ * compare, waits for `{"event": {"kind": "miss", "entry": 1}}`.
  */
 export interface EventPredicate {
     /**
      * The event wanted.
      */
     event: EventMatch;
+}
+
+/**
+ * True when the last access matches every field given and is new to the step.
+ *
+ * The access is the displayed run's most recent completed one at or before
+ * the cursor, and it is new to the step only when an op made since the step
+ * began made it: what an instruct step waits for.
+ */
+export interface LastAccessPredicate {
+    /**
+     * The access wanted.
+     */
+    lastAccess: AccessMatch;
 }
 
 /**

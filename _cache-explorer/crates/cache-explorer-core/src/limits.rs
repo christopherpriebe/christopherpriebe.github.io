@@ -102,8 +102,7 @@ pub const CHECKPOINT_INTERVAL: u32 = 2_000;
 /// frame. Trades responsiveness against load time. Tunable.
 pub const LOAD_SLICE_EVENTS: u32 = 2_000;
 
-/// Bytes of program source that take about as long to parse as one event
-/// takes to replay.
+/// Bytes of program source that parse in about the time one event replays.
 ///
 /// A sliced share load counts the parsing an op does as this many bytes an
 /// event: a `Program` op parses its source, and a `Config` op parses the
@@ -116,8 +115,7 @@ pub const PARSE_BYTES_PER_EVENT: u32 = 64;
 /// whatever was pasted. Tunable.
 pub const MAX_SHARE_TEXT_BYTES: u32 = 64 * 1024;
 
-/// The largest inflated share document, and the largest loaded file, in bytes
-/// (1 MiB).
+/// The largest inflated share document or loaded file, in bytes (1 MiB).
 ///
 /// It is also the limit of the inflate itself, so a short link cannot
 /// decompress into unbounded memory; and the most a session's saved file may

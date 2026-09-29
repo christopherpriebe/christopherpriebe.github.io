@@ -135,11 +135,11 @@ pub(crate) fn golden_settings(description: &str) -> Settings {
     settings
 }
 
-/// One test per case of a table: each `name => (arguments)` becomes a test
-/// named `name` that passes the arguments to `check`.
+/// One test per case of a table, each passing its arguments to `check`.
 ///
-/// A failure names the case it is in, and the cases after it still run. The
-/// tests take after `snapshots!` in `tests/golden.rs`.
+/// Each `name => (arguments)` becomes a test named `name`. A failure names the
+/// case it is in, and the cases after it still run. The tests take after
+/// `snapshots!` in `tests/golden.rs`.
 ///
 /// A table whose cases are the rows of another list, one argument each, names
 /// a constant and its type after `check`: the constant lists the arguments the
