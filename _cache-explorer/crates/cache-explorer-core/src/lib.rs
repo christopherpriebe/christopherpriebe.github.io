@@ -41,6 +41,7 @@ mod module;
 mod op;
 mod prng;
 mod replacement;
+mod request;
 mod session;
 mod share;
 mod snapshot;

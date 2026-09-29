@@ -26,11 +26,11 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use super::Session;
-use crate::engine::{Origin, Request};
 use crate::event::{Cause, ChangeRef, EventKind, MicroEvent};
 use crate::explain;
 use crate::machine::Machine;
 use crate::op::{AccessKind, ProgramFormat};
+use crate::request::{Origin, Request};
 use crate::units::{Addr, EventPos, Register, SetIndex, WayIndex};
 
 /// The bit of a tick set on an entry's first step. A tick is the byte the

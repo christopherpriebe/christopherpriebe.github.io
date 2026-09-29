@@ -31,7 +31,7 @@
 use std::sync::Arc;
 
 use crate::cpu::{Cpu, Halted};
-use crate::engine::access::{access, Origin, Request};
+use crate::engine::access::access;
 use crate::engine::{end_entry, Draft, Emitter, Flow, Halt, OpProgress};
 use crate::event::{ChangeRef, EventKind};
 use crate::explain;
@@ -39,6 +39,7 @@ use crate::isa::{Address, Instruction, Operand, Program};
 use crate::limits::INSTRUCTION_BUDGET;
 use crate::machine::Machine;
 use crate::op::OpError;
+use crate::request::{Origin, Request};
 use crate::units::{Addr, Register};
 
 /// When an op that executes several instructions stops, if the program has

@@ -33,7 +33,6 @@ use thiserror::Error;
 use crate::cache::{Cache, Dirtiness, Set, Slot, Way};
 use crate::config::{Config, ConfigError, Replacement, WritePolicy};
 use crate::cpu::{Cpu, Registers};
-use crate::engine::Request;
 use crate::event::ChangeRef;
 use crate::format;
 use crate::geometry::{Geometry, Location};
@@ -42,6 +41,7 @@ use crate::limits::MAX_LINES;
 use crate::memory::{word_at, Memory};
 use crate::prng::Prng;
 use crate::replacement::VictimChoice;
+use crate::request::Request;
 use crate::stats::{Counters, Recent, Shadow};
 use crate::units::{Cycle, LineAddr, SetIndex, Tag, WayIndex};
 
@@ -1030,7 +1030,7 @@ mod tests {
             request: Request::Load {
                 addr,
                 into: crate::units::Register::R1,
-                origin: crate::engine::Origin::Hand,
+                origin: crate::request::Origin::Hand,
             },
             location: geometry.locate(addr),
             lookup: None,

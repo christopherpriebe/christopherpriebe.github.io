@@ -28,7 +28,6 @@ mod exec;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use access::{Origin, Request};
 pub(crate) use edit::{draft_memory, draft_way, plan_edit, Blocked};
 pub use edit::{
     Consequence, EditDraft, EditOutcome, EditPlan, EditRefusal, FieldChange, FieldInput,
@@ -48,6 +47,7 @@ use crate::isa::{ParseFailure, Program};
 use crate::limits::{MAX_EVENTS_PER_ENTRY, MAX_RUN_STEPS, MAX_SHARE_OPS, SESSION_EVENT_LIMIT};
 use crate::machine::{InvariantViolation, Machine};
 use crate::op::{AccessKind, Op, OpError};
+use crate::request::{Origin, Request};
 use crate::units::{Addr, OpIndex, Register, SetIndex, WayIndex, Word};
 
 /// Whether the engine goes on after an event.

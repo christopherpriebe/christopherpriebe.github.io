@@ -17,7 +17,7 @@
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
-use super::access::{access, Origin};
+use super::access::access;
 use super::exec::{load_program, ready, step};
 use super::*;
 use crate::cache::{Cache, Dirtiness, Slot};
