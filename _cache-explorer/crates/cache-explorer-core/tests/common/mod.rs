@@ -10,7 +10,7 @@
 #![expect(dead_code, reason = "each test crate uses a subset of the helpers")]
 
 use cache_explorer_core::{
-    AccessKind, Addr, Config, EventPos, LineAddr, Op, ProgramFormat, Session, Word,
+    AccessKind, Addr, CacheConfig, Config, EventPos, LineAddr, Op, ProgramFormat, Session, Word,
 };
 use insta::{Comparator, DefaultComparator, Settings, Snapshot};
 
@@ -57,6 +57,20 @@ pub(crate) fn program(source: &str) -> Op {
     Op::Program {
         source: source.to_owned(),
         format: ProgramFormat::Asm,
+    }
+}
+
+/// `Config::default()` with another cache geometry.
+pub(crate) fn with_cache(size_bytes: u32, line_bytes: u32, associativity: u32) -> Config {
+    let default = Config::default();
+    Config {
+        cache: CacheConfig {
+            size_bytes,
+            line_bytes,
+            associativity,
+            ..default.cache
+        },
+        ..default
     }
 }
 
