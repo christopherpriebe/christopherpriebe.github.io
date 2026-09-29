@@ -153,16 +153,15 @@ impl Fixture {
     pub fn events(&self) -> Result<Vec<MicroEvent>, FixtureError> {
         let mut session = Session::with_config(self.config)?;
         for issue in &self.issues {
-            session.apply(issue.op())?;
+            session.apply(Op::from(issue))?;
         }
         Ok(session.events().to_vec())
     }
 }
 
-impl Issue {
-    /// The op that applies the issue.
-    fn op(&self) -> Op {
-        match self {
+impl From<&Issue> for Op {
+    fn from(issue: &Issue) -> Self {
+        match issue {
             Issue::Load { addr } => Op::Issue {
                 kind: AccessKind::Read,
                 addr: *addr,
@@ -559,7 +558,7 @@ fn timed() -> Vec<Fixture> {
 }
 
 /// Frame 3b's program, as the design writes it.
-const FRAME_3B: &str = concat!(
+pub const FRAME_3B: &str = concat!(
     "  st  [0x0B0], #5\n",
     "  ld  r1, [0x0A4]\n",
     "  st  [0x1A4], #7\n",

@@ -10,6 +10,7 @@
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
+use cache_explorer_core::golden::FRAME_3B;
 use cache_explorer_core::limits::{MAX_RUN_STEPS, MIN_ADDRESS_BITS};
 use cache_explorer_core::{
     AccessKind, AddressInput, AllocatePolicy, CacheConfig, ChangeRef, Config, ConfigChange,
@@ -18,12 +19,12 @@ use cache_explorer_core::{
     RequestStatus, Session, SetIndex, State, StepOutcome, Tense, Timing, Transfer, WayCompare,
     WordIndex, WritePolicy,
 };
-use insta::{Comparator, DefaultComparator, Snapshot};
 
-use support::{
-    controls_text, first_visit, frame_3b, json, line, load, pos, program, session, store, way,
-    FRAME_3B,
-};
+use common::{golden_settings, line, load, pos, program, session, store};
+use support::{controls_text, first_visit, frame_3b, json, way};
+
+#[cfg(test)]
+mod common;
 
 /// The tests' helpers. They sit in a module compiled for tests only, where a
 /// failed `unwrap` is a failed test, as in the tests themselves.
@@ -31,75 +32,9 @@ use support::{
 mod support {
     use std::fmt::Write as _;
 
-    use cache_explorer_core::{
-        AccessKind, Addr, Config, ConfigControls, EventPos, LineAddr, Op, Preset, ProgramFormat,
-        Session, State, WayView, Word,
-    };
+    use cache_explorer_core::{Config, ConfigControls, Preset, Session, State, WayView};
 
-    /// Frame 3b's program, as the design writes it.
-    pub(crate) const FRAME_3B: &str = concat!(
-        "  st  [0x0B0], #5\n",
-        "  ld  r1, [0x0A4]\n",
-        "  st  [0x1A4], #7\n",
-        "  ld  r2, [0x0A8]\n",
-        "  ld  r3, [0x2A4]\n",
-        "  ld  r4, [0x1A4]",
-    );
-
-    /// `value` as an address, as one read from JSON is.
-    pub(crate) fn addr(value: u32) -> Addr {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// `value` as a line address, as one read from JSON is.
-    pub(crate) fn line(value: u32) -> LineAddr {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// `value` as a data value, as one read from JSON is.
-    pub(crate) fn word(value: u64) -> Word {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// Position `value`, as one read from JSON is.
-    pub(crate) fn pos(value: u32) -> EventPos {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// A load of `at` issued by hand.
-    pub(crate) fn load(at: u32) -> Op {
-        Op::Issue {
-            kind: AccessKind::Read,
-            addr: addr(at),
-            value: None,
-        }
-    }
-
-    /// A store of `value` to `at` issued by hand.
-    pub(crate) fn store(at: u32, value: u64) -> Op {
-        Op::Issue {
-            kind: AccessKind::Write,
-            addr: addr(at),
-            value: Some(word(value)),
-        }
-    }
-
-    /// A load of the assembly program `source`.
-    pub(crate) fn program(source: &str) -> Op {
-        Op::Program {
-            source: source.to_owned(),
-            format: ProgramFormat::Asm,
-        }
-    }
-
-    /// A session on `config` with `ops` applied.
-    pub(crate) fn session(config: Config, ops: impl IntoIterator<Item = Op>) -> Session {
-        let mut session = Session::with_config(config).unwrap();
-        for op in ops {
-            session.apply(op).unwrap();
-        }
-        session
-    }
+    use super::common::{load, session, store};
 
     /// The page's first visit: `direct-mapped-8` with pattern memory,
     /// nothing issued.
@@ -177,29 +112,10 @@ mod support {
     }
 }
 
-/// Compares a snapshot's header as well as its body, so an edited
-/// description is reviewed again.
-#[derive(Clone)]
-struct WithHeader;
-
-impl Comparator for WithHeader {
-    fn matches(&self, reference: &Snapshot, test: &Snapshot) -> bool {
-        DefaultComparator.matches_fully(reference, test)
-    }
-
-    fn dyn_clone(&self) -> Box<dyn Comparator> {
-        Box::new(self.clone())
-    }
-}
-
 /// Checks `text` against the snapshot `name`, whose header carries
 /// `description`.
 fn golden(name: &str, description: &str, text: &str) {
-    insta::with_settings!({
-        description => description,
-        omit_expression => true,
-        comparator => Box::new(WithHeader),
-    }, {
+    golden_settings(description).bind(|| {
         insta::assert_snapshot!(name, text);
     });
 }

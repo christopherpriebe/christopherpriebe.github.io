@@ -15,60 +15,28 @@ use cache_explorer_core::{
     AllocatePolicy, CacheConfig, Config, EventKind, Op, Preset, Replacement, WritePolicy,
 };
 
-use support::{cases, cells, load, memory, moved, pos, session, short, store, two_way, victims};
+use common::{load, pos, session, store};
+use support::{cases, cells, memory, moved, short, two_way, victims};
 use EventKind::{Evict, Miss, WriteBack};
+
+#[cfg(test)]
+mod common;
 
 /// The tests' helpers. They sit in a module compiled for tests only, where a
 /// failed `unwrap` is a failed test, as in the tests themselves.
 #[cfg(test)]
 mod support {
     use cache_explorer_core::{
-        AccessKind, Addr, AllocatePolicy, CacheConfig, ChangeRef, Config, EventKind, EventPos, Op,
-        Preset, Session, State, Word, WritePolicy,
+        AllocatePolicy, CacheConfig, ChangeRef, Config, EventKind, Op, Preset, Session, State,
+        WritePolicy,
     };
+
+    use super::common::{load, store};
 
     use EventKind::{
         Complete, Decode, Evict, Fill, Hit, MemWrite, Miss, Rank, Victim, Write, WriteBack,
         WriteThrough,
     };
-
-    /// `value` as an address, as one read from JSON is.
-    fn addr(value: u32) -> Addr {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// Position `value`, as one read from JSON is.
-    pub(crate) fn pos(value: u32) -> EventPos {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// A load of `at` issued by hand.
-    pub(crate) fn load(at: u32) -> Op {
-        Op::Issue {
-            kind: AccessKind::Read,
-            addr: addr(at),
-            value: None,
-        }
-    }
-
-    /// A store of `value` to `at` issued by hand.
-    pub(crate) fn store(at: u32, value: u64) -> Op {
-        let value: Word = serde_json::from_value(value.into()).unwrap();
-        Op::Issue {
-            kind: AccessKind::Write,
-            addr: addr(at),
-            value: Some(value),
-        }
-    }
-
-    /// A session on `config` with `ops` applied.
-    pub(crate) fn session(config: Config, ops: impl IntoIterator<Item = Op>) -> Session {
-        let mut session = Session::with_config(config).unwrap();
-        for op in ops {
-            session.apply(op).unwrap();
-        }
-        session
-    }
 
     /// `two-way-lru` with the write and allocate policies given: 128 B of 16 B
     /// lines in four sets of two ways, 12-bit addresses, pattern memory, where

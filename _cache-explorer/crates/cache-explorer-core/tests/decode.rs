@@ -25,20 +25,10 @@ use cache_explorer_core::{
 use serde_json::json;
 
 use bar::{bar, labels, option, options, shape};
+use common::grouped;
 
-/// Comma-grouped from 1,000 on: how messages and labels print limits and
-/// configuration values.
-fn grouped(n: impl Into<u64>) -> String {
-    let digits = n.into().to_string();
-    let mut text = String::new();
-    for (i, digit) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
-            text.push(',');
-        }
-        text.push(digit);
-    }
-    text
-}
+#[cfg(test)]
+mod common;
 
 /// `Config::default()` with another cache geometry.
 fn with_cache(size_bytes: u32, line_bytes: u32, associativity: u32) -> Config {

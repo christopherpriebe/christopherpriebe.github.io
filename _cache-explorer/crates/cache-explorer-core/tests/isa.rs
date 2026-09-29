@@ -18,7 +18,11 @@ use cache_explorer_core::{
     Preset, ProgramFormat, Session, WordBytes,
 };
 
+use common::grouped;
 use ProgramFormat::{Asm, Trace};
+
+#[cfg(test)]
+mod common;
 
 /// The tests' address width: 12 bits, as in every design frame, so the
 /// messages below read as the design's. It is set here rather than taken
@@ -113,20 +117,6 @@ fn place(line: u32, column: u32, length: u32, message: &str) -> Place {
 /// A limit as a count of things to build.
 fn count(limit: u32) -> usize {
     usize::try_from(limit).unwrap_or(usize::MAX)
-}
-
-/// `n` with a comma before every group of three digits, as limits are
-/// written in messages.
-fn grouped(n: u32) -> String {
-    let digits = n.to_string();
-    let mut text = String::new();
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index) % 3 == 0 {
-            text.push(',');
-        }
-        text.push(digit);
-    }
-    text
 }
 
 /// "program" or "trace".

@@ -30,11 +30,15 @@ use cache_explorer_core::{
     WritePolicy,
 };
 
+use common::{addr, apply_all, grouped, load, pos, program, store, word};
 use support::{
-    addr, apply_all, as_large_as_a_file, as_long_as_a_link, change_refused, config, drawer, edit,
-    edit_word, editors_refuse_for_room, end_of, gated_at_end, gated_mid_log, grouped, hand_loads,
-    load, log, log_end, padded, pos, program, refused, session, store, table, varied, word,
+    as_large_as_a_file, as_long_as_a_link, change_refused, config, drawer, edit, edit_word,
+    editors_refuse_for_room, end_of, gated_at_end, gated_mid_log, hand_loads, log, log_end, padded,
+    refused, session, table, varied,
 };
+
+#[cfg(test)]
+mod common;
 
 /// An `add` then a load: two entries, the second an access.
 const ADD_THEN_LOAD: &str = "add r1, r0, #1\nld r2, [0x0B0]";
@@ -61,11 +65,11 @@ const WALK: &str = concat!(
 mod support {
     use cache_explorer_core::limits::{MAX_PROGRAM_BYTES, MAX_SHARE_OPS};
     use cache_explorer_core::{
-        AccessKind, Addr, Boundary, Config, EditOutcome, EventPos, MicroEvent, Module, ModuleRun,
-        Op, OpError, Preset, ProgramFormat, ProgramSource, RefusalReason, Session, Tone, WayForm,
-        Word,
+        Boundary, Config, EditOutcome, EventPos, MicroEvent, Module, ModuleRun, Op, OpError,
+        Preset, ProgramFormat, ProgramSource, RefusalReason, Session, Tone, WayForm,
     };
 
+    use super::common::{addr, apply_all, load, pos, program, store};
     use super::{ADD_THEN_LOAD, WALK};
 
     /// The tests' configuration: `direct-mapped-8`, whose 12-bit
@@ -147,39 +151,6 @@ mod support {
         assert_eq!(session.machine(), before.machine());
     }
 
-    /// `value` as an address, unchecked, as one read from JSON is.
-    pub(crate) fn addr(value: u32) -> Addr {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// `value` as a data value, as one read from JSON is.
-    pub(crate) fn word(value: u64) -> Word {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// Position `value`, as one read from JSON is.
-    pub(crate) fn pos(value: u32) -> EventPos {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// A load of `at` issued by hand.
-    pub(crate) fn load(at: u32) -> Op {
-        Op::Issue {
-            kind: AccessKind::Read,
-            addr: addr(at),
-            value: None,
-        }
-    }
-
-    /// A store of `value` to `at` issued by hand.
-    pub(crate) fn store(at: u32, value: u64) -> Op {
-        Op::Issue {
-            kind: AccessKind::Write,
-            addr: addr(at),
-            value: Some(word(value)),
-        }
-    }
-
     /// An edit of `target` with `patch`, each as the UI sends it.
     pub(crate) fn edit(target: &serde_json::Value, patch: &serde_json::Value) -> Op {
         serde_json::from_value(serde_json::json!({"op": "edit", "target": target, "patch": patch}))
@@ -232,40 +203,11 @@ mod support {
         }
     }
 
-    /// A load of the assembly program `source`.
-    pub(crate) fn program(source: &str) -> Op {
-        Op::Program {
-            source: source.to_owned(),
-            format: ProgramFormat::Asm,
-        }
-    }
-
     /// The drawer holding the assembly program `source`.
     pub(crate) fn drawer(source: &str) -> ProgramSource {
         ProgramSource {
             source: source.to_owned(),
             format: ProgramFormat::Asm,
-        }
-    }
-
-    /// Comma-grouped from 1,000 on: how messages print limits.
-    pub(crate) fn grouped(n: u32) -> String {
-        let digits = n.to_string();
-        let mut text = String::new();
-        for (index, digit) in digits.chars().enumerate() {
-            if index > 0 && (digits.len() - index) % 3 == 0 {
-                text.push(',');
-            }
-            text.push(digit);
-        }
-        text
-    }
-
-    /// Applies each of `ops`, which must all be accepted.
-    pub(crate) fn apply_all(session: &mut Session, ops: impl IntoIterator<Item = Op>) {
-        for op in ops {
-            let accepted = session.apply(op.clone());
-            assert!(accepted.is_ok(), "{op:?}: {accepted:?}");
         }
     }
 

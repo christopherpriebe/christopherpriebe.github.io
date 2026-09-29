@@ -28,11 +28,15 @@ use cache_explorer_core::{
 };
 use serde_json::{json, Value};
 
+use common::{apply_all, grouped, load, pos, program};
 use support::{
-    apply_all, as_long_as_a_link, code, config, counted, failure_of, file_failure, grouped, link,
-    link_failure, link_of, load, loaded, long_program, pathological, plain, pos, pretty, program,
-    same, session, unpacked, varied, with_ops,
+    as_long_as_a_link, code, config, counted, failure_of, file_failure, link, link_failure,
+    link_of, loaded, long_program, pathological, plain, pretty, same, session, unpacked, varied,
+    with_ops,
 };
+
+#[cfg(test)]
+mod common;
 
 /// A loop without an exit and without a memory access: one event per
 /// instruction until the budget or the session's limit stops it.
@@ -48,11 +52,12 @@ mod support {
         LOAD_SLICE_EVENTS, MAX_PROGRAM_BYTES, MAX_PROGRAM_LINES, MAX_SHARE_OPS,
     };
     use cache_explorer_core::{
-        AccessKind, Config, EventPos, LoadError, LoadFailure, LoadProgress, Op, Preset,
-        ProgramFormat, Session, ShareDoc, ShareLoad, TextSegment, TextStyle, Word,
+        Config, LoadError, LoadFailure, LoadProgress, Op, Preset, Session, ShareDoc, ShareLoad,
+        TextSegment, TextStyle,
     };
     use serde_json::{json, Value};
 
+    use super::common::{apply_all, grouped, load, program, store};
     use super::ENDLESS;
 
     /// A loop that loads and stores a line at a time and counts `r3` down
@@ -83,38 +88,6 @@ mod support {
         let mut session = session();
         apply_all(&mut session, (0..MAX_SHARE_OPS).map(|_| load(0x0A4)));
         session
-    }
-
-    /// Position `value`, as one read from JSON is.
-    pub(crate) fn pos(value: u32) -> EventPos {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// A load of `at` issued by hand.
-    pub(crate) fn load(at: u32) -> Op {
-        Op::Issue {
-            kind: AccessKind::Read,
-            addr: serde_json::from_value(at.into()).unwrap(),
-            value: None,
-        }
-    }
-
-    /// A store of `value` to `at` issued by hand.
-    pub(crate) fn store(at: u32, value: u64) -> Op {
-        let value: Word = serde_json::from_value(value.into()).unwrap();
-        Op::Issue {
-            kind: AccessKind::Write,
-            addr: serde_json::from_value(at.into()).unwrap(),
-            value: Some(value),
-        }
-    }
-
-    /// A load of the assembly program `source`.
-    pub(crate) fn program(source: &str) -> Op {
-        Op::Program {
-            source: source.to_owned(),
-            format: ProgramFormat::Asm,
-        }
     }
 
     /// An assembly program as long as a program may be: one instruction,
@@ -155,14 +128,6 @@ mod support {
             "patch": {"kind": "memory", "value": 1}
         }))
         .unwrap()
-    }
-
-    /// Applies each of `ops`, which must all be accepted.
-    pub(crate) fn apply_all(session: &mut Session, ops: impl IntoIterator<Item = Op>) {
-        for op in ops {
-            let accepted = session.apply(op.clone());
-            assert!(accepted.is_ok(), "{op:?}: {accepted:?}");
-        }
     }
 
     /// A log of every kind of op across two runs, a timed one among them:
@@ -345,19 +310,6 @@ mod support {
         } else {
             grouped(n)
         }
-    }
-
-    /// Comma-grouped from 1,000 on: how messages print limits.
-    pub(crate) fn grouped(n: impl Into<u64>) -> String {
-        let digits = n.into().to_string();
-        let mut text = String::new();
-        for (index, digit) in digits.chars().enumerate() {
-            if index > 0 && (digits.len() - index) % 3 == 0 {
-                text.push(',');
-            }
-            text.push(digit);
-        }
-        text
     }
 }
 

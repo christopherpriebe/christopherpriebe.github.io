@@ -199,8 +199,8 @@ mod support {
 /// snapshots hold them, and the same events through the facade.
 #[cfg(test)]
 mod golden {
-    use cache_explorer_core::golden::{self, Issue};
-    use cache_explorer_core::{AccessKind, MicroEvents, Op};
+    use cache_explorer_core::golden;
+    use cache_explorer_core::{MicroEvents, Op};
     use cache_explorer_wasm::Session;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -273,32 +273,6 @@ mod golden {
         body.trim_end_matches('\n')
     }
 
-    /// The op a session applies for `issue`.
-    fn op(issue: &Issue) -> Op {
-        match issue {
-            Issue::Load { addr } => Op::Issue {
-                kind: AccessKind::Read,
-                addr: *addr,
-                value: None,
-            },
-            Issue::Store { addr, value } => Op::Issue {
-                kind: AccessKind::Write,
-                addr: *addr,
-                value: Some(*value),
-            },
-            Issue::Program { source, format } => Op::Program {
-                source: source.clone(),
-                format: *format,
-            },
-            Issue::Step => Op::Step,
-            Issue::StepAccess => Op::StepAccess,
-            Issue::Edit { target, patch } => Op::Edit {
-                target: *target,
-                patch: patch.clone(),
-            },
-        }
-    }
-
     #[wasm_bindgen_test]
     fn every_golden_fixture_has_a_committed_snapshot() {
         let fixtures: Vec<&str> = golden::fixtures()
@@ -327,7 +301,7 @@ mod golden {
         for fixture in golden::fixtures() {
             let mut session = Session::with_config(&arg(&fixture.config)).unwrap();
             for issue in &fixture.issues {
-                session.apply_op(&arg(&op(issue))).unwrap();
+                session.apply_op(&arg(&Op::from(issue))).unwrap();
             }
             same(
                 session.events().unwrap(),

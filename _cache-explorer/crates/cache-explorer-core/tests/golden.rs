@@ -7,7 +7,11 @@
 
 use cache_explorer_core::golden::{self, Fixture};
 use cache_explorer_core::{AllocatePolicy, EventKind, MicroEvent, WritePolicy};
-use insta::{Comparator, DefaultComparator, Snapshot};
+
+use common::golden_settings;
+
+#[cfg(test)]
+mod common;
 
 /// Renders the events of the fixture named `name` and compares them with its
 /// snapshot, whose header carries the fixture's description.
@@ -17,31 +21,10 @@ fn check(name: &str) -> Result<(), String> {
         .find(|fixture| fixture.name == name)
         .ok_or_else(|| format!("no fixture is named {name}"))?;
     let events = fixture.events().map_err(|error| error.to_string())?;
-    insta::with_settings!({
-        description => fixture.description,
-        omit_expression => true,
-        comparator => Box::new(WithHeader),
-    }, {
+    golden_settings(fixture.description).bind(|| {
         insta::assert_snapshot!(name, golden::render(&events));
     });
     Ok(())
-}
-
-/// Compares a snapshot's header as well as its events. insta compares only
-/// the events by default, so an edited description would leave the committed
-/// header stale while every test passed; with the header compared, the
-/// snapshot is reviewed again.
-#[derive(Clone)]
-struct WithHeader;
-
-impl Comparator for WithHeader {
-    fn matches(&self, reference: &Snapshot, test: &Snapshot) -> bool {
-        DefaultComparator.matches_fully(reference, test)
-    }
-
-    fn dyn_clone(&self) -> Box<dyn Comparator> {
-        Box::new(self.clone())
-    }
 }
 
 /// One test per fixture, and the list of the fixtures they cover.

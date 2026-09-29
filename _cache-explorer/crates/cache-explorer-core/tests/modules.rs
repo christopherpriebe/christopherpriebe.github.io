@@ -32,10 +32,14 @@ use cache_explorer_core::{
 };
 use serde_json::{json, Value};
 
+use common::{load, pos};
 use support::{
-    actions, edited, fill, load, pos, predicate, refused_with, session, shape_refused,
-    show_me_path, started, text, walk, with,
+    actions, edited, fill, predicate, refused_with, session, shape_refused, show_me_path, started,
+    text, walk, with,
 };
+
+#[cfg(test)]
+mod common;
 
 /// Flow A's module: explain, instruct, an observe step waiting for the tag
 /// compare of access 1, a prediction, instruct, explain.
@@ -67,10 +71,12 @@ const SEARCH_BOUND: Duration = Duration::from_secs(20);
 #[cfg(test)]
 mod support {
     use cache_explorer_core::{
-        Config, EventPos, FeedbackTone, Module, ModuleAction, ModuleActionKind, ModuleError,
-        ModuleRun, ModuleStepKind, ModuleView, Op, Predicate, Session, Step, TextSegment,
+        Config, FeedbackTone, Module, ModuleAction, ModuleActionKind, ModuleError, ModuleRun,
+        ModuleStepKind, ModuleView, Predicate, Session, Step, TextSegment,
     };
-    use serde_json::{json, Value};
+    use serde_json::Value;
+
+    use super::common::load;
 
     /// A session with an empty log on the first visit's configuration.
     pub(crate) fn session() -> Session {
@@ -121,11 +127,6 @@ mod support {
             .collect()
     }
 
-    /// A load of `addr` issued by hand.
-    pub(crate) fn load(addr: u32) -> Op {
-        serde_json::from_value(json!({"op": "issue", "kind": "read", "addr": addr})).unwrap()
-    }
-
     /// Fills `session`'s log with loads of `addr` by hand until it holds
     /// `count` ops. `addr` should be one no fixture step's predicate checks,
     /// so filling a running module's session does not complete its step.
@@ -133,11 +134,6 @@ mod support {
         while session.op_count() < count {
             session.apply(load(addr)).unwrap();
         }
-    }
-
-    /// Position `pos`.
-    pub(crate) fn pos(pos: u32) -> EventPos {
-        serde_json::from_value(pos.into()).unwrap()
     }
 
     /// Takes `run` through every step by its "Show me" path: Next on an

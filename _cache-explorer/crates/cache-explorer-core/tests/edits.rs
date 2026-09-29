@@ -17,50 +17,30 @@ use cache_explorer_core::{
     StepOutcome, Tone, WayForm, WordMark, WritePolicy,
 };
 
+use common::{addr, line, program, session, word};
 use support::{
-    addr, applied, draft, draft_of_line, draft_outcome, edit, form, frame_3b_at_access_4, line,
-    memory, offer, plan, program, ranks, refusal, said, session, set, two_way, value, way,
-    way_index, way_patch, word,
+    applied, draft, draft_of_line, draft_outcome, edit, form, frame_3b_at_access_4, memory, offer,
+    plan, ranks, refusal, said, set, two_way, value, way, way_index, way_patch,
 };
+
+#[cfg(test)]
+mod common;
 
 /// The tests' helpers. They sit in a module compiled for tests only, where a
 /// failed `unwrap` is a failed test, as in the tests themselves.
 #[cfg(test)]
 mod support {
+    use cache_explorer_core::golden::FRAME_3B;
     use cache_explorer_core::{
-        AccessKind, Addr, CacheConfig, Config, EditDraft, EditOutcome, EditPatch, EditPlan,
-        EditRefusal, EditTarget, LineAddr, Op, Preset, ProgramFormat, Replacement, Session,
-        SetIndex, WayForm, WayIndex, Word, WritePolicy,
+        AccessKind, CacheConfig, Config, EditDraft, EditOutcome, EditPatch, EditPlan, EditRefusal,
+        EditTarget, Op, Preset, Replacement, Session, SetIndex, WayForm, WayIndex, WritePolicy,
     };
     use serde_json::{json, Value};
 
-    /// Frame 3b's program, as the design writes it.
-    pub(crate) const FRAME_3B: &str = concat!(
-        "  st  [0x0B0], #5\n",
-        "  ld  r1, [0x0A4]\n",
-        "  st  [0x1A4], #7\n",
-        "  ld  r2, [0x0A8]\n",
-        "  ld  r3, [0x2A4]\n",
-        "  ld  r4, [0x1A4]",
-    );
-
-    /// `value` as an address, as one read from JSON is.
-    pub(crate) fn addr(value: u32) -> Addr {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// `value` as a line address, as one read from JSON is.
-    pub(crate) fn line(value: u32) -> LineAddr {
-        serde_json::from_value(value.into()).unwrap()
-    }
+    use super::common::{addr, program, session};
 
     /// `value` as a set index, as one read from JSON is.
     pub(crate) fn set(value: u32) -> SetIndex {
-        serde_json::from_value(value.into()).unwrap()
-    }
-
-    /// `value` as a data value, as one read from JSON is.
-    pub(crate) fn word(value: u64) -> Word {
         serde_json::from_value(value.into()).unwrap()
     }
 
@@ -103,26 +83,9 @@ mod support {
         }
     }
 
-    /// A load of the assembly program `source`.
-    pub(crate) fn program(source: &str) -> Op {
-        Op::Program {
-            source: source.to_owned(),
-            format: ProgramFormat::Asm,
-        }
-    }
-
     /// An edit op.
     pub(crate) fn edit(target: EditTarget, patch: EditPatch) -> Op {
         Op::Edit { target, patch }
-    }
-
-    /// A session on `config` with `ops` applied.
-    pub(crate) fn session(config: Config, ops: impl IntoIterator<Item = Op>) -> Session {
-        let mut session = Session::with_config(config).unwrap();
-        for op in ops {
-            session.apply(op).unwrap();
-        }
-        session
     }
 
     /// Loads by hand of each of `at`, on `config`.
