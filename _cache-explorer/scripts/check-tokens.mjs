@@ -2,9 +2,12 @@
 // `node check-tokens.mjs <dir>`):
 //
 // 1. Signal and ramp colours are fills and strokes, never type: no `color:` declaration, no
-//    `<text>` fill in a stylesheet and no `<text>` element built with a `fill` attribute may use
-//    them. The check reads the sources, so it cannot see a class that a script puts on a text
-//    element; a stylesheet rule that fills `text` elements is caught, one that fills a class is not.
+//    `.color =`, `setProperty('color', …)` or `setAttribute('color', …)` in a script, no `<text>`
+//    fill in a stylesheet, no `<text>` element built with a `fill` attribute, and no fill set on a
+//    variable that holds a `<text>` element may use them. The check reads the sources, so it cannot
+//    see a class that a script puts on a text element, or a text element it cannot follow through a
+//    variable in the same file; a stylesheet rule that fills `text` elements is caught, one that
+//    fills a class is not.
 // 2. No name of the design export's own token set appears: the tokens here are --cache-explorer-*.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -48,6 +51,17 @@ for (const file of sources(root)) {
     for (const m of text.matchAll(/\bs\(\s*['"]text['"]\s*,\s*\{([^}]*)\}/g)) {
       const fill = /(?<![\w-])fill\s*:\s*([^,}]*)/.exec(m[1]);
       if (fill && signalToken.test(fill[1])) report(file, text, m.index, `${fill[1].trim()} used as the fill of text`);
+    }
+    // The colour rule through the DOM: el.style.color = …, el.style.setProperty('color', …), el.setAttribute('color', …).
+    for (const m of text.matchAll(/(?:\.color\s*=(?!=)|(?:setProperty|setAttribute)\(\s*['"]color['"]\s*,)\s*([^;\n]*)/g)) {
+      if (signalToken.test(m[1])) report(file, text, m.index, `${m[1].trim()} used as type colour`);
+    }
+    // A variable that holds a text element (t = s('text', …), t = document.createElementNS(…, 'text')), then its fill set on it.
+    for (const [, name] of text.matchAll(/\b(\w+)(?:\s*:\s*[\w.<>]+)?\s*=\s*(?:s\(\s*['"]text['"]|document\.createElementNS\([^)]*['"]text['"])/g)) {
+      const setsFill = new RegExp(`\\b${name}\\.(?:setAttribute\\(\\s*['"]fill['"]\\s*,|style\\.fill\\s*=(?!=)|style\\.setProperty\\(\\s*['"]fill['"]\\s*,)\\s*([^;\\n]*)`, 'g');
+      for (const m of text.matchAll(setsFill)) {
+        if (signalToken.test(m[1])) report(file, text, m.index, `${m[1].trim()} used as the fill of text`);
+      }
     }
   }
 }

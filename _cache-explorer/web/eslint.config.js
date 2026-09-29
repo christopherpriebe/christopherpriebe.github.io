@@ -17,6 +17,15 @@ const GENERATED_PACKAGE = {
 const NUMBERS_AND_JSON_COME_FROM_THE_CORE =
   'Numbers and JSON go through the core (readAddress, readWord, the draft functions, parseModule, Session.fromJson), which keeps 64-bit values exact.';
 
+/** The same names are banned when reached through the global object: `globalThis.parseInt`, `window.JSON.parse`. */
+const GLOBAL_OBJECTS = ['globalThis', 'window', 'self'];
+/**
+ * The rule matches an object by its name, so `globalThis.JSON.parse` and `globalThis.Number.parseInt`
+ * (a member of a member) are stopped at `globalThis.JSON` and `globalThis.Number`. Plain
+ * `JSON.stringify` and `Number(...)` stay available.
+ */
+const GLOBAL_NAMES = ['parseInt', 'parseFloat', 'BigInt', 'JSON', 'Number'];
+
 export default defineConfig(
   // wasm-bindgen's glue is generated, and ESLint's flat config never reads .gitignore.
   { ignores: ['pkg/**'] },
@@ -41,10 +50,14 @@ export default defineConfig(
       ],
       'no-restricted-properties': [
         'error',
-        ...['JSON.parse', 'Number.parseInt', 'Number.parseFloat'].map((name) => {
-          const [object, property] = name.split('.');
-          return { object, property, message: NUMBERS_AND_JSON_COME_FROM_THE_CORE };
-        }),
+        ...[
+          { object: 'JSON', property: 'parse' },
+          { object: 'Number', property: 'parseInt' },
+          { object: 'Number', property: 'parseFloat' },
+          ...GLOBAL_OBJECTS.flatMap((object) =>
+            GLOBAL_NAMES.map((property) => ({ object, property })),
+          ),
+        ].map((banned) => ({ ...banned, message: NUMBERS_AND_JSON_COME_FROM_THE_CORE })),
       ],
       'no-restricted-globals': [
         'error',
