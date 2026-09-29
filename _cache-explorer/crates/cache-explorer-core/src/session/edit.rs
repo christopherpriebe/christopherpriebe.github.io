@@ -11,7 +11,7 @@
 //! would take its saved file past what a file can hold with the edit. Then
 //! the machine's own rules decide.
 
-use super::{EntryKind, EntryRecord, Session};
+use super::{EntryKind, Session};
 use crate::engine::{self, Blocked, EditDraft, EditPlan, EditRefusal, MemoryEditDraft, WayForm};
 use crate::explain::Unfinished;
 use crate::op::{EditPatch, EditTarget, Op};
@@ -100,14 +100,14 @@ impl Session {
             .unwrap_or(EventPos::new_unchecked(0));
         let from = self.entries.partition_point(|record| record.first <= start);
         let to = self.entries.partition_point(|record| record.first <= end);
-        let numbered: Vec<(u32, &EntryRecord)> = self
+        let mut numbered = self
             .entries
             .get(from..to)
             .unwrap_or_default()
             .iter()
-            .filter_map(|record| record.number.map(|number| (number, record)))
-            .collect();
-        let (&(first, _), &(last, record)) = (numbered.first()?, numbered.last()?);
+            .filter_map(|record| record.number.map(|number| (number, record)));
+        let (first, earliest) = numbered.next()?;
+        let (last, record) = numbered.next_back().unwrap_or((first, earliest));
         if first == last || record.holds(self.cursor) {
             Some(Unfinished::Entry {
                 noun: snapshot::noun(record.kind),
