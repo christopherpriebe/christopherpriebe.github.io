@@ -744,9 +744,9 @@ impl<'de> Deserialize<'de> for Predicate {
 /// predicates, refusing before any of it is read once `depth` exceeds
 /// [`MAX_PREDICATE_DEPTH`].
 ///
-/// The depth travels with the read, on the call stack, rather than in a
-/// shared counter: a read that fails, by an ordinary refusal, an unwind or a
-/// thrown exception, leaves nothing behind for the next read to find.
+/// The depth travels with the read, on the call stack: a read that fails, by
+/// an ordinary refusal, an unwind or a thrown exception, leaves nothing
+/// behind for the next read to find.
 struct PredicateSeed {
     /// How many `all`, `any` or `not` predicates enclose this one.
     depth: u32,
@@ -815,6 +815,8 @@ fn set_seed<'de, A: de::MapAccess<'de>, S: DeserializeSeed<'de>>(
     Ok(())
 }
 
+/// Reads a [`RawPredicate`] from a map keyed by [`FIELDS`] or a sequence
+/// positioned by them, seeding `all`, `any` and `not` at `depth`.
 struct RawPredicateVisitor {
     /// The depth [`PredicateSeed`] passes to a nested `all`, `any` or `not`.
     depth: u32,
@@ -825,6 +827,58 @@ impl<'de> de::Visitor<'de> for RawPredicateVisitor {
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("struct RawPredicate")
+    }
+
+    /// Reads each of [`FIELDS`] in order, seeding `all`, `any` and `not`;
+    /// a field the sequence does not reach takes its default, as a missing
+    /// map key does.
+    fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<RawPredicate, A::Error> {
+        let way = seq.next_element()?.unwrap_or_default();
+        let valid = seq.next_element()?.unwrap_or_default();
+        let tag = seq.next_element()?.unwrap_or_default();
+        let dirty = seq.next_element()?.unwrap_or_default();
+        let rank = seq.next_element()?.unwrap_or_default();
+        let line = seq.next_element()?.unwrap_or_default();
+        let present = seq.next_element()?.unwrap_or_default();
+        let memory = seq.next_element()?.unwrap_or_default();
+        let equals = seq.next_element()?.unwrap_or_default();
+        let counter = seq.next_element()?.unwrap_or_default();
+        let op = seq.next_element()?.unwrap_or_default();
+        let value = seq.next_element()?.unwrap_or_default();
+        let register = seq.next_element()?.unwrap_or_default();
+        let all = seq
+            .next_element_seed(FieldSeed(PredicateVecSeed { depth: self.depth }))?
+            .unwrap_or_default();
+        let any = seq
+            .next_element_seed(FieldSeed(PredicateVecSeed { depth: self.depth }))?
+            .unwrap_or_default();
+        let not = seq
+            .next_element_seed(FieldSeed(BoxPredicateSeed { depth: self.depth }))?
+            .unwrap_or_default();
+        let event = seq.next_element()?.unwrap_or_default();
+        let last_access = seq.next_element()?.unwrap_or_default();
+        let config = seq.next_element()?.unwrap_or_default();
+        Ok(RawPredicate {
+            way,
+            valid,
+            tag,
+            dirty,
+            rank,
+            line,
+            present,
+            memory,
+            equals,
+            counter,
+            op,
+            value,
+            register,
+            all,
+            any,
+            not,
+            event,
+            last_access,
+            config,
+        })
     }
 
     fn visit_map<A: de::MapAccess<'de>>(self, mut map: A) -> Result<RawPredicate, A::Error> {
@@ -984,6 +1038,7 @@ fn key_of(key: &str) -> Option<Key> {
     })
 }
 
+/// Reads a field identifier, matching it against [`FIELDS`].
 struct KeyVisitor;
 
 impl de::Visitor<'_> for KeyVisitor {
@@ -1019,6 +1074,8 @@ impl<'de, S: DeserializeSeed<'de>> DeserializeSeed<'de> for FieldSeed<S> {
     }
 }
 
+/// Reads an option: absent reads as [`Field::Null`]; present, as
+/// [`Field::Value`] through the wrapped seed.
 struct FieldVisitor<S>(S);
 
 impl<'de, S: DeserializeSeed<'de>> de::Visitor<'de> for FieldVisitor<S> {
@@ -1055,6 +1112,7 @@ impl<'de> DeserializeSeed<'de> for PredicateVecSeed {
     }
 }
 
+/// Reads a sequence of predicates, each seeded at `depth`.
 struct PredicateVecVisitor {
     /// The depth each element is seeded at.
     depth: u32,
@@ -1331,7 +1389,7 @@ impl TryFrom<RawPredicate> for Predicate {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+    #![expect(clippy::disallowed_macros, reason = "assertions are how tests fail")]
 
     use std::panic;
 
@@ -1449,9 +1507,8 @@ mod tests {
     }
 
     /// A panic partway through reading a predicate, caught with
-    /// `catch_unwind`, leaves nothing behind: unlike a thread-local counter
-    /// left raised by a skipped restore, a depth carried on the stack goes
-    /// with the unwind, so a later, unrelated read is unaffected.
+    /// `catch_unwind`, leaves nothing behind: a depth carried on the stack
+    /// goes with the unwind, so a later, unrelated read is unaffected.
     #[test]
     fn a_panic_mid_read_leaves_no_depth_behind() {
         let panicked = panic::catch_unwind(panic::AssertUnwindSafe(|| {

@@ -1582,6 +1582,43 @@ fn a_predicate_without_its_shape_is_refused_with_its_place() {
 }
 
 #[test]
+fn a_predicate_given_as_a_sequence_reads_and_refuses_like_its_map_form() {
+    assert_eq!(
+        predicate(json!([{"set": 0, "way": 0}])),
+        predicate(json!({"way": {"set": 0, "way": 0}})),
+    );
+    shape_refused(&[
+        (
+            with(MISS_THEN_HIT, "/steps/1/expect", json!([])),
+            "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
+             `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none",
+        ),
+        (
+            with(MISS_THEN_HIT, "/steps/1/expect", json!({"not": []})),
+            "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
+             `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none",
+        ),
+        (
+            with(MISS_THEN_HIT, "/steps/1/expect", json!({"all": [[]]})),
+            "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
+             `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none",
+        ),
+        (
+            with(MISS_THEN_HIT, "/steps/1/expect", json!([null])),
+            "a `way` predicate needs `way`",
+        ),
+        (
+            with(
+                MISS_THEN_HIT,
+                "/steps/1/expect",
+                json!([{"counter": "misses", "op": "==", "value": 0}]),
+            ),
+            "unknown field `counter`, expected `set` or `way`",
+        ),
+    ]);
+}
+
+#[test]
 fn a_step_or_module_without_its_shape_is_refused_with_its_place() {
     match Module::parse("{") {
         Err(ModuleError::Json { message }) => assert!(message.contains("EOF while parsing")),
