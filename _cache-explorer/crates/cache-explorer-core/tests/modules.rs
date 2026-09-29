@@ -1937,6 +1937,8 @@ fn ops_the_state_refuses_leave_the_step_waiting() {
     run.show_me(&mut session);
     let predict = run.view(&session);
     assert_eq!(predict.kind, ModuleStepKind::Predict);
+    // The new step clears the notice the refused "Show me" left.
+    assert_eq!(predict.notice, None);
     let before = session.position();
     let ops = session.op_count();
     // A right answer lifts the gate; the refused `then` ops append nothing,
@@ -1948,7 +1950,10 @@ fn ops_the_state_refuses_leave_the_step_waiting() {
     assert_eq!(session.op_count(), ops);
     assert_eq!(session.position(), before);
     assert_eq!(answered.notice, Some(OpError::NoProgram.to_string()));
-    assert_eq!(run.next(&mut session).kind, ModuleStepKind::Instruct);
+    let advanced = run.next(&mut session);
+    assert_eq!(advanced.kind, ModuleStepKind::Instruct);
+    // The new step clears the notice the refused `then` left.
+    assert_eq!(advanced.notice, None);
 }
 
 #[test]
