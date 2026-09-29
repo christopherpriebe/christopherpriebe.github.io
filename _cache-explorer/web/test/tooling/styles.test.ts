@@ -130,6 +130,22 @@ describe('cache-explorer.css', () => {
     expect(body).toMatch(/transition:\s*none\s*!important/);
   });
 
+  it('draws a button in the secondary look, and the primary one over it', () => {
+    const block = (selector: string): string =>
+      new RegExp(`^${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`, 'm').exec(
+        componentsCss,
+      )?.[1] ?? '';
+    const base = block('.cache-explorer__button');
+    expect(base).toContain('border: 1px solid var(--cache-explorer-rule)');
+    expect(base).toContain('background: var(--cache-explorer-surface)');
+    expect(base).toContain('color: var(--cache-explorer-text)');
+    expect(base).toContain('border-radius: 0');
+    const primary = block('.cache-explorer__button--primary');
+    expect(primary).toContain('border-color: var(--cache-explorer-strong)');
+    expect(primary).toContain('background: var(--cache-explorer-strong)');
+    expect(primary).toContain('color: var(--cache-explorer-surface)');
+  });
+
   it('sets the layout thresholds through data-layout, which the entry measures', () => {
     expect(componentsCss).toContain(".cache-explorer[data-layout='narrow']");
     expect(componentsCss).toContain(".cache-explorer[data-layout='tablet']");

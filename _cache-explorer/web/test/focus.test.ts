@@ -98,6 +98,52 @@ describe('focus across a rebuild', () => {
     expect([next.selectionStart, next.selectionEnd]).toEqual([2, 4]);
   });
 
+  it('leaves a control alone that survived the render and kept focus', () => {
+    // A persistent control with no action, such as the jump box: nothing names it but itself.
+    const jump = h('input');
+    plane.replaceChildren(jump);
+    jump.value = '12';
+    jump.focus();
+    jump.setSelectionRange(1, 2);
+    const memory = captureFocus(root);
+
+    const focus = vi.spyOn(jump, 'focus');
+    const select = vi.spyOn(jump, 'setSelectionRange');
+    restoreFocus(root, memory);
+
+    expect(document.activeElement).toBe(jump);
+    expect(focus).not.toHaveBeenCalled();
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it('takes focus back for a control that survived the render but lost it in a move', () => {
+    const jump = h('input');
+    plane.replaceChildren(jump);
+    jump.value = '12';
+    jump.focus();
+    jump.setSelectionRange(1, 2);
+    const memory = captureFocus(root);
+
+    plane.replaceChildren(h('div', null, jump));
+    expect(document.activeElement).not.toBe(jump);
+    restoreFocus(root, memory);
+
+    expect(document.activeElement).toBe(jump);
+    expect([jump.selectionStart, jump.selectionEnd]).toEqual([1, 2]);
+  });
+
+  it('prefers the element that survived to a new one with the same key', () => {
+    const old = h('button', { 'data-action': 'step' }, 'Step');
+    plane.replaceChildren(old);
+    old.focus();
+    const memory = captureFocus(root);
+
+    plane.replaceChildren(h('button', { 'data-action': 'step' }, 'Step'), old);
+    restoreFocus(root, memory);
+
+    expect(document.activeElement).toBe(old);
+  });
+
   it('does not take focus from outside the tool', () => {
     rebuild();
     const outside = document.getElementById('outside');

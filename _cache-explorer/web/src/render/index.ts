@@ -26,7 +26,11 @@ import type { UiState } from '../ui-state';
 export interface Snapshot {
   state: State;
   timeline: Timeline;
-  /** One byte per step of the run: bit 0 marks an entry's first step, bit 1 a step of a miss. */
+  /**
+   * One byte per step of the run: bit 0 marks an entry's first step, bit 1 a step of a miss. Asked
+   * of the session on every render, not kept while the step count holds: an undo followed by an
+   * access of the same length leaves the count as it was and the ticks different.
+   */
   ticks: Uint8Array;
   /** The memory rows in view. */
   memoryRows: MemoryLineView[];

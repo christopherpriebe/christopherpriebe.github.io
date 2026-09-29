@@ -193,6 +193,25 @@ describe('start', () => {
   });
 });
 
+describe('the action table', () => {
+  it('finds nothing for a name it does not hold, whatever names an object inherits', () => {
+    startWith('desktop');
+    const failures: Event[] = [];
+    const record = (event: Event): void => {
+      event.preventDefault();
+      failures.push(event);
+    };
+    window.addEventListener('error', record);
+    for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
+      const element = h('button', { 'data-action': name });
+      root.append(element);
+      element.click();
+    }
+    window.removeEventListener('error', record);
+    expect(failures).toEqual([]);
+  });
+});
+
 describe('ownership', () => {
   it('frees the session once, when disposed, however often that is asked', () => {
     const free = vi.spyOn(current(), 'free');

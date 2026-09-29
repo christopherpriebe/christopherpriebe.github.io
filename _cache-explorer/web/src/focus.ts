@@ -1,7 +1,9 @@
-// Focus kept across a render. Render rebuilds the DOM, so the element that had focus is replaced;
-// before rendering the controller records which one it was by its action and parameters, and
-// afterwards focuses the new element with the same key, or the plane when there is none. The plane
-// takes focus without a tab stop (`tabindex="-1"`), so the next shortcut still reaches the root.
+// Focus kept across a render. Render rebuilds the DOM, so the element that had focus is usually
+// replaced; before rendering the controller records the element and which one it was by its action
+// and parameters. Afterwards an element that survived keeps focus, or takes it back when moving it
+// cost it; a replaced one is followed by the new element with the same key, or by the plane when
+// there is none. The plane takes focus without a tab stop (`tabindex="-1"`), so the next shortcut
+// still reaches the root.
 
 import { PARAMS, readAction, type Action } from './actions';
 
@@ -12,6 +14,9 @@ export const PLANE_CLASS = 'cache-explorer__plane';
 export type FocusKey = Pick<Action, 'name' | 'params'>;
 
 export interface FocusMemory {
+  /** The element that had focus. */
+  readonly element: HTMLElement | SVGElement;
+  /** Which element it was, for finding its successor; null for one without an action. */
   readonly key: FocusKey | null;
   /** The caret or selection of a text control, put back after focus returns. */
   readonly selection: {
@@ -41,7 +46,9 @@ export function findByKey(root: HTMLElement, key: FocusKey): HTMLElement | null 
 /** What has focus inside `root`, or null when focus is elsewhere. Call it before rendering. */
 export function captureFocus(root: HTMLElement): FocusMemory | null {
   const active = root.ownerDocument.activeElement;
-  if (!active || !root.contains(active)) return null;
+  if (!(active instanceof HTMLElement || active instanceof SVGElement) || !root.contains(active)) {
+    return null;
+  }
   const selection =
     (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
     active.selectionStart !== null &&
@@ -52,13 +59,20 @@ export function captureFocus(root: HTMLElement): FocusMemory | null {
           direction: active.selectionDirection ?? 'none',
         }
       : null;
-  return { key: focusKey(active), selection };
+  return { element: active, key: focusKey(active), selection };
 }
 
-/** Puts focus back after a render: on the element with the recorded key, or else on the plane. */
+/**
+ * Puts focus back after a render: the element that had it, when it is still in the tool; else the
+ * element with the recorded key, or else the plane.
+ */
 export function restoreFocus(root: HTMLElement, memory: FocusMemory | null): void {
   if (!memory) return;
-  const successor = memory.key && findByKey(root, memory.key);
+  const { element } = memory;
+  const survived = element.isConnected && root.contains(element);
+  // An element that kept focus is left alone: setting its caret again would end a composition.
+  if (survived && root.ownerDocument.activeElement === element) return;
+  const successor = survived ? element : memory.key && findByKey(root, memory.key);
   const target = successor ?? root.querySelector<HTMLElement>(`.${PLANE_CLASS}`);
   if (!target) return;
   target.focus({ preventScroll: true });

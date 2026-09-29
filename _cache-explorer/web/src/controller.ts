@@ -41,9 +41,12 @@ export function buildSnapshot(
   return { snapshot, log: session.entries(ui.logFirst, LOG_WINDOW) };
 }
 
-/** What a click on an element with a `data-action` does; one function per action, added with its region. */
+/**
+ * What a click on an element with a `data-action` does; one function per action, added with its
+ * region. A map, so that a name an object inherits (`constructor`, `__proto__`) finds nothing.
+ */
 type ActionHandler = (action: Action, event: MouseEvent) => void;
-const ACTIONS: Readonly<Record<string, ActionHandler>> = {};
+const ACTIONS: ReadonlyMap<string, ActionHandler> = new Map();
 
 export interface Controller {
   /** Asks the session again and draws what it says. */
@@ -77,7 +80,7 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
 
   const stopListening = delegate(root, {
     click(event, action) {
-      if (action) ACTIONS[action.name]?.(action, event);
+      if (action) ACTIONS.get(action.name)?.(action, event);
     },
   });
 
