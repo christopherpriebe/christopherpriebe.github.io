@@ -31,9 +31,8 @@ pub(crate) struct Checkpoint {
 }
 
 /// A log's checkpoints: the machine at position 0, which is the start of op
-/// 0, and those taken since, in increasing order of position. There are at
-/// most `SESSION_EVENT_LIMIT / CHECKPOINT_INTERVAL` of them, always inserted
-/// in that order, kept as a sorted list with no per-entry allocation.
+/// 0, and those taken since, sorted by position. There are at most
+/// `SESSION_EVENT_LIMIT / CHECKPOINT_INTERVAL` of them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Checkpoints {
     /// The machine at position 0, before the first op.

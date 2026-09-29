@@ -240,8 +240,8 @@ impl Geometry {
     /// [`crate::config::ConfigError::NoTagBits`].
     ///
     /// `sets`, `ways`, `line_bytes` and `word_bytes` must already be non-zero
-    /// powers of two, and `lines` their product; `Config::validate` computes
-    /// and validates all four before calling this.
+    /// powers of two, and `lines` must equal `sets * ways`; `Config::validate`
+    /// computes and validates all five before calling this.
     pub(crate) fn new(
         address_bits: u8,
         word_bytes: u32,

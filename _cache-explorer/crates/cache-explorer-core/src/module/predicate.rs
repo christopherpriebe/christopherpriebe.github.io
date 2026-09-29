@@ -1074,7 +1074,7 @@ impl<'de, S: DeserializeSeed<'de>> DeserializeSeed<'de> for FieldSeed<S> {
     }
 }
 
-/// Reads an option: absent reads as [`Field::Null`]; present, as
+/// Reads an option: `null` reads as [`Field::Null`]; a value, as
 /// [`Field::Value`] through the wrapped seed.
 struct FieldVisitor<S>(S);
 
