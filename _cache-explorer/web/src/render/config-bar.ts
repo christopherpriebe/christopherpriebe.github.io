@@ -14,7 +14,6 @@ import type {
 import { commit, control, type Put } from '../controls';
 import { copy } from '../copy';
 import { h, type Attrs, type Child } from '../dom';
-import { flashAge } from '../motion';
 import type { UiState } from '../ui-state';
 import type { Snapshot } from './index';
 
@@ -37,20 +36,11 @@ export function createConfigBar(): ConfigBar {
   return { element: h('div', { class: 'cache-explorer__config' }, body), body, prompt };
 }
 
-/** What each group is called in `data-group`, and what a log line's `why:` link names. */
+/**
+ * What each cell of the bar is called in `data-group`, and what a log line's `why:` link names.
+ * The address width and the word size share one cell.
+ */
 type Cell = Exclude<ConfigGroupKind, 'addressBits' | 'wordSize'> | 'address' | 'timing';
-
-/** The groups in the order they are drawn; Basics leaves out the ones the core marks advanced. */
-const ORDER: readonly Cell[] = [
-  'cacheSize',
-  'lineSize',
-  'associativity',
-  'replacement',
-  'writePolicy',
-  'allocatePolicy',
-  'address',
-  'timing',
-];
 
 /** How a render sees the bar: the configuration on show, and whether it may be changed. */
 interface Bar {
@@ -118,7 +108,7 @@ function summaryLine(bar: Bar): HTMLElement {
 
 /** One group's box: its name over its content, flashing when a log line has pointed at it. */
 function cell(bar: Bar, key: Cell, readOnly: boolean, ...content: Child[]): HTMLElement {
-  const flashing = bar.ui.flashGroup === key;
+  const flashing = bar.ui.flash?.cause === key;
   const elapsed = flashing ? Math.round(bar.flashAge ?? 0) : 0;
   return h(
     'div',
@@ -141,17 +131,29 @@ function whyOff(bar: Bar, option?: ConfigOption): string | undefined {
   return option?.disabled ? option.title : bar.live ? undefined : bar.guard;
 }
 
-/** The buttons of one group, as a segmented control that wraps onto rows when it is narrow. */
+/**
+ * The buttons of one group, as a segmented control that wraps onto rows when it is narrow. A group
+ * Basics hides, drawn because a log line points at it, is read-only: its buttons do nothing, but
+ * the current choice stays as it is, since that is what the line points at. That is not the look
+ * of a button the core switches off, which every group can have.
+ */
 function options(bar: Bar, group: ConfigGroup, label: string, readOnly: boolean): HTMLElement {
   return h(
     'div',
-    { class: 'cache-explorer__seg', role: 'group', 'aria-label': label },
+    {
+      class: readOnly
+        ? 'cache-explorer__seg cache-explorer__seg--read-only'
+        : 'cache-explorer__seg',
+      role: 'group',
+      'aria-label': label,
+    },
     ...group.options.map((option, index) =>
       segOption(option.label, option.pressed, {
         'data-action': 'config-option',
         'data-group': group.group,
         'data-option': index,
-        disabled: option.disabled || !bar.live || readOnly,
+        disabled: option.disabled || !bar.live,
+        'aria-disabled': readOnly && !option.disabled && bar.live ? 'true' : null,
         title: whyOff(bar, option),
       }),
     ),
@@ -160,11 +162,6 @@ function options(bar: Bar, group: ConfigGroup, label: string, readOnly: boolean)
 
 function optionGroup(bar: Bar, kind: Cell, group: ConfigGroup, readOnly: boolean): HTMLElement {
   return cell(bar, kind, readOnly, options(bar, group, copy.config.groups[kind], readOnly));
-}
-
-/** The pressed option's label: what the group's current choice is called. */
-function pressed(group: ConfigGroup | undefined): string {
-  return group?.options.find((option) => option.pressed)?.label ?? '';
 }
 
 /** The address-width list, which is one `<select>` for the life of the root. */
@@ -226,7 +223,7 @@ function addressGroup(bar: Bar): HTMLElement {
       h(
         'div',
         { class: 'cache-explorer__summary-line' },
-        copy.config.address.summary(pressed(width), pressed(word)),
+        config.addressSummary,
         ' ',
         toggle(copy.config.address.change, false),
       ),
@@ -309,6 +306,9 @@ function timingGroup(bar: Bar, timing: TimingControl, readOnly: boolean): HTMLEl
       miss,
       h('span', null, words.cycles),
     ),
+    // The note sits with the field it is about, not under the checkbox.
+    ui.timingError &&
+      h('p', { class: 'cache-explorer__note', id: TIMING_NOTE_ID }, ui.timingError.message),
     h(
       'label',
       { class: 'cache-explorer__check' },
@@ -321,28 +321,32 @@ function timingGroup(bar: Bar, timing: TimingControl, readOnly: boolean): HTMLEl
       }),
       words.timed,
     ),
-    ui.timingError &&
-      h('p', { class: 'cache-explorer__note', id: TIMING_NOTE_ID }, ui.timingError.message),
   );
 }
 
-/** The groups the bar shows now, in the order they are drawn. */
+/**
+ * The groups the bar shows now, in the order the core lists them: the address width and the word
+ * size are one cell, drawn where the first of them is, and the timing controls, which are not a
+ * list of options, come last.
+ */
 function groups(bar: Bar): HTMLElement {
   const { snap, ui } = bar;
   const { advanced } = snap.state;
-  const cells = ORDER.flatMap((kind): HTMLElement[] => {
-    // A log line can point at a group Basics hides; it is drawn, switched off, for as long as it flashes.
-    const flashed = ui.flashGroup === kind;
-    if (kind === 'address') return [addressGroup(bar)];
-    if (kind === 'timing') {
-      const readOnly = !advanced;
-      return advanced || flashed ? [timingGroup(bar, snap.config.timing, readOnly)] : [];
+  // A log line can point at a group Basics hides; it is drawn, read-only, for as long as it flashes.
+  const flashed = (kind: Cell): boolean => ui.flash?.cause === kind;
+  const cells: HTMLElement[] = [];
+  let addressDrawn = false;
+  for (const group of snap.config.groups) {
+    const kind = group.group;
+    if (kind === 'addressBits' || kind === 'wordSize') {
+      if (!addressDrawn) cells.push(addressGroup(bar));
+      addressDrawn = true;
+      continue;
     }
-    const group = snap.config.groups.find((each) => each.group === kind);
-    if (!group) return [];
     const readOnly = group.advancedOnly && !advanced;
-    return !readOnly || flashed ? [optionGroup(bar, kind, group, readOnly)] : [];
-  });
+    if (!readOnly || flashed(kind)) cells.push(optionGroup(bar, kind, group, readOnly));
+  }
+  if (advanced || flashed('timing')) cells.push(timingGroup(bar, snap.config.timing, !advanced));
   return h('div', { class: 'cache-explorer__config-groups' }, ...cells);
 }
 
@@ -394,7 +398,7 @@ export function renderConfigBar(
       put,
       live: controls.enabled.includes('configure'),
       guard: controls.guard,
-      flashAge: flashAge(root, ui.flashGroup),
+      flashAge: snap.flashAge,
     };
     return [
       summaryLine(drawing),

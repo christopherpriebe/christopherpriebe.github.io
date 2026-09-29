@@ -402,6 +402,10 @@ Associativity | Full | 128 B · 16 B lines · fully associative · LRU · write-
 Replacement | LRU | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
 Replacement | FIFO | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
 Replacement | Random | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+WritePolicy (Advanced) | Write-back | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+WritePolicy (Advanced) | Write-through | 128 B · 16 B lines · direct-mapped · write-through · allocate | 12-bit, 4 B words
+AllocatePolicy (Advanced) | Allocate | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
+AllocatePolicy (Advanced) | No allocate | 128 B · 16 B lines · direct-mapped · write-back · no-allocate | 12-bit, 4 B words
 AddressBits | 8-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 8-bit, 4 B words
 AddressBits | 9-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 9-bit, 4 B words
 AddressBits | 10-bit | 128 B · 16 B lines · direct-mapped · write-back · allocate | 10-bit, 4 B words
@@ -431,7 +435,3 @@ WordSize | 1 B | 128 B · 16 B lines · direct-mapped · write-back · allocate 
 WordSize | 2 B | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 2 B words
 WordSize | 4 B | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
 WordSize | 8 B | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 8 B words
-WritePolicy (Advanced) | Write-back | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
-WritePolicy (Advanced) | Write-through | 128 B · 16 B lines · direct-mapped · write-through · allocate | 12-bit, 4 B words
-AllocatePolicy (Advanced) | Allocate | pressed | 128 B · 16 B lines · direct-mapped · write-back · allocate | 12-bit, 4 B words
-AllocatePolicy (Advanced) | No allocate | 128 B · 16 B lines · direct-mapped · write-back · no-allocate | 12-bit, 4 B words

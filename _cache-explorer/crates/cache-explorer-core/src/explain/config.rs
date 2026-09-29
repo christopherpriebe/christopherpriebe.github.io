@@ -153,6 +153,16 @@ pub(crate) fn word_option(word: WordBytes) -> String {
     bytes_option(word.bytes())
 }
 
+/// The line the bar shows for the Address and word group at rest: the
+/// address width and the word size, "12-bit address \u{b7} 4-byte words".
+pub(crate) fn address_summary(bits: u8, word: WordBytes) -> String {
+    format!(
+        "{}-bit address \u{b7} {}-byte words",
+        format::setting(bits),
+        format::setting(word.bytes())
+    )
+}
+
 /// The label of a write-policy option: "Write-back", "Write-through".
 pub(crate) fn write_option(policy: WritePolicy) -> String {
     match policy {
@@ -281,6 +291,14 @@ mod tests {
         assert_eq!(replacement_option(Replacement::Fifo), "FIFO");
         assert_eq!(address_option(12), "12-bit");
         assert_eq!(word_option(WordBytes::Eight), "8 B");
+        assert_eq!(
+            address_summary(12, WordBytes::Four),
+            "12-bit address \u{b7} 4-byte words"
+        );
+        assert_eq!(
+            address_summary(32, WordBytes::One),
+            "32-bit address \u{b7} 1-byte words"
+        );
         assert_eq!(write_option(WritePolicy::WriteThrough), "Write-through");
         assert_eq!(
             allocate_option(AllocatePolicy::WriteNoAllocate),

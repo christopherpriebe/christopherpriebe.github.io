@@ -262,7 +262,9 @@
   padding-inline: 15px;
 }
 
-.cache-explorer__seg-option:not(:disabled):not([aria-pressed='true']):hover {
+.cache-explorer__seg-option:not(:disabled):not([aria-disabled='true']):not(
+    [aria-pressed='true']
+  ):hover {
   background: var(--cache-explorer-plane);
 }
 
@@ -274,6 +276,18 @@
 .cache-explorer__seg-option:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/*
+ * A group a log line points at while Basics hides it: read-only. Its current choice stays in full
+ * navy, since that is what the line points at, and the others step back.
+ */
+.cache-explorer__seg--read-only .cache-explorer__seg-option {
+  cursor: default;
+}
+
+.cache-explorer__seg--read-only .cache-explorer__seg-option:not([aria-pressed='true']) {
+  opacity: 0.45;
 }
 
 /* Address and word: a summary line that opens into a width list and a word-size control */
@@ -368,6 +382,7 @@
   color: var(--cache-explorer-ink);
   font: var(--cache-explorer-font-label);
   font-size: 15px;
+  line-height: normal;
 }
 
 .cache-explorer__field[aria-invalid='true'] {
@@ -393,11 +408,13 @@
   accent-color: var(--cache-explorer-strong);
 }
 
+/* Balanced, so that a range such as "1 to 1,000" is not split across two lines of a narrow cell. */
 .cache-explorer__note {
   margin: 9px 0 0;
   font: var(--cache-explorer-font-body);
   font-size: 13px;
   line-height: 21px;
+  text-wrap: balance;
 }
 
 /* "Reset to apply?": under the groups, ruled off from them */

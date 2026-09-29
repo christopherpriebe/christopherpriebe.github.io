@@ -641,20 +641,31 @@ mod session {
         same(facade.set_advanced(true).unwrap(), &core.set_advanced(true));
         let state = same(facade.state().unwrap(), &core.state());
         assert_eq!(get(&state, "advanced"), JsValue::TRUE);
-        // A timed run needs Advanced, so Basics asks before it starts a new
-        // run.
+        // A timed run needs Advanced. With an access in it, Basics asks
+        // before it starts a new run.
         let timed = Config {
             timing: timed_two_way().timing,
             advanced: true,
             ..Config::first_visit()
         };
         apply_op_both(&mut core, &mut facade, &Op::Config { config: timed });
+        apply_both(&mut core, &mut facade, LOAD_0X0A4);
         let change = same(
             facade.set_advanced(false).unwrap(),
             &core.set_advanced(false),
         );
         assert_eq!(text(&change, "status"), "needsReset");
         same(facade.state().unwrap(), &core.state());
+        // With no entries, there is nothing to lose: the Basics run starts at
+        // once.
+        apply_op_both(&mut core, &mut facade, &Op::Config { config: timed });
+        let change = same(
+            facade.set_advanced(false).unwrap(),
+            &core.set_advanced(false),
+        );
+        assert_eq!(text(&change, "status"), "applied");
+        let state = same(facade.state().unwrap(), &core.state());
+        assert_eq!(get(&state, "advanced"), JsValue::FALSE);
     }
 
     #[wasm_bindgen_test]

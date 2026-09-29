@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { FLASH_MS } from '../../src/motion';
 
 const read = (name: string): string =>
   readFileSync(fileURLToPath(new URL(`../../src/styles/${name}`, import.meta.url)), 'utf8');
@@ -135,8 +136,28 @@ describe('cache-explorer.css', () => {
     expect(keyframes).toMatch(/0%,\s*100%\s*\{\s*background: transparent;/);
     expect(keyframes).toMatch(/25%,\s*75%\s*\{\s*background: var\(--cache-explorer-changed\);/);
     expect(componentsCss).toMatch(
-      /\.cache-explorer__group--why\s*\{\s*animation: cache-explorer-why 1600ms/,
+      new RegExp(
+        `\\.cache-explorer__group--why\\s*\\{\\s*animation: cache-explorer-why ${String(FLASH_MS)}ms`,
+      ),
     );
+  });
+
+  it('keeps the pressed option of a read-only group whole and dims only the others', () => {
+    const rules = [
+      ...componentsCss.matchAll(/\.cache-explorer__seg--read-only [^{]*\{([^}]*)\}/g),
+    ].map(([selector, body]) => [selector.split('{')[0]?.trim(), body?.trim()]);
+    expect(rules).toEqual([
+      ['.cache-explorer__seg--read-only .cache-explorer__seg-option', 'cursor: default;'],
+      [
+        ".cache-explorer__seg--read-only .cache-explorer__seg-option:not([aria-pressed='true'])",
+        'opacity: 0.45;',
+      ],
+    ]);
+  });
+
+  it('gives a timing field the metrics of the design’s input, a normal line height', () => {
+    const field = /^\.cache-explorer__field\s*\{([^}]*)\}/m.exec(componentsCss)?.[1];
+    expect(field).toContain('line-height: normal');
   });
 
   it('shows the why flash’s ground still, without its fade, for a student who asks for less motion', () => {

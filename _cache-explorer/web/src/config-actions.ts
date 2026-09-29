@@ -66,7 +66,9 @@ function propose(context: Context, config: Config): void {
   const { ui } = context;
   ui.timingError = null;
   try {
-    settle(ui, context.session.proposeConfig(config), ui.pendingBasics);
+    // A change made while the switch to Basics is being asked about is another change, and the
+    // question is now about it: applying it leaves the page where it is.
+    settle(ui, context.session.proposeConfig(config), false);
   } catch (error) {
     ui.status = refusal(error);
   }
@@ -106,6 +108,8 @@ function chooseDetail(context: Context, action: Action): void {
 }
 
 function chooseOption(context: Context, action: Action): void {
+  // A group a log line has pointed at is drawn read-only, its buttons still in reach but idle.
+  if (action.element.getAttribute('aria-disabled') === 'true') return;
   const { group, option } = action.params;
   const chosen = optionsOf(context, group)[Number(option)];
   if (chosen && !chosen.disabled) propose(context, chosen.config);
@@ -127,7 +131,8 @@ function applyPending(context: Context): void {
   if (!ui.pending) return;
   try {
     session.applyOp({ op: 'config', config: ui.pending });
-    // The new run fits Basics, so leaving Advanced cannot ask again.
+    // Nothing else was proposed since the switch to Basics was asked about, so the new run is the
+    // Basics form of the old one, and leaving Advanced cannot ask again.
     if (ui.pendingBasics) session.setAdvanced(false);
   } catch (error) {
     ui.status = refusal(error);
@@ -163,8 +168,16 @@ function sendTiming(context: Context, action: Action): void {
   else context.refresh();
 }
 
-function toggleTiming(context: Context): void {
-  propose(context, context.session.configControls(shown(context)).timing.toggle);
+/**
+ * The checkbox says whether timed mode is wanted, and the core says whether it is on. Typing a
+ * cost has already turned it on, which a checkbox drawn before that does not show yet, so a click
+ * on it flips nothing: it asks for what the box now says.
+ */
+function toggleTiming(context: Context, action: Action): void {
+  const { timing } = context.session.configControls(shown(context));
+  const wanted = action.element instanceof HTMLInputElement && action.element.checked;
+  if (wanted === timing.on) context.refresh();
+  else propose(context, timing.toggle);
 }
 
 const timingNames = [...TIMING_FIELDS.keys()];

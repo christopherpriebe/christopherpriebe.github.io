@@ -523,7 +523,11 @@ pub struct ConfigControls {
     /// The configuration's summary in the mode shown: "128 B · 16 B lines ·
     /// 2-way · LRU".
     pub summary: String,
-    /// The groups, in display order.
+    /// The Address and word group's line at rest: "12-bit address ·
+    /// 4-byte words".
+    pub address_summary: String,
+    /// The groups, in the order the bar draws them: the address width and the
+    /// word size, which share one cell, follow the last option group.
     pub groups: Vec<ConfigGroup>,
     /// The timing controls.
     pub timing: TimingControl,
@@ -1084,8 +1088,9 @@ pub fn validate_config(config: &Config) -> ConfigCheck {
 impl Session {
     /// Everything the configuration bar draws for `shown`, the pending
     /// configuration or the displayed run's: its summary in the mode shown,
-    /// every option with the whole configuration a click produces, the
-    /// timing controls, and why `shown` itself is invalid, if it is.
+    /// the Address and word line, every option with the whole configuration a
+    /// click produces, the timing controls, and why `shown` itself is
+    /// invalid, if it is.
     ///
     /// A size or line option keeps a fully associative cache fully
     /// associative, as many ways as its new line count, and otherwise lowers
@@ -1105,6 +1110,7 @@ fn controls(shown: &Config, advanced: bool, recent: Option<Timing>) -> ConfigCon
     let timing = shown.timing.or(recent).unwrap_or(FALLBACK_TIMING);
     ConfigControls {
         summary: shown.summary(advanced),
+        address_summary: explain::address_summary(shown.address_bits, shown.word_bytes),
         groups: groups(shown),
         timing: TimingControl {
             on: shown.timing.is_some(),
@@ -1126,7 +1132,9 @@ fn controls(shown: &Config, advanced: bool, recent: Option<Timing>) -> ConfigCon
     }
 }
 
-/// The configuration bar's groups for `shown`, in display order.
+/// The configuration bar's groups for `shown`, in the order the bar draws
+/// them; the address width and the word size, which share one cell, come
+/// last.
 fn groups(shown: &Config) -> Vec<ConfigGroup> {
     let cache = &shown.cache;
     let group = |group, advanced_only, options| ConfigGroup {
@@ -1180,28 +1188,6 @@ fn groups(shown: &Config) -> Vec<ConfigGroup> {
             ),
         ),
         group(
-            ConfigGroupKind::AddressBits,
-            false,
-            choices(
-                shown,
-                address_bits,
-                shown.address_bits,
-                explain::address_option,
-                |config, bits| config.address_bits = bits,
-            ),
-        ),
-        group(
-            ConfigGroupKind::WordSize,
-            false,
-            choices(
-                shown,
-                WordBytes::ALL,
-                shown.word_bytes,
-                explain::word_option,
-                |config, word| config.word_bytes = word,
-            ),
-        ),
-        group(
             ConfigGroupKind::WritePolicy,
             true,
             choices(
@@ -1224,6 +1210,28 @@ fn groups(shown: &Config) -> Vec<ConfigGroup> {
                 cache.allocate_policy,
                 explain::allocate_option,
                 |config, policy| config.cache.allocate_policy = policy,
+            ),
+        ),
+        group(
+            ConfigGroupKind::AddressBits,
+            false,
+            choices(
+                shown,
+                address_bits,
+                shown.address_bits,
+                explain::address_option,
+                |config, bits| config.address_bits = bits,
+            ),
+        ),
+        group(
+            ConfigGroupKind::WordSize,
+            false,
+            choices(
+                shown,
+                WordBytes::ALL,
+                shown.word_bytes,
+                explain::word_option,
+                |config, word| config.word_bytes = word,
             ),
         ),
     ]

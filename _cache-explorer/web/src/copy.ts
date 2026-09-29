@@ -36,8 +36,6 @@ export const copy = {
       wordCaption: 'Word',
       addressLabel: 'Address width',
       wordLabel: 'Word size',
-      /** The two pressed options, as the core labels them: `12-bit`, `4 B`. */
-      summary: (address: string, word: string) => `${address} address · ${word} words`,
     },
     timing: {
       hit: 'Hit',

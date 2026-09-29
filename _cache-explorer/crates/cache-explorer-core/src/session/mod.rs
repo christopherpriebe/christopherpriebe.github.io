@@ -565,7 +565,7 @@ impl Session {
         if same == *displayed {
             return Ok(ConfigChange::Applied);
         }
-        if self.cursor.pos() == self.log.end() && self.at_run_origin(self.cursor.pos()) {
+        if self.at_empty_run_end() {
             self.apply(Op::Config { config })?;
             return Ok(ConfigChange::Applied);
         }
@@ -581,17 +581,24 @@ impl Session {
     /// changes no machine.
     ///
     /// Switching to Basics while the displayed run's configuration needs
-    /// Advanced changes nothing and asks first, as a change from the
-    /// configuration bar does, offering the configuration's Basics form as a
-    /// new run. Once that run is applied, switching again succeeds. The
-    /// question is asked whether or not the new run's op could be appended:
-    /// while a gate is set, or once the log has no room for it, the op is
-    /// refused when the student agrees, as Reset is.
+    /// Advanced asks first, as a change from the configuration bar does,
+    /// offering the configuration's Basics form as a new run; once that run
+    /// is applied, switching again succeeds. On a run with no entries, with
+    /// the cursor at the log end, there is nothing to lose: the Basics form
+    /// is appended at once, as `propose_config` appends a change there, and
+    /// the mode changes with it. The question is also asked when that op
+    /// cannot be appended, while a gate is set or once the log has no room
+    /// for it, and is refused when the student agrees, as Reset is.
     pub fn set_advanced(&mut self, on: bool) -> ConfigChange {
-        let displayed = self.config();
+        let displayed = *self.config();
         if !on && !displayed.fits_basics() {
+            let basics = displayed.to_basics();
+            if self.at_empty_run_end() && self.apply(Op::Config { config: basics }).is_ok() {
+                self.view.advanced = false;
+                return ConfigChange::Applied;
+            }
             return ConfigChange::NeedsReset {
-                config: displayed.to_basics(),
+                config: basics,
                 message: self.reset_question(),
             };
         }
@@ -860,6 +867,12 @@ impl Session {
     /// none at position 0.
     pub(crate) fn event_at(&self, pos: EventPos) -> Option<&MicroEvent> {
         self.log.event_at(pos)
+    }
+
+    /// Whether the displayed run has no entries and the cursor is at the log
+    /// end, where a new run replaces nothing the student has done.
+    fn at_empty_run_end(&self) -> bool {
+        self.cursor.pos() == self.log.end() && self.at_run_origin(self.cursor.pos())
     }
 
     /// Whether `pos` is a run's origin: position 0, where the first run

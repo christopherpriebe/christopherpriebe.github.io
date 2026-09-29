@@ -1,7 +1,12 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import type { Cause } from '../pkg/cache_explorer';
+import type { Action } from '../src/actions';
+import { configActions } from '../src/config-actions';
+import type { Context } from '../src/context';
 import { start, type Controller } from '../src/controller';
+import { copy } from '../src/copy';
 import { h } from '../src/dom';
-import { SAMPLE_PROGRAM } from '../src/ui-state';
+import { initialUiState, SAMPLE_PROGRAM, type UiState } from '../src/ui-state';
 import { Session } from '../src/wasm';
 import { loadWasm } from './support/wasm';
 
@@ -474,6 +479,38 @@ describe('a log line’s "why:" link', () => {
     expect(root.querySelector('.cache-explorer__group--why')).toBeNull();
   });
 
+  it('starts again from the beginning when the same link points at the group again', () => {
+    vi.useFakeTimers();
+    open();
+    const age = (): string | null => query("[data-group='lineSize']").getAttribute('style');
+    link('lineSize');
+    vi.advanceTimersByTime(1000);
+    controller.refresh();
+    expect(age()).toBe('animation-delay: -1000ms');
+    link('lineSize');
+    expect(age()).toBeNull();
+    vi.advanceTimersByTime(700);
+    controller.refresh();
+    // 1,700 ms after the first link, 700 after the second: the flash has not ended, and the
+    // element built now carries on from 700 ms, not from the first link's 1,700.
+    expect(query("[data-group='lineSize']").classList).toContain('cache-explorer__group--why');
+    expect(age()).toBe('animation-delay: -700ms');
+    vi.advanceTimersByTime(899);
+    expect(root.querySelector('.cache-explorer__group--why')).not.toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(root.querySelector('.cache-explorer__group--why')).toBeNull();
+  });
+
+  it('draws a flash begun at another group from its own beginning', () => {
+    vi.useFakeTimers();
+    open();
+    link('lineSize');
+    vi.advanceTimersByTime(900);
+    link('replacement');
+    expect(query("[data-group='replacement']").hasAttribute('style')).toBe(false);
+    expect(query("[data-group='lineSize']").classList).not.toContain('cache-explorer__group--why');
+  });
+
   it('shows a group Basics hides, read-only, and takes it away when the flash is over', () => {
     vi.useFakeTimers();
     open();
@@ -499,5 +536,356 @@ describe('a log line’s "why:" link', () => {
     controller.dispose();
     expect(() => vi.advanceTimersByTime(2000)).not.toThrow();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('a press on a control while a timing field is being left', () => {
+  const down = (target: Element): void => {
+    target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+  };
+  const up = (target: Element): void => {
+    target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+  };
+
+  it('holds the redraw back, so the click reaches the button the press began on', () => {
+    open();
+    detail('advanced').click();
+    const miss = type('timing-miss', '35');
+    const pressed = option('associativity', 1);
+    down(pressed);
+    // What the browser does next: the field loses focus, and its change is sent.
+    leave(miss);
+    expect(lent.state().config.timing).toEqual({ hitCycles: 1, missCycles: 35 });
+    expect(pressed.isConnected).toBe(true);
+    up(pressed);
+    expect(pressed.isConnected).toBe(true);
+    pressed.click();
+    expect(lent.state().config.cache.associativity).toBe(2);
+    expect(lent.state().config.timing).toEqual({ hitCycles: 1, missCycles: 35 });
+    expect(lent.opCount()).toBe(2);
+    expect(option('associativity', 1).getAttribute('aria-pressed')).toBe('true');
+    expect(inputAt("[data-action='timed']").checked).toBe(true);
+  });
+
+  it('does the same for the Basics and Advanced switch', () => {
+    open();
+    detail('advanced').click();
+    const miss = type('timing-miss', '35');
+    const basics = detail('basics');
+    down(basics);
+    leave(miss);
+    up(basics);
+    basics.click();
+    expect(lent.state().config.timing).toBeUndefined();
+    expect(lent.state().advanced).toBe(false);
+    expect(lent.opCount()).toBe(2);
+  });
+
+  it('asks for what the Timed mode box says when the cost typed has already turned it on', () => {
+    open();
+    detail('advanced').click();
+    const miss = type('timing-miss', '35');
+    const box = inputAt("[data-action='timed']");
+    expect(box.checked).toBe(false);
+    down(box);
+    leave(miss);
+    up(box);
+    box.click();
+    expect(lent.state().config.timing).toEqual({ hitCycles: 1, missCycles: 35 });
+    expect(inputAt("[data-action='timed']").checked).toBe(true);
+    expect(lent.opCount()).toBe(1);
+  });
+
+  it('still turns timed mode off when the box says so', () => {
+    open();
+    detail('advanced').click();
+    inputAt("[data-action='timed']").click();
+    expect(lent.state().config.timing).toBeDefined();
+    inputAt("[data-action='timed']").click();
+    expect(lent.state().config.timing).toBeUndefined();
+  });
+
+  it('makes the redraw once the press is over when no click follows it', () => {
+    vi.useFakeTimers();
+    open();
+    detail('advanced').click();
+    const miss = type('timing-miss', '35');
+    const pressed = option('associativity', 1);
+    down(pressed);
+    leave(miss);
+    up(pressed);
+    expect(inputAt("[data-action='timed']").checked).toBe(false);
+    vi.runAllTimers();
+    expect(inputAt("[data-action='timed']").checked).toBe(true);
+    expect(pressed.isConnected).toBe(false);
+  });
+
+  it('redraws at once for a press on something that is not a control', () => {
+    open();
+    detail('advanced').click();
+    const miss = type('timing-miss', '35');
+    down(query('.cache-explorer__head'));
+    leave(miss);
+    expect(inputAt("[data-action='timed']").checked).toBe(true);
+  });
+
+  it('redraws at once when no press is down, as a change made from the keyboard does', () => {
+    open();
+    detail('advanced').click();
+    const miss = type('timing-miss', '35');
+    leave(miss);
+    expect(inputAt("[data-action='timed']").checked).toBe(true);
+    expect(document.activeElement).toBe(miss);
+  });
+
+  it('draws the state of every change that came while it was held', () => {
+    vi.useFakeTimers();
+    open();
+    detail('advanced').click();
+    const hit = type('timing-hit', '3');
+    const pressed = option('cacheSize', 3);
+    down(pressed);
+    leave(hit);
+    leave(type('timing-miss', '9'));
+    up(pressed);
+    vi.runAllTimers();
+    expect(inputAt("[data-action='timing-hit']").value).toBe('3');
+    expect(inputAt("[data-action='timing-miss']").value).toBe('9');
+    expect(lent.state().config.timing).toEqual({ hitCycles: 3, missCycles: 9 });
+  });
+
+  it('lets go of the press when the tool is disposed', () => {
+    vi.useFakeTimers();
+    open();
+    const pressed = option('cacheSize', 3);
+    down(pressed);
+    up(pressed);
+    controller.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('a change made while the switch to Basics is being asked about', () => {
+  /** A write-through run with entries, and the question about leaving Advanced for it. */
+  function askAboutBasics(): void {
+    open();
+    detail('advanced').click();
+    option('writePolicy', 1).click();
+    step();
+    detail('basics').click();
+    expect(prompt()).not.toBeNull();
+  }
+
+  it('is another change: applying it starts the run the student last chose, and stays in Advanced', () => {
+    askAboutBasics();
+    const leaving = vi.spyOn(lent, 'setAdvanced');
+    const ops = lent.opCount();
+    // The bar shows the Basics form on offer, which allocates on a store miss.
+    option('allocatePolicy', 1).click();
+    expect(prompt()).not.toBeNull();
+    query("[data-action='apply-pending']").click();
+    expect(lent.opCount()).toBe(ops + 1);
+    expect(lent.state().config.cache.allocatePolicy).toBe('writeNoAllocate');
+    expect(lent.state().advanced).toBe(true);
+    expect(leaving).not.toHaveBeenCalled();
+    expect(prompt()).toBeNull();
+    expect(detail('advanced').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('is another change too when it is a typed cost', () => {
+    askAboutBasics();
+    const leaving = vi.spyOn(lent, 'setAdvanced');
+    leave(type('timing-miss', '35'));
+    expect(prompt()).not.toBeNull();
+    query("[data-action='apply-pending']").click();
+    expect(lent.state().config.timing).toEqual({ hitCycles: 1, missCycles: 35 });
+    expect(lent.state().advanced).toBe(true);
+    expect(leaving).not.toHaveBeenCalled();
+  });
+
+  it('is dropped, with the question, when the student picks the run’s own choice again', () => {
+    askAboutBasics();
+    option('writePolicy', 1).click();
+    expect(prompt()).toBeNull();
+    expect(lent.state().advanced).toBe(true);
+    expect(lent.state().config.cache.writePolicy).toBe('writeThrough');
+  });
+
+  it('leaves the page in Advanced even when the change would fit Basics', () => {
+    askAboutBasics();
+    option('cacheSize', 3).click();
+    expect(query('.cache-explorer__config-toggle').textContent).toContain('512 B');
+    query("[data-action='apply-pending']").click();
+    expect(lent.state().config.cache.sizeBytes).toBe(512);
+    expect(lent.state().config.cache.writePolicy).toBe('writeBack');
+    expect(lent.state().advanced).toBe(true);
+    expect(prompt()).toBeNull();
+  });
+
+  it('is still asked about as before when nothing else is chosen', () => {
+    askAboutBasics();
+    query("[data-action='apply-pending']").click();
+    expect(lent.state().config.cache.writePolicy).toBe('writeBack');
+    expect(lent.state().advanced).toBe(false);
+  });
+
+  it('is not lost when the other change is refused', () => {
+    askAboutBasics();
+    vi.spyOn(lent, 'proposeConfig').mockImplementationOnce(() => {
+      throw new Error('A link can hold at most 10,000 actions.');
+    });
+    option('cacheSize', 3).click();
+    query("[data-action='apply-pending']").click();
+    expect(lent.state().config.cache.writePolicy).toBe('writeBack');
+    expect(lent.state().advanced).toBe(false);
+  });
+
+  it('starts the Basics run at once, with no question, when the run has no entries', () => {
+    open();
+    detail('advanced').click();
+    option('writePolicy', 1).click();
+    detail('basics').click();
+    expect(prompt()).toBeNull();
+    expect(lent.state().advanced).toBe(false);
+    expect(lent.state().config.cache.writePolicy).toBe('writeBack');
+    expect(detail('basics').getAttribute('aria-pressed')).toBe('true');
+    expect(lent.undo()).toBe(true);
+    expect(lent.state().config.cache.writePolicy).toBe('writeThrough');
+  });
+});
+
+describe('a group a log line has pointed at while Basics hides it', () => {
+  it('ignores a click on its buttons, and changes nothing', () => {
+    vi.useFakeTimers();
+    open();
+    const element = h('button', { 'data-action': 'why', 'data-group': 'writePolicy' });
+    root.append(element);
+    element.click();
+    element.remove();
+    option('writePolicy', 1).click();
+    expect(lent.opCount()).toBe(0);
+    expect(lent.state().config.cache.writePolicy).toBe('writeBack');
+    expect(prompt()).toBeNull();
+    expect(option('writePolicy', 0).getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+describe('what the handlers say to the status line', () => {
+  let session: Session;
+  let ui: UiState;
+  let refresh: Mock<() => void>;
+  let context: Context;
+
+  const act = (
+    kind: 'clicks' | 'changes',
+    name: string,
+    params: Action['params'] = {},
+    element: HTMLElement = h('button'),
+  ): void => {
+    const handler = configActions[kind].get(name);
+    if (!handler) throw new Error(`no handler for ${name}`);
+    handler(context, { name, params, element });
+  };
+
+  /** A click on an option of the bar. */
+  const choose = (group: string, index: number): void => {
+    act('clicks', 'config-option', { group, option: String(index) });
+  };
+
+  beforeEach(() => {
+    session = Session.firstVisit();
+    ui = initialUiState('desktop');
+    refresh = vi.fn<() => void>();
+    context = { session, ui, refresh, flash: vi.fn<(cause: Cause) => void>() };
+    for (let i = 0; i < 2; i += 1) session.stepEvent(program);
+  });
+
+  afterEach(() => {
+    session.free();
+  });
+
+  it('says why the core refused a change, and asks nothing', () => {
+    vi.spyOn(session, 'proposeConfig').mockImplementationOnce(() => {
+      throw new Error('A link can hold at most 10,000 actions.');
+    });
+    choose('associativity', 1);
+    expect(ui.status).toBe('A link can hold at most 10,000 actions.');
+    expect(ui.pending).toBeNull();
+    expect(ui.pendingMessage).toBeNull();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('says nothing for a change the core asks about', () => {
+    choose('associativity', 1);
+    expect(ui.status).toBe('');
+    expect(ui.pending?.cache.associativity).toBe(2);
+    expect(ui.pendingMessage).toMatch(/^Configuration is fixed for a run\./);
+  });
+
+  it('says the new configuration is applied, and that the run starts empty', () => {
+    choose('associativity', 1);
+    act('clicks', 'apply-pending');
+    expect(ui.status).toBe('New configuration applied. The run starts empty.');
+    expect(ui.status).toBe(copy.config.applied);
+    expect(ui.pending).toBeNull();
+    expect(session.state().config.cache.associativity).toBe(2);
+  });
+
+  it('keeps the question, and says why, when "Reset and apply" is refused', () => {
+    choose('associativity', 1);
+    const { pending, pendingMessage } = ui;
+    const ops = session.opCount();
+    vi.spyOn(session, 'applyOp').mockImplementationOnce(() => {
+      throw new Error('A link can hold at most 10,000 actions, and this would pass that.');
+    });
+    act('clicks', 'apply-pending');
+    expect(ui.status).toBe('A link can hold at most 10,000 actions, and this would pass that.');
+    expect(ui.pending).toBe(pending);
+    expect(ui.pendingMessage).toBe(pendingMessage);
+    expect(session.opCount()).toBe(ops);
+    expect(session.state().config.cache.associativity).toBe(1);
+    // The student can still agree once the core has room.
+    act('clicks', 'apply-pending');
+    expect(ui.status).toBe(copy.config.applied);
+    expect(session.state().config.cache.associativity).toBe(2);
+  });
+
+  it('keeps the switch to Basics too when "Reset and apply" is refused', () => {
+    session.setAdvanced(true);
+    choose('writePolicy', 1);
+    act('clicks', 'apply-pending');
+    session.stepEvent(program);
+    act('clicks', 'detail', { option: 'basics' });
+    expect(ui.pendingBasics).toBe(true);
+    vi.spyOn(session, 'applyOp').mockImplementationOnce(() => {
+      throw new Error('Answer the prediction in the module panel first.');
+    });
+    act('clicks', 'apply-pending');
+    expect(ui.status).toBe('Answer the prediction in the module panel first.');
+    expect(ui.pendingBasics).toBe(true);
+    expect(ui.pending).not.toBeNull();
+    expect(session.state().advanced).toBe(true);
+  });
+
+  it('clears the question about Basics when another change is proposed', () => {
+    session.setAdvanced(true);
+    choose('writePolicy', 1);
+    act('clicks', 'apply-pending');
+    session.stepEvent(program);
+    act('clicks', 'detail', { option: 'basics' });
+    expect(ui.pendingBasics).toBe(true);
+    choose('cacheSize', 3);
+    expect(ui.pendingBasics).toBe(false);
+    expect(ui.pending).not.toBeNull();
+  });
+
+  it('lets a refusal that is not one through', () => {
+    vi.spyOn(session, 'applyOp').mockImplementationOnce(() => {
+      throw new WebAssembly.RuntimeError('unreachable');
+    });
+    choose('associativity', 1);
+    expect(() => {
+      act('clicks', 'apply-pending');
+    }).toThrow(WebAssembly.RuntimeError);
   });
 });

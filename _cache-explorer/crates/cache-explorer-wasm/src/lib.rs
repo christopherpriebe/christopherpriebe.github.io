@@ -297,7 +297,9 @@ impl Session {
         Ok(self.inner.step_access(program.as_ref()).into_ts()?)
     }
 
-    /// Switches between Basics and Advanced, which never resets the run.
+    /// Switches between Basics and Advanced. Leaving Advanced on a run Basics
+    /// cannot show starts the run's Basics form at once when the run has no
+    /// entries, and otherwise asks first.
     ///
     /// # Errors
     ///

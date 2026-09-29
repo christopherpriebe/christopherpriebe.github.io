@@ -584,7 +584,13 @@ export interface ConfigControls {
      */
     summary: string;
     /**
-     * The groups, in display order.
+     * The Address and word group's line at rest: "12-bit address ·
+     * 4-byte words".
+     */
+    addressSummary: string;
+    /**
+     * The groups, in the order the bar draws them: the address width and the
+     * word size, which share one cell, follow the last option group.
      */
     groups: ConfigGroup[];
     /**
@@ -2993,7 +2999,9 @@ export class Session {
      */
     seek(pos: EventPos): void;
     /**
-     * Switches between Basics and Advanced, which never resets the run.
+     * Switches between Basics and Advanced. Leaving Advanced on a run Basics
+     * cannot show starts the run's Basics form at once when the run has no
+     * entries, and otherwise asks first.
      *
      * # Errors
      *

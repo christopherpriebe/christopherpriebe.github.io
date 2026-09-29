@@ -58,8 +58,11 @@ export interface UiState {
   addressOpen: boolean;
   /** The timing field the student typed in that does not read, and why; null when both do. */
   timingError: { field: ConfigNumberField; message: string } | null;
-  /** The group a `why:` link is flashing, until the flash has run its course. */
-  flashGroup: Cause | null;
+  /**
+   * The group a `why:` link is flashing and when the flash began, in the milliseconds
+   * `performance.now` counts, until the flash has run its course.
+   */
+  flash: { cause: Cause; since: number } | null;
   draft: { kind: AccessKind; addrText: string; valueText: string };
   /** What the address strip follows: the access at the cursor, or the typed address until the cursor next moves. */
   stripSource: 'cursor' | 'draft';
@@ -92,7 +95,7 @@ export function initialUiState(layout: Layout): UiState {
     pendingBasics: false,
     addressOpen: false,
     timingError: null,
-    flashGroup: null,
+    flash: null,
     draft: { kind: 'read', addrText: FIRST_VISIT_ADDRESS, valueText: FIRST_VISIT_VALUE },
     stripSource: 'cursor',
     editor: null,

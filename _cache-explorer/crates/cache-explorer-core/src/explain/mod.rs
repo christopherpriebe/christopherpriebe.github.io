@@ -39,8 +39,9 @@ pub(crate) use access::{
     write_through, StallFor, WriteNote,
 };
 pub(crate) use config::{
-    address_option, allocate_option, bytes_option, config_summary, full_option, repair_label,
-    replacement_option, same_as_full, short_summary, ways_option, word_option, write_option,
+    address_option, address_summary, allocate_option, bytes_option, config_summary, full_option,
+    repair_label, replacement_option, same_as_full, short_summary, ways_option, word_option,
+    write_option,
 };
 pub(crate) use edit::{
     already_cached, already_holds, already_in, belongs_in, cached_item, check_value, check_word,

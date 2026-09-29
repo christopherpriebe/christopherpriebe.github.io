@@ -109,10 +109,10 @@ fn the_bar_offers_its_groups_and_their_options() {
             (ConfigGroupKind::LineSize, false),
             (ConfigGroupKind::Associativity, false),
             (ConfigGroupKind::Replacement, false),
-            (ConfigGroupKind::AddressBits, false),
-            (ConfigGroupKind::WordSize, false),
             (ConfigGroupKind::WritePolicy, true),
             (ConfigGroupKind::AllocatePolicy, true),
+            (ConfigGroupKind::AddressBits, false),
+            (ConfigGroupKind::WordSize, false),
         ]
     );
     let names = |group| -> Vec<String> {
@@ -190,6 +190,41 @@ fn the_bar_offers_its_groups_and_their_options() {
     );
     let wide = option(&controls, ConfigGroupKind::AddressBits, "16-bit");
     assert_eq!(wide.config.address_bits, 16);
+}
+
+#[test]
+fn the_address_and_word_line_names_the_width_and_the_word_of_the_configuration_shown() {
+    assert_eq!(
+        bar(&Config::default()).address_summary,
+        "12-bit address \u{b7} 4-byte words"
+    );
+    let wide = Config {
+        address_bits: 32,
+        word_bytes: WordBytes::One,
+        ..Config::default()
+    };
+    assert_eq!(
+        bar(&wide).address_summary,
+        "32-bit address \u{b7} 1-byte words"
+    );
+    let narrow = Config {
+        address_bits: MIN_ADDRESS_BITS,
+        word_bytes: WordBytes::Eight,
+        ..Config::default()
+    };
+    assert_eq!(
+        bar(&narrow).address_summary,
+        format!("{MIN_ADDRESS_BITS}-bit address \u{b7} 8-byte words")
+    );
+    // A width the options do not list, from a link, is named as it is.
+    let odd = Config {
+        address_bits: MAX_ADDRESS_BITS.saturating_add(1),
+        ..Config::default()
+    };
+    assert_eq!(
+        bar(&odd).address_summary,
+        format!("{}-bit address \u{b7} 4-byte words", odd.address_bits)
+    );
 }
 
 #[test]

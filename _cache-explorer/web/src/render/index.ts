@@ -39,6 +39,8 @@ export interface Snapshot {
   config: ConfigControls;
   /** The typed access, read. */
   draft: IssueDraft;
+  /** How long ago the flash a log line started began, in milliseconds, or null when none is showing. */
+  flashAge: number | null;
   /** The drawer's text, parsed, while it holds text. */
   programDraft?: ParseResult;
   /** The open editor's form, checked. */

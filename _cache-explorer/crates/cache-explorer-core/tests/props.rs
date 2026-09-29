@@ -1421,7 +1421,20 @@ mod support {
                 Change::Mode { advanced, reset } => {
                     let before = self.before();
                     match self.session.set_advanced(*advanced) {
-                        ConfigChange::Applied => self.after(before, Call::Moved),
+                        // Leaving Advanced on a run with no entries appends
+                        // the Basics run at once, and nothing else appends.
+                        ConfigChange::Applied => {
+                            let appended = self.session.op_count() as usize != before.ops.len();
+                            prop_assert!(!appended || !*advanced, "switching to Advanced appended");
+                            self.after(
+                                before,
+                                if appended {
+                                    Call::Appended
+                                } else {
+                                    Call::Moved
+                                },
+                            )
+                        }
                         ConfigChange::NeedsReset { config, .. } => {
                             self.after(before, Call::Refused)?;
                             if *reset && self.apply(Op::Config { config })? {

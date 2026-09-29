@@ -1193,6 +1193,133 @@ fn switching_mode_is_not_an_op_and_basics_asks_first_while_the_run_needs_advance
     assert!(!session.advanced());
 }
 
+/// `config()` with write-through, which Basics cannot show.
+fn write_through() -> Config {
+    Config {
+        cache: CacheConfig {
+            write_policy: WritePolicy::WriteThrough,
+            ..config().cache
+        },
+        ..config()
+    }
+}
+
+#[test]
+fn leaving_advanced_on_a_run_with_no_entries_starts_the_basics_run_at_once() {
+    let through = write_through();
+    // A run that starts the session, as a link or a module can leave it.
+    let mut session = Session::with_config(through).unwrap();
+    assert!(session.advanced());
+    assert_eq!(session.set_advanced(false), ConfigChange::Applied);
+    assert!(!session.advanced());
+    assert_eq!(session.config(), &through.to_basics());
+    assert_eq!(
+        session.ops(),
+        [Op::Config {
+            config: through.to_basics()
+        }]
+    );
+    // The change is an op of its own, so Undo returns to the write-through
+    // run, which needs Advanced again.
+    assert!(session.undo());
+    assert_eq!(session.config(), &through);
+    assert!(session.advanced());
+
+    // The same after a configuration change, timing included, made in
+    // Advanced.
+    let mut session = session_in_advanced();
+    let timed = Config {
+        timing: Some(cache_explorer_core::Timing {
+            hit_cycles: 1,
+            miss_cycles: 20,
+        }),
+        ..through
+    };
+    assert_eq!(session.propose_config(timed), Ok(ConfigChange::Applied));
+    assert_eq!(session.op_count(), 1);
+    assert_eq!(session.set_advanced(false), ConfigChange::Applied);
+    assert_eq!(session.op_count(), 2);
+    assert!(!session.advanced());
+    assert_eq!(session.config(), &timed.to_basics());
+    assert!(session.config().timing.is_none());
+}
+
+/// A session on `config()` in Advanced.
+fn session_in_advanced() -> Session {
+    let mut session = session();
+    assert_eq!(session.set_advanced(true), ConfigChange::Applied);
+    session
+}
+
+#[test]
+fn leaving_advanced_asks_first_where_a_new_run_would_lose_something() {
+    let through = write_through();
+    let basics = through.to_basics();
+    // With entries, at the log end: the run is kept, so the question is
+    // asked.
+    let mut session = Session::with_config(through).unwrap();
+    session.apply(load(0x0A4)).unwrap();
+    let before = session.clone();
+    assert!(matches!(
+        session.set_advanced(false),
+        ConfigChange::NeedsReset { config, .. } if config == basics
+    ));
+    assert_eq!(session.ops(), before.ops());
+    assert!(session.advanced());
+
+    // On an empty run with steps undone after it, a new op would drop them.
+    apply_all(&mut session, [Op::Config { config: through }]);
+    apply_all(&mut session, [load(0x0A8)]);
+    assert!(session.undo());
+    let before = session.clone();
+    match session.set_advanced(false) {
+        ConfigChange::NeedsReset { config, message } => {
+            assert_eq!(config, basics);
+            assert!(message.contains("undone step"), "{message}");
+        }
+        ConfigChange::Applied => panic!("the question was not asked"),
+    }
+    assert_eq!(session.ops(), before.ops());
+    assert_eq!(session.position(), before.position());
+    assert!(session.advanced());
+}
+
+#[test]
+fn leaving_advanced_on_an_empty_run_asks_when_the_new_run_has_no_room() {
+    let through = write_through();
+    // A log as long as a link can hold, its last op a configuration change
+    // to a run with no entries.
+    let mut session = Session::with_config(through).unwrap();
+    for _ in 0..MAX_SHARE_OPS - 1 {
+        session.apply(load(0x0A4)).unwrap();
+    }
+    let other = Config {
+        cache: CacheConfig {
+            replacement: Replacement::Fifo,
+            ..through.cache
+        },
+        ..through
+    };
+    session.apply(Op::Config { config: other }).unwrap();
+    assert_eq!(session.op_count(), MAX_SHARE_OPS);
+    let before = session.clone();
+    let basics = other.to_basics();
+    // The question is asked, and refused with the limit's message when the
+    // student agrees, as Reset is.
+    assert!(matches!(
+        session.set_advanced(false),
+        ConfigChange::NeedsReset { config, .. } if config == basics
+    ));
+    assert_eq!(session.ops(), before.ops());
+    assert_eq!(session.position(), before.position());
+    assert!(session.advanced());
+    refused(
+        &mut session,
+        &Op::Config { config: basics },
+        &OpError::LinkFull,
+    );
+}
+
 #[test]
 fn every_state_the_cursor_reaches_is_the_folds() {
     let mut session = varied();

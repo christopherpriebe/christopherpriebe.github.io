@@ -8,6 +8,7 @@ import { delegate } from './delegate';
 import { captureFocus, restoreFocus } from './focus';
 import type { Layout } from './layout';
 import { FLASH_MS } from './motion';
+import { watchPress } from './press';
 import { render, type LogWindow, type Snapshot } from './render';
 import { initialUiState, type UiState } from './ui-state';
 import type { Session } from './wasm';
@@ -16,10 +17,14 @@ import type { Session } from './wasm';
 const MEMORY_WINDOW = 24;
 const LOG_WINDOW = 40;
 
-/** Everything one render draws, asked of the session as it is now. */
+/**
+ * Everything one render draws, asked of the session as it is now. `now` is the clock the flash's
+ * age is read from, in the milliseconds `performance.now` counts.
+ */
 export function buildSnapshot(
   session: Session,
   ui: UiState,
+  now: number = performance.now(),
 ): { snapshot: Snapshot; log: LogWindow } {
   const state = session.state();
   const { draft, program, editor, modules } = ui;
@@ -30,6 +35,7 @@ export function buildSnapshot(
     memoryRows: session.memoryLines(ui.memoryFirst, MEMORY_WINDOW),
     config: session.configControls(ui.pending ?? state.config),
     draft: session.draftIssue(draft.kind, draft.addrText, draft.valueText),
+    flashAge: ui.flash ? Math.max(0, now - ui.flash.since) : null,
   };
   if (program.text !== '')
     snapshot.programDraft = session.parseProgram(program.text, program.format);
@@ -70,13 +76,32 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
     return owned;
   }
 
-  function refresh(): void {
+  function draw(): void {
     const focus = captureFocus(root);
     const { snapshot, log } = buildSnapshot(current(), ui);
     render(root, snapshot, log, ui);
     restoreFocus(root, focus);
     ui.lastPos = snapshot.state.position.pos;
   }
+
+  /** A redraw asked for while a press was down, which waits until the press and its click are over. */
+  let held = false;
+
+  function refresh(): void {
+    if (press.down) {
+      held = true;
+      return;
+    }
+    held = false;
+    draw();
+  }
+
+  /** Makes the redraw that was held back, if there is one and the press is over. */
+  function release(): void {
+    if (held && owned) refresh();
+  }
+
+  const press = watchPress(root, release);
 
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -87,12 +112,14 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
     ui,
     refresh,
     flash(cause) {
+      // Pointing at a group again, or at another, starts a flash from the beginning, and its time
+      // from the same moment.
       clearTimeout(flashTimer);
       ui.configOpen = true;
-      ui.flashGroup = cause;
+      ui.flash = { cause, since: performance.now() };
       flashTimer = setTimeout(() => {
         flashTimer = undefined;
-        ui.flashGroup = null;
+        ui.flash = null;
         if (owned) refresh();
       }, FLASH_MS);
       refresh();
@@ -113,6 +140,7 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
 
   function dispose(): void {
     clearTimeout(flashTimer);
+    press.stop();
     stopListening();
     const session = owned;
     owned = null;
@@ -120,7 +148,7 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
   }
 
   try {
-    refresh();
+    draw();
   } catch (error) {
     dispose();
     throw error;

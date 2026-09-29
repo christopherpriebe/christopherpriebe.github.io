@@ -15,9 +15,15 @@ function current(): Session {
   return session;
 }
 
-/** One render of the session as it is now; `change` may alter what the snapshot says first. */
-function draw(change?: (snapshot: ReturnType<typeof buildSnapshot>['snapshot']) => void): void {
-  const { snapshot, log } = buildSnapshot(current(), ui);
+/**
+ * One render of the session as it is now, at `now` on the clock a flash's age is read from;
+ * `change` may alter what the snapshot says first.
+ */
+function draw(
+  change?: (snapshot: ReturnType<typeof buildSnapshot>['snapshot']) => void,
+  now = 0,
+): void {
+  const { snapshot, log } = buildSnapshot(current(), ui, now);
   change?.(snapshot);
   render(root, snapshot, log, ui);
 }
@@ -130,6 +136,39 @@ describe('the groups', () => {
     ]);
   });
 
+  it('are listed by the core in the order the bar draws them, the two of the address cell together', () => {
+    const kinds = current()
+      .configControls(current().state().config)
+      .groups.map((group) => group.group);
+    expect(kinds).toEqual([
+      'cacheSize',
+      'lineSize',
+      'associativity',
+      'replacement',
+      'writePolicy',
+      'allocatePolicy',
+      'addressBits',
+      'wordSize',
+    ]);
+  });
+
+  it('follow the order the core lists them in, the address cell where the first of its two is', () => {
+    current().setAdvanced(true);
+    draw((snapshot) => {
+      snapshot.config.groups.reverse();
+    });
+    expect(groupNames()).toEqual([
+      'Address and word',
+      'On a store miss',
+      'Write policy',
+      'Replacement',
+      'Associativity',
+      'Line size',
+      'Cache size',
+      'Timing',
+    ]);
+  });
+
   it('gain write policy and store miss before the address, and timing after it, in Advanced', () => {
     current().setAdvanced(true);
     draw();
@@ -211,11 +250,24 @@ describe('address and word', () => {
   it('rests as a line of the two current choices with a way to change them', () => {
     draw();
     const line = query('.cache-explorer__summary-line');
-    expect(line.textContent).toBe('12-bit address · 4 B words change…');
+    expect(line.textContent).toBe('12-bit address · 4-byte words change…');
     const link = query('[data-action="address-toggle"]');
     expect(link.textContent).toBe('change…');
     expect(link.getAttribute('aria-expanded')).toBe('false');
     expect(root.querySelector('select')).toBeNull();
+  });
+
+  it('draws the core’s line for the configuration on show, as it gives it', () => {
+    const config = current().state().config;
+    ui.pending = { ...config, addressBits: 16, wordBytes: 8 };
+    draw();
+    expect(query('.cache-explorer__summary-line').textContent).toBe(
+      '16-bit address · 8-byte words change…',
+    );
+    draw((snapshot) => {
+      snapshot.config.addressSummary = 'as the core says';
+    });
+    expect(query('.cache-explorer__summary-line').textContent).toBe('as the core says change…');
   });
 
   it('opens into a list of the address widths and the four word sizes', () => {
@@ -318,6 +370,9 @@ describe('timing', () => {
     const note = query('.cache-explorer__note');
     expect(hit.getAttribute('aria-describedby')).toBe(note.id);
     expect(note.textContent).toBe('Type a whole number of cycles, 1 to 1,000.');
+    // The note sits straight after the two fields it is about, above the checkbox.
+    expect(note.previousElementSibling).toBe(query('.cache-explorer__timing'));
+    expect(note.nextElementSibling).toBe(query('.cache-explorer__check'));
     expect(query('[data-action="timing-miss"]').hasAttribute('aria-invalid')).toBe(false);
 
     ui.timingError = null;
@@ -411,54 +466,43 @@ describe('the flash a log line starts', () => {
     vi.restoreAllMocks();
   });
 
+  const flashing = (): (string | null)[] =>
+    [...root.querySelectorAll('.cache-explorer__group--why')].map((g) =>
+      g.getAttribute('data-group'),
+    );
+
   it('marks the group it names, and only that one', () => {
-    ui.flashGroup = 'lineSize';
+    ui.flash = { cause: 'lineSize', since: 0 };
     draw();
-    expect(
-      [...root.querySelectorAll('.cache-explorer__group--why')].map((g) =>
-        g.getAttribute('data-group'),
-      ),
-    ).toEqual(['lineSize']);
+    expect(flashing()).toEqual(['lineSize']);
   });
 
-  it('starts at the beginning on the render that first draws it, and carries on from where it is', () => {
-    const now = vi.spyOn(performance, 'now');
-    ui.flashGroup = 'replacement';
-    now.mockReturnValue(1000);
-    draw();
+  it('starts at the beginning when it has just begun, and carries on from how far it has got', () => {
+    ui.flash = { cause: 'replacement', since: 1000 };
+    draw(undefined, 1000);
     expect(group('replacement').hasAttribute('style')).toBe(false);
-    now.mockReturnValue(1600);
-    draw();
+    draw(undefined, 1600);
     expect(group('replacement').getAttribute('style')).toBe('animation-delay: -600ms');
   });
 
-  it('is a new flash when the log points at another group, or at the same one again', () => {
-    const now = vi.spyOn(performance, 'now');
-    ui.flashGroup = 'lineSize';
-    now.mockReturnValue(1000);
-    draw();
-    ui.flashGroup = 'replacement';
-    now.mockReturnValue(1400);
-    draw();
-    expect(group('replacement').hasAttribute('style')).toBe(false);
-
-    ui.flashGroup = null;
-    draw();
-    ui.flashGroup = 'replacement';
-    now.mockReturnValue(1500);
-    draw();
-    expect(group('replacement').hasAttribute('style')).toBe(false);
+  it('is a function of what it is given, and never reads the clock', () => {
+    ui.flash = { cause: 'associativity', since: 1000 };
+    const { snapshot, log } = buildSnapshot(current(), ui, 1250);
+    const now = vi.spyOn(performance, 'now').mockReturnValue(99_999);
+    render(root, snapshot, log, ui);
+    render(root, snapshot, log, ui);
+    expect(now).not.toHaveBeenCalled();
+    expect(group('associativity').getAttribute('style')).toBe('animation-delay: -250ms');
   });
 
-  it('draws a group Basics hides, switched off with a note, for as long as it flashes', () => {
+  it('draws a group Basics hides, read-only, with a note, for as long as it flashes', () => {
     draw();
     expect(root.querySelector('.cache-explorer__group[data-group="writePolicy"]')).toBeNull();
 
-    ui.flashGroup = 'writePolicy';
+    ui.flash = { cause: 'writePolicy', since: 0 };
     draw();
     const policy = group('writePolicy');
     expect(labels('writePolicy')).toEqual(['Write-back', 'Write-through']);
-    expect([...policy.querySelectorAll('button')].every((button) => button.disabled)).toBe(true);
     expect(policy.querySelector('.cache-explorer__note')?.textContent).toBe(
       'Advanced changes this.',
     );
@@ -471,13 +515,36 @@ describe('the flash a log line starts', () => {
       'Address and word',
     ]);
 
-    ui.flashGroup = null;
+    ui.flash = null;
     draw();
     expect(root.querySelector('.cache-explorer__group[data-group="writePolicy"]')).toBeNull();
   });
 
+  it('keeps the current choice of a read-only group whole, and stills the others', () => {
+    ui.flash = { cause: 'writePolicy', since: 0 };
+    draw();
+    expect(
+      query('.cache-explorer__group[data-group="writePolicy"] .cache-explorer__seg').className,
+    ).toContain('cache-explorer__seg--read-only');
+    for (const [index, pressed] of [true, false].entries()) {
+      const button = optionOf('writePolicy', index);
+      // Not `disabled`, which is how the core and the gate switch a button off.
+      expect(button.disabled).toBe(false);
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      expect(button.getAttribute('aria-pressed')).toBe(String(pressed));
+    }
+  });
+
+  it('leaves a button the core switches off disabled, in a read-only group as in any other', () => {
+    current().setAdvanced(true);
+    draw();
+    expect(optionOf('associativity', 3).disabled).toBe(true);
+    expect(optionOf('associativity', 3).hasAttribute('aria-disabled')).toBe(false);
+    expect(group('associativity').querySelector('.cache-explorer__seg--read-only')).toBeNull();
+  });
+
   it('draws the timing Basics hides, read-only, when a log line points at it', () => {
-    ui.flashGroup = 'timing';
+    ui.flash = { cause: 'timing', since: 0 };
     draw();
     expect(group('timing').querySelector('.cache-explorer__note')?.textContent).toBe(
       'Advanced changes this.',
@@ -488,9 +555,10 @@ describe('the flash a log line starts', () => {
 
   it('leaves a group Advanced shows live while it flashes', () => {
     current().setAdvanced(true);
-    ui.flashGroup = 'writePolicy';
+    ui.flash = { cause: 'writePolicy', since: 0 };
     draw();
     expect(optionOf('writePolicy', 1).disabled).toBe(false);
+    expect(optionOf('writePolicy', 1).hasAttribute('aria-disabled')).toBe(false);
     expect(group('writePolicy').querySelector('.cache-explorer__note')).toBeNull();
   });
 });
