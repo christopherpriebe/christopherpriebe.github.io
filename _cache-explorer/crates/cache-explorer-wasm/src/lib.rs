@@ -37,17 +37,84 @@ fn install_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
+/// A type JavaScript passes as an argument, with the kind an error names when
+/// a value is not one.
+trait Argument: DeserializeOwned {
+    /// The kind the error of a value that is not this type names.
+    const KIND: ArgKind;
+}
+
+impl Argument for AccessKind {
+    const KIND: ArgKind = ArgKind::AccessKind;
+}
+
+impl Argument for Addr {
+    const KIND: ArgKind = ArgKind::Addr;
+}
+
+impl Argument for Config {
+    const KIND: ArgKind = ArgKind::Config;
+}
+
+impl Argument for ConfigNumberField {
+    const KIND: ArgKind = ArgKind::ConfigNumberField;
+}
+
+impl Argument for EditPatch {
+    const KIND: ArgKind = ArgKind::EditPatch;
+}
+
+impl Argument for EditTarget {
+    const KIND: ArgKind = ArgKind::EditTarget;
+}
+
+impl Argument for EventPos {
+    const KIND: ArgKind = ArgKind::EventPos;
+}
+
+impl Argument for Vec<LineAddr> {
+    const KIND: ArgKind = ArgKind::LineAddrs;
+}
+
+impl Argument for Op {
+    const KIND: ArgKind = ArgKind::Op;
+}
+
+impl Argument for Predicate {
+    const KIND: ArgKind = ArgKind::Predicate;
+}
+
+impl Argument for ProgramFormat {
+    const KIND: ArgKind = ArgKind::ProgramFormat;
+}
+
+impl Argument for ProgramSource {
+    const KIND: ArgKind = ArgKind::ProgramSource;
+}
+
+impl Argument for SetIndex {
+    const KIND: ArgKind = ArgKind::SetIndex;
+}
+
+impl Argument for WayForm {
+    const KIND: ArgKind = ArgKind::WayForm;
+}
+
+impl Argument for WayIndex {
+    const KIND: ArgKind = ArgKind::WayIndex;
+}
+
 /// `value` read as the `T` it was passed as.
 ///
 /// # Errors
 ///
-/// The core's [`ArgumentError`] for `kind`, with serde-wasm-bindgen's reason,
-/// when `value` does not have `T`'s shape.
-fn arg<T>(value: &Ts<T>, kind: ArgKind) -> Result<T, JsError>
+/// The core's [`ArgumentError`] for `T`'s kind, with serde-wasm-bindgen's
+/// reason, when `value` does not have `T`'s shape.
+fn arg<T>(value: &Ts<T>) -> Result<T, JsError>
 where
-    T: Tsify + DeserializeOwned,
+    T: Argument + Tsify,
 {
-    read(value.js_value(), kind)
+    read(value.js_value())
 }
 
 /// `value` read as a `T`, for an argument passed as a plain `JsValue`
@@ -56,13 +123,13 @@ where
 /// # Errors
 ///
 /// As [`arg`].
-fn read<T: DeserializeOwned>(value: JsValue, kind: ArgKind) -> Result<T, JsError> {
+fn read<T: Argument>(value: JsValue) -> Result<T, JsError> {
     serde_wasm_bindgen::from_value(value).map_err(|error| {
         let detail = JsValue::from(error)
             .dyn_into::<js_sys::Error>()
             .map(|error| String::from(error.message()))
             .unwrap_or_default();
-        JsError::new(&ArgumentError::new(kind, detail).to_string())
+        JsError::new(&ArgumentError::new(T::KIND, detail).to_string())
     })
 }
 
@@ -128,7 +195,7 @@ impl Session {
     #[wasm_bindgen(js_name = withConfig)]
     pub fn with_config(config: &Ts<Config>) -> Result<Session, JsError> {
         Ok(Session {
-            inner: model::Session::with_config(arg(config, ArgKind::Config)?)?,
+            inner: model::Session::with_config(arg(config)?)?,
         })
     }
 
@@ -165,7 +232,7 @@ impl Session {
     /// Throws why the op is refused, leaving the session unchanged.
     #[wasm_bindgen(js_name = applyOp)]
     pub fn apply_op(&mut self, op: &Ts<Op>) -> Result<Ts<MicroEvents>, JsError> {
-        events_ts(self.inner.apply(arg(op, ArgKind::Op)?)?)
+        events_ts(self.inner.apply(arg(op)?)?)
     }
 
     /// Moves the cursor back to the previous undo stop; false if there is
@@ -194,7 +261,7 @@ impl Session {
     ///
     /// Throws when `pos` is not a position.
     pub fn seek(&mut self, pos: &Ts<EventPos>) -> Result<(), JsError> {
-        self.inner.seek(arg(pos, ArgKind::EventPos)?);
+        self.inner.seek(arg(pos)?);
         Ok(())
     }
 
@@ -211,9 +278,7 @@ impl Session {
         &mut self,
         program: Option<Ts<ProgramSource>>,
     ) -> Result<Ts<StepOutcome>, JsError> {
-        let program = program
-            .map(|program| arg(&program, ArgKind::ProgramSource))
-            .transpose()?;
+        let program = program.map(|program| arg(&program)).transpose()?;
         Ok(self.inner.step_event(program.as_ref()).into_ts()?)
     }
 
@@ -229,9 +294,7 @@ impl Session {
         &mut self,
         program: Option<Ts<ProgramSource>>,
     ) -> Result<Ts<StepOutcome>, JsError> {
-        let program = program
-            .map(|program| arg(&program, ArgKind::ProgramSource))
-            .transpose()?;
+        let program = program.map(|program| arg(&program)).transpose()?;
         Ok(self.inner.step_access(program.as_ref()).into_ts()?)
     }
 
@@ -254,10 +317,7 @@ impl Session {
     /// would be refused.
     #[wasm_bindgen(js_name = proposeConfig)]
     pub fn propose_config(&mut self, config: &Ts<Config>) -> Result<Ts<ConfigChange>, JsError> {
-        Ok(self
-            .inner
-            .propose_config(arg(config, ArgKind::Config)?)?
-            .into_ts()?)
+        Ok(self.inner.propose_config(arg(config)?)?.into_ts()?)
     }
 
     /// Everything the configuration bar draws for `shown`, the pending
@@ -268,10 +328,7 @@ impl Session {
     /// Throws when `shown` is not a configuration.
     #[wasm_bindgen(js_name = configControls)]
     pub fn config_controls(&self, shown: &Ts<Config>) -> Result<Ts<ConfigControls>, JsError> {
-        Ok(self
-            .inner
-            .config_controls(&arg(shown, ArgKind::Config)?)
-            .into_ts()?)
+        Ok(self.inner.config_controls(&arg(shown)?).into_ts()?)
     }
 
     /// A typed hit time or miss penalty, applied to `shown`.
@@ -288,11 +345,7 @@ impl Session {
     ) -> Result<Ts<ConfigNumberInput>, JsError> {
         Ok(self
             .inner
-            .read_config_number(
-                arg(field, ArgKind::ConfigNumberField)?,
-                text,
-                &arg(shown, ArgKind::Config)?,
-            )
+            .read_config_number(arg(field)?, text, &arg(shown)?)
             .into_ts()?)
     }
 
@@ -374,7 +427,7 @@ impl Session {
         &mut self,
         #[wasm_bindgen(unchecked_param_type = "LineAddr[]")] lines: JsValue,
     ) -> Result<(), JsError> {
-        let lines: Vec<LineAddr> = read(lines, ArgKind::LineAddrs)?;
+        let lines: Vec<LineAddr> = read(lines)?;
         self.inner.set_memory_watch(&lines);
         Ok(())
     }
@@ -432,7 +485,7 @@ impl Session {
     ) -> Result<Ts<IssueDraft>, JsError> {
         Ok(self
             .inner
-            .draft_issue(arg(kind, ArgKind::AccessKind)?, addr_text, value_text)
+            .draft_issue(arg(kind)?, addr_text, value_text)
             .into_ts()?)
     }
 
@@ -447,8 +500,8 @@ impl Session {
         target: &Ts<EditTarget>,
         patch: &Ts<EditPatch>,
     ) -> Result<Ts<EditOutcome>, JsError> {
-        let target = arg(target, ArgKind::EditTarget)?;
-        let patch = arg(patch, ArgKind::EditPatch)?;
+        let target = arg(target)?;
+        let patch = arg(patch)?;
         Ok(EditOutcome::from(self.inner.plan_edit(&target, &patch)).into_ts()?)
     }
 
@@ -466,11 +519,7 @@ impl Session {
     ) -> Result<Ts<EditDraft>, JsError> {
         Ok(self
             .inner
-            .draft_edit(
-                arg(set, ArgKind::SetIndex)?,
-                arg(way, ArgKind::WayIndex)?,
-                &arg(form, ArgKind::WayForm)?,
-            )
+            .draft_edit(arg(set)?, arg(way)?, &arg(form)?)
             .into_ts()?)
     }
 
@@ -487,7 +536,7 @@ impl Session {
     ) -> Result<Ts<MemoryEditDraft>, JsError> {
         Ok(self
             .inner
-            .draft_memory_edit(arg(addr, ArgKind::Addr)?, value_text)
+            .draft_memory_edit(arg(addr)?, value_text)
             .into_ts()?)
     }
 
@@ -503,10 +552,7 @@ impl Session {
         source: &str,
         format: &Ts<ProgramFormat>,
     ) -> Result<Ts<ParseResult>, JsError> {
-        Ok(self
-            .inner
-            .parse_program(source, arg(format, ArgKind::ProgramFormat)?)
-            .into_ts()?)
+        Ok(self.inner.parse_program(source, arg(format)?).into_ts()?)
     }
 
     /// The first position of the displayed run where `p` holds.
@@ -518,7 +564,7 @@ impl Session {
     pub fn find_event(&self, p: &Ts<Predicate>) -> Result<Option<Ts<EventPos>>, JsError> {
         Ok(self
             .inner
-            .find_event(&arg(p, ArgKind::Predicate)?)
+            .find_event(&arg(p)?)
             .map(|pos| pos.into_ts())
             .transpose()?)
     }
@@ -761,7 +807,7 @@ pub fn parse_module_index(json: &str) -> Result<Ts<ModuleIndexView>, JsError> {
 /// Throws when `p` is not a predicate.
 #[wasm_bindgen(js_name = evalPredicate)]
 pub fn eval_predicate(session: &Session, p: &Ts<Predicate>) -> Result<bool, JsError> {
-    Ok(session.inner.eval_predicate(&arg(p, ArgKind::Predicate)?))
+    Ok(session.inner.eval_predicate(&arg(p)?))
 }
 
 /// `config` checked on its own: its summary and geometry, or the first rule
@@ -772,7 +818,7 @@ pub fn eval_predicate(session: &Session, p: &Ts<Predicate>) -> Result<bool, JsEr
 /// Throws when `config` is not a configuration.
 #[wasm_bindgen(js_name = validateConfig)]
 pub fn validate_config(config: &Ts<Config>) -> Result<Ts<ConfigCheck>, JsError> {
-    Ok(model::validate_config(&arg(config, ArgKind::Config)?).into_ts()?)
+    Ok(model::validate_config(&arg(config)?).into_ts()?)
 }
 
 /// The build: the crates' version and the share format.
