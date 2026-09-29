@@ -101,19 +101,63 @@ fn source_noun(format: ProgramFormat) -> &'static str {
 
 /// An address or a line address, padded to the address width. A `Display`
 /// adapter, like [`format::Hex`] itself, so a per-event line can interpolate
-/// it without allocating a `String` first.
+/// it without allocating a `String` first. The tables' [`format::address`]
+/// writes the same text.
 fn address(geometry: &Geometry, value: u32) -> format::Hex {
-    format::Hex {
-        value: u64::from(value),
-        digits: usize::from(geometry.address_bits()).div_ceil(4),
-    }
+    format::Hex::address(value, geometry.address_bits())
 }
 
 /// A tag, padded to the tag width. A `Display` adapter, for the same reason
-/// as [`address`].
+/// as [`address`]; the tables' [`format::tag`] writes the same text.
 fn tag(geometry: &Geometry, tag: Tag) -> format::Hex {
-    format::Hex {
-        value: u64::from(tag.get()),
-        digits: usize::from(geometry.tag_bits()).div_ceil(4).max(2),
+    format::Hex::tag(tag.get(), geometry.tag_bits())
+}
+
+#[cfg(test)]
+mod tests {
+    #![expect(clippy::disallowed_macros, reason = "assertions are how tests fail")]
+
+    use super::*;
+    use crate::config::{Config, Preset};
+    use crate::explain::testing::geometry;
+    use crate::limits::{MAX_ADDRESS_BITS, MIN_ADDRESS_BITS};
+
+    fn at_width(address_bits: u8) -> Geometry {
+        geometry(&Config {
+            address_bits,
+            ..Preset::DirectMapped8.config()
+        })
+    }
+
+    #[test]
+    fn the_logs_address_and_tag_are_padded_to_the_geometrys_widths() {
+        let narrow = at_width(8);
+        assert_eq!(address(&narrow, 0xA4).to_string(), "0xA4");
+        assert_eq!(tag(&narrow, Tag::new_unchecked(1)).to_string(), "0x01");
+        let default = at_width(12);
+        assert_eq!(address(&default, 0xA4).to_string(), "0x0A4");
+        assert_eq!(tag(&default, Tag::new_unchecked(5)).to_string(), "0x05");
+        let wide = at_width(32);
+        assert_eq!(address(&wide, 0xA4).to_string(), "0x000000A4");
+        assert_eq!(tag(&wide, Tag::new_unchecked(1)).to_string(), "0x0000001");
+    }
+
+    #[test]
+    fn the_logs_address_and_tag_read_like_the_tables() {
+        for address_bits in MIN_ADDRESS_BITS..=MAX_ADDRESS_BITS {
+            let geometry = at_width(address_bits);
+            for value in [0_u32, 1, 0xA4, 0x2A0, 0xFFF, 0x1000] {
+                assert_eq!(
+                    address(&geometry, value).to_string(),
+                    format::address(value, geometry.address_bits()),
+                    "address {value:#X} at {address_bits} bits"
+                );
+                assert_eq!(
+                    tag(&geometry, Tag::new_unchecked(value)).to_string(),
+                    format::tag(value, geometry.tag_bits()),
+                    "tag {value:#X} at {address_bits} bits"
+                );
+            }
+        }
     }
 }

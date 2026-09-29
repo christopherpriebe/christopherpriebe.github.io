@@ -155,7 +155,7 @@ pub(crate) fn victim(geometry: &Geometry, set: SetIndex, choice: VictimChoice) -
 /// victim "The CPU stalls for 40 cycles: 20 to write line 0x1A0 back, then 20
 /// to fetch line 0x2A0."
 pub(crate) fn stall(geometry: &Geometry, miss: u32, wait: StallFor) -> String {
-    let total = format::cycles(miss.saturating_mul(wait.transfers()));
+    let total = format::Cycles(u64::from(miss.saturating_mul(wait.transfers())));
     match wait {
         StallFor::Fill { line } => format!(
             "The CPU stalls for {total} while memory supplies line {}.",
@@ -201,7 +201,7 @@ pub(crate) fn fill(geometry: &Geometry, way: WayIndex, line: LineAddr) -> String
     format!(
         "Fill way {} with line {} from memory.",
         format::Data(u64::from(way.get())),
-        format::line_range(line.get(), geometry.line_bytes(), geometry.address_bits())
+        format::LineRange::new(line.get(), geometry.line_bytes(), geometry.address_bits())
     )
 }
 
@@ -345,18 +345,18 @@ pub(crate) fn write_around(geometry: &Geometry, addr: Addr, value: Word) -> Stri
 pub(crate) fn truncated(register: Register, value: u64, word_bytes: u32, stored: Word) -> String {
     format!(
         "{register} = {} does not fit {} {}-byte word, so its low {} bits, {}, are stored. ",
-        format::data(value),
+        format::Data(value),
         format::a_or_an(word_bytes),
-        format::setting(word_bytes),
-        format::setting(word_bytes.saturating_mul(u8::BITS)),
-        format::data(stored.get())
+        format::Setting(u64::from(word_bytes)),
+        format::Setting(u64::from(word_bytes.saturating_mul(u8::BITS))),
+        format::Data(stored.get())
     )
 }
 
 /// An `add`'s `Complete` line: "add: r2 ← 176. No memory access." A sum for
 /// r0 is computed and dropped.
 pub(crate) fn add(into: Register, value: u64) -> String {
-    let value = format::data(value);
+    let value = format::Data(value);
     if into == Register::R0 {
         format!("add: r0 always reads 0, so the result {value} is dropped.")
     } else {
@@ -367,7 +367,7 @@ pub(crate) fn add(into: Register, value: u64) -> String {
 /// A `bnez`'s `Complete` line: "bnez: r1 is 3, branch taken to loop." when
 /// `taken` names the label, or "bnez: r1 is 0, branch not taken."
 pub(crate) fn bnez(test: Register, value: u64, taken: Option<&str>) -> String {
-    let value = format::data(value);
+    let value = format::Data(value);
     match taken {
         Some(label) => format!("bnez: {test} is {value}, branch taken to {label}."),
         None => format!("bnez: {test} is {value}, branch not taken."),
@@ -387,9 +387,9 @@ pub(crate) fn fault_out_of_range(
     format!(
         "Line {}: {register} holds {}, which does not fit {} {}-bit address. The program stopped.",
         format::position(line),
-        format::data(value),
+        format::Data(value),
         format::a_or_an(bits),
-        format::setting(bits)
+        format::Setting(u64::from(bits))
     )
 }
 
@@ -408,10 +408,10 @@ pub(crate) fn fault_misaligned(
         "Line {}: {register} holds {} ({}), which is not aligned to {} {}-byte word. The program \
          stopped.",
         format::position(line),
-        format::data(addr.get()),
+        format::Data(u64::from(addr.get())),
         super::address(geometry, addr.get()),
         format::a_or_an(word_bytes),
-        format::setting(word_bytes)
+        format::Setting(u64::from(word_bytes))
     )
 }
 
@@ -421,7 +421,7 @@ pub(crate) fn fault_misaligned(
 pub(crate) fn out_of_budget() -> String {
     format!(
         "The program used its budget of {} instructions and stopped. Is a loop missing its exit?",
-        format::setting(INSTRUCTION_BUDGET)
+        format::Setting(u64::from(INSTRUCTION_BUDGET))
     )
 }
 

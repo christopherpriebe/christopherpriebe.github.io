@@ -2,12 +2,14 @@
 //! labels and views call these functions; nothing else in the crate turns a
 //! number into text.
 //!
-//! [`Data`], [`Setting`], [`Hex`] and [`Bit`] are `Display` adapters: they
-//! write straight into the caller's formatter, so a line built with `write!`
-//! or `format!` pays no allocation for a number that does not need grouping.
-//! [`data`], [`setting`], [`hex`], [`address`], [`tag`] and [`bit`] are thin
-//! `String` wrappers around them for the places a value is stored rather
-//! than written straight into a line.
+//! [`Data`], [`Setting`], [`Hex`], [`Cycles`], [`LineRange`] and [`Bit`] are
+//! `Display` adapters: they write straight into the caller's formatter, so a
+//! line built with `write!` or `format!` pays no allocation for a number that
+//! does not need grouping. [`Hex::address`] and [`Hex::tag`] hold the width
+//! rules of an address and of a tag. [`data`], [`setting`], [`hex`],
+//! [`address`], [`tag`], [`cycles`] and [`bit`] are thin `String` wrappers
+//! around them for the places a value is stored rather than written straight
+//! into a line.
 
 use std::fmt;
 
@@ -76,6 +78,30 @@ pub(crate) struct Hex {
     pub(crate) digits: usize,
 }
 
+impl Hex {
+    /// An address or a line address as the student reads it: hex padded to
+    /// ⌈`address_bits` / 4⌉ digits, so `0x0A4` with 12-bit addresses and
+    /// `0x00A4` with 16-bit ones. A value too wide for the width keeps all its
+    /// digits, so an address the student wrote beyond it is quoted as written:
+    /// `0x1000`.
+    pub(crate) fn address(value: impl Into<u64>, address_bits: u8) -> Self {
+        Self {
+            value: value.into(),
+            digits: usize::from(address_bits).div_ceil(4),
+        }
+    }
+
+    /// A tag as the student reads it: hex padded to ⌈`tag_bits` / 4⌉ digits,
+    /// and to at least two, so `0x05` for a 5-bit tag and `0x001` for a 9-bit
+    /// one.
+    pub(crate) fn tag(value: impl Into<u64>, tag_bits: u8) -> Self {
+        Self {
+            value: value.into(),
+            digits: usize::from(tag_bits).div_ceil(4).max(2),
+        }
+    }
+}
+
 impl fmt::Display for Hex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "0x{:0width$X}", self.value, width = self.digits)
@@ -91,30 +117,44 @@ pub(crate) fn hex(value: impl Into<u64>, digits: usize) -> String {
     .to_string()
 }
 
-/// An address or a line address as the student reads it: hex padded to
-/// ⌈`address_bits` / 4⌉ digits, so `0x0A4` with 12-bit addresses and `0x00A4`
-/// with 16-bit ones. A value too wide for the width keeps all its digits, so
-/// an address the student wrote beyond it is quoted as written: `0x1000`.
+/// An address or a line address as [`Hex::address`] describes it: hex padded
+/// to ⌈`address_bits` / 4⌉ digits, so `0x0A4` with 12-bit addresses and
+/// `0x00A4` with 16-bit ones.
 pub(crate) fn address(value: impl Into<u64>, address_bits: u8) -> String {
-    hex(value, usize::from(address_bits).div_ceil(4))
+    Hex::address(value, address_bits).to_string()
 }
 
-/// The bytes of a line, first to last, as a fill names them: two
-/// [`address`]es joined by an en dash, `0x2A0–0x2AF` for a 16 B line with
-/// 12-bit addresses.
-pub(crate) fn line_range(line: u32, line_bytes: u32, address_bits: u8) -> String {
-    let last = line.saturating_add(line_bytes.saturating_sub(1));
-    format!(
-        "{}\u{2013}{}",
-        address(line, address_bits),
-        address(last, address_bits)
-    )
+/// The bytes of a line, first to last, as a fill names them: two addresses
+/// joined by an en dash, `0x2A0–0x2AF` for a 16 B line with 12-bit
+/// addresses.
+pub(crate) struct LineRange {
+    first: Hex,
+    last: Hex,
 }
 
-/// A tag as the student reads it: hex padded to ⌈`tag_bits` / 4⌉ digits, and to
-/// at least two, so `0x05` for a 5-bit tag and `0x001` for a 9-bit one.
+impl LineRange {
+    /// The range of the `line_bytes` bytes that start at `line`, its
+    /// addresses written at `address_bits` wide. The last byte saturates
+    /// rather than wrapping past the top of the address space.
+    pub(crate) fn new(line: u32, line_bytes: u32, address_bits: u8) -> Self {
+        let last = line.saturating_add(line_bytes.saturating_sub(1));
+        Self {
+            first: Hex::address(line, address_bits),
+            last: Hex::address(last, address_bits),
+        }
+    }
+}
+
+impl fmt::Display for LineRange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}\u{2013}{}", self.first, self.last)
+    }
+}
+
+/// A tag as [`Hex::tag`] describes it: hex padded to ⌈`tag_bits` / 4⌉ digits,
+/// and to at least two, so `0x05` for a 5-bit tag and `0x001` for a 9-bit one.
 pub(crate) fn tag(value: u32, tag_bits: u8) -> String {
-    hex(value, usize::from(tag_bits).div_ceil(4).max(2))
+    Hex::tag(value, tag_bits).to_string()
 }
 
 /// The low `width` bits of `value` as binary digits, most significant first,
@@ -133,11 +173,25 @@ pub(crate) fn bits(value: u32, width: u8) -> String {
 }
 
 /// A number of cycles, as a stall and the bus's cycle chip give it: `20
-/// cycles`, `1 cycle`, `2,000 cycles`. Grouped like a setting, since every
+/// cycles`, `1 cycle`, `2,000 cycles`. Grouped like a [`Setting`], since every
 /// such figure is a multiple of the configured miss penalty.
+pub(crate) struct Cycles(pub(crate) u64);
+
+impl fmt::Display for Cycles {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {}",
+            Setting(self.0),
+            plural(self.0, "cycle", "cycles")
+        )
+    }
+}
+
+/// A number of cycles, written as [`Cycles`] describes it: `20 cycles`, `1
+/// cycle`, `2,000 cycles`.
 pub(crate) fn cycles(n: impl Into<u64>) -> String {
-    let n = n.into();
-    format!("{} {}", setting(n), plural(n, "cycle", "cycles"))
+    Cycles(n.into()).to_string()
 }
 
 /// A fixed-point number, `units` of 10^−`places`, written with exactly
@@ -399,15 +453,36 @@ mod tests {
     }
 
     #[test]
+    fn address_and_tag_constructors_hold_the_width_rules() {
+        assert_eq!(Hex::address(0xA4_u32, 8).to_string(), "0xA4");
+        assert_eq!(Hex::address(0xA4_u32, 12).to_string(), "0x0A4");
+        assert_eq!(Hex::address(0xA4_u32, 13).to_string(), "0x00A4");
+        assert_eq!(Hex::address(0xA4_u32, 32).to_string(), "0x000000A4");
+        assert_eq!(Hex::address(0x1000_u32, 12).to_string(), "0x1000");
+        assert_eq!(Hex::tag(0x1_u32, 1).to_string(), "0x01");
+        assert_eq!(Hex::tag(0x5_u32, 5).to_string(), "0x05");
+        assert_eq!(Hex::tag(0x1_u32, 9).to_string(), "0x001");
+        assert_eq!(Hex::tag(0x1_u32, 25).to_string(), "0x0000001");
+        assert_eq!(Hex::tag(0x123_u32, 4).to_string(), "0x123");
+    }
+
+    #[test]
     fn line_ranges_run_from_the_first_byte_to_the_last() {
-        assert_eq!(line_range(0x2A0, 16, 12), "0x2A0\u{2013}0x2AF");
-        assert_eq!(line_range(0x2A0, 16, 16), "0x02A0\u{2013}0x02AF");
-        assert_eq!(line_range(0xA0, 32, 8), "0xA0\u{2013}0xBF");
-        assert_eq!(line_range(0xA4, 4, 12), "0x0A4\u{2013}0x0A7");
-        assert_eq!(
-            line_range(0xFFFF_FF80, 128, 32),
-            "0xFFFFFF80\u{2013}0xFFFFFFFF"
-        );
+        let range = |line, line_bytes, address_bits| {
+            LineRange::new(line, line_bytes, address_bits).to_string()
+        };
+        assert_eq!(range(0x2A0, 16, 12), "0x2A0\u{2013}0x2AF");
+        assert_eq!(range(0x2A0, 16, 16), "0x02A0\u{2013}0x02AF");
+        assert_eq!(range(0xA0, 32, 8), "0xA0\u{2013}0xBF");
+        assert_eq!(range(0xA4, 4, 12), "0x0A4\u{2013}0x0A7");
+        assert_eq!(range(0xFFFF_FF80, 128, 32), "0xFFFFFF80\u{2013}0xFFFFFFFF");
+    }
+
+    #[test]
+    fn a_line_range_stops_at_the_top_of_the_address_space() {
+        let range = |line, line_bytes| LineRange::new(line, line_bytes, 32).to_string();
+        assert_eq!(range(0xFFFF_FFF0, 64), "0xFFFFFFF0\u{2013}0xFFFFFFFF");
+        assert_eq!(range(0x10, 0), "0x00000010\u{2013}0x00000010");
     }
 
     #[test]
@@ -443,6 +518,19 @@ mod tests {
         for n in [0_u32, 2, 8, 1_000] {
             assert_eq!(plural(n, "way", "ways"), "ways", "{n}");
         }
+    }
+
+    #[test]
+    fn the_cycles_adapter_groups_like_a_setting_and_is_singular_for_one() {
+        assert_eq!(Cycles(0).to_string(), "0 cycles");
+        assert_eq!(Cycles(1).to_string(), "1 cycle");
+        assert_eq!(Cycles(20).to_string(), "20 cycles");
+        assert_eq!(Cycles(999).to_string(), "999 cycles");
+        assert_eq!(Cycles(2_000).to_string(), "2,000 cycles");
+        assert_eq!(
+            Cycles(u64::MAX).to_string(),
+            "18,446,744,073,709,551,615 cycles"
+        );
     }
 
     #[test]

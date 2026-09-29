@@ -342,10 +342,10 @@ fn operands(geometry: &Geometry, mnemonic: Mnemonic) -> String {
 /// The address the parse messages give as an example: the design's 0x0A4,
 /// aligned down to the word and written at the address width. It fits the
 /// narrowest width.
-fn example_address(geometry: &Geometry) -> String {
+fn example_address(geometry: &Geometry) -> format::Hex {
     const DESIGN_EXAMPLE: u32 = 0x0A4;
     let word_bytes = geometry.word_bytes().max(1);
-    super::address(geometry, DESIGN_EXAMPLE - DESIGN_EXAMPLE % word_bytes).to_string()
+    super::address(geometry, DESIGN_EXAMPLE - DESIGN_EXAMPLE % word_bytes)
 }
 
 /// A program's size as the drawer and the log count it: "5 instructions",
