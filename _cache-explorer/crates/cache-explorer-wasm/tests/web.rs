@@ -1195,6 +1195,14 @@ mod session {
         );
     }
 
+    /// The position `findEvent` gives for `predicate`, read back as a number
+    /// the way the page reads it.
+    #[track_caller]
+    fn found_at(session: &Session, predicate: &Ts<Predicate>) -> Option<u32> {
+        let found = session.find_event(predicate).unwrap();
+        found.map(|pos| from_ts::<model::EventPos>(pos).get())
+    }
+
     #[wasm_bindgen_test]
     fn find_event_finds_where_a_predicate_first_holds() {
         let (core, facade) = frame_3b();
@@ -1204,24 +1212,13 @@ mod session {
             r#"{"counter":"accesses","op":"==","value":1000}"#,
         ];
         for predicate in predicates {
-            let found = facade
-                .find_event(&ts(predicate))
-                .unwrap()
-                .map(from_ts)
-                .map(model::EventPos::get);
+            let found = found_at(&facade, &ts(predicate));
             let expected = core
                 .find_event(&rust::<Predicate>(predicate))
                 .map(model::EventPos::get);
             assert_eq!(found, expected, "{predicate}");
         }
-        assert_eq!(
-            facade
-                .find_event(&ts(predicates[2]))
-                .unwrap()
-                .map(from_ts)
-                .map(model::EventPos::get),
-            None
-        );
+        assert_eq!(found_at(&facade, &ts(predicates[2])), None);
         let thrown = message(facade.find_event(&ts(r#"{"nothing":1}"#)).unwrap_err());
         assert_eq!(
             thrown,
@@ -1229,6 +1226,20 @@ mod session {
              `counter`, `register`, `all`, `any`, `not`, `event`, `lastAccess`, `config`; found \
              none"
         );
+    }
+
+    #[wasm_bindgen_test]
+    fn the_position_find_event_gives_is_one_seek_takes() {
+        let (mut core, mut facade) = frame_3b();
+        let predicate = r#"{"event":{"kind":"writeBack"}}"#;
+        let end = facade.cursor();
+        let found = facade.find_event(&ts(predicate)).unwrap().unwrap();
+        facade.seek(&found).unwrap();
+        let expected = core.find_event(&rust::<Predicate>(predicate)).unwrap();
+        core.seek(expected);
+        assert_ne!(facade.cursor(), end);
+        same_place(&core, &facade);
+        same(facade.state().unwrap(), &core.state());
     }
 
     #[wasm_bindgen_test]
@@ -1243,15 +1254,7 @@ mod session {
             // The deepest predicate the core reads is read and evaluated.
             let deepest = Ts::new_unchecked(nest(no_accesses(), key, list, MAX_PREDICATE_DEPTH));
             assert!(eval_predicate(&session, &deepest).unwrap(), "{key}");
-            assert_eq!(
-                session
-                    .find_event(&deepest)
-                    .unwrap()
-                    .map(from_ts)
-                    .map(model::EventPos::get),
-                Some(0),
-                "{key}"
-            );
+            assert_eq!(found_at(&session, &deepest), Some(0), "{key}");
             // Far deeper than the stack could follow, it is refused before
             // it is read that deep, by both calls, and again.
             let deep = Ts::new_unchecked(nest(no_accesses(), key, list, 10_000));
