@@ -530,13 +530,8 @@ impl ShareLoad {
     /// boundary. Once the load is done or has failed, every call answers the
     /// same.
     pub fn advance(&mut self, max_events: u32) -> LoadProgress {
-        if let LoadState::Replaying(replaying) = &mut self.state {
-            match replaying.loader.advance(max_events) {
-                Ok(false) => replaying.opening.observe(&replaying.loader, replaying.at),
-                Ok(true) => self.finish(),
-                Err(error) => self.fail(error),
-            }
-        }
+        let state = std::mem::replace(&mut self.state, LoadState::taken());
+        self.state = state.advanced(max_events);
         self.progress()
     }
 
@@ -613,67 +608,8 @@ impl ShareLoad {
         text: Option<&str>,
     ) -> ShareLoad {
         ShareLoad {
-            state: LoadState::Failed {
-                failure: Box::new(failure(source, error, doc, text)),
-                error: error.clone(),
-            },
+            state: LoadState::failed(source, error, doc, text),
         }
-    }
-
-    /// Ends a replay that has replayed every op: the session, with its
-    /// cursor where the document places it.
-    fn finish(&mut self) {
-        let LoadState::Replaying(replaying) =
-            std::mem::replace(&mut self.state, LoadState::taken())
-        else {
-            return;
-        };
-        let Replaying { at, loader, .. } = *replaying;
-        let cursor = match at {
-            Some(at) => position_in_op(loader.op_ends(), at.op, at.event),
-            None => end_of(loader.op_ends()),
-        };
-        let session = loader.finish(cursor);
-        self.state = LoadState::Done {
-            summary: session.share_summary(),
-            session: Some(Box::new(session)),
-        };
-    }
-
-    /// Ends a replay whose op was refused with `error`.
-    fn fail(&mut self, error: ReplayError) {
-        let LoadState::Replaying(replaying) =
-            std::mem::replace(&mut self.state, LoadState::taken())
-        else {
-            return;
-        };
-        let Replaying {
-            source,
-            config,
-            at,
-            loader,
-            ..
-        } = *replaying;
-        let ops = loader.into_ops();
-        let total = count(ops.len());
-        let error = match error {
-            ReplayError::Op { index, error } => LoadError::Op {
-                index: index.get(),
-                error,
-                not_replayed: total.saturating_sub(index.get()).saturating_sub(1),
-            },
-            ReplayError::InitialConfig(error) => LoadError::InitialConfig {
-                error,
-                total_ops: total,
-            },
-        };
-        let doc = ShareDoc {
-            schema_version: SCHEMA_VERSION,
-            config,
-            ops,
-            at,
-        };
-        *self = Self::failed(source, &error, Some(&doc), None);
     }
 
     /// How the load is going.
@@ -700,6 +636,82 @@ impl LoadState {
             summary: ShareSummary::default(),
             session: None,
         }
+    }
+
+    /// A load that has failed with `error`, on `doc` if it was read, from
+    /// `text` if it was decoded.
+    fn failed(
+        source: Source,
+        error: &LoadError,
+        doc: Option<&ShareDoc>,
+        text: Option<&str>,
+    ) -> Self {
+        LoadState::Failed {
+            failure: Box::new(failure(source, error, doc, text)),
+            error: error.clone(),
+        }
+    }
+
+    /// This state once the next slice has replayed. A load that is done or
+    /// has failed stays as it is.
+    fn advanced(self, max_events: u32) -> Self {
+        match self {
+            LoadState::Replaying(mut replaying) => match replaying.loader.advance(max_events) {
+                Ok(false) => {
+                    replaying.opening.observe(&replaying.loader, replaying.at);
+                    LoadState::Replaying(replaying)
+                }
+                Ok(true) => Self::finish(*replaying),
+                Err(error) => Self::fail(*replaying, error),
+            },
+            settled @ (LoadState::Done { .. } | LoadState::Failed { .. }) => settled,
+        }
+    }
+
+    /// The state of a replay that has replayed every op: the session, with
+    /// its cursor where the document places it.
+    fn finish(replaying: Replaying) -> Self {
+        let Replaying { at, loader, .. } = replaying;
+        let cursor = match at {
+            Some(at) => position_in_op(loader.op_ends(), at.op, at.event),
+            None => end_of(loader.op_ends()),
+        };
+        let session = loader.finish(cursor);
+        LoadState::Done {
+            summary: session.share_summary(),
+            session: Some(Box::new(session)),
+        }
+    }
+
+    /// The state of a replay whose op was refused with `error`.
+    fn fail(replaying: Replaying, error: ReplayError) -> Self {
+        let Replaying {
+            source,
+            config,
+            at,
+            loader,
+            ..
+        } = replaying;
+        let ops = loader.into_ops();
+        let total = count(ops.len());
+        let error = match error {
+            ReplayError::Op { index, error } => LoadError::Op {
+                index: index.get(),
+                error,
+                not_replayed: total.saturating_sub(index.get()).saturating_sub(1),
+            },
+            ReplayError::InitialConfig(error) => LoadError::InitialConfig {
+                error,
+                total_ops: total,
+            },
+        };
+        let doc = ShareDoc {
+            schema_version: SCHEMA_VERSION,
+            config,
+            ops,
+            at,
+        };
+        Self::failed(source, &error, Some(&doc), None)
     }
 }
 
