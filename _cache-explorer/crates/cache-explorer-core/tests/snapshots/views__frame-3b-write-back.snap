@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/views.rs
-description: "Frame 3b: Advanced, two-way-lru with write-back, timed at 1 and 20 cycles, its first five accesses issued by hand, paused on access #5's write-back, event 5.5 (a timed run's stall is 5.4): the victim, way 1 of set 2, is still valid and dirty and its word 7 has reached memory, so nothing is stale there; the store to 0x0B0 is still stale. The CPU is stalled with 20 of 40 cycles to go, the lane shows the write-back with its 20-cycle chip, the status line ends in `timed`, the summary and the stats are Advanced's, the counters include access #5 so far while AMAT and the measured cost are still those after access #4, the comparators show a miss, and the changed line is the design's `memory 0x1A4 · misses, write-backs`."
+description: "Frame 3b: Advanced, two-way-lru with write-back, timed at 1 and 20 cycles, its first five accesses issued by hand, paused on access #5's write-back, event 5.5 (a timed run's stall is 5.4): the victim, way 1 of set 2, is still valid and dirty and its word 7 has reached memory, so nothing is stale there; the store to 0x0B0 is still stale. The CPU is stalled with 20 of 40 cycles to go, the lane shows the write-back with its 20-cycle chip, the status line ends in `timed`, the summary and the stats are Advanced's, the counters include access #5 so far while AMAT and the measured cost are still those after access #4, the comparators show a miss, and the changed line reads `memory 0x1A4 · misses, write-backs`."
 ---
 state = {
   "config": {

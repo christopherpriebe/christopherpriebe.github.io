@@ -24,10 +24,9 @@ use ProgramFormat::{Asm, Trace};
 #[cfg(test)]
 mod common;
 
-/// The tests' address width: 12 bits, as in every design frame, so the
-/// messages below read as the design's. It is set here rather than taken
-/// from `Config::default()`, so changing the default does not break these
-/// tests.
+/// The tests' address width: 12 bits, so the messages below carry 12-bit
+/// addresses. It is set here rather than taken from `Config::default()`, so
+/// changing the default does not break these tests.
 const ADDRESS_BITS: u8 = 12;
 
 /// An error's line, column, length and message.
@@ -140,7 +139,7 @@ const BNEZ: &str = "`bnez` needs a register and a label, like `bnez r1, loop`.";
 
 #[test]
 fn a_program_parses_into_its_count_and_first_instruction() {
-    // The design's first-visit program.
+    // A labelled program of five instructions: four loads and a store.
     let sample = "start:\n  ld  r1, [0x0A4]\n  ld  r2, [0x0A8]\n  ld  r3, [0x1A4]\n  st  [0x0A4], \
                   #7\n  ld  r4, [0x0A4]";
     assert_eq!(
@@ -484,7 +483,7 @@ const W: &str = "`W` needs an address and a value, like `W 0x0A4 7`.";
 
 #[test]
 fn a_trace_parses_into_its_count_of_accesses() {
-    // The design's sample trace.
+    // A trace of five accesses: four reads and a write.
     assert_eq!(
         parse("R 0x0A4\nR 0x0A8\nW 0x0A4 7\nR 0x1A4\nR 0x0A4", Trace),
         Ok(ParseResult::Ok {

@@ -96,8 +96,8 @@ impl Driven {
     }
 }
 
-/// Frame 3b's program, as the design writes it. The unit tests do not depend
-/// on the `golden` feature, so they keep this copy beside `golden::FRAME_3B`.
+/// Frame 3b's program, as `golden::FRAME_3B` has it. The unit tests do not
+/// depend on the `golden` feature, so they keep this copy.
 const FRAME_3B: &str = concat!(
     "  st  [0x0B0], #5\n",
     "  ld  r1, [0x0A4]\n",

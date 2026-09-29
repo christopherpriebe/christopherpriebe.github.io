@@ -5,9 +5,13 @@
 //! run's setup before its error; ranks under each policy and in one-way
 //! sets; the editors' drafts, with their minimal patches, fields read, word
 //! prefill and the way they would leave; applied edits as ops, events and
-//! log entries, refused ops and replay; and the design's editor states 4a to
-//! 4e, staged at the end of access #4 of frame 3b's program. The session's
-//! refusal at its event limit is tested with that limit, in session.rs.
+//! log entries, refused ops and replay; and five editor states, 4a to 4e,
+//! staged at the end of access #4 of frame 3b's program: 4a edits a word, the
+//! dirty bit and the rank of a clean way; 4b edits the data of a dirty way
+//! and clears its dirty bit; 4c types a line that belongs in another set,
+//! which has an empty way; 4d types a line whose own set is full; and 4e
+//! edits a memory word behind a dirty line. The session's refusal at its
+//! event limit is tested with that limit, in session.rs.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -103,7 +107,7 @@ mod support {
     }
 
     /// Frame 3b's program on `two-way-lru`, stepped to the end of access
-    /// #4, where the design's editor states are staged: set 2 holds 0x0A0,
+    /// #4, where the editor states are staged: set 2 holds 0x0A0,
     /// clean, in way 0 at rank 0 and 0x1A0, dirty with 7 at 0x1A4 (memory
     /// 12), in way 1; set 3 holds 0x0B0, dirty with 5 at 0x0B0 (memory 92),
     /// in way 0; sets 0 and 1 are empty. Its events end at position 21.
@@ -477,15 +481,15 @@ fn state_4d_refuses_a_line_whose_own_set_is_full() {
         )
     );
     assert_eq!(refusal.suggestion, None);
-    // The design's 0x1A0 is still in set 2, way 1 here, so another rule
-    // speaks first.
-    let design = draft_of_line(&session, "0x1A0");
-    let EditOutcome::Refusal(design) = design.outcome else {
+    // 0x1A0, the dirty line frame 3b left in set 2, is still in way 1, so
+    // another rule speaks first.
+    let duplicate = draft_of_line(&session, "0x1A0");
+    let EditOutcome::Refusal(duplicate) = duplicate.outcome else {
         panic!("0x1A0 is refused");
     };
-    assert_eq!(design.reason, RefusalReason::DuplicateLine);
+    assert_eq!(duplicate.reason, RefusalReason::DuplicateLine);
     assert_eq!(
-        said(&design),
+        said(&duplicate),
         (
             "0x1A0 belongs in set 2",
             "0x1A0 is already in set 2, way 1."

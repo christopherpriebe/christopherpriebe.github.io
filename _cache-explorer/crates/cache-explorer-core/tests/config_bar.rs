@@ -441,7 +441,7 @@ fn the_timing_fields_show_the_most_recent_timing_even_when_it_is_off() {
     };
     let mut session = Session::with_config(Config::default()).unwrap();
     let timing = session.config_controls(session.config()).timing;
-    // Nothing in the log is timed: the design's 1 and 20.
+    // Nothing in the log is timed: the fallback timing, 1 and 20.
     assert!(!timing.on);
     assert_eq!(
         (timing.hit_text.as_str(), timing.miss_text.as_str()),

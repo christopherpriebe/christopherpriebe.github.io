@@ -63,8 +63,7 @@ fn default_config_validates_as_eight_direct_mapped_sets() {
     assert_eq!(geometry.placement(), Placement::DirectMapped);
 }
 
-/// The one test that pins the default width: 12 bits, the design's, where the
-/// spec's default is 16.
+/// The one test that pins the default width: 12 bits.
 #[test]
 fn default_address_width_is_twelve_bits() {
     assert_eq!(Config::default().address_bits, 12);

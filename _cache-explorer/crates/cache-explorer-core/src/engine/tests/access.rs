@@ -2554,7 +2554,7 @@ fn amat_and_the_measured_cost_of_fixed_traces() {
     );
 
     // Ten accesses on direct-mapped-8 at 1/20 with 4 misses and 1
-    // write-back: 110 cycles, the figures the AMAT line is designed around.
+    // write-back: 110 cycles.
     let mut run = Run::new(timed(preset(Preset::DirectMapped8), 1, 20));
     run.store(0x0A4, 7);
     for at in [

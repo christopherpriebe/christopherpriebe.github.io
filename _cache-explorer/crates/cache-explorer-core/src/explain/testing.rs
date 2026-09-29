@@ -9,7 +9,7 @@ use crate::config::{CacheConfig, Config, Preset};
 use crate::geometry::Geometry;
 use crate::units::{Addr, LineAddr, SetIndex, WayIndex};
 
-/// The tests' address width: 12 bits, as in every design frame. The lines
+/// The tests' address width: 12 bits. The lines
 /// these tests expect are written for it, so the width is set here rather
 /// than taken from `Config::default()`, and changing the default does not
 /// break these tests.

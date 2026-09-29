@@ -175,8 +175,8 @@ fn every_event_is_stamped_with_what_it_charged() -> Result<(), String> {
 
 #[test]
 fn frame_3b_charges_the_miss_at_its_transfers() -> Result<(), String> {
-    // The entry totals are the design's; within the dirty eviction, the
-    // write-back row reads 85 where the design reads 105, and the fill 105.
+    // The dirty eviction's 40 cycles are charged at its two transfers, not
+    // at the Miss row: the write-back row reads 85 and the fill 105.
     let events = run(
         &timed(Preset::TwoWayLru.config(), 1, 20),
         &[

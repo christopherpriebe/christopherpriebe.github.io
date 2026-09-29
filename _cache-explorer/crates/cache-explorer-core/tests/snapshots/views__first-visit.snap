@@ -1,6 +1,6 @@
 ---
 source: crates/cache-explorer-core/tests/views.rs
-description: "The first visit (frame 5a) on direct-mapped-8 with pattern memory, before anything is issued: an empty cache without a rank column, no lines touched, no request and a ready CPU, `no steps yet`, Undo, Redo and Reset disabled; 0x0A4 typed, decoded to set 2 with one pending comparator; and the configuration bar's options."
+description: "The first visit on direct-mapped-8 with pattern memory, before anything is issued: an empty cache without a rank column, no lines touched, no request and a ready CPU, `no steps yet`, Undo, Redo and Reset disabled; 0x0A4 typed, decoded to set 2 with one pending comparator; and the configuration bar's options."
 ---
 state = {
   "config": {

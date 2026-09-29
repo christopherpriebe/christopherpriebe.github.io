@@ -431,9 +431,8 @@ mod tests {
     use super::*;
     use crate::config::{Config, Preset, WordBytes};
 
-    /// The tests' address width: 12 bits, as in every design frame, so the
-    /// messages below read as the design's; set here rather than taken from
-    /// `Config::default()`.
+    /// The tests' address width: 12 bits, so the messages below carry 12-bit
+    /// addresses; set here rather than taken from `Config::default()`.
     const ADDRESS_BITS: u8 = 12;
 
     fn geometry() -> Geometry {

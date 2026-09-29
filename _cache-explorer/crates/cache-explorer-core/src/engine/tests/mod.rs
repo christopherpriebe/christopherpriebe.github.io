@@ -225,15 +225,15 @@ fn store(at: u32, value: u64) -> Request {
     }
 }
 
-/// The tests' address width: 12 bits, as in every design frame. The design's
-/// addresses, up to 0x2A4, and the request streams need at least 10 bits, so
-/// the width is set here rather than taken from `Config::default()`, and
-/// changing the default does not break these tests.
+/// The tests' address width: 12 bits. The addresses the tests use, up to
+/// 0x2A4, and the request streams need at least 10 bits, so the width is set
+/// here rather than taken from `Config::default()`, and changing the default
+/// does not break these tests.
 const ADDRESS_BITS: u8 = 12;
 
 /// A 16 B-line cache of `size` bytes and `ways` ways under the given
 /// policies, with the tests' address width, `Config::default()`'s word size
-/// and the design's pattern memory, so a fill brings in visible values.
+/// and pattern memory, so a fill brings in visible values.
 fn config(
     size: u32,
     ways: u32,

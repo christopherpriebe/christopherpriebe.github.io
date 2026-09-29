@@ -368,7 +368,7 @@ cases! {
         Some((6, 4, 2)),
         Some((3, 0, 4)),
     ),
-    // 16-bit, the spec's default width, same cache
+    // 16-bit, same cache
     the_address_table_row_of_a_16_bit_direct_mapped_cache => (
         config_of(16, WordBytes::Four, 128, 16, 1),
         0x00A4,

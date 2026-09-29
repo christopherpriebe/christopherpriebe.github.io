@@ -122,8 +122,8 @@ fn golden(name: &str, description: &str, text: &str) {
 
 #[test]
 fn frame_3b_paused_on_its_write_back_shows_a_stalled_cpu_and_a_dirty_victim() {
-    // The frame as its caption gives it: Advanced, two-way-lru, write-back,
-    // timed, paused on the write-back of a dirty victim.
+    // Advanced, two-way-lru, write-back, timed, paused on the write-back of
+    // a dirty victim.
     let config = Config {
         timing: Some(Timing {
             hit_cycles: 1,
@@ -167,11 +167,11 @@ fn frame_3b_paused_on_its_write_back_shows_a_stalled_cpu_and_a_dirty_victim() {
          is stalled with 20 of 40 cycles to go, the lane shows the write-back with its 20-cycle \
          chip, the status line ends in `timed`, the summary and the stats are Advanced's, the \
          counters include access #5 so far while AMAT and the measured cost are still those \
-         after access #4, the comparators show a miss, and the changed line is the design's \
+         after access #4, the comparators show a miss, and the changed line reads \
          `memory 0x1A4 \u{b7} misses, write-backs`.",
         &text,
     );
-    // The frame's pause, as the design draws it.
+    // The pause on the write-back.
     assert_eq!(state.position.label, "5.5");
     let victim = way(&state, 2, 1);
     assert!(victim.valid && victim.dirty && victim.victim);
@@ -204,11 +204,11 @@ fn frame_3b_paused_on_its_write_back_shows_a_stalled_cpu_and_a_dirty_victim() {
         Some(vec![WayCompare::Mismatch, WayCompare::Mismatch])
     );
     assert_eq!(state.cpu.hit_marker, HitMarker::Miss);
-    // Here the frame departs from the design, which draws AMAT from the live
-    // counters: `AMAT = 1 + 0.80 × 20 = 17.0 cycles`. The write-back is
-    // counted, but AMAT and the measured cost wait for the access to
-    // complete, so they are access #4's, while the hit rate is live and no
-    // longer matches the rate in the AMAT line.
+    // AMAT is not drawn from the live counters, which would give `AMAT = 1 +
+    // 0.80 × 20 = 17.0 cycles`. The write-back is counted, but AMAT and the
+    // measured cost wait for the access to complete, so they are access #4's,
+    // while the hit rate is live and no longer matches the rate in the AMAT
+    // line.
     assert_eq!(state.stats.counters.writebacks, 1);
     assert_eq!(
         state.stats.hit_rate.map(|figure| figure.text).as_deref(),
@@ -238,7 +238,7 @@ fn the_first_visit_shows_an_empty_cache_a_ready_cpu_and_the_typed_address() {
     );
     golden(
         "first-visit",
-        "The first visit (frame 5a) on direct-mapped-8 with pattern memory, before anything is \
+        "The first visit on direct-mapped-8 with pattern memory, before anything is \
          issued: an empty cache without a rank column, no lines touched, no request and a ready \
          CPU, `no steps yet`, Undo, Redo and Reset disabled; 0x0A4 typed, decoded to set 2 with \
          one pending comparator; and the configuration bar's options.",
@@ -989,7 +989,7 @@ fn the_live_sentence_opens_with_the_outcome_after_a_jump() {
     for _ in 0..5 {
         session.apply(Op::Step).unwrap();
     }
-    // A seek from afar lands on access #5's read: the design's example.
+    // A seek from afar lands on access #5's read.
     session.seek(pos(0));
     session.seek(pos(28));
     assert_eq!(

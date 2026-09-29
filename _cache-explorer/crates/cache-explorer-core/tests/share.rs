@@ -6,9 +6,9 @@
 //! contents, repair and the actions before it; each size limit one byte or
 //! one op over its constant; a session as long as a link can hold opening
 //! from its link, and a run too long for one offered as a file; the runs
-//! that once made a file too large to open, configuration changes and
-//! programs loaded again and again, now stopped at the file's limit, saved
-//! and opened; the session's limit stopping a pathological link; loading
+//! that fill a file fastest, configuration changes and programs loaded again
+//! and again, stopped at the file's limit, saved and opened; the session's
+//! limit stopping a pathological link; loading
 //! in slices giving the session one slice gives, with the loading state's
 //! summary; the share summary and its texts; and a trace file loaded as a
 //! program.
@@ -715,8 +715,8 @@ fn json_that_is_not_a_document_names_its_line_and_column() {
 
 #[test]
 fn a_link_with_an_invalid_associativity_offers_its_repair() {
-    // The design's 5c: a link whose cache has three ways in eight lines,
-    // with six actions after it.
+    // A link whose cache has three ways in eight lines, with six actions
+    // after it.
     let bad = Config {
         cache: CacheConfig {
             associativity: 3,
@@ -1265,9 +1265,9 @@ fn configuration_changes_stop_at_the_file_limit() {
 #[test]
 fn one_program_loaded_again_and_again_stops_at_the_file_limit() {
     // The same long program loaded again and again, which a link shortens
-    // well, and which once made a link unpack to more JSON than can be
-    // opened: the session refuses the load that would take its saved file
-    // past the limit, and its file and its link open.
+    // well, so its unpacked JSON is far longer than the link: the session
+    // refuses the load that would take its saved file past the limit, and
+    // its file and its link open.
     let source = long_program(None);
     let mut original = session();
     let loads = std::iter::repeat_with(|| program(&source));

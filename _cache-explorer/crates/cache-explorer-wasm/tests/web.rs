@@ -35,10 +35,11 @@ mod support {
     use tsify::{Ts, Tsify};
     use wasm_bindgen::{JsCast, JsError, JsValue};
 
-    /// Frame 3b's first five accesses (the store to 0x0B0, the load of
-    /// 0x0A4, the store to 0x1A4, the load of 0x0A8 and the load of 0x2A4
-    /// that evicts the dirty line 0x1A0), then a program loaded and its
-    /// first instruction stepped: hits, misses, a write-back, a program.
+    /// Frame 3b's first five accesses, as the core's golden fixtures issue
+    /// them (the store to 0x0B0, the load of 0x0A4, the store to 0x1A4, the
+    /// load of 0x0A8 and the load of 0x2A4 that evicts the dirty line 0x1A0),
+    /// then a program loaded and its first instruction stepped: hits, misses,
+    /// a write-back, a program.
     pub(crate) const FRAME_3B: &[&str] = &[
         r#"{"op":"issue","kind":"write","addr":176,"value":5}"#,
         r#"{"op":"issue","kind":"read","addr":164}"#,
