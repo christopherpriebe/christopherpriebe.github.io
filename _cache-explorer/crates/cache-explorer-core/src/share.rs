@@ -372,7 +372,7 @@ struct Replaying {
 
 /// Where a document came from, which the failure's wording names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Source {
+pub(crate) enum Source {
     /// A share link.
     Link,
     /// A saved file.
@@ -1286,10 +1286,9 @@ fn failure(
     doc: Option<&ShareDoc>,
     text: Option<&str>,
 ) -> LoadFailure {
-    let file = source == Source::File;
     LoadFailure {
-        title: explain::load_title(file),
-        lead: explain::load_lead(file),
+        title: explain::load_title(source),
+        lead: explain::load_lead(source),
         message: error.segments(),
         contents: contents(doc, text),
         repair: doc.and_then(|doc| repair(doc, error)),

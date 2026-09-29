@@ -3,6 +3,7 @@
 //! of a link or file that cannot be opened.
 
 use crate::format;
+use crate::share::Source;
 
 /// The line a shared run's loading screen shows under its heading: the
 /// opening run's short summary, then its steps and the step it opens at,
@@ -81,18 +82,27 @@ fn step_count(steps: u32) -> String {
     )
 }
 
+/// What a document from `source` is called in the wording: "link" or
+/// "file".
+fn noun(source: Source) -> &'static str {
+    match source {
+        Source::Link => "link",
+        Source::File => "file",
+    }
+}
+
 /// The heading of the page's state for a link or a file that cannot be
 /// opened: "Could not open link", or for a file "Could not open file".
-pub(crate) fn load_title(file: bool) -> String {
-    format!("Could not open {}", if file { "file" } else { "link" })
+pub(crate) fn load_title(source: Source) -> String {
+    format!("Could not open {}", noun(source))
 }
 
 /// The lead under that heading: "This link doesn't describe a cache the
 /// Interactive Cache Explorer can build.", or the same of a file.
-pub(crate) fn load_lead(file: bool) -> String {
+pub(crate) fn load_lead(source: Source) -> String {
     format!(
         "This {} doesn't describe a cache the Interactive Cache Explorer can build.",
-        if file { "file" } else { "link" }
+        noun(source)
     )
 }
 
