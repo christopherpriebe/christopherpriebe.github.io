@@ -21,6 +21,7 @@ import { h } from '../dom';
 import { PLANE_CLASS } from '../focus';
 import { narrowState } from '../page-states';
 import type { UiState } from '../ui-state';
+import { createConfigBar, renderConfigBar, type ConfigBar } from './config-bar';
 
 /** Everything one render draws from the session, asked of the facade again after each change. */
 export interface Snapshot {
@@ -53,6 +54,7 @@ export type LogWindow = EntryView[];
 interface Shell {
   plane: HTMLElement;
   head: HTMLElement;
+  config: ConfigBar;
   live: HTMLElement;
 }
 
@@ -69,6 +71,7 @@ function shellOf(root: HTMLElement): Shell {
       'aria-live': 'polite',
       'aria-atomic': 'true',
     });
+    const config = createConfigBar();
     const plane = h(
       'section',
       {
@@ -77,9 +80,10 @@ function shellOf(root: HTMLElement): Shell {
         tabindex: -1,
       },
       head,
+      config.element,
       live,
     );
-    shell = { plane, head, live };
+    shell = { plane, head, config, live };
     shells.set(root, shell);
   }
   return shell;
@@ -96,11 +100,12 @@ export function render(root: HTMLElement, snap: Snapshot, log: LogWindow, ui: Ui
     root.replaceChildren(narrowState());
     return;
   }
-  const { plane, head, live } = shellOf(root);
+  const { plane, head, config, live } = shellOf(root);
   head.replaceChildren(
     h('span', { class: 'cache-explorer__label' }, copy.title),
     h('span', { class: 'cache-explorer__label' }, snap.state.labels.statusText),
   );
+  renderConfigBar(root, config, snap, ui);
   if (live.textContent !== snap.timeline.liveText) live.textContent = snap.timeline.liveText;
   mount(root, plane);
 }

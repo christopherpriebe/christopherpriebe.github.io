@@ -1,9 +1,9 @@
 // What an actionable element says about itself: `data-action` names it, and the attributes below
-// say which set, way, position, group or address it acts on. Render writes them, the delegated
-// listeners read them, and focus is kept across a render by them.
+// say which set, way, position, group, option or address it acts on. Render writes them, the
+// delegated listeners read them, and focus is kept across a render by them.
 
 /** The attributes that parameterise an action, without their `data-` prefix. */
-export const PARAMS = ['set', 'way', 'pos', 'group', 'addr'] as const;
+export const PARAMS = ['set', 'way', 'pos', 'group', 'option', 'addr'] as const;
 export type Param = (typeof PARAMS)[number];
 
 export interface Action {

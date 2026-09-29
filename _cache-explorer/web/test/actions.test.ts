@@ -12,13 +12,14 @@ describe('readAction', () => {
     });
   });
 
-  it('reads all five parameters', () => {
+  it('reads all six parameters', () => {
     const el = h('button', {
       'data-action': 'go',
       'data-set': 1,
       'data-way': 2,
       'data-pos': 3,
       'data-group': 'lineSize',
+      'data-option': 2,
       'data-addr': 164,
     });
     expect(readAction(el)?.params).toEqual({
@@ -26,6 +27,7 @@ describe('readAction', () => {
       way: '2',
       pos: '3',
       group: 'lineSize',
+      option: '2',
       addr: '164',
     });
   });

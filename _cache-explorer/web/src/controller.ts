@@ -2,13 +2,15 @@
 // else touches the DOM. It never works out what the machine does: after every change it asks the
 // core again and draws the answer.
 
-import type { Action } from './actions';
-import type { Session } from './wasm';
-import { captureFocus, restoreFocus } from './focus';
+import { configActions } from './config-actions';
+import type { ActionHandler, Context } from './context';
 import { delegate } from './delegate';
+import { captureFocus, restoreFocus } from './focus';
 import type { Layout } from './layout';
+import { FLASH_MS } from './motion';
 import { render, type LogWindow, type Snapshot } from './render';
 import { initialUiState, type UiState } from './ui-state';
+import type { Session } from './wasm';
 
 /** The rows and entries fetched around the first one in view: more than the scrollers show. */
 const MEMORY_WINDOW = 24;
@@ -41,12 +43,10 @@ export function buildSnapshot(
   return { snapshot, log: session.entries(ui.logFirst, LOG_WINDOW) };
 }
 
-/**
- * What a click on an element with a `data-action` does; one function per action, added with its
- * region. A map, so that a name an object inherits (`constructor`, `__proto__`) finds nothing.
- */
-type ActionHandler = (action: Action, event: MouseEvent) => void;
-const ACTIONS: ReadonlyMap<string, ActionHandler> = new Map();
+/** What an event on an element with a `data-action` does; each region contributes its own. */
+const CLICKS: ReadonlyMap<string, ActionHandler> = new Map(configActions.clicks);
+const INPUTS: ReadonlyMap<string, ActionHandler> = new Map(configActions.inputs);
+const CHANGES: ReadonlyMap<string, ActionHandler> = new Map(configActions.changes);
 
 export interface Controller {
   /** Asks the session again and draws what it says. */
@@ -78,13 +78,41 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
     ui.lastPos = snapshot.state.position.pos;
   }
 
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const context: Context = {
+    get session() {
+      return current();
+    },
+    ui,
+    refresh,
+    flash(cause) {
+      clearTimeout(flashTimer);
+      ui.configOpen = true;
+      ui.flashGroup = cause;
+      flashTimer = setTimeout(() => {
+        flashTimer = undefined;
+        ui.flashGroup = null;
+        if (owned) refresh();
+      }, FLASH_MS);
+      refresh();
+    },
+  };
+
   const stopListening = delegate(root, {
-    click(event, action) {
-      if (action) ACTIONS.get(action.name)?.(action, event);
+    click(_, action) {
+      if (action) CLICKS.get(action.name)?.(context, action);
+    },
+    input(_, action) {
+      if (action) INPUTS.get(action.name)?.(context, action);
+    },
+    change(_, action) {
+      if (action) CHANGES.get(action.name)?.(context, action);
     },
   });
 
   function dispose(): void {
+    clearTimeout(flashTimer);
     stopListening();
     const session = owned;
     owned = null;

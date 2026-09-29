@@ -130,6 +130,24 @@ describe('cache-explorer.css', () => {
     expect(body).toMatch(/transition:\s*none\s*!important/);
   });
 
+  it('has the why flash fade in, hold and fade out over the time the script gives it', () => {
+    const keyframes = /@keyframes cache-explorer-why\s*\{([\s\S]*?)\n\}/.exec(componentsCss)?.[1];
+    expect(keyframes).toMatch(/0%,\s*100%\s*\{\s*background: transparent;/);
+    expect(keyframes).toMatch(/25%,\s*75%\s*\{\s*background: var\(--cache-explorer-changed\);/);
+    expect(componentsCss).toMatch(
+      /\.cache-explorer__group--why\s*\{\s*animation: cache-explorer-why 1600ms/,
+    );
+  });
+
+  it('shows the why flash’s ground still, without its fade, for a student who asks for less motion', () => {
+    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([^@]*)\}\s*$/m.exec(
+      componentsCss,
+    );
+    expect(reduced?.[1]).toMatch(
+      /\.cache-explorer__group--why\s*\{\s*background: var\(--cache-explorer-changed\);/,
+    );
+  });
+
   it('draws a button in the secondary look, and the primary one over it', () => {
     const block = (selector: string): string =>
       new RegExp(`^${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`, 'm').exec(

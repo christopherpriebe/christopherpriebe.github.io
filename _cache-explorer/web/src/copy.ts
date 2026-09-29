@@ -11,6 +11,49 @@ export const copy = {
   couldNotStartMessage:
     "The page's files are out of step, usually after an update. Reload to fix it.",
   reload: 'Reload',
+  config: {
+    title: 'Configuration',
+    detailLevel: 'Detail level',
+    basics: 'Basics',
+    advanced: 'Advanced',
+    /** The name over each group of options; the core names the options themselves. */
+    groups: {
+      cacheSize: 'Cache size',
+      lineSize: 'Line size',
+      associativity: 'Associativity',
+      replacement: 'Replacement',
+      writePolicy: 'Write policy',
+      allocatePolicy: 'On a store miss',
+      address: 'Address and word',
+      timing: 'Timing',
+    },
+    /** Under a group that Basics hides, shown because a log line points at it. */
+    readOnlyNote: 'Advanced changes this.',
+    address: {
+      change: 'change…',
+      done: 'done',
+      addressCaption: 'Address',
+      wordCaption: 'Word',
+      addressLabel: 'Address width',
+      wordLabel: 'Word size',
+      /** The two pressed options, as the core labels them: `12-bit`, `4 B`. */
+      summary: (address: string, word: string) => `${address} address · ${word} words`,
+    },
+    timing: {
+      hit: 'Hit',
+      miss: 'Miss',
+      cycles: 'cycles',
+      hitLabel: 'Hit time in cycles',
+      missLabel: 'Miss penalty in cycles',
+      timed: 'Timed mode',
+    },
+    pending: {
+      title: 'Reset to apply?',
+      apply: 'Reset and apply',
+      keep: 'Keep this run',
+    },
+    applied: 'New configuration applied. The run starts empty.',
+  },
   notices: {
     noWebAssembly: {
       lead: 'The Interactive Cache Explorer needs WebAssembly, which this browser does not provide.',

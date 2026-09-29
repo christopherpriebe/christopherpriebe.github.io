@@ -7,6 +7,7 @@ import type {
   Addr,
   Cause,
   Config,
+  ConfigNumberField,
   ModuleIndexView,
   ModuleRun,
   ProgramFormat,
@@ -51,6 +52,12 @@ export interface UiState {
   pending: Config | null;
   /** Why the core asked for a reset, shown by "Reset to apply?". */
   pendingMessage: string | null;
+  /** The pending change is the switch to Basics: once it is applied, the page leaves Advanced. */
+  pendingBasics: boolean;
+  /** The "Address and word" group shows its two controls in place of its summary line. */
+  addressOpen: boolean;
+  /** The timing field the student typed in that does not read, and why; null when both do. */
+  timingError: { field: ConfigNumberField; message: string } | null;
   /** The group a `why:` link is flashing, until the flash has run its course. */
   flashGroup: Cause | null;
   draft: { kind: AccessKind; addrText: string; valueText: string };
@@ -82,6 +89,9 @@ export function initialUiState(layout: Layout): UiState {
     configOpen: layout === 'desktop',
     pending: null,
     pendingMessage: null,
+    pendingBasics: false,
+    addressOpen: false,
+    timingError: null,
     flashGroup: null,
     draft: { kind: 'read', addrText: FIRST_VISIT_ADDRESS, valueText: FIRST_VISIT_VALUE },
     stripSource: 'cursor',
