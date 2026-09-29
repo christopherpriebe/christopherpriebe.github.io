@@ -254,8 +254,10 @@ export interface ShareSummary {
      */
     copiedText: string;
     /**
-     * One byte per step of the opening run replayed so far, as
-     * [`Session::ticks`] gives them.
+     * One byte per step of the opening run replayed so far, in order: bit 0
+     * (1) is set on an entry's first step and bit 1 (2) on every step of an
+     * entry that missed. They are the bytes the session's `ticks()`
+     * returns, there as a `Uint8Array` and here as a `number[]`.
      */
     ticks: number[];
 }
@@ -3048,7 +3050,10 @@ export class Session {
      */
     stepEvent(program?: ProgramSource | null): StepOutcome;
     /**
-     * One byte per step of the displayed run, for the scrubber's ticks.
+     * One byte per step of the displayed run, in order, for the scrubber's
+     * ticks. Bit 0 (1) is set on an entry's first step and bit 1 (2) on
+     * every step of an entry that missed, so a tick is 0, 1, 2 or 3. The
+     * loading summary's `ticks` hold the same bytes as a `number[]`.
      */
     ticks(): Uint8Array;
     /**

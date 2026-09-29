@@ -35,9 +35,14 @@ use crate::units::{Addr, EventPos, Register, SetIndex, WayIndex};
 /// The bit of a tick set on an entry's first step. A tick is the byte the
 /// scrubber draws for one step of a run; the ticks of the displayed run and
 /// those of a run still loading are built from this bit and [`MISS_TICK`].
+///
+/// The page decodes these bits, and the docs of [`Session::ticks`] and of
+/// the ticks the page receives name this one as bit 0, so changing its value
+/// changes what the page reads and leaves those docs wrong.
 pub(crate) const FIRST_TICK: u8 = 1;
 
-/// The bit of a tick set on every step of an entry that missed.
+/// The bit of a tick set on every step of an entry that missed. Like
+/// [`FIRST_TICK`], the page decodes it, and the docs name it as bit 1.
 pub(crate) const MISS_TICK: u8 = 2;
 
 /// The log of the displayed run: which run it is, where it starts and ends,

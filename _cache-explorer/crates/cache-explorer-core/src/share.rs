@@ -319,8 +319,10 @@ pub struct ShareSummary {
     /// "Link copied. It encodes the configuration and all 14 steps, and
     /// opens at step 9."
     pub copied_text: String,
-    /// One byte per step of the opening run replayed so far, as
-    /// [`Session::ticks`] gives them.
+    /// One byte per step of the opening run replayed so far, in order: bit 0
+    /// (1) is set on an entry's first step and bit 1 (2) on every step of an
+    /// entry that missed. They are the bytes the session's `ticks()`
+    /// returns, there as a `Uint8Array` and here as a `number[]`.
     pub ticks: Vec<u8>,
 }
 

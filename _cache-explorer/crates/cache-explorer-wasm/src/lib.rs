@@ -398,7 +398,10 @@ impl Session {
         Ok(EntryViews(self.inner.entries(first, count)).into_ts()?)
     }
 
-    /// One byte per step of the displayed run, for the scrubber's ticks.
+    /// One byte per step of the displayed run, in order, for the scrubber's
+    /// ticks. Bit 0 (1) is set on an entry's first step and bit 1 (2) on
+    /// every step of an entry that missed, so a tick is 0, 1, 2 or 3. The
+    /// loading summary's `ticks` hold the same bytes as a `number[]`.
     pub fn ticks(&self) -> Vec<u8> {
         self.inner.ticks()
     }
