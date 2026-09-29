@@ -3,6 +3,7 @@
 //! entries and headers, the changed summary and the status line.
 
 use super::EntryNoun;
+use crate::config::Mode;
 use crate::event::{ChangeRef, Counter, EventKind};
 use crate::format;
 use crate::geometry::Geometry;
@@ -420,10 +421,13 @@ pub(crate) fn log_header(step: u32, steps: u32) -> String {
 /// The status line over the workbench: the mode and the run's steps, then
 /// "timed" in timed mode: "Basics · 14 steps in this run", "Advanced · 1
 /// step in this run · timed".
-pub(crate) fn status_line(advanced: bool, steps: u32, timed: bool) -> String {
+pub(crate) fn status_line(mode: Mode, steps: u32, timed: bool) -> String {
+    let mode = match mode {
+        Mode::Basics => "Basics",
+        Mode::Advanced => "Advanced",
+    };
     format!(
-        "{} \u{b7} {} {} in this run{}",
-        if advanced { "Advanced" } else { "Basics" },
+        "{mode} \u{b7} {} {} in this run{}",
         format::data(steps),
         format::plural(steps, "step", "steps"),
         if timed { " \u{b7} timed" } else { "" }
@@ -876,11 +880,11 @@ mod tests {
         assert_eq!(log_header(0, 0), "no steps yet");
         assert_eq!(log_header(12_000, 12_345), "step 12,000 of 12,345");
         assert_eq!(
-            status_line(false, 14, false),
+            status_line(Mode::Basics, 14, false),
             "Basics \u{b7} 14 steps in this run"
         );
         assert_eq!(
-            status_line(true, 1, true),
+            status_line(Mode::Advanced, 1, true),
             "Advanced \u{b7} 1 step in this run \u{b7} timed"
         );
         assert_eq!(ready(), "Ready");

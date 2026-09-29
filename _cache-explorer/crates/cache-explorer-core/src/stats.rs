@@ -36,7 +36,7 @@ use std::collections::VecDeque;
 
 use serde::Serialize;
 
-use crate::config::Timing;
+use crate::config::{Mode, Timing};
 use crate::de::deserialize_unit_enum;
 use crate::event::{ChangeRef, Counter};
 use crate::explain;
@@ -438,14 +438,14 @@ impl StatKey {
 
 impl Stats {
     /// The Stats region of `machine`'s run where the machine stands, in
-    /// Advanced when `advanced` and in Basics otherwise. `highlight` is what
-    /// the cursor's entry has changed so far; a row is changed when one of
-    /// its counters is among it. The hit rate, which no event names, never
-    /// is. The counters, the rows, the traffic, the hit rate and the
-    /// sparkline are those where the machine stands; AMAT and the measured
-    /// cost are those of the run's last completed access, so while an
-    /// access is in flight they are the figures from before it began.
-    pub(crate) fn new(machine: &Machine, advanced: bool, highlight: &[ChangeRef]) -> Self {
+    /// `mode`. `highlight` is what the cursor's entry has changed so far; a
+    /// row is changed when one of its counters is among it. The hit rate,
+    /// which no event names, never is. The counters, the rows, the traffic,
+    /// the hit rate and the sparkline are those where the machine stands;
+    /// AMAT and the measured cost are those of the run's last completed
+    /// access, so while an access is in flight they are the figures from
+    /// before it began.
+    pub(crate) fn new(machine: &Machine, mode: Mode, highlight: &[ChangeRef]) -> Self {
         let counters = machine.counters;
         let completed = match &machine.access {
             Some(access) if !access.done => access.counters_before,
@@ -464,7 +464,7 @@ impl Stats {
         Self {
             counters,
             traffic: Traffic::new(&counters, &machine.geometry),
-            rows: rows(&counters, advanced, timing.is_some(), highlight),
+            rows: rows(&counters, mode, timing.is_some(), highlight),
             hit_rate: counters.hit_rate(),
             amat: timing.and_then(|timing| completed.amat(timing)),
             measured: timing.and_then(|timing| completed.measured(timing)),
@@ -474,9 +474,9 @@ impl Stats {
     }
 }
 
-/// The rows of the Stats region: in Advanced when `advanced`, with the
-/// cycles row when `timed`, and in Basics otherwise.
-fn rows(counters: &Counters, advanced: bool, timed: bool, highlight: &[ChangeRef]) -> Vec<StatRow> {
+/// The rows of the Stats region in `mode`, with the cycles row in Advanced
+/// when `timed`.
+fn rows(counters: &Counters, mode: Mode, timed: bool, highlight: &[ChangeRef]) -> Vec<StatRow> {
     let mut keys = vec![
         StatKey::Accesses,
         StatKey::Hits,
@@ -484,18 +484,19 @@ fn rows(counters: &Counters, advanced: bool, timed: bool, highlight: &[ChangeRef
         StatKey::HitRate,
         StatKey::Evictions,
     ];
-    if advanced {
-        keys.extend([
-            StatKey::Writebacks,
-            StatKey::Writethroughs,
-            StatKey::Writearounds,
-        ]);
-        if timed {
-            keys.push(StatKey::Cycles);
+    match mode {
+        Mode::Advanced => {
+            keys.extend([
+                StatKey::Writebacks,
+                StatKey::Writethroughs,
+                StatKey::Writearounds,
+            ]);
+            if timed {
+                keys.push(StatKey::Cycles);
+            }
+            keys.extend([StatKey::Compulsory, StatKey::Capacity, StatKey::Conflict]);
         }
-        keys.extend([StatKey::Compulsory, StatKey::Capacity, StatKey::Conflict]);
-    } else {
-        keys.push(StatKey::MemoryWrites);
+        Mode::Basics => keys.push(StatKey::MemoryWrites),
     }
     keys.into_iter()
         .map(|key| key.row(counters, highlight))
@@ -1001,7 +1002,7 @@ mod tests {
     fn recent_text(outcomes: &[Outcome]) -> Option<String> {
         Stats::new(
             &after(crate::config::Config::default(), outcomes),
-            false,
+            Mode::Basics,
             &[],
         )
         .recent_text
@@ -1010,7 +1011,11 @@ mod tests {
     #[test]
     fn the_sparkline_text_counts_its_outcomes_in_the_singular_and_plural() {
         use Outcome::{Hit, Miss};
-        let stats = Stats::new(&after(crate::config::Config::default(), &[]), false, &[]);
+        let stats = Stats::new(
+            &after(crate::config::Config::default(), &[]),
+            Mode::Basics,
+            &[],
+        );
         assert!(stats.recent.is_empty());
         assert_eq!(stats.recent_text, None);
         assert_eq!(recent_text(&[Miss]).as_deref(), Some("0 hits, 1 miss"));
@@ -1039,7 +1044,7 @@ mod tests {
         let hits = format::data(hit_count);
         let stats = Stats::new(
             &after(crate::config::Config::default(), &outcomes),
-            false,
+            Mode::Basics,
             &[],
         );
         assert_eq!(stats.recent, outcomes);
@@ -1055,7 +1060,7 @@ mod tests {
         outcomes.push(Miss);
         let stats = Stats::new(
             &after(crate::config::Config::default(), &outcomes),
-            false,
+            Mode::Basics,
             &[],
         );
         assert_eq!(stats.recent, outcomes[1..]);
@@ -1084,11 +1089,11 @@ mod tests {
         let untimed = crate::config::Config::default();
         let machine = after(untimed.clone(), &[]);
         assert_eq!(
-            keys(&Stats::new(&machine, false, &[]).rows),
+            keys(&Stats::new(&machine, Mode::Basics, &[]).rows),
             [Accesses, Hits, Misses, HitRate, Evictions, MemoryWrites]
         );
         assert_eq!(
-            keys(&Stats::new(&machine, true, &[]).rows),
+            keys(&Stats::new(&machine, Mode::Advanced, &[]).rows),
             [
                 Accesses,
                 Hits,
@@ -1112,7 +1117,7 @@ mod tests {
             &[],
         );
         assert_eq!(
-            keys(&Stats::new(&machine, true, &[]).rows),
+            keys(&Stats::new(&machine, Mode::Advanced, &[]).rows),
             [
                 Accesses,
                 Hits,
@@ -1141,7 +1146,7 @@ mod tests {
                 .collect()
         };
         // Before the first access the hit rate has nothing to show.
-        let stats = Stats::new(&machine, false, &[]);
+        let stats = Stats::new(&machine, Mode::Basics, &[]);
         assert_eq!(
             stats.rows[3],
             StatRow {
@@ -1164,7 +1169,7 @@ mod tests {
             ..Counters::default()
         };
         assert_eq!(
-            texts(&Stats::new(&machine, false, &[])),
+            texts(&Stats::new(&machine, Mode::Basics, &[])),
             [
                 (StatKey::Accesses, "12,000".to_owned()),
                 (StatKey::Hits, "8000".to_owned()),
@@ -1175,7 +1180,7 @@ mod tests {
                 (StatKey::MemoryWrites, "14".to_owned()),
             ]
         );
-        let advanced = texts(&Stats::new(&machine, true, &[]));
+        let advanced = texts(&Stats::new(&machine, Mode::Advanced, &[]));
         assert_eq!(
             advanced[5..],
             [
@@ -1202,8 +1207,8 @@ mod tests {
                 .map(|&counter| ChangeRef::Counter { counter })
                 .collect()
         };
-        let changed = |advanced: bool, highlight: &[ChangeRef]| -> Vec<StatKey> {
-            Stats::new(&machine, advanced, highlight)
+        let changed = |mode: Mode, highlight: &[ChangeRef]| -> Vec<StatKey> {
+            Stats::new(&machine, mode, highlight)
                 .rows
                 .iter()
                 .filter(|row| row.changed)
@@ -1222,7 +1227,7 @@ mod tests {
             Counter::Writebacks,
         ]);
         assert_eq!(
-            changed(true, &highlight),
+            changed(Mode::Advanced, &highlight),
             [
                 StatKey::Accesses,
                 StatKey::Misses,
@@ -1232,7 +1237,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            changed(false, &highlight),
+            changed(Mode::Basics, &highlight),
             [StatKey::Accesses, StatKey::Misses, StatKey::MemoryWrites]
         );
         // Any of the three writes changes the writes to memory; cells that
@@ -1244,16 +1249,16 @@ mod tests {
         ] {
             let mut highlight = moved(&[counter]);
             highlight.push(ChangeRef::Pc);
-            assert_eq!(changed(false, &highlight), [StatKey::MemoryWrites]);
+            assert_eq!(changed(Mode::Basics, &highlight), [StatKey::MemoryWrites]);
         }
-        assert!(changed(true, &[ChangeRef::Pc]).is_empty());
+        assert!(changed(Mode::Advanced, &[ChangeRef::Pc]).is_empty());
     }
 
     #[test]
     fn amat_and_the_measured_cost_are_there_in_timed_mode_only() {
         let untimed = crate::config::Config::default();
         let mut machine = after(untimed.clone(), &[Outcome::Miss, Outcome::Hit]);
-        let stats = Stats::new(&machine, true, &[]);
+        let stats = Stats::new(&machine, Mode::Advanced, &[]);
         assert_eq!((stats.amat, stats.measured), (None, None));
         assert_eq!(stats.hit_rate.map(|rate| rate.text).as_deref(), Some("50%"));
 
@@ -1263,7 +1268,7 @@ mod tests {
         };
         machine.config = config.clone();
         machine.counters.cycles = Cycle::new_unchecked(22);
-        let stats = Stats::new(&machine, true, &[]);
+        let stats = Stats::new(&machine, Mode::Advanced, &[]);
         assert_eq!(stats.amat, machine.counters.amat(timing(1, 20)));
         assert_eq!(stats.measured, machine.counters.measured(timing(1, 20)));
         assert_eq!(
@@ -1271,7 +1276,7 @@ mod tests {
             Some("AMAT = 1 + 0.50 \u{d7} 20 = 11.0 cycles")
         );
         // Before the run's first access there is nothing to average.
-        let stats = Stats::new(&after(config, &[]), true, &[]);
+        let stats = Stats::new(&after(config, &[]), Mode::Advanced, &[]);
         assert_eq!(
             (stats.hit_rate, stats.amat, stats.measured),
             (None, None, None)
@@ -1281,7 +1286,7 @@ mod tests {
     #[test]
     fn stats_serialize_in_camel_case_without_absent_figures() {
         let machine = after(crate::config::Config::default(), &[]);
-        let value = serde_json::to_value(Stats::new(&machine, false, &[])).unwrap();
+        let value = serde_json::to_value(Stats::new(&machine, Mode::Basics, &[])).unwrap();
         let fields: Vec<&String> = value.as_object().unwrap().keys().collect();
         assert_eq!(fields, ["counters", "recent", "rows", "traffic"]);
         assert_eq!(value["recent"], json!([]));
@@ -1295,7 +1300,7 @@ mod tests {
             ..crate::config::Config::default()
         };
         let machine = after(config, &[Outcome::Miss, Outcome::Hit]);
-        let value = serde_json::to_value(Stats::new(&machine, true, &[])).unwrap();
+        let value = serde_json::to_value(Stats::new(&machine, Mode::Advanced, &[])).unwrap();
         let fields: Vec<&String> = value.as_object().unwrap().keys().collect();
         assert_eq!(
             fields,

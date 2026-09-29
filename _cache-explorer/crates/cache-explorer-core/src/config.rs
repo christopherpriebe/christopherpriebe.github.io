@@ -561,6 +561,16 @@ pub struct WordBytesError {
     pub got: u8,
 }
 
+/// What the page shows a run in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Mode {
+    /// Basics: what a write-back, write-allocate, untimed cache needs.
+    Basics,
+    /// Advanced: also the write and allocate policies, timing and the
+    /// counters that go with them.
+    Advanced,
+}
+
 impl Config {
     /// Checks the rules in order and returns the geometry of a valid
     /// configuration; the first rule that fails is the error.
@@ -626,6 +636,17 @@ impl Config {
         self.cache.write_policy == WritePolicy::WriteBack
             && self.cache.allocate_policy == AllocatePolicy::WriteAllocate
             && self.timing.is_none()
+    }
+
+    /// The mode the page shows this configuration in: Advanced when the
+    /// student chose it, `chose_advanced`, or when the configuration does not
+    /// fit Basics, and Basics otherwise.
+    pub(crate) fn mode(&self, chose_advanced: bool) -> Mode {
+        if chose_advanced || !self.fits_basics() {
+            Mode::Advanced
+        } else {
+            Mode::Basics
+        }
     }
 
     /// The design's summary line: the size, the line size and the placement,
@@ -1035,7 +1056,7 @@ impl ConfigErrorView {
 pub fn validate_config(config: &Config) -> ConfigCheck {
     match config.validate() {
         Ok(geometry) => ConfigCheck::Valid {
-            summary: config.summary(config.advanced || !config.fits_basics()),
+            summary: config.summary(config.mode(config.advanced) == Mode::Advanced),
             geometry,
         },
         Err(error) => ConfigCheck::Invalid {

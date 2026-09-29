@@ -22,7 +22,7 @@ use super::exec::{load_program, ready, step};
 use super::*;
 use crate::cache::{Cache, Dirtiness, Slot};
 use crate::config::{
-    AllocatePolicy, CacheConfig, Config, MemoryInit, Preset, Replacement, Timing, WordBytes,
+    AllocatePolicy, CacheConfig, Config, MemoryInit, Mode, Preset, Replacement, Timing, WordBytes,
     WritePolicy,
 };
 use crate::cpu::{Cpu, Halted, Registers};
@@ -1829,7 +1829,7 @@ fn the_stats_of_a_run_add_up_its_counters() {
     highlight.sort_unstable();
     highlight.dedup();
 
-    let stats = Stats::new(&run.machine, true, &highlight);
+    let stats = Stats::new(&run.machine, Mode::Advanced, &highlight);
     let counters = stats.counters;
     assert_eq!(
         (counters.accesses, counters.hits, counters.misses),

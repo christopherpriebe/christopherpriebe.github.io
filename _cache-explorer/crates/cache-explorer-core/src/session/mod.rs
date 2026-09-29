@@ -70,7 +70,7 @@ use cursor::Cursor;
 use log::{op_start, Extension, LastAccess, Log};
 use timeline::{Entries, EntryBase};
 
-use crate::config::{Config, ConfigError, Timing};
+use crate::config::{Config, ConfigError, Mode, Timing};
 use crate::engine::{self, Blocked, Emitter, EventSink, Flow, OpProgress};
 use crate::event::{EventKind, MicroEvent};
 use crate::explain;
@@ -251,7 +251,12 @@ impl Session {
     /// Advanced whatever the choice while the displayed run's configuration
     /// needs it, as after undoing back into a write-through run.
     pub fn advanced(&self) -> bool {
-        self.view.advanced || !self.config().fits_basics()
+        self.mode() == Mode::Advanced
+    }
+
+    /// The mode the page shows: [`Session::advanced`] as a [`Mode`].
+    fn mode(&self) -> Mode {
+        self.config().mode(self.view.advanced)
     }
 
     /// The machine at the cursor.
@@ -295,7 +300,8 @@ impl Session {
     /// controls and the texts over the workbench.
     pub fn state(&self) -> State {
         let machine = self.cursor.machine();
-        let advanced = self.advanced();
+        let mode = self.mode();
+        let advanced = mode == Mode::Advanced;
         let position = self.position();
         let event = self.log.event_at(self.cursor.pos());
         let entry = self
@@ -321,12 +327,12 @@ impl Session {
             request: RequestView::new(machine, entry),
             cpu: CpuView::new(machine, entry, &position),
             program: ProgramView::new(machine),
-            stats: Stats::new(machine, advanced, &highlight),
+            stats: Stats::new(machine, mode, &highlight),
             changed_summary: explain::changed_summary(&machine.geometry, &highlight),
             highlight,
             controls: self.controls(),
             labels: Labels {
-                status_text: explain::status_line(advanced, steps, machine.config.timing.is_some()),
+                status_text: explain::status_line(mode, steps, machine.config.timing.is_some()),
                 config_summary: machine.config.summary(advanced),
             },
             position,
@@ -336,7 +342,7 @@ impl Session {
     /// The Stats region at the cursor, in the mode shown, with the rows the
     /// cursor's entry has changed so far marked.
     pub fn stats(&self) -> Stats {
-        Stats::new(self.cursor.machine(), self.advanced(), &self.highlight())
+        Stats::new(self.cursor.machine(), self.mode(), &self.highlight())
     }
 
     /// The memory table's rows from its `first`, at most `count` of them,
