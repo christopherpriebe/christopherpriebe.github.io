@@ -19,11 +19,12 @@ use cache_explorer_core::{
     self as model, AccessKind, Addr, AddressInput, ArgKind, ArgumentError, BuildInfo, Config,
     ConfigChange, ConfigCheck, ConfigControls, ConfigNumberField, ConfigNumberInput, Decoded,
     EditDraft, EditOutcome, EditPatch, EditTarget, EntryViews, EventPos, IssueDraft, LineAddr,
-    LoadProgress, MemoryEditDraft, MemoryLines, MicroEvents, Module, ModuleIndexView, ModuleView,
-    Op, ParseResult, Position, Predicate, ProgramFormat, ProgramSource, SetIndex, ShareSummary,
-    State, Stats, StepOutcome, Timeline, WayForm, WayIndex, WordInput,
+    LoadProgress, MemoryEditDraft, MemoryLines, MicroEvent, MicroEvents, Module, ModuleIndexView,
+    ModuleView, Op, ParseResult, Position, Predicate, ProgramFormat, ProgramSource, SetIndex,
+    ShareSummary, State, Stats, StepOutcome, Timeline, WayForm, WayIndex, WordInput,
 };
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use tsify::{Ts, Tsify};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -63,6 +64,23 @@ fn read<T: DeserializeOwned>(value: JsValue, kind: ArgKind) -> Result<T, JsError
             .unwrap_or_default();
         JsError::new(&ArgumentError::new(kind, detail).to_string())
     })
+}
+
+/// Serializes `events` to the JavaScript value a [`MicroEvents`] holding
+/// them would give, without a copy of them.
+///
+/// # Errors
+///
+/// Never in practice: events always convert.
+fn events_ts(events: &[MicroEvent]) -> Result<Ts<MicroEvents>, JsError> {
+    // Configured as `Tsify::into_js` configures it for a `MicroEvents`, which
+    // serializes as its events do.
+    let config = <MicroEvents as Tsify>::SERIALIZATION_CONFIG;
+    let serializer = serde_wasm_bindgen::Serializer::new()
+        .serialize_missing_as_null(config.missing_as_null)
+        .serialize_maps_as_objects(config.hashmap_as_object)
+        .serialize_large_number_types_as_bigints(config.large_number_types_as_bigints);
+    Ok(Ts::new_unchecked(events.serialize(&serializer)?))
 }
 
 /// A run of the Interactive Cache Explorer: the log of ops over a first
@@ -147,7 +165,7 @@ impl Session {
     /// Throws why the op is refused, leaving the session unchanged.
     #[wasm_bindgen(js_name = applyOp)]
     pub fn apply_op(&mut self, op: &Ts<Op>) -> Result<Ts<MicroEvents>, JsError> {
-        Ok(MicroEvents(self.inner.apply(arg(op, ArgKind::Op)?)?).into_ts()?)
+        events_ts(&self.inner.apply(arg(op, ArgKind::Op)?)?)
     }
 
     /// Moves the cursor back to the previous undo stop; false if there is
@@ -294,7 +312,7 @@ impl Session {
     ///
     /// Never in practice: events always convert.
     pub fn events(&self) -> Result<Ts<MicroEvents>, JsError> {
-        Ok(MicroEvents(self.inner.events().to_vec()).into_ts()?)
+        events_ts(self.inner.events())
     }
 
     /// The events whose ids run from `start` up to but not including `end`,
@@ -305,7 +323,7 @@ impl Session {
     /// Never in practice: events always convert.
     #[wasm_bindgen(js_name = eventsRange)]
     pub fn events_range(&self, start: u32, end: u32) -> Result<Ts<MicroEvents>, JsError> {
-        Ok(MicroEvents(self.inner.events_range(start..end).to_vec()).into_ts()?)
+        events_ts(self.inner.events_range(start..end))
     }
 
     /// The displayed run's timeline: the scrubber, the log's header and the
@@ -648,7 +666,7 @@ impl ModuleRun {
     /// Throws why the session refuses those ops; the session and the run are
     /// then as they were.
     pub fn start(&mut self, session: &mut Session) -> Result<Ts<MicroEvents>, JsError> {
-        Ok(MicroEvents(self.inner.start(&mut session.inner)?).into_ts()?)
+        events_ts(&self.inner.start(&mut session.inner)?)
     }
 
     /// What the module panel draws, with `session` as it is.
