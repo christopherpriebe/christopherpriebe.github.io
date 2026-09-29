@@ -1104,7 +1104,7 @@ fn the_session_limit_stops_a_loop_with_an_error() {
     let mut last_op = Vec::new();
     for _ in 0..=SESSION_EVENT_LIMIT / pair {
         session.apply(endless.clone()).unwrap();
-        last_op = session.apply(Op::StepAccess).unwrap();
+        last_op = session.apply(Op::StepAccess).unwrap().to_vec();
         if last_op.last().map(|event| &event.explain) != Some(&budget_error) {
             break;
         }

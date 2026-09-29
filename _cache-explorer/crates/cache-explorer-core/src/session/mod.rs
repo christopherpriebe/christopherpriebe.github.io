@@ -484,6 +484,7 @@ impl Session {
 
     /// Appends `op` at the end of the op holding the cursor, or at position
     /// 0 if there is none, and moves the cursor to the op's last event.
+    /// Returns the events appended, as the log holds them.
     ///
     /// The op is first checked against the gate, if one is set, then
     /// against the session's event limit, then against the ops a link can
@@ -498,7 +499,7 @@ impl Session {
     ///
     /// The [`OpError`] refusing the op. A refused op changes nothing: the
     /// log, the undone ops and the cursor are as they were.
-    pub fn apply(&mut self, op: Op) -> Result<Vec<MicroEvent>, OpError> {
+    pub fn apply(&mut self, op: Op) -> Result<&[MicroEvent], OpError> {
         self.apply_all(vec![op])
     }
 
@@ -599,16 +600,17 @@ impl Session {
     /// [`Session::apply`] appends one: each is checked against the machine
     /// the ones before it leave, and none is appended unless all are
     /// accepted. Each is an op of its own, with its own undo stop. The
-    /// cursor goes to the last one's last event.
+    /// cursor goes to the last one's last event. Returns the events
+    /// appended, as the log holds them.
     ///
     /// # Errors
     ///
     /// The [`OpError`] refusing the first op refused; nothing changes.
-    pub(crate) fn apply_all(&mut self, ops: Vec<Op>) -> Result<Vec<MicroEvent>, OpError> {
+    pub(crate) fn apply_all(&mut self, ops: Vec<Op>) -> Result<&[MicroEvent], OpError> {
         let plan = self.plan(ops, false)?;
         let first = slot(plan.base);
         self.commit(plan);
-        Ok(self.events.get(first..).unwrap_or_default().to_vec())
+        Ok(self.events.get(first..).unwrap_or_default())
     }
 
     /// Checks `ops` in turn, each against the machine the ones before it

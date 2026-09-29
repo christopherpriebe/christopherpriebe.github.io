@@ -660,7 +660,7 @@ fn start_reports_the_events_of_the_ops_it_appended_over_an_undone_op() {
     assert!(session.undo());
     let from = session.position().pos;
     let mut run = ModuleRun::new(Module::parse(SWITCH_CONFIG).unwrap());
-    let reported = run.start(&mut session).unwrap().clone();
+    let reported = run.start(&mut session).unwrap().to_vec();
     let kinds: Vec<EventKind> = reported.iter().map(|event| event.kind).collect();
     assert_eq!(kinds, [EventKind::Setup, EventKind::Setup], "{reported:?}");
     let to = u32::try_from(session.events_range(0..u32::MAX).len()).unwrap();

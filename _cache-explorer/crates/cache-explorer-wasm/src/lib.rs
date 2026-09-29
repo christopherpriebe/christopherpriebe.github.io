@@ -165,7 +165,7 @@ impl Session {
     /// Throws why the op is refused, leaving the session unchanged.
     #[wasm_bindgen(js_name = applyOp)]
     pub fn apply_op(&mut self, op: &Ts<Op>) -> Result<Ts<MicroEvents>, JsError> {
-        events_ts(&self.inner.apply(arg(op, ArgKind::Op)?)?)
+        events_ts(self.inner.apply(arg(op, ArgKind::Op)?)?)
     }
 
     /// Moves the cursor back to the previous undo stop; false if there is
@@ -666,7 +666,7 @@ impl ModuleRun {
     /// Throws why the session refuses those ops; the session and the run are
     /// then as they were.
     pub fn start(&mut self, session: &mut Session) -> Result<Ts<MicroEvents>, JsError> {
-        events_ts(&self.inner.start(&mut session.inner)?)
+        events_ts(self.inner.start(&mut session.inner)?)
     }
 
     /// What the module panel draws, with `session` as it is.

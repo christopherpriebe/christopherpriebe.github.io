@@ -404,7 +404,7 @@ fn a_new_session_rests_at_position_0_of_an_empty_log() {
 #[test]
 fn an_applied_op_is_appended_and_the_cursor_rests_on_its_last_event() {
     let mut session = session();
-    let events = session.apply(load(0x0A4)).unwrap();
+    let events = session.apply(load(0x0A4)).unwrap().to_vec();
     let kinds: Vec<EventKind> = events.iter().map(|event| event.kind).collect();
     assert_eq!(
         kinds,
@@ -441,7 +441,7 @@ fn an_applied_op_reports_the_events_the_log_holds_over_its_positions() {
         Op::StepAccess,
     ] {
         let from = end_of(&session);
-        let reported = session.apply(op.clone()).unwrap().clone();
+        let reported = session.apply(op.clone()).unwrap().to_vec();
         let to = end_of(&session);
         assert!(!reported.is_empty(), "{op:?}");
         assert_eq!(
@@ -459,7 +459,7 @@ fn an_op_applied_after_undo_reports_the_events_that_replace_the_undone_ones() {
     assert!(session.undo());
     let from = session.position().pos;
     assert_eq!(from, pos(5));
-    let reported = session.apply(store(0x0A4, 7)).unwrap().clone();
+    let reported = session.apply(store(0x0A4, 7)).unwrap().to_vec();
     let to = end_of(&session);
     assert_eq!(
         to.get(),
@@ -728,12 +728,12 @@ fn an_accepted_op_drops_the_undone_ops_and_reuses_their_ids() {
     assert!(session.undo());
     assert_eq!(session.position().pos, pos(5));
     let events = session.apply(store(0x0A4, 7)).unwrap();
-    assert_eq!(session.ops(), [load(0x0A4), store(0x0A4, 7)]);
     assert_eq!(events.first().map(|event| event.id), Some(5));
     assert_eq!(
         events.first().map(|event| event.label.as_str()),
         Some("2.1")
     );
+    assert_eq!(session.ops(), [load(0x0A4), store(0x0A4, 7)]);
     assert!(!session.redo());
     // An op applied inside another keeps that op whole.
     session.seek(pos(2));
@@ -1035,7 +1035,8 @@ fn applying_a_configuration_always_appends_a_new_run_that_undo_leaves() {
         .apply(Op::Config {
             config: two_way.clone(),
         })
-        .unwrap();
+        .unwrap()
+        .to_vec();
     assert_eq!(session.op_count(), 5);
     assert_eq!(session.config(), &two_way);
     let [setup] = events.as_slice() else {

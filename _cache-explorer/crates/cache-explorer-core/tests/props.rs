@@ -1339,7 +1339,7 @@ mod support {
         /// returns its events, the last of the log, where the cursor rests.
         fn apply(&mut self, op: Op) -> Result<bool, TestCaseError> {
             let before = self.before();
-            let result = self.session.apply(op);
+            let result = self.session.apply(op).map(<[MicroEvent]>::to_vec);
             if let (Ok(events), true) = (&result, self.checks.append_only) {
                 let all = self.session.events_range(0..u32::MAX);
                 prop_assert!(!events.is_empty());
@@ -1455,7 +1455,7 @@ mod support {
             // or not the refusal offers another edit.
             if self.session.position().boundary >= Boundary::OpEnd {
                 let before = self.before();
-                let result = self.session.apply(Op::Edit { target, patch });
+                let result = self.session.apply(Op::Edit { target, patch }).map(drop);
                 if self.checks.edits {
                     // This harness never sets a gate, so `Gated` is unreached
                     // here; it is listed alongside `SessionFull`, `LinkFull`
@@ -1470,7 +1470,7 @@ mod support {
                         RefusalReason::FileFull => OpError::FileFull,
                         _ => OpError::Edit(Box::new(refusal.clone())),
                     };
-                    prop_assert_eq!(result.as_ref().map(drop), Err(&expected));
+                    prop_assert_eq!(result.as_ref(), Err(&expected));
                 }
                 self.after(before, Call::of(&result))?;
             }
@@ -1512,7 +1512,7 @@ mod support {
                 None
             };
             let before = self.before();
-            let result = self.session.apply(Op::Edit { target, patch });
+            let result = self.session.apply(Op::Edit { target, patch }).map(drop);
             if let Some((way, differing)) = dirty {
                 prop_assert!(result.is_ok(), "a planned edit was refused: {:?}", result);
                 prop_assert_eq!(self.session.machine().check_invariants(), Ok(()));

@@ -240,13 +240,13 @@ impl ModuleRun {
     /// `Config` with the preset, and `Program` with the module's program if
     /// it has one, so the work before stays reachable with Undo, and sets
     /// the mode to the module's. A gate another run left is lifted first.
-    /// Returns the events of the ops appended.
+    /// Returns the events of the ops appended, as the log holds them.
     ///
     /// # Errors
     ///
     /// The [`OpError`] refusing the ops, such as the session's limit; the
     /// session and this run are then as they were, a gate included.
-    pub fn start(&mut self, session: &mut Session) -> Result<Vec<MicroEvent>, OpError> {
+    pub fn start<'s>(&mut self, session: &'s mut Session) -> Result<&'s [MicroEvent], OpError> {
         let mut ops = vec![Op::Config {
             config: self.module.preset().clone(),
         }];
@@ -258,17 +258,27 @@ impl ModuleRun {
         }
         let held = session.limit();
         session.clear_gate();
-        let events = session.apply_all(ops).inspect_err(|_| {
-            if let Some(limit) = held {
-                session.set_gate(limit);
-            }
-        })?;
+        let appended = session
+            .apply_all(ops)
+            .map(<[MicroEvent]>::len)
+            .inspect_err(|_| {
+                if let Some(limit) = held {
+                    session.set_gate(limit);
+                }
+            })?;
         // The preset of a module that is not advanced fits Basics, so the
         // switch applies at once.
         let _ = session.set_advanced(self.module.advanced());
         self.step = 0;
         self.enter(session);
-        Ok(events)
+        // Neither call above appends an event, so the ops' events are still
+        // the last of the log. They are read from it here, as the slice
+        // `apply_all` returned would have held the session through those
+        // calls.
+        let events = session.events();
+        Ok(events
+            .get(events.len().saturating_sub(appended)..)
+            .unwrap_or_default())
     }
 
     /// Re-evaluates the current step after any change to `session`, and
@@ -540,11 +550,11 @@ impl ModuleRun {
         // As for "Show me": checked when the module was read, and a refused
         // `then` appends nothing and puts the cursor back where the student
         // left it.
-        let outcome = session.apply_all(ops.clone());
-        if outcome.is_err() {
+        let error = session.apply_all(ops.clone()).err();
+        if error.is_some() {
             session.seek(back);
         }
-        self.notice = outcome.err().map(|error| error.to_string());
+        self.notice = error.map(|error| error.to_string());
     }
 
     /// The panel's buttons: Next on an explanation; Show me on an instruct

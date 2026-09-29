@@ -182,7 +182,7 @@ mod support {
     /// facade returns the core's events; then the facade's events.
     #[track_caller]
     pub(crate) fn apply_both(core: &mut model::Session, facade: &mut Session, op: &str) -> JsValue {
-        let expected = core.apply(rust::<Op>(op)).unwrap();
+        let expected = core.apply(rust::<Op>(op)).unwrap().to_vec();
         same(facade.apply_op(&ts(op)).unwrap(), &MicroEvents(expected))
     }
 
@@ -190,7 +190,7 @@ mod support {
     /// built, and checks that the facade returns the core's events.
     #[track_caller]
     pub(crate) fn apply_op_both(core: &mut model::Session, facade: &mut Session, op: &Op) {
-        let expected = core.apply(op.clone()).unwrap();
+        let expected = core.apply(op.clone()).unwrap().to_vec();
         same(facade.apply_op(&arg(op)).unwrap(), &MicroEvents(expected));
     }
 }
@@ -1496,7 +1496,7 @@ mod module_run {
         let mut session = Session::first_visit().unwrap();
         same(
             run.start(&mut session).unwrap(),
-            &MicroEvents(core_run.start(&mut core).unwrap()),
+            &MicroEvents(core_run.start(&mut core).unwrap().to_vec()),
         );
         (core_run, core, run, session)
     }
