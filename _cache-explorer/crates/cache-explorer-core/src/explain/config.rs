@@ -271,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn option_labels_are_the_designs() {
+    fn option_labels_name_sizes_and_ways() {
         assert_eq!(bytes_option(64), "64 B");
         assert_eq!(bytes_option(1_024), "1,024 B");
         assert_eq!(ways_option(1), "Direct");

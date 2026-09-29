@@ -322,7 +322,7 @@ fn case_4_a_dirty_victim_is_written_back_before_it_is_evicted() {
 }
 
 #[test]
-fn case_4_reads_as_the_design_words_frame_3b() {
+fn case_4_words_each_event_of_frame_3b_access_5() {
     let (_, trace) = frame_3b_access_5();
     let lines: Vec<&str> = trace
         .iter()
@@ -2164,7 +2164,7 @@ fn timed_trace(trace: &[(MicroEvent, Machine)]) -> Vec<Timed> {
 }
 
 #[test]
-fn case_4_timed_is_stamped_as_the_design_example_reads() {
+fn case_4_timed_stamps_each_event_with_its_cycle() {
     // Two-way LRU at 1/20, with the run's count at 100 when access #5
     // starts: Decode@100 · Miss@101 · Victim@101 · Stall@101 (total 40) ·
     // WriteBack@121 · Evict@121 · Fill@141 · Complete@141 · Rank@141.

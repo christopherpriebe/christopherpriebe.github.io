@@ -1733,7 +1733,7 @@ fn optional_fields_may_be_null() {
 }
 
 #[test]
-fn predicates_serialize_as_the_spec_shapes_them() {
+fn predicates_serialize_keyed_by_which_field_they_have() {
     let shapes = [
         json!({"way": {"set": 2, "way": 0}, "valid": true, "tag": 1, "dirty": false, "rank": 0}),
         json!({"line": {"addr": 164}, "present": true}),

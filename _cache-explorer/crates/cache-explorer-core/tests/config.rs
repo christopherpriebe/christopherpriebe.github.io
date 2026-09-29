@@ -71,7 +71,7 @@ fn default_address_width_is_twelve_bits() {
 }
 
 #[test]
-fn default_config_keeps_the_spec_defaults_elsewhere() {
+fn default_config_is_four_byte_lru_write_back_allocate_untimed_with_zero_memory() {
     let config = Config::default();
     assert_eq!(config.word_bytes, WordBytes::Four);
     assert_eq!(config.cache.replacement, Replacement::Lru);

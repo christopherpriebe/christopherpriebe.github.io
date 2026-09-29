@@ -326,7 +326,7 @@ mod tests {
     }
 
     #[test]
-    fn pattern_memory_reads_the_design_filler() {
+    fn pattern_memory_reads_the_filler_pattern() {
         // 0x0A0 to 0x0AC read 40, 53, 66, 79 with 4-byte words.
         let memory = memory(&Preset::DirectMapped8.config());
         let words: Vec<u64> = [0x0A0, 0x0A4, 0x0A8, 0x0AC]

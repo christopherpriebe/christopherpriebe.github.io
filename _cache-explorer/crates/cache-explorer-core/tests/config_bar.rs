@@ -95,7 +95,7 @@ mod bar {
 }
 
 #[test]
-fn the_bar_offers_the_designs_groups_and_options() {
+fn the_bar_offers_its_groups_and_their_options() {
     let controls = bar(&Config::default());
     let groups: Vec<(ConfigGroupKind, bool)> = controls
         .groups

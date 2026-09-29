@@ -121,7 +121,7 @@ fn golden(name: &str, description: &str, text: &str) {
 }
 
 #[test]
-fn frame_3b_paused_on_its_write_back_reads_as_the_design_draws_it() {
+fn frame_3b_paused_on_its_write_back_shows_a_stalled_cpu_and_a_dirty_victim() {
     // The frame as its caption gives it: Advanced, two-way-lru, write-back,
     // timed, paused on the write-back of a dirty victim.
     let config = Config {
@@ -255,7 +255,7 @@ fn the_first_visit_shows_an_empty_cache_a_ready_cpu_and_the_typed_address() {
 }
 
 #[test]
-fn the_changed_line_reads_as_the_design_writes_it() {
+fn the_changed_line_names_the_cells_registers_and_counters_that_changed() {
     // Flow A: the miss brings in the line and r1 changes; the hit changes
     // only r1 and the hit count.
     let mut session = session(Config::first_visit(), [load(0x0A4)]);

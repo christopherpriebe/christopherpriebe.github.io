@@ -410,7 +410,7 @@ fn a_pretty_printed_file_still_opens() {
 }
 
 #[test]
-fn the_document_keeps_its_keys_as_the_spec_spells_them() {
+fn the_document_keeps_snake_case_keys_around_camel_case_values() {
     let mut session = session();
     apply_all(
         &mut session,
@@ -714,7 +714,7 @@ fn json_that_is_not_a_document_names_its_line_and_column() {
 }
 
 #[test]
-fn the_frame_5c_link_offers_its_repair() {
+fn a_link_with_an_invalid_associativity_offers_its_repair() {
     // The design's 5c: a link whose cache has three ways in eight lines,
     // with six actions after it.
     let bad = Config {
@@ -1649,7 +1649,7 @@ fn a_session_is_taken_once_the_load_is_done_and_only_once() {
 }
 
 #[test]
-fn the_loading_summary_is_the_design_s_frame_5b() {
+fn the_loading_summary_counts_steps_runs_and_actions() {
     let mut original = Session::with_config(Preset::TwoWayLru.config()).unwrap();
     apply_all(&mut original, [load(0x0A4), load(0x0A8), load(0x1A4)]);
     original.seek(pos(9));
