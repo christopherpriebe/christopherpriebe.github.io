@@ -1,7 +1,7 @@
 //! The wording of an access as it plays out on the machine: the address
 //! decode, the hit or miss and why, the victim chosen and the transfers a
-//! miss stalls for, the load or store that completes it, and an
-//! instruction's own `Complete` and `Error` lines.
+//! miss stalls for, the load or store that completes it, an instruction's
+//! own `Complete` and `Error` lines, and the line for a broken invariant.
 
 use std::fmt::Write as _;
 
@@ -10,6 +10,7 @@ use crate::config::Replacement;
 use crate::format;
 use crate::geometry::{Geometry, Location, Placement};
 use crate::limits::INSTRUCTION_BUDGET;
+use crate::machine::InvariantViolation;
 use crate::op::AccessKind;
 use crate::replacement::{VictimChoice, VictimReason};
 use crate::units::{Addr, LineAddr, Register, SetIndex, Tag, WayIndex, Word, WordIndex};
@@ -423,75 +424,25 @@ pub(crate) fn out_of_budget() -> String {
         format::setting(INSTRUCTION_BUDGET)
     )
 }
+
+/// The line of the `Error` event that ends an op when an invariant no longer
+/// holds.
+pub(crate) fn internal_error(violation: &InvariantViolation) -> String {
+    format!(
+        "Internal error: {violation} no longer holds. The run stopped here; please report it \
+         with a share link."
+    )
+}
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+    #![expect(clippy::disallowed_macros, reason = "assertions are how tests fail")]
 
     use super::*;
-    use crate::config::{CacheConfig, Config, Preset, WordBytes};
-
-    /// The tests' address width: 12 bits, as in every design frame. The lines
-    /// these tests expect are written for it, so the width is set here rather
-    /// than taken from `Config::default()`, and changing the default does not
-    /// break these tests.
-    const ADDRESS_BITS: u8 = 12;
-
-    fn geometry(config: &Config) -> Geometry {
-        config.validate().unwrap()
-    }
-
-    /// A named configuration's geometry at the tests' address width.
-    fn preset(preset: Preset) -> Geometry {
-        geometry(&Config {
-            address_bits: ADDRESS_BITS,
-            ..preset.config()
-        })
-    }
-
-    /// A 128 B cache of 16 B lines with `ways` ways, at the tests' address
-    /// width.
-    fn ways(ways: u32) -> Geometry {
-        geometry(&Config {
-            address_bits: ADDRESS_BITS,
-            cache: CacheConfig {
-                associativity: ways,
-                ..Preset::DirectMapped8.config().cache
-            },
-            ..Preset::DirectMapped8.config()
-        })
-    }
-
-    /// The one-line cache: 16 B of 16 B lines, fully associative with one
-    /// way, at the tests' address width.
-    fn one_line() -> Geometry {
-        geometry(&Config {
-            address_bits: ADDRESS_BITS,
-            cache: CacheConfig {
-                size_bytes: 16,
-                ..Preset::DirectMapped8.config().cache
-            },
-            ..Preset::DirectMapped8.config()
-        })
-    }
-
-    fn addr(value: u32) -> Addr {
-        Addr::new_unchecked(value)
-    }
-
-    fn line(value: u32) -> LineAddr {
-        LineAddr::new_unchecked(value)
-    }
+    use crate::config::{Config, Preset, WordBytes};
+    use crate::explain::testing::{addr, geometry, line, one_line, preset, set, way, ways};
 
     fn tag_of(value: u32) -> Tag {
         Tag::new_unchecked(value)
-    }
-
-    fn set(index: u32) -> SetIndex {
-        SetIndex::new_unchecked(index)
-    }
-
-    fn way(index: u32) -> WayIndex {
-        WayIndex::new_unchecked(index)
     }
 
     fn word(index: u32) -> WordIndex {
@@ -927,6 +878,16 @@ mod tests {
         assert_eq!(
             write_around(&preset(Preset::DirectMapped8), addr(0x0A4), value(70_000)),
             "Write-no-allocate: 70,000 goes straight to memory at 0x0A4. The cache is unchanged."
+        );
+    }
+
+    #[test]
+    fn an_internal_error_names_the_invariant() {
+        let violation = InvariantViolation::DuplicateTag { set: set(2) };
+        assert_eq!(
+            internal_error(&violation),
+            "Internal error: invariant I3 (no two valid ways in set 2 hold the same tag) no \
+             longer holds. The run stopped here; please report it with a share link."
         );
     }
 }

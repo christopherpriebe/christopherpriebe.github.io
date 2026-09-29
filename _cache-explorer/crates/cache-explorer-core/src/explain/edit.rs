@@ -811,66 +811,11 @@ pub(crate) fn edited_memory(
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+    #![expect(clippy::disallowed_macros, reason = "assertions are how tests fail")]
 
     use super::*;
-    use crate::config::{CacheConfig, Config, Preset};
-
-    /// The tests' address width: 12 bits, as in every design frame. The lines
-    /// these tests expect are written for it, so the width is set here rather
-    /// than taken from `Config::default()`, and changing the default does not
-    /// break these tests.
-    const ADDRESS_BITS: u8 = 12;
-
-    fn geometry(config: &Config) -> Geometry {
-        config.validate().unwrap()
-    }
-
-    /// A named configuration's geometry at the tests' address width.
-    fn preset(preset: Preset) -> Geometry {
-        geometry(&Config {
-            address_bits: ADDRESS_BITS,
-            ..preset.config()
-        })
-    }
-
-    /// A 128 B cache of 16 B lines with `ways` ways, at the tests' address
-    /// width.
-    fn ways(ways: u32) -> Geometry {
-        geometry(&Config {
-            address_bits: ADDRESS_BITS,
-            cache: CacheConfig {
-                associativity: ways,
-                ..Preset::DirectMapped8.config().cache
-            },
-            ..Preset::DirectMapped8.config()
-        })
-    }
-
-    /// The one-line cache: 16 B of 16 B lines, fully associative with one
-    /// way, at the tests' address width.
-    fn one_line() -> Geometry {
-        geometry(&Config {
-            address_bits: ADDRESS_BITS,
-            cache: CacheConfig {
-                size_bytes: 16,
-                ..Preset::DirectMapped8.config().cache
-            },
-            ..Preset::DirectMapped8.config()
-        })
-    }
-
-    fn addr(value: u32) -> Addr {
-        Addr::new_unchecked(value)
-    }
-
-    fn set(index: u32) -> SetIndex {
-        SetIndex::new_unchecked(index)
-    }
-
-    fn way(index: u32) -> WayIndex {
-        WayIndex::new_unchecked(index)
-    }
+    use crate::config::Preset;
+    use crate::explain::testing::{addr, one_line, preset, set, way, ways};
 
     #[test]
     fn an_unfinished_op_says_what_to_finish_first() {

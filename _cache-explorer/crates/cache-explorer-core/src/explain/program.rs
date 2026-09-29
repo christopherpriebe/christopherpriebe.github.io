@@ -364,28 +364,11 @@ fn count_of(format: ProgramFormat, instructions: u32) -> String {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+    #![expect(clippy::disallowed_macros, reason = "assertions are how tests fail")]
 
     use super::*;
     use crate::config::{Config, Preset, WordBytes};
-
-    /// The tests' address width: 12 bits, as in every design frame. The lines
-    /// these tests expect are written for it, so the width is set here rather
-    /// than taken from `Config::default()`, and changing the default does not
-    /// break these tests.
-    const ADDRESS_BITS: u8 = 12;
-
-    fn geometry(config: &Config) -> Geometry {
-        config.validate().unwrap()
-    }
-
-    /// A named configuration's geometry at the tests' address width.
-    fn preset(preset: Preset) -> Geometry {
-        geometry(&Config {
-            address_bits: ADDRESS_BITS,
-            ..preset.config()
-        })
-    }
+    use crate::explain::testing::{geometry, preset};
 
     #[test]
     fn a_program_load_counts_instructions_and_a_trace_accesses() {

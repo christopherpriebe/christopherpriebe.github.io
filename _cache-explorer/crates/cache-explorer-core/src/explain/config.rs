@@ -194,21 +194,12 @@ fn replacement_name(replacement: Replacement) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+    #![expect(clippy::disallowed_macros, reason = "assertions are how tests fail")]
 
     use super::*;
     use crate::config::Preset;
+    use crate::explain::testing::{geometry, ADDRESS_BITS};
     use crate::limits::MAX_LINES;
-
-    /// The tests' address width: 12 bits, as in every design frame. The lines
-    /// these tests expect are written for it, so the width is set here rather
-    /// than taken from `Config::default()`, and changing the default does not
-    /// break these tests.
-    const ADDRESS_BITS: u8 = 12;
-
-    fn geometry(config: &Config) -> Geometry {
-        config.validate().unwrap()
-    }
 
     fn config(size: u32, ways: u32, replacement: Replacement) -> Config {
         Config {

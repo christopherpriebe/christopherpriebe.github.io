@@ -6,7 +6,6 @@ use super::EntryNoun;
 use crate::event::{ChangeRef, Counter, EventKind};
 use crate::format;
 use crate::geometry::Geometry;
-use crate::machine::InvariantViolation;
 use crate::op::{AccessKind, ProgramFormat};
 use crate::session::EntryOutcome;
 use crate::units::{Addr, LineAddr, Register, SetIndex, WayIndex, Word};
@@ -76,15 +75,6 @@ pub(crate) fn recent(hits: u32, misses: u32, shown: Option<u32>) -> String {
         format::plural(hits, "hit", "hits"),
         format::data(misses),
         format::plural(misses, "miss", "misses")
-    )
-}
-
-/// The line of the `Error` event that ends an op when an invariant no longer
-/// holds.
-pub(crate) fn internal_error(violation: &InvariantViolation) -> String {
-    format!(
-        "Internal error: {violation} no longer holds. The run stopped here; please report it \
-         with a share link."
     )
 }
 
@@ -530,58 +520,12 @@ fn counter_name(counter: Counter) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+    #![expect(clippy::disallowed_macros, reason = "assertions are how tests fail")]
 
     use super::*;
-    use crate::config::{CacheConfig, Config, Preset};
+    use crate::config::Preset;
+    use crate::explain::testing::{addr, line, one_line, preset, set, way};
     use crate::units::WordIndex;
-
-    /// The tests' address width: 12 bits, as in every design frame. The lines
-    /// these tests expect are written for it, so the width is set here rather
-    /// than taken from `Config::default()`, and changing the default does not
-    /// break these tests.
-    const ADDRESS_BITS: u8 = 12;
-
-    fn geometry(config: &Config) -> Geometry {
-        config.validate().unwrap()
-    }
-
-    /// A named configuration's geometry at the tests' address width.
-    fn preset(preset: Preset) -> Geometry {
-        geometry(&Config {
-            address_bits: ADDRESS_BITS,
-            ..preset.config()
-        })
-    }
-
-    /// The one-line cache: 16 B of 16 B lines, fully associative with one
-    /// way, at the tests' address width.
-    fn one_line() -> Geometry {
-        geometry(&Config {
-            address_bits: ADDRESS_BITS,
-            cache: CacheConfig {
-                size_bytes: 16,
-                ..Preset::DirectMapped8.config().cache
-            },
-            ..Preset::DirectMapped8.config()
-        })
-    }
-
-    fn addr(value: u32) -> Addr {
-        Addr::new_unchecked(value)
-    }
-
-    fn line(value: u32) -> LineAddr {
-        LineAddr::new_unchecked(value)
-    }
-
-    fn set(index: u32) -> SetIndex {
-        SetIndex::new_unchecked(index)
-    }
-
-    fn way(index: u32) -> WayIndex {
-        WayIndex::new_unchecked(index)
-    }
 
     #[test]
     fn the_stall_status_counts_the_cycles_left() {
@@ -659,16 +603,6 @@ mod tests {
         assert_eq!(
             recent(1_000, 200, Some(1_200)),
             "1000 hits, 200 misses (last 1,200)"
-        );
-    }
-
-    #[test]
-    fn an_internal_error_names_the_invariant() {
-        let violation = InvariantViolation::DuplicateTag { set: set(2) };
-        assert_eq!(
-            internal_error(&violation),
-            "Internal error: invariant I3 (no two valid ways in set 2 hold the same tag) no \
-             longer holds. The run stopped here; please report it with a share link."
         );
     }
 

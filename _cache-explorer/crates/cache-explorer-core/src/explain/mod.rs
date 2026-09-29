@@ -30,12 +30,14 @@ mod edit;
 mod module;
 mod program;
 mod share;
+#[cfg(test)]
+mod testing;
 mod view;
 
 pub(crate) use access::{
-    add, bnez, decode, evict, fault_misaligned, fault_out_of_range, fill, hit, load, miss,
-    out_of_budget, rank, stall, truncated, victim, write, write_around, write_back, write_through,
-    StallFor, WriteNote,
+    add, bnez, decode, evict, fault_misaligned, fault_out_of_range, fill, hit, internal_error,
+    load, miss, out_of_budget, rank, stall, truncated, victim, write, write_around, write_back,
+    write_through, StallFor, WriteNote,
 };
 pub(crate) use config::{
     address_option, allocate_option, bytes_option, config_summary, full_option, repair_label,
@@ -63,10 +65,10 @@ pub(crate) use program::{
 pub(crate) use share::{load_lead, load_title, prefix_label, share_copied, share_text};
 pub(crate) use view::{
     amat, bus_idle, cache_header, changed_summary, edit_memory, edit_way, entry_outcome,
-    entry_status, fill_transfer, finished, internal_error, issued, live, log_header, measured,
-    memory_caption, memory_word, no_instruction, no_request, program_divider, ready, recent,
-    request, request_source, stale, stalled, status_line, stopped_at, typed_request,
-    way_description, write_around_transfer, write_back_transfer, write_through_transfer,
+    entry_status, fill_transfer, finished, issued, live, log_header, measured, memory_caption,
+    memory_word, no_instruction, no_request, program_divider, ready, recent, request,
+    request_source, stale, stalled, status_line, stopped_at, typed_request, way_description,
+    write_around_transfer, write_back_transfer, write_through_transfer,
 };
 
 use crate::format;
