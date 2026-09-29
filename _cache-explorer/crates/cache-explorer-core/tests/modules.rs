@@ -243,20 +243,14 @@ mod support {
         }
     }
 
-    /// Checks that each module of `cases` is refused for its JSON's shape,
-    /// with a message that starts as given and ends with serde's place.
-    #[track_caller]
-    pub(crate) fn shape_refused(cases: &[(String, &str)]) {
-        for (json, expected) in cases {
-            let Err(ModuleError::Json { message }) = Module::parse(json) else {
-                panic!("{json}");
-            };
-            assert!(
-                message.starts_with(expected),
-                "{message}\n  expected\n{expected}"
-            );
-            assert!(message.contains(" at line "), "{message}");
-        }
+    /// Checks that the module `json` is refused for its JSON's shape, with
+    /// exactly the message `expected`: the reason and serde's place, its line
+    /// and column, the JSON being compact and so all on line 1.
+    pub(crate) fn shape_refused(json: &str, expected: &str) {
+        let Err(ModuleError::Json { message }) = Module::parse(json) else {
+            panic!("{json}");
+        };
+        assert_eq!(message, expected);
     }
 
     /// Adds the kind of `predicate`, and of each predicate inside it, to
@@ -1501,217 +1495,226 @@ fn a_predicate_nests_at_most_max_predicate_depth_deep() {
     assert!(session.eval_predicate(&predicate(nest("not", MAX_PREDICATE_DEPTH))));
     // In module JSON, serde_json's own limit comes first, as it did before
     // predicates had a limit.
-    shape_refused(&[(
-        with(
+    shape_refused(
+        &with(
             MISS_THEN_HIT,
             "/steps/1/expect",
             nest("not", MAX_PREDICATE_DEPTH),
         ),
-        "recursion limit exceeded",
-    )]);
+        "recursion limit exceeded at line 1 column 1442",
+    );
+}
+
+cases! {
+    shape_refused;
+    a_misspelled_predicate_key_is_refused_with_the_keys_it_could_be => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"way": {"set": 0, "way": 0}, "vaild": true}),
+        ),
+        "unknown field `vaild`, expected one of `way`, `valid`, `tag`, `dirty`, `rank`, \
+         `line`, `present`, `memory`, `equals`, `counter`, `op`, `value`, `register`, `all`, \
+         `any`, `not`, `event`, `lastAccess`, `config` at line 1 column 581",
+    ),
+    a_predicate_of_two_kinds_is_refused_naming_both => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"way": {"set": 0, "way": 0}, "line": {"addr": 0}}),
+        ),
+        "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
+         `all`, `any`, `not`, `event`, `lastAccess`, `config`; found way, line at line 1 \
+         column 616",
+    ),
+    an_empty_predicate_is_refused_naming_the_kinds_it_could_be => (
+        &with(MISS_THEN_HIT, "/steps/1/expect", json!({})),
+        "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
+         `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none at line 1 column 575",
+    ),
+    a_field_not_allowed_in_a_line_predicate_is_refused => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"line": {"addr": 0}, "rank": 1}),
+        ),
+        "`rank` is not allowed in a `line` predicate (allowed: present, dirty) at line 1 \
+         column 601",
+    ),
+    a_field_not_allowed_in_an_all_predicate_is_refused => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"all": [], "valid": true}),
+        ),
+        "`valid` is not allowed in an `all` predicate (allowed: none) at line 1 column 596",
+    ),
+    a_memory_predicate_without_equals_is_refused => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"memory": {"addr": 0}}),
+        ),
+        "a `memory` predicate needs `equals` at line 1 column 594",
+    ),
+    a_counter_predicate_without_a_value_is_refused => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"counter": "misses", "op": "==", "value": null}),
+        ),
+        "a `counter` predicate needs `value` at line 1 column 616",
+    ),
+    an_unknown_register_is_refused_with_the_registers => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"register": "r8", "equals": 0}),
+        ),
+        "unknown variant `r8`, expected one of `r0`, `r1`, `r2`, `r3`, `r4`, `r5`, `r6`, `r7` \
+         at line 1 column 600",
+    ),
+    an_unknown_comparison_is_refused_with_the_comparisons => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"counter": "misses", "op": "!=", "value": 0}),
+        ),
+        "unknown variant `!=`, expected one of `==`, `>=`, `<=` at line 1 column 602",
+    ),
+    // A count, as the counters are: a module read back across the
+    // boundary never holds a number JavaScript cannot represent.
+    a_count_beyond_a_javascript_number_is_refused => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"counter": "misses", "op": "==", "value": 9_007_199_254_740_993_u64}),
+        ),
+        "invalid value: integer `9007199254740993`, expected u32 at line 1 column 627",
+    ),
+    a_malformed_hex_address_is_refused_with_the_forms_it_takes => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"lastAccess": {"addr": "0x0G4"}}),
+        ),
+        "invalid value: string \"0x0G4\", expected an address: a number, or hex after 0x such \
+         as \"0x0A4\" at line 1 column 602",
+    ),
+    an_address_without_its_prefix_is_refused => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!({"line": {"addr": "0A4"}}),
+        ),
+        "invalid value: string \"0A4\", expected an address: a number, or hex after 0x such as \
+         \"0x0A4\" at line 1 column 594",
+    ),
 }
 
 #[test]
-fn a_predicate_without_its_shape_is_refused_with_its_place() {
-    shape_refused(&[
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"way": {"set": 0, "way": 0}, "vaild": true}),
-            ),
-            "unknown field `vaild`, expected one of `way`, `valid`, `tag`, `dirty`, `rank`, \
-             `line`, `present`, `memory`, `equals`, `counter`, `op`, `value`, `register`, \
-             `all`, `any`, `not`, `event`, `lastAccess`, `config` at line 1 column ",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"way": {"set": 0, "way": 0}, "line": {"addr": 0}}),
-            ),
-            "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
-             `all`, `any`, `not`, `event`, `lastAccess`, `config`; found way, line at line 1 \
-             column ",
-        ),
-        (
-            with(MISS_THEN_HIT, "/steps/1/expect", json!({})),
-            "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
-             `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"line": {"addr": 0}, "rank": 1}),
-            ),
-            "`rank` is not allowed in a `line` predicate (allowed: present, dirty)",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"all": [], "valid": true}),
-            ),
-            "`valid` is not allowed in an `all` predicate (allowed: none)",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"memory": {"addr": 0}}),
-            ),
-            "a `memory` predicate needs `equals`",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"counter": "misses", "op": "==", "value": null}),
-            ),
-            "a `counter` predicate needs `value`",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"register": "r8", "equals": 0}),
-            ),
-            "unknown variant `r8`, expected one of `r0`",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"counter": "misses", "op": "!=", "value": 0}),
-            ),
-            "unknown variant `!=`, expected one of `==`, `>=`, `<=`",
-        ),
-        // A count, as the counters are: a module read back across the
-        // boundary never holds a number JavaScript cannot represent.
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"counter": "misses", "op": "==", "value": 9_007_199_254_740_993_u64}),
-            ),
-            "invalid value: integer `9007199254740993`, expected u32",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"lastAccess": {"addr": "0x0G4"}}),
-            ),
-            "invalid value: string \"0x0G4\", expected an address: a number, or hex after 0x \
-             such as \"0x0A4\"",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!({"line": {"addr": "0A4"}}),
-            ),
-            "invalid value: string \"0A4\", expected an address",
-        ),
-    ]);
-}
-
-#[test]
-fn a_predicate_given_as_a_sequence_reads_and_refuses_like_its_map_form() {
+fn a_predicate_given_as_a_sequence_reads_like_its_map_form() {
     assert_eq!(
         predicate(json!([{"set": 0, "way": 0}])),
         predicate(json!({"way": {"set": 0, "way": 0}})),
     );
-    shape_refused(&[
-        (
-            with(MISS_THEN_HIT, "/steps/1/expect", json!([])),
-            "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
-             `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none",
+}
+
+cases! {
+    shape_refused;
+    an_empty_predicate_sequence_is_refused_as_an_empty_map_is => (
+        &with(MISS_THEN_HIT, "/steps/1/expect", json!([])),
+        "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
+         `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none at line 1 column 575",
+    ),
+    a_not_of_an_empty_sequence_is_refused => (
+        &with(MISS_THEN_HIT, "/steps/1/expect", json!({"not": []})),
+        "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
+         `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none at line 1 column 583",
+    ),
+    an_all_of_an_empty_sequence_is_refused => (
+        &with(MISS_THEN_HIT, "/steps/1/expect", json!({"all": [[]]})),
+        "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
+         `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none at line 1 column 584",
+    ),
+    a_null_in_a_predicate_sequence_is_refused_as_a_way_without_its_way => (
+        &with(MISS_THEN_HIT, "/steps/1/expect", json!([null])),
+        "a `way` predicate needs `way` at line 1 column 579",
+    ),
+    a_counter_in_a_predicate_sequence_is_refused_as_an_unknown_way_field => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/expect",
+            json!([{"counter": "misses", "op": "==", "value": 0}]),
         ),
-        (
-            with(MISS_THEN_HIT, "/steps/1/expect", json!({"not": []})),
-            "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
-             `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none",
-        ),
-        (
-            with(MISS_THEN_HIT, "/steps/1/expect", json!({"all": [[]]})),
-            "a predicate needs exactly one of `way`, `line`, `memory`, `counter`, `register`, \
-             `all`, `any`, `not`, `event`, `lastAccess`, `config`; found none",
-        ),
-        (
-            with(MISS_THEN_HIT, "/steps/1/expect", json!([null])),
-            "a `way` predicate needs `way`",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/expect",
-                json!([{"counter": "misses", "op": "==", "value": 0}]),
-            ),
-            "unknown field `counter`, expected `set` or `way`",
-        ),
-    ]);
+        "unknown field `counter`, expected `set` or `way` at line 1 column 584",
+    ),
 }
 
 #[test]
-fn a_step_or_module_without_its_shape_is_refused_with_its_place() {
+fn a_module_cut_short_is_refused_with_its_place() {
     match Module::parse("{") {
         Err(ModuleError::Json { message }) => assert!(message.contains("EOF while parsing")),
         other => panic!("{other:?}"),
     }
-    shape_refused(&[
-        (
-            with(MISS_THEN_HIT, "/steps/1/showMe/0/addr", json!("A4")),
-            "invalid value: string \"A4\", expected an address",
+}
+
+cases! {
+    shape_refused;
+    a_show_me_address_without_its_prefix_is_refused => (
+        &with(MISS_THEN_HIT, "/steps/1/showMe/0/addr", json!("A4")),
+        "invalid value: string \"A4\", expected an address: a number, or hex after 0x such as \
+         \"0x0A4\" at line 1 column 746",
+    ),
+    an_unknown_show_me_op_is_refused_with_the_ops => (
+        &with(MISS_THEN_HIT, "/steps/1/showMe/0", json!({"op": "stpe"})),
+        "unknown variant `stpe`, expected one of `config`, `issue`, `program`, `step`, \
+         `stepAccess`, `run`, `edit` at line 1 column 719",
+    ),
+    an_until_on_an_instruct_step_is_refused => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/1/until",
+            json!({"counter": "misses", "op": "==", "value": 0}),
         ),
-        (
-            with(MISS_THEN_HIT, "/steps/1/showMe/0", json!({"op": "stpe"})),
-            "unknown variant `stpe`, expected one of",
+        "unexpected field `until` for step `instruct` at line 1 column 834",
+    ),
+    an_instruct_step_without_its_expect_is_refused => (
+        &with(MISS_THEN_HIT, "/steps/1/expect", Value::Null),
+        "missing field `expect` for step `instruct` at line 1 column 744",
+    ),
+    a_hint_on_an_explain_step_is_refused => (
+        &with(MISS_THEN_HIT, "/steps/0/hint", json!("a hint")),
+        "unexpected field `hint` for step `explain` at line 1 column 557",
+    ),
+    an_unknown_step_kind_is_refused_with_the_kinds => (
+        &with(MISS_THEN_HIT, "/steps/0/kind", json!("quiz")),
+        "unknown variant `quiz`, expected one of `instruct`, `predict`, `observe`, `explain` \
+         at line 1 column 432",
+    ),
+    an_unknown_callout_area_is_refused_with_the_areas => (
+        &with(MISS_THEN_HIT, "/steps/0/callout", json!("table")),
+        "unknown variant `table`, expected one of `addressStrip`, `cache`, `memory`, `log`, \
+         `stats`, `config`, `cpu`, `transport` at line 1 column 411",
+    ),
+    an_unknown_callout_cell_field_is_refused => (
+        &with(
+            MISS_THEN_HIT,
+            "/steps/0/callout",
+            json!({"set": 1, "row": 2}),
         ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/1/until",
-                json!({"counter": "misses", "op": "==", "value": 0}),
-            ),
-            "unexpected field `until` for step `instruct`",
-        ),
-        (
-            with(MISS_THEN_HIT, "/steps/1/expect", Value::Null),
-            "missing field `expect` for step `instruct`",
-        ),
-        (
-            with(MISS_THEN_HIT, "/steps/0/hint", json!("a hint")),
-            "unexpected field `hint` for step `explain`",
-        ),
-        (
-            with(MISS_THEN_HIT, "/steps/0/kind", json!("quiz")),
-            "unknown variant `quiz`, expected one of `instruct`, `predict`, `observe`, `explain`",
-        ),
-        (
-            with(MISS_THEN_HIT, "/steps/0/callout", json!("table")),
-            "unknown variant `table`, expected one of `addressStrip`, `cache`, `memory`, `log`, \
-             `stats`, `config`, `cpu`, `transport`",
-        ),
-        (
-            with(
-                MISS_THEN_HIT,
-                "/steps/0/callout",
-                json!({"set": 1, "row": 2}),
-            ),
-            "unknown field `row`, expected `set` or `way`",
-        ),
-        (
-            with(MISS_THEN_HIT, "/steps/0/callout", json!(3)),
-            "invalid type: integer `3`, expected an area such as \"cache\", or a cell such as",
-        ),
-        (
-            with(MISS_THEN_HIT, "/theme", json!("dark")),
-            "unknown field `theme`, expected one of `id`, `title`, `description`, `advanced`, \
-             `preset`, `program`, `steps`",
-        ),
-    ]);
+        "unknown field `row`, expected `set` or `way` at line 1 column 410",
+    ),
+    a_callout_that_is_neither_area_nor_cell_is_refused => (
+        &with(MISS_THEN_HIT, "/steps/0/callout", json!(3)),
+        "invalid type: integer `3`, expected an area such as \"cache\", or a cell such as \
+         {\"set\": 2, \"way\": 0} at line 1 column 405",
+    ),
+    an_unknown_module_field_is_refused_with_the_fields => (
+        &with(MISS_THEN_HIT, "/theme", json!("dark")),
+        "unknown field `theme`, expected one of `id`, `title`, `description`, `advanced`, \
+         `preset`, `program`, `steps` at line 1 column 1856",
+    ),
 }
 
 #[test]

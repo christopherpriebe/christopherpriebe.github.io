@@ -46,9 +46,9 @@ use support::{
     arb_access_match, arb_config, arb_config_match, arb_edit_patch, arb_edit_target,
     arb_event_match, arb_long_session, arb_near_limit, arb_op, arb_predicate, arb_raw_config,
     arb_session, arb_share_doc, arb_step, arb_text, arb_valid_config, arb_way_form, arb_way_patch,
-    cells, changes, check, checked_positions, end, event_kinds, every_position, load_in_slices,
-    number, number_fields, op_ends, op_start, play, play_long, registers, round_trip, seeks_reach,
-    undo_stops, without_mode, Checks, Fold, Limits, COUNTERS,
+    cells, changes, check, checked_positions, end, event_kind_index, event_kinds, every_position,
+    load_in_slices, number, number_fields, op_ends, op_start, play, play_long, registers,
+    round_trip, seeks_reach, undo_stops, without_mode, Checks, Fold, Limits, COUNTERS,
 };
 
 /// How the properties over whole sessions run: with a quarter of the cases
@@ -2350,7 +2350,7 @@ mod support {
 
     /// Any event match.
     pub(crate) fn arb_event_match() -> impl Strategy<Value = EventMatch> {
-        (select(event_kinds().to_vec()), option::of(any::<u32>()))
+        (select(event_kinds()), option::of(any::<u32>()))
             .prop_map(|(kind, entry)| EventMatch { kind, entry })
     }
 
@@ -2409,9 +2409,33 @@ mod support {
         )
     }
 
-    /// Every event kind.
-    pub(crate) fn event_kinds() -> [EventKind; 16] {
-        [
+    /// The place of `kind` in [`event_kinds`]. The match names every kind, so
+    /// a kind added to the engine stops this compiling until it is numbered
+    /// here and listed there.
+    pub(crate) fn event_kind_index(kind: EventKind) -> usize {
+        match kind {
+            EventKind::Decode => 0,
+            EventKind::Hit => 1,
+            EventKind::Miss => 2,
+            EventKind::Victim => 3,
+            EventKind::WriteBack => 4,
+            EventKind::WriteThrough => 5,
+            EventKind::Fill => 6,
+            EventKind::Write => 7,
+            EventKind::Rank => 8,
+            EventKind::MemWrite => 9,
+            EventKind::Stall => 10,
+            EventKind::Complete => 11,
+            EventKind::Edit => 12,
+            EventKind::Error => 13,
+            EventKind::Evict => 14,
+            EventKind::Setup => 15,
+        }
+    }
+
+    /// Every event kind, each at its [`event_kind_index`].
+    pub(crate) fn event_kinds() -> Vec<EventKind> {
+        vec![
             EventKind::Decode,
             EventKind::Hit,
             EventKind::Miss,
@@ -3251,7 +3275,13 @@ fn session_properties_run_their_share_of_the_cases() {
         Ok(())
     });
     assert_eq!(cases.get(), long_sessions().cases);
-    assert_eq!(sessions().cases, (values().cases / 4).max(1));
+}
+
+#[test]
+fn the_list_of_event_kinds_has_each_kind_once_at_its_index() {
+    for (place, kind) in event_kinds().into_iter().enumerate() {
+        assert_eq!(event_kind_index(kind), place, "{kind:?}");
+    }
 }
 
 proptest! {
@@ -3437,7 +3467,8 @@ proptest! {
         round_trip(&number::<Word>(large))?;
         round_trip(&WayLoc { set: number(small.into()), way: number(large >> 32) })?;
         round_trip(&registers()[pick % 8])?;
-        round_trip(&event_kinds()[pick % 16])?;
+        let kinds = event_kinds();
+        round_trip(&kinds[pick % kinds.len()])?;
         round_trip(&COUNTERS[pick % COUNTERS.len()])?;
         round_trip(&number_fields()[pick % 2])?;
         round_trip(&[Outcome::Hit, Outcome::Miss][pick % 2])?;

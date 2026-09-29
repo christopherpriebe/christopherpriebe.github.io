@@ -1537,7 +1537,9 @@ fn a_file_too_large_for_a_link_offers_no_link() {
         ..doc
     };
     let repair = file_failure(&small.to_json()).repair.unwrap();
-    assert!(Session::from_share_string(&repair.share).is_ok());
+    let repaired = Session::from_share_string(&repair.share).unwrap();
+    assert_eq!(repaired.initial().cache.associativity, 2);
+    assert_eq!(repaired.ops(), small.ops);
 }
 
 #[test]
