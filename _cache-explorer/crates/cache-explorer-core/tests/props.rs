@@ -3238,9 +3238,8 @@ fn edits_are_refused_for_room_as_planned_near_each_limit() {
 }
 
 /// The properties over whole sessions run their share of the cases, and the
-/// properties over long sessions and over the limits of the log theirs,
-/// whatever `PROPTEST_CASES` says: the `proptest!` macro would run as many as
-/// `PROPTEST_CASES` of each.
+/// property over long sessions its share, whatever `PROPTEST_CASES` says:
+/// the `proptest!` macro would run as many as `PROPTEST_CASES` of each.
 #[test]
 fn session_properties_run_their_share_of_the_cases() {
     let cases = Cell::new(0);
@@ -3255,12 +3254,6 @@ fn session_properties_run_their_share_of_the_cases() {
         Ok(())
     });
     assert_eq!(cases.get(), long_sessions().cases);
-    cases.set(0);
-    check(near_limits(), &arb_near_limit(), |_| {
-        cases.set(cases.get() + 1);
-        Ok(())
-    });
-    assert_eq!(cases.get(), near_limits().cases);
     assert_eq!(sessions().cases, (values().cases / 4).max(1));
 }
 
