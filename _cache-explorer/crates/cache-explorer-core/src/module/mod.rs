@@ -580,10 +580,10 @@ impl Step {
             } => {
                 check_hint(path, hint.as_deref())?;
                 let before = force.config;
-                let mut switched = false;
-                if let Some(ops) = show_me {
-                    switched = force.apply(path, "showMe", ops)?;
-                }
+                let switched = match show_me {
+                    Some(ops) => force.apply(path, "showMe", ops)?,
+                    None => false,
+                };
                 let at = format!("{path}.expect");
                 expect.check(&at, &force.config, &force.geometry)?;
                 if switched && !expect.tells_config(&before, &force.config) {
