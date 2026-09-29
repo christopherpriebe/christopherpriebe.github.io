@@ -946,7 +946,7 @@ impl RequestView {
                     status: RequestStatus::Issued,
                     kind: Some(kind),
                     text: explain::request(geometry, kind, addr),
-                    source: Some(entry.label.clone()),
+                    source: Some(String::from(&*entry.label)),
                     source_text: entry
                         .number
                         .map(explain::request_source)
@@ -971,7 +971,7 @@ impl CpuView {
     pub(crate) fn new(machine: &Machine, entry: Option<&EntryRecord>, position: &Position) -> Self {
         let instruction = entry
             .filter(|entry| entry.kind != EntryKind::Program)
-            .map_or_else(explain::no_instruction, |entry| entry.label.clone());
+            .map_or_else(explain::no_instruction, |entry| String::from(&*entry.label));
         // Every event of a numbered entry names it, its last included,
         // except the last event of the entry that finished or stopped the
         // program, where the program's state takes over at once.

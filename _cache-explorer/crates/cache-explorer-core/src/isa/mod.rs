@@ -22,6 +22,8 @@ mod asm;
 mod lexer;
 mod trace;
 
+use std::sync::Arc;
+
 use serde::Serialize;
 
 use crate::explain::{self, ParseProblem};
@@ -56,8 +58,9 @@ pub(crate) struct Placed {
     /// Its source line, from 1.
     pub(crate) line: u32,
     /// Its source text without its label and comment, with each run of
-    /// spaces and tabs made one space: `ld r1, [0x0A4]`, `W 0x0A4 7`.
-    pub(crate) text: String,
+    /// spaces and tabs made one space: `ld r1, [0x0A4]`, `W 0x0A4 7`. Shared
+    /// with the label of the log entry the instruction makes.
+    pub(crate) text: Arc<str>,
 }
 
 /// One instruction.
@@ -274,7 +277,7 @@ impl Program {
     /// The drawer's line with the pc at `pc`: how many instructions, and the
     /// next one, `end` past the last.
     pub(crate) fn summary(&self, pc: u32) -> String {
-        let next = self.get(pc).map(|placed| placed.text.as_str());
+        let next = self.get(pc).map(|placed| &*placed.text);
         explain::program_summary(self.format, self.len(), next)
     }
 }
@@ -459,13 +462,7 @@ mod tests {
         let placed = placed(source, ProgramFormat::Asm);
         let read: Vec<(Instruction, u32, &str)> = placed
             .iter()
-            .map(|placed| {
-                (
-                    placed.instruction.clone(),
-                    placed.line,
-                    placed.text.as_str(),
-                )
-            })
+            .map(|placed| (placed.instruction.clone(), placed.line, &*placed.text))
             .collect();
         assert_eq!(
             read,
@@ -525,13 +522,7 @@ mod tests {
         );
         let read: Vec<(Instruction, u32, &str)> = placed
             .iter()
-            .map(|placed| {
-                (
-                    placed.instruction.clone(),
-                    placed.line,
-                    placed.text.as_str(),
-                )
-            })
+            .map(|placed| (placed.instruction.clone(), placed.line, &*placed.text))
             .collect();
         assert_eq!(
             read,

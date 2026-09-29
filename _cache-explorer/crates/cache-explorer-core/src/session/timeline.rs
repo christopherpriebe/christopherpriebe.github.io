@@ -21,6 +21,7 @@
 //! have a place on the scrubber and a tick.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use serde::Serialize;
 
@@ -211,9 +212,10 @@ pub(crate) struct EntryRecord {
     /// What it did.
     pub(crate) outcome: EntryOutcome,
     /// What it did, in words.
-    pub(crate) outcome_text: String,
-    /// What it is, in a few words.
-    pub(crate) label: String,
+    pub(crate) outcome_text: &'static str,
+    /// What it is, in a few words. An instruction's is the text the program
+    /// holds for it, shared with the program.
+    pub(crate) label: Arc<str>,
     /// What it changed over the whole entry; none for a program load, whose
     /// divider row has no changed line.
     pub(crate) summary: Option<String>,
@@ -288,7 +290,7 @@ struct Open {
     /// What it is.
     kind: EntryKind,
     /// Its label.
-    label: String,
+    label: Arc<str>,
     /// The format of the program it loads, for a program load.
     format: Option<ProgramFormat>,
     /// The load or store it makes, for an access.
@@ -473,19 +475,21 @@ impl Entries {
 
 /// What the entry that `event` opens is, its label, and the format of the
 /// program it loads, from the machine `after` it and `pc`, the pc before
-/// it.
+/// it. The label of an instruction is the program's own text for it, shared;
+/// any other is built here.
 fn describe(
     event: &MicroEvent,
     after: &Machine,
     pc: u32,
-) -> (EntryKind, String, Option<ProgramFormat>) {
+) -> (EntryKind, Arc<str>, Option<ProgramFormat>) {
     let geometry = &after.geometry;
+    let no_instruction = || Arc::<str>::from(explain::no_instruction());
     let instruction = |at: u32| {
         after
             .program
             .as_ref()
             .and_then(|program| program.get(at))
-            .map_or_else(explain::no_instruction, |placed| placed.text.clone())
+            .map_or_else(no_instruction, |placed| Arc::clone(&placed.text))
     };
     match event.kind {
         EventKind::Setup => {
@@ -497,15 +501,15 @@ fn describe(
                 });
             (
                 EntryKind::Program,
-                explain::program_divider(format, count),
+                explain::program_divider(format, count).into(),
                 Some(format),
             )
         }
         EventKind::Edit => {
             let label = match (event.set, event.way, event.addr) {
-                (Some(set), Some(way), _) => explain::edit_way(set, way),
-                (_, _, Some(addr)) => explain::edit_memory(geometry, addr),
-                _ => explain::no_instruction(),
+                (Some(set), Some(way), _) => explain::edit_way(set, way).into(),
+                (_, _, Some(addr)) => explain::edit_memory(geometry, addr).into(),
+                _ => no_instruction(),
             };
             (EntryKind::Edit, label, None)
         }
@@ -515,7 +519,7 @@ fn describe(
             let label = if after.cpu.halted.is_some() {
                 instruction(after.cpu.pc)
             } else {
-                explain::no_instruction()
+                no_instruction()
             };
             (EntryKind::Error, label, None)
         }
@@ -526,7 +530,7 @@ fn describe(
                         Request::Load { into, .. } => (into, None),
                         Request::Store { value, .. } => (Register::R1, Some(value)),
                     };
-                    explain::issued(geometry, request.addr(), into, value)
+                    explain::issued(geometry, request.addr(), into, value).into()
                 }
                 // The instruction is still at the pc: it retires at the
                 // access's last event.
@@ -680,10 +684,10 @@ impl Session {
         EntryView {
             index: count(index),
             number: record.number,
-            label: record.label.clone(),
+            label: String::from(&*record.label),
             kind: record.kind,
             outcome: record.outcome,
-            outcome_text: record.outcome_text.clone(),
+            outcome_text: record.outcome_text.to_owned(),
             first: record.first,
             last: record.last,
             tense,
@@ -706,7 +710,7 @@ impl Session {
             self.log.record_at(cursor).and_then(|(_, record)| {
                 record
                     .number
-                    .map(|number| (number, record.label.as_str(), record.outcome_text.as_str()))
+                    .map(|number| (number, &*record.label, record.outcome_text))
             })
         };
         explain::live(entry, &event.explain)
@@ -911,7 +915,7 @@ mod tests {
             .entries()
             .iter()
             .any(|record| record.kind == EntryKind::Error
-                && record.label == explain::no_instruction()
+                && *record.label == explain::no_instruction()
                 && record.number == Some(1)));
         for record in session.log.entries() {
             let expected = (record.kind != EntryKind::Program).then(|| {
@@ -921,6 +925,30 @@ mod tests {
                 explain::changed_summary(&geometry, &replayed_highlight(&session, record.last))
             });
             assert_eq!(record.summary, expected, "{record:?}");
+        }
+    }
+
+    #[test]
+    fn an_entry_of_a_program_instruction_shares_the_programs_text_for_it() {
+        let mut session = Session::with_config(Preset::DirectMapped8.config()).unwrap();
+        session
+            .apply(Op::Program {
+                source: "add r1, r0, #1\nld r2, [0x0B0]".to_owned(),
+                format: ProgramFormat::Asm,
+            })
+            .unwrap();
+        session.apply(Op::Run { n: 2 }).unwrap();
+        let program = session.machine().program.clone().unwrap();
+        let entries: Vec<&EntryRecord> = session
+            .log
+            .entries()
+            .iter()
+            .filter(|record| record.kind != EntryKind::Program)
+            .collect();
+        assert_eq!(entries.len(), 2);
+        for (index, record) in (0..).zip(entries) {
+            let placed = program.get(index).unwrap();
+            assert!(Arc::ptr_eq(&record.label, &placed.text), "{record:?}");
         }
     }
 

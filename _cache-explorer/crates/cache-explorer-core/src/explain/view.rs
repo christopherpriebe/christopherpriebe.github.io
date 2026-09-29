@@ -302,34 +302,93 @@ pub(crate) fn program_divider(format: ProgramFormat, instructions: u32) -> Strin
 /// write-back"; "CPU only" for an instruction without a memory access;
 /// "edit"; "program" or "trace" for a load; "error". `kinds` are the kinds
 /// of the entry's events, and `format` the loaded program's.
+///
+/// An access's extras always come in the order evict, write-back,
+/// write-through, write-around, whatever the order of its events, so each
+/// combination has one text, fixed here.
 pub(crate) fn entry_outcome(
     outcome: EntryOutcome,
     kinds: &[EventKind],
     format: Option<ProgramFormat>,
-) -> String {
-    let access = |result: &str| {
-        let mut parts = vec![result];
-        for (kind, name) in [
-            (EventKind::Evict, "evict"),
-            (EventKind::WriteBack, "write-back"),
-            (EventKind::WriteThrough, "write-through"),
-            (EventKind::MemWrite, "write-around"),
-        ] {
-            if kinds.contains(&kind) {
-                parts.push(name);
-            }
+) -> &'static str {
+    let did = |kind| kinds.contains(&kind);
+    let extras = (
+        did(EventKind::Evict),
+        did(EventKind::WriteBack),
+        did(EventKind::WriteThrough),
+        did(EventKind::MemWrite),
+    );
+    match (outcome, extras) {
+        (EntryOutcome::Hit, (false, false, false, false)) => "hit",
+        (EntryOutcome::Hit, (true, false, false, false)) => "hit \u{b7} evict",
+        (EntryOutcome::Hit, (false, true, false, false)) => "hit \u{b7} write-back",
+        (EntryOutcome::Hit, (true, true, false, false)) => "hit \u{b7} evict \u{b7} write-back",
+        (EntryOutcome::Hit, (false, false, true, false)) => "hit \u{b7} write-through",
+        (EntryOutcome::Hit, (true, false, true, false)) => "hit \u{b7} evict \u{b7} write-through",
+        (EntryOutcome::Hit, (false, true, true, false)) => {
+            "hit \u{b7} write-back \u{b7} write-through"
         }
-        parts.join(" \u{b7} ")
-    };
-    match outcome {
-        EntryOutcome::Hit => access("hit"),
-        EntryOutcome::Miss => access("miss"),
-        EntryOutcome::Edit => "edit".to_owned(),
-        EntryOutcome::CpuOnly => "CPU only".to_owned(),
-        EntryOutcome::Program => {
-            super::source_noun(format.unwrap_or(ProgramFormat::Asm)).to_owned()
+        (EntryOutcome::Hit, (true, true, true, false)) => {
+            "hit \u{b7} evict \u{b7} write-back \u{b7} write-through"
         }
-        EntryOutcome::Error => "error".to_owned(),
+        (EntryOutcome::Hit, (false, false, false, true)) => "hit \u{b7} write-around",
+        (EntryOutcome::Hit, (true, false, false, true)) => "hit \u{b7} evict \u{b7} write-around",
+        (EntryOutcome::Hit, (false, true, false, true)) => {
+            "hit \u{b7} write-back \u{b7} write-around"
+        }
+        (EntryOutcome::Hit, (true, true, false, true)) => {
+            "hit \u{b7} evict \u{b7} write-back \u{b7} write-around"
+        }
+        (EntryOutcome::Hit, (false, false, true, true)) => {
+            "hit \u{b7} write-through \u{b7} write-around"
+        }
+        (EntryOutcome::Hit, (true, false, true, true)) => {
+            "hit \u{b7} evict \u{b7} write-through \u{b7} write-around"
+        }
+        (EntryOutcome::Hit, (false, true, true, true)) => {
+            "hit \u{b7} write-back \u{b7} write-through \u{b7} write-around"
+        }
+        (EntryOutcome::Hit, (true, true, true, true)) => {
+            "hit \u{b7} evict \u{b7} write-back \u{b7} write-through \u{b7} write-around"
+        }
+        (EntryOutcome::Miss, (false, false, false, false)) => "miss",
+        (EntryOutcome::Miss, (true, false, false, false)) => "miss \u{b7} evict",
+        (EntryOutcome::Miss, (false, true, false, false)) => "miss \u{b7} write-back",
+        (EntryOutcome::Miss, (true, true, false, false)) => "miss \u{b7} evict \u{b7} write-back",
+        (EntryOutcome::Miss, (false, false, true, false)) => "miss \u{b7} write-through",
+        (EntryOutcome::Miss, (true, false, true, false)) => {
+            "miss \u{b7} evict \u{b7} write-through"
+        }
+        (EntryOutcome::Miss, (false, true, true, false)) => {
+            "miss \u{b7} write-back \u{b7} write-through"
+        }
+        (EntryOutcome::Miss, (true, true, true, false)) => {
+            "miss \u{b7} evict \u{b7} write-back \u{b7} write-through"
+        }
+        (EntryOutcome::Miss, (false, false, false, true)) => "miss \u{b7} write-around",
+        (EntryOutcome::Miss, (true, false, false, true)) => "miss \u{b7} evict \u{b7} write-around",
+        (EntryOutcome::Miss, (false, true, false, true)) => {
+            "miss \u{b7} write-back \u{b7} write-around"
+        }
+        (EntryOutcome::Miss, (true, true, false, true)) => {
+            "miss \u{b7} evict \u{b7} write-back \u{b7} write-around"
+        }
+        (EntryOutcome::Miss, (false, false, true, true)) => {
+            "miss \u{b7} write-through \u{b7} write-around"
+        }
+        (EntryOutcome::Miss, (true, false, true, true)) => {
+            "miss \u{b7} evict \u{b7} write-through \u{b7} write-around"
+        }
+        (EntryOutcome::Miss, (false, true, true, true)) => {
+            "miss \u{b7} write-back \u{b7} write-through \u{b7} write-around"
+        }
+        (EntryOutcome::Miss, (true, true, true, true)) => {
+            "miss \u{b7} evict \u{b7} write-back \u{b7} write-through \u{b7} write-around"
+        }
+        (EntryOutcome::Edit, _) => "edit",
+        (EntryOutcome::CpuOnly, _) => "CPU only",
+        (EntryOutcome::Program, _) => super::source_noun(format.unwrap_or(ProgramFormat::Asm)),
+        (EntryOutcome::Error, _) => "error",
     }
 }
 
@@ -747,6 +806,53 @@ mod tests {
             entry_outcome(EntryOutcome::Program, &[], Some(ProgramFormat::Asm)),
             "program"
         );
+    }
+
+    #[test]
+    fn an_access_outcome_names_its_result_then_each_thing_it_also_did_in_a_fixed_order() {
+        use EventKind::{Complete, Decode, Evict, Fill, MemWrite, WriteBack, WriteThrough};
+        let extras = [
+            (Evict, "evict"),
+            (WriteBack, "write-back"),
+            (WriteThrough, "write-through"),
+            (MemWrite, "write-around"),
+        ];
+        for flags in 0..16_u32 {
+            let did: Vec<(EventKind, &str)> = extras
+                .iter()
+                .enumerate()
+                .filter(|(bit, _)| flags & (1 << bit) != 0)
+                .map(|(_, extra)| *extra)
+                .collect();
+            // The events of an entry come in their own order, with others
+            // among them; the text follows neither.
+            let mut kinds = vec![Decode, Fill];
+            kinds.extend(did.iter().rev().map(|(kind, _)| *kind));
+            kinds.push(Complete);
+            for (outcome, result) in [(EntryOutcome::Hit, "hit"), (EntryOutcome::Miss, "miss")] {
+                let expected = std::iter::once(result)
+                    .chain(did.iter().map(|(_, name)| *name))
+                    .collect::<Vec<&str>>()
+                    .join(" \u{b7} ");
+                assert_eq!(
+                    entry_outcome(outcome, &kinds, None),
+                    expected,
+                    "{outcome:?} with {kinds:?}"
+                );
+            }
+            // Only an access's text depends on its events.
+            for (outcome, text) in [
+                (EntryOutcome::Edit, "edit"),
+                (EntryOutcome::CpuOnly, "CPU only"),
+                (EntryOutcome::Error, "error"),
+            ] {
+                assert_eq!(entry_outcome(outcome, &kinds, None), text);
+            }
+            assert_eq!(
+                entry_outcome(EntryOutcome::Program, &kinds, Some(ProgramFormat::Trace)),
+                "trace"
+            );
+        }
     }
 
     #[test]

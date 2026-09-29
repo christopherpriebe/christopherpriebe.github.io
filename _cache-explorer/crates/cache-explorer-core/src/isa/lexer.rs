@@ -9,6 +9,8 @@
 //! counted in Unicode scalar values, so a line with an accented comment
 //! underlines the same characters the student sees.
 
+use std::sync::Arc;
+
 use crate::units::Register;
 
 /// What a token is.
@@ -135,12 +137,17 @@ fn token(
 }
 
 /// `text` with every run of spaces and tabs made one space, as the drawer's
-/// summary and the CPU box show an instruction.
-pub(crate) fn collapse(text: &str) -> String {
-    text.split([' ', '\t'])
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<&str>>()
-        .join(" ")
+/// summary and the CPU box show an instruction. The text is shared: the
+/// program keeps it, and so does the log entry the instruction makes.
+pub(crate) fn collapse(text: &str) -> Arc<str> {
+    let mut collapsed = String::with_capacity(text.len());
+    for part in text.split([' ', '\t']).filter(|part| !part.is_empty()) {
+        if !collapsed.is_empty() {
+            collapsed.push(' ');
+        }
+        collapsed.push_str(part);
+    }
+    collapsed.into()
 }
 
 impl Token<'_> {
@@ -277,8 +284,8 @@ mod tests {
 
     #[test]
     fn runs_of_spaces_and_tabs_collapse_to_one_space() {
-        assert_eq!(collapse("ld  r1,\t[0x0A4]"), "ld r1, [0x0A4]");
-        assert_eq!(collapse("  W 0x0A4   7 "), "W 0x0A4 7");
+        assert_eq!(&*collapse("ld  r1,\t[0x0A4]"), "ld r1, [0x0A4]");
+        assert_eq!(&*collapse("  W 0x0A4   7 "), "W 0x0A4 7");
     }
 
     #[test]
