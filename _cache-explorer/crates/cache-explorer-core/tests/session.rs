@@ -1618,7 +1618,7 @@ fn a_log_as_large_as_a_file_can_hold_refuses_every_op_until_undo_makes_room() {
     // The file is within its limit wherever the cursor is and in either
     // mode, at the size the session keeps without writing it.
     for advanced in [true, false] {
-        session.set_advanced(advanced);
+        assert_eq!(session.set_advanced(advanced), ConfigChange::Applied);
         for at in [0, 1, end / 2, end] {
             session.seek(pos(at));
             let json = session.to_json();
@@ -1736,7 +1736,10 @@ fn no_call_rewrites_an_op_the_log_keeps() {
     let calls: Vec<Call<'_>> = vec![
         Box::new(|session| apply_all(session, [load(0x0A4)])),
         Box::new(|session| {
-            let _ = session.propose_config(two_way.clone());
+            assert!(matches!(
+                session.propose_config(two_way.clone()),
+                Ok(ConfigChange::NeedsReset { .. })
+            ));
         }),
         Box::new(|session| {
             apply_all(
@@ -1757,16 +1760,16 @@ fn no_call_rewrites_an_op_the_log_keeps() {
             assert_eq!(session.set_advanced(false), ConfigChange::Applied);
         }),
         Box::new(|session| {
-            session.step_event(Some(&sample));
+            assert_eq!(session.step_event(Some(&sample)), StepOutcome::Applied);
         }),
         Box::new(|session| {
-            session.step_event(Some(&sample));
+            assert_eq!(session.step_event(Some(&sample)), StepOutcome::Applied);
         }),
         Box::new(|session| {
             session.undo();
         }),
         Box::new(|session| {
-            session.step_access(Some(&sample));
+            assert_eq!(session.step_access(Some(&sample)), StepOutcome::Moved);
         }),
         Box::new(|session| session.seek(pos(2))),
         Box::new(|session| apply_all(session, [store(0x0A4, 3)])),

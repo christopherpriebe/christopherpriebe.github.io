@@ -143,6 +143,7 @@ pub enum ReplayError {
 
 /// What a change from the configuration bar, or a switch between Basics and
 /// Advanced, did.
+#[must_use = "NeedsReset means nothing has changed yet"]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(

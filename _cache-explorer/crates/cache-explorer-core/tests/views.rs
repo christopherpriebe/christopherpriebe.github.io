@@ -12,10 +12,11 @@
 
 use cache_explorer_core::limits::{MAX_RUN_STEPS, MIN_ADDRESS_BITS};
 use cache_explorer_core::{
-    AccessKind, AddressInput, AllocatePolicy, CacheConfig, ChangeRef, Config, ControlAction,
-    Counter, CpuStatus, EntryKind, EntryOutcome, EntryViews, EventKind, HitMarker, MemoryLines,
-    MicroEvents, Op, Preset, RankHeader, RankRole, Register, Replacement, RequestStatus, Session,
-    SetIndex, State, Tense, Timing, Transfer, WayCompare, WordIndex, WritePolicy,
+    AccessKind, AddressInput, AllocatePolicy, CacheConfig, ChangeRef, Config, ConfigChange,
+    ControlAction, Counter, CpuStatus, EntryKind, EntryOutcome, EntryViews, EventKind, HitMarker,
+    MemoryLines, MicroEvents, Op, Preset, RankHeader, RankRole, Register, Replacement,
+    RequestStatus, Session, SetIndex, State, StepOutcome, Tense, Timing, Transfer, WayCompare,
+    WordIndex, WritePolicy,
 };
 use insta::{Comparator, DefaultComparator, Snapshot};
 
@@ -1081,20 +1082,20 @@ fn the_live_sentence_opens_with_the_outcome_after_a_jump() {
          r3."
     );
     // One event on, as Space moves, the log line alone.
-    session.step_event(None);
+    assert_eq!(session.step_event(None), StepOutcome::Moved);
     assert_eq!(
         session.timeline().live_text,
         "LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1."
     );
     // Space at the end of the log executes the next instruction and shows
     // its first event, still one at a time.
-    session.step_event(None);
+    assert_eq!(session.step_event(None), StepOutcome::Applied);
     assert_eq!(
         session.timeline().live_text,
         "Load 0x1A4: tag 0x06, set 2, offset 4 (word 1)."
     );
     // Shift+Space jumps to the access's end.
-    session.step_access(None);
+    assert_eq!(session.step_access(None), StepOutcome::Moved);
     assert!(session
         .timeline()
         .live_text
@@ -1145,7 +1146,7 @@ fn the_labels_give_the_mode_the_runs_steps_and_timing() {
         labels.config_summary,
         "128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU"
     );
-    session.set_advanced(true);
+    assert_eq!(session.set_advanced(true), ConfigChange::Applied);
     let labels = session.state().labels;
     assert_eq!(labels.status_text, "Advanced \u{b7} 28 steps in this run");
     assert_eq!(
@@ -1189,10 +1190,7 @@ fn the_state_does_not_depend_on_how_the_cursor_got_there() {
     // ... reads the same when reached one event at a time from the start ...
     session.seek(pos(0));
     for expected in sought.iter().skip(1) {
-        assert_eq!(
-            session.step_event(None),
-            cache_explorer_core::StepOutcome::Moved
-        );
+        assert_eq!(session.step_event(None), StepOutcome::Moved);
         assert_eq!(&session.state(), expected);
     }
     // ... and backwards, one seek at a time.

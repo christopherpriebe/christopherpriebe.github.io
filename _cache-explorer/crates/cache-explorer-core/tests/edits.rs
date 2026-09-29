@@ -14,7 +14,7 @@
 use cache_explorer_core::{
     AccessKind, CacheConfig, ChangeRef, Config, Consequence, EditOutcome, EntryKind, EntryOutcome,
     EventKind, FieldInput, Op, OpError, Preset, RefusalReason, Replacement, ReplayError, Session,
-    Tone, WayForm, WordMark, WritePolicy,
+    StepOutcome, Tone, WayForm, WordMark, WritePolicy,
 };
 
 use support::{
@@ -589,7 +589,7 @@ fn an_edit_waits_for_the_end_of_the_access_the_cursor_is_in() {
     );
     // Shift+Space goes to the end of the access, where the edit plans:
     // way 1 now holds the clean 0x2A0 the access brought in.
-    session.step_access(None);
+    assert_eq!(session.step_access(None), StepOutcome::Moved);
     assert!(session.plan_edit(&way(2, 1), &patch).is_ok());
 }
 
@@ -652,7 +652,7 @@ fn inside_an_access_before_the_ops_last_entry_an_edit_waits_for_the_ops_end() {
              #2 (Shift+Space), then edit."
         )
     );
-    session.step_access(None);
+    assert_eq!(session.step_access(None), StepOutcome::Moved);
     assert_eq!(session.position().label, "2.3");
     assert!(session.plan_edit(&memory(0x0A4), &patch).is_ok());
 }

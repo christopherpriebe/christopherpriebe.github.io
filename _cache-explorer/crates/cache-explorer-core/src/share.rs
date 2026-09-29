@@ -1458,6 +1458,7 @@ mod tests {
     use super::*;
     use crate::config::Preset;
     use crate::op::{AccessKind, ProgramFormat};
+    use crate::session::ConfigChange;
     use crate::units::Addr;
 
     fn load(addr: u32) -> Op {
@@ -1508,11 +1509,11 @@ mod tests {
         session.apply(load(0x2A4)).unwrap();
         assert_eq!(session.op_count(), 4);
         kept_json_is_the_documents(&session);
-        session.set_advanced(true);
+        assert_eq!(session.set_advanced(true), ConfigChange::Applied);
         kept_json_is_the_documents(&session);
         session.seek(EventPos::new_unchecked(0));
         kept_json_is_the_documents(&session);
-        session.set_advanced(false);
+        assert_eq!(session.set_advanced(false), ConfigChange::Applied);
         kept_json_is_the_documents(&session);
     }
 

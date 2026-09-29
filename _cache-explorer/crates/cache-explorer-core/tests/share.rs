@@ -22,9 +22,9 @@ use cache_explorer_core::limits::{
     SESSION_EVENT_LIMIT,
 };
 use cache_explorer_core::{
-    CacheConfig, Config, ConfigError, ConfigNumberField, EncodingError, LinkTooLong, LoadError,
-    LoadFailure, LoadProgress, Op, OpError, Preset, ProgramFormat, Session, ShareAt, ShareDoc,
-    ShareLoad, ShareSummary, TextSegment, TooLarge, WordBytes, SCHEMA_VERSION,
+    CacheConfig, Config, ConfigChange, ConfigError, ConfigNumberField, EncodingError, LinkTooLong,
+    LoadError, LoadFailure, LoadProgress, Op, OpError, Preset, ProgramFormat, Session, ShareAt,
+    ShareDoc, ShareLoad, ShareSummary, TextSegment, TooLarge, WordBytes, SCHEMA_VERSION,
 };
 use serde_json::{json, Value};
 
@@ -526,7 +526,7 @@ fn a_place_beyond_an_op_or_the_log_is_clamped_and_none_opens_at_the_end() {
 #[test]
 fn the_mode_chosen_is_kept() {
     let mut original = session();
-    original.set_advanced(true);
+    assert_eq!(original.set_advanced(true), ConfigChange::Applied);
     apply_all(&mut original, [load(0x0A4)]);
     assert!(original.share_doc().config.advanced);
     let loaded = Session::from_share_string(&original.to_share_string().unwrap()).unwrap();
@@ -545,7 +545,7 @@ fn the_mode_chosen_is_kept() {
     );
     // Back in Basics, the flag follows.
     let mut basics = loaded.clone();
-    basics.set_advanced(false);
+    assert_eq!(basics.set_advanced(false), ConfigChange::Applied);
     assert!(!basics.share_doc().config.advanced);
     assert!(
         !Session::from_share_string(&basics.to_share_string().unwrap())

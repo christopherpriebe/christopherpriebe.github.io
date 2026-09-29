@@ -65,6 +65,7 @@ pub enum Boundary {
 
 /// What Space or Shift+Space did. The page reads the new state afterwards,
 /// so no event is returned.
+#[must_use = "Idle carries why nothing happened"]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(
