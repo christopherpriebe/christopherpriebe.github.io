@@ -1,6 +1,43 @@
 //! The shape of a valid configuration: sets, ways, lines and the widths of the
 //! tag, index and offset fields, the checked constructors for the indices the
 //! shape bounds, and the decoding of an address into its fields.
+//!
+//! # Arithmetic in the core
+//!
+//! A release build does not check overflow and a debug build panics on it, so
+//! no operator in the core may be able to overflow. Each one is in a class
+//! below, and a new one must be too, since no lint checks it:
+//!
+//! - **Checked, saturating or wrapping** (`checked_*`, `saturating_*`,
+//!   `wrapping_*`), for a value that a session, a link, a file or a program
+//!   can push out of range: counters, and lengths and positions read from
+//!   outside. Machine values wrap to the word width.
+//! - **Division, remainder, shifts and masks by a geometry's fields**, its
+//!   counts and field widths. A `Geometry` exists only as `Config::validate`
+//!   computes it, so its counts are non-zero powers of two and its widths add
+//!   up to the address width with at least one bit left for the tag: no
+//!   divisor is zero and no shift reaches the width of its operand. The
+//!   validation and repair that build a geometry from unchecked numbers
+//!   divide only by a value they have checked or raised to at least 1. Any
+//!   other divisor is non-zero where it is made: a literal, a power of ten
+//!   from `checked_pow`, or a constant of [`crate::limits`] that the tests
+//!   there keep above zero.
+//! - **Plain `+`, `-` and `*` on values that the geometry, a limit or the
+//!   operation itself keeps in range.** The geometry keeps an address within
+//!   its width, at most 32 bits: a line's address plus an offset below the
+//!   line's length is an address, a word's first byte in its line (its index
+//!   times its bytes) is below the line's length, and the fields' widths and
+//!   positions add up to at most the address width. A limit keeps a count
+//!   small: a set has at most `limits::MAX_LINES` ways, each with one rank and
+//!   one tag, and a line at most `limits::MAX_WORDS_PER_LINE` words. The
+//!   operation keeps itself in range when it takes a part of a value from that
+//!   value (an address minus its remainder or its offset bits), adds or
+//!   removes one right after a comparison that leaves room (`from + 1` under
+//!   `from < target`, `ways - 1` once `ways <= 1` has been handled), works
+//!   within one string or slice (`len - i` for an index `i` below `len`, an
+//!   offset plus the length of the character at it), or is done in a type
+//!   wide enough for its operands (a `u32` times 13 as a `u64`, three `u8`
+//!   widths as `i32`).
 
 use serde::Serialize;
 use thiserror::Error;
