@@ -13,12 +13,12 @@
 
 use serde::Serialize;
 
-use super::text::{markup, Segments};
-use super::{Callout, EvalContext, Module, ModuleError, Step, TextSegment};
+use super::{Callout, EvalContext, Module, ModuleError, Step};
 use crate::event::MicroEvent;
 use crate::explain;
 use crate::op::{Op, OpError};
 use crate::session::{Boundary, Session};
+use crate::text::{markup, Segments, TextSegment};
 use crate::units::EventPos;
 
 /// A module in progress on a session.

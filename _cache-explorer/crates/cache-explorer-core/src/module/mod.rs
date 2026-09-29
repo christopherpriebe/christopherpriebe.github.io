@@ -17,14 +17,9 @@
 //! file. While a prediction is unanswered it gates the session, which then
 //! refuses every op and keeps the cursor from passing the point where the
 //! prediction began, so nothing can reveal the answer first.
-//!
-//! Text is also written in runs of plain, code and emphasised words, as
-//! the page renders the core's structured messages: code in mono, the way
-//! the malformed-link message shows the offending field.
 
 mod predicate;
 mod run;
-mod text;
 
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::{Deserialize, Serialize};
@@ -40,9 +35,6 @@ pub use run::{
     Feedback, FeedbackTone, ModuleAction, ModuleActionKind, ModuleRun, ModuleStepKind, ModuleView,
     OptionState, OptionView,
 };
-pub use text::{Markdown, MarkupError, TextSegment, TextStyle};
-
-pub(crate) use text::{code_spans, Segments};
 
 use crate::config::{Config, ConfigError};
 use crate::de::deserialize_unit_enum;
@@ -52,6 +44,7 @@ use crate::format;
 use crate::geometry::{AccessError, Geometry};
 use crate::machine::Machine;
 use crate::op::{Field, Op, OpError, ProgramSource};
+use crate::text::{markup, MarkupError, TextSegment};
 use crate::units::{Addr, SetIndex, Tag, WayIndex, Word};
 
 /// A guided module, read and checked by [`Module::parse`]. Serialized in
@@ -751,7 +744,7 @@ pub fn parse_module_index(json: &str) -> Result<ModuleIndexView, ModuleError> {
                 ModuleProblem::EmptyTitle,
             ));
         }
-        let description = text::markup(&row.description).map_err(|error| {
+        let description = markup(&row.description).map_err(|error| {
             invalid(
                 &format!("[{index}].description"),
                 ModuleProblem::Markup(error),
@@ -803,7 +796,7 @@ fn check_id(path: &str, id: &str) -> Result<(), ModuleError> {
 /// Checks that `text`, at `path`, uses only the inline markdown module text
 /// may use.
 fn check_text(path: &str, text: &str) -> Result<(), ModuleError> {
-    text::markup(text)
+    markup(text)
         .map(|_| ())
         .map_err(|error| invalid(path, ModuleProblem::Markup(error)))
 }

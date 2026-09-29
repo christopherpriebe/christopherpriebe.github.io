@@ -45,6 +45,7 @@ mod session;
 mod share;
 mod snapshot;
 mod stats;
+mod text;
 mod units;
 
 pub use config::{
@@ -70,11 +71,10 @@ pub use memory::StaleInfo;
 pub use module::{
     parse_module_index, AccessMatch, AddrLoc, AllPredicate, AnyPredicate, Callout, CalloutArea,
     CellRef, CmpOp, ConfigMatch, ConfigPredicate, CounterPredicate, EvalContext, EventMatch,
-    EventPredicate, Feedback, FeedbackTone, LastAccessPredicate, LinePredicate, Markdown,
-    MarkupError, MemoryPredicate, Module, ModuleAction, ModuleActionKind, ModuleCard, ModuleError,
-    ModuleIndexView, ModuleProblem, ModuleRun, ModuleStepKind, ModuleView, NotPredicate,
-    OptionState, OptionView, Predicate, RegisterPredicate, Step, TextSegment, TextStyle,
-    WayPredicate,
+    EventPredicate, Feedback, FeedbackTone, LastAccessPredicate, LinePredicate, MemoryPredicate,
+    Module, ModuleAction, ModuleActionKind, ModuleCard, ModuleError, ModuleIndexView,
+    ModuleProblem, ModuleRun, ModuleStepKind, ModuleView, NotPredicate, OptionState, OptionView,
+    Predicate, RegisterPredicate, Step, WayPredicate,
 };
 pub use op::{
     AccessKind, EditPatch, EditTarget, Op, OpError, ProgramFormat, ProgramSource, WayPatch,
@@ -94,6 +94,7 @@ pub use snapshot::{
     Transfer, WayCompare, WayLoc, WayView,
 };
 pub use stats::{Counters, Figure, Outcome, StatKey, StatRow, Stats, Traffic};
+pub use text::{Markdown, MarkupError, TextSegment, TextStyle};
 pub use units::{
     Addr, Cycle, EventPos, LineAddr, OpIndex, Register, SetIndex, Tag, WayIndex, Word, WordIndex,
 };

@@ -40,9 +40,9 @@ use crate::limits::{
     LOAD_SLICE_EVENTS, MAX_PROGRAM_BYTES, MAX_SHARE_JSON_BYTES, MAX_SHARE_OPS,
     MAX_SHARE_TEXT_BYTES, SESSION_EVENT_LIMIT,
 };
-use crate::module::{code_spans, Segments, TextSegment};
 use crate::op::{Op, OpError};
 use crate::session::{position_in_op, Loader, ReplayError, Session, FIRST_TICK, MISS_TICK};
+use crate::text::{code_spans, Segments, TextSegment};
 use crate::units::EventPos;
 
 /// The format version of the share documents this crate writes, and the

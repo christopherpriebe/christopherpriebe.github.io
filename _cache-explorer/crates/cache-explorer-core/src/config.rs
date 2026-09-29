@@ -24,8 +24,8 @@ use crate::limits::{
     MAX_ADDRESS_BITS, MAX_CYCLES, MAX_LINES, MAX_SEED, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS,
     MIN_CYCLES,
 };
-use crate::module::{Segments, TextSegment};
 use crate::session::Session;
+use crate::text::{Segments, TextSegment};
 
 /// A cache and machine configuration. Fixed for a run; a new configuration
 /// starts a new run.
