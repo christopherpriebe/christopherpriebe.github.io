@@ -99,9 +99,8 @@ impl Memory {
     }
 
     /// `line`'s bytes, if the run has touched it. One lookup answers both
-    /// whether the run has touched the line and, when it has, what its bytes
-    /// are, rather than the separate lookups `is_touched` and `holds` would
-    /// each make for the same line.
+    /// whether the run has touched the line and, when it has, what its
+    /// bytes are.
     pub(crate) fn touched_bytes(&self, line: LineAddr) -> Option<&[u8]> {
         self.lines.get(&line).map(|bytes| &**bytes)
     }

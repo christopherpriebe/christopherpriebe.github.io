@@ -442,12 +442,11 @@ impl Machine {
         Ok(())
     }
 
-    /// I6 and I8 together, in one pass over `ways` rather than one each:
-    /// the lowest-numbered way whose clean line differs from memory's copy
-    /// of it (I6, meaningful only `between_accesses`), and the
-    /// lowest-numbered way holding a line memory has not recorded as
-    /// touched (I8). Every way with a tag looks its line up in memory once,
-    /// serving both checks, rather than once for each.
+    /// I6 and I8 together, in one pass over `ways`: the lowest-numbered way
+    /// whose clean line differs from memory's copy of it (I6, meaningful
+    /// only `between_accesses`), and the lowest-numbered way holding a line
+    /// memory has not recorded as touched (I8). Every way with a tag looks
+    /// its line up in memory once, serving both checks.
     fn memory_state(
         &self,
         set: SetIndex,
@@ -788,9 +787,13 @@ mod tests {
                 ways: 1
             })
         );
-        // A rank of 64 is out of range for any set, the widest a set gets;
-        // the bitmask I1 folds ranks into must refuse it rather than shift
-        // it out of range.
+    }
+
+    #[test]
+    fn i1_reports_a_rank_equal_to_the_widest_sets_way_count() {
+        // 64 is the most ways any set gets, so this is the narrowest rank
+        // `rank >= count` refuses on its own, before the bitmask it folds
+        // ranks into is ever consulted.
         let mut machine = start(config(1024, 64, Replacement::Lru, WritePolicy::WriteBack));
         machine.cache.way_mut(set(0), way(0)).unwrap().rank = 64;
         assert_eq!(
@@ -878,6 +881,10 @@ mod tests {
         put(&mut machine, 1, 0, slot.clone(), 0);
         put(&mut machine, 2, 0, slot, 0);
         assert_eq!(machine.check_invariants(), Ok(()));
+    }
+
+    #[test]
+    fn i3_reports_a_duplicate_tag_found_above_the_pairwise_scan_width() {
         // Above 8 ways, I3 sorts a fixed-size array instead of scanning
         // pairwise; a 64-way set with a distinct tag per way exercises that
         // path once two of them collide.
