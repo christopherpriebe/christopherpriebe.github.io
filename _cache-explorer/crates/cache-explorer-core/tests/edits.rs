@@ -257,7 +257,7 @@ mod support {
     }
 }
 
-// ── Editor states 4a–4e ─────────────────────────────────────────────────
+// --- Editor states 4a-4e ---------------------------------------------
 
 #[test]
 fn state_4a_edits_a_word_the_dirty_bit_and_the_rank_of_a_clean_way() {
@@ -556,7 +556,7 @@ fn state_4e_warns_that_a_word_behind_a_dirty_line_stays_stale() {
     assert_eq!((stale.cached, stale.memory), (word(5), word(12)));
 }
 
-// ── The cursor inside an op ─────────────────────────────────────────────
+// --- The cursor inside an op -----------------------------------------
 
 #[test]
 fn an_edit_waits_for_the_end_of_the_access_the_cursor_is_in() {
@@ -725,7 +725,7 @@ fn a_new_run_whose_program_no_longer_fits_waits_for_the_error_that_unloads_it() 
     );
 }
 
-// ── The target and the patch's shape ────────────────────────────────────
+// --- The target and the patch's shape --------------------------------
 
 cases! {
     check_out_of_range_edit;
@@ -821,7 +821,7 @@ fn a_patch_of_the_wrong_shape_or_a_value_too_wide_is_refused() {
     );
 }
 
-// ── Ways ────────────────────────────────────────────────────────────────
+// --- Ways ------------------------------------------------------------
 
 cases! {
     check_idle_way_edit;
@@ -1407,7 +1407,7 @@ fn validating_a_way_fills_it_from_memory_clean_and_first() {
     assert_eq!(ranks(&after, 3), [1, 0]);
 }
 
-// ── Memory words ────────────────────────────────────────────────────────
+// --- Memory words ----------------------------------------------------
 
 #[test]
 fn memory_edits_follow_the_line_that_holds_the_word() {
@@ -1534,7 +1534,7 @@ fn a_memory_edit_under_a_dirty_line_that_agreed_with_memory_makes_the_word_stale
     assert_eq!((stale.cached, stale.memory), (word(8), word(77)));
 }
 
-// ── Drafts ──────────────────────────────────────────────────────────────
+// --- Drafts ----------------------------------------------------------
 
 #[test]
 fn an_empty_way_opens_empty_and_a_bare_apply_changes_nothing() {
@@ -1775,7 +1775,7 @@ fn an_edit_draft_serializes_with_its_tags() {
     assert_eq!(serde_json::from_str::<WayForm>(&json).unwrap(), form);
 }
 
-// ── Applied edits ───────────────────────────────────────────────────────
+// --- Applied edits ---------------------------------------------------
 
 #[test]
 fn an_edit_is_an_entry_of_its_own_in_the_log() {

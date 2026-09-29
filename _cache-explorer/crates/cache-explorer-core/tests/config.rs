@@ -228,34 +228,34 @@ fn summaries_name_the_size_the_placement_and_the_policy() {
     let cases = [
         (
             Preset::DirectMapped8.config(),
-            "128 B · 16 B lines · direct-mapped",
-            "Direct-mapped · 128 B",
+            "128 B \u{b7} 16 B lines \u{b7} direct-mapped",
+            "Direct-mapped \u{b7} 128 B",
         ),
         (
             Preset::TwoWayLru.config(),
-            "128 B · 16 B lines · 2-way · LRU",
-            "2-way LRU · 128 B",
+            "128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU",
+            "2-way LRU \u{b7} 128 B",
         ),
         (
             Preset::FourWayWriteBack.config(),
-            "256 B · 16 B lines · 4-way · LRU",
-            "4-way LRU · 256 B",
+            "256 B \u{b7} 16 B lines \u{b7} 4-way \u{b7} LRU",
+            "4-way LRU \u{b7} 256 B",
         ),
         (
             fully_associative,
-            "128 B · 16 B lines · fully associative · FIFO",
-            "Fully associative FIFO · 128 B",
+            "128 B \u{b7} 16 B lines \u{b7} fully associative \u{b7} FIFO",
+            "Fully associative FIFO \u{b7} 128 B",
         ),
         // One line in one set: fully associative, as its geometry says.
         (
             with_cache(16, 16, 1),
-            "16 B · 16 B lines · fully associative · LRU",
-            "Fully associative LRU · 16 B",
+            "16 B \u{b7} 16 B lines \u{b7} fully associative \u{b7} LRU",
+            "Fully associative LRU \u{b7} 16 B",
         ),
         (
             large,
-            "2,048 B · 128 B lines · 2-way · Random",
-            "2-way Random · 2,048 B",
+            "2,048 B \u{b7} 128 B lines \u{b7} 2-way \u{b7} Random",
+            "2-way Random \u{b7} 2,048 B",
         ),
     ];
     for (config, summary, short_summary) in cases {
@@ -268,7 +268,7 @@ fn summaries_name_the_size_the_placement_and_the_policy() {
 fn advanced_summaries_add_the_write_and_allocate_policies() {
     assert_eq!(
         Config::default().summary(true),
-        "128 B · 16 B lines · direct-mapped · write-back · allocate"
+        "128 B \u{b7} 16 B lines \u{b7} direct-mapped \u{b7} write-back \u{b7} allocate"
     );
     let two_way = Preset::TwoWayLru.config();
     let config = Config {
@@ -285,22 +285,25 @@ fn advanced_summaries_add_the_write_and_allocate_policies() {
     };
     assert_eq!(
         config.summary(true),
-        "128 B · 16 B lines · 2-way · LRU · write-through · no-allocate"
+        "128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU \u{b7} write-through \u{b7} no-allocate"
     );
     // Timing is never in a summary, and the policies only in Advanced.
-    assert_eq!(config.summary(false), "128 B · 16 B lines · 2-way · LRU");
-    assert_eq!(config.short_summary(), "2-way LRU · 128 B");
+    assert_eq!(
+        config.summary(false),
+        "128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU"
+    );
+    assert_eq!(config.short_summary(), "2-way LRU \u{b7} 128 B");
 }
 
 #[test]
 fn an_invalid_configuration_is_summarised_as_given() {
     assert_eq!(
         with_cache(128, 16, 16).summary(false),
-        "128 B · 16 B lines · 16-way · LRU"
+        "128 B \u{b7} 16 B lines \u{b7} 16-way \u{b7} LRU"
     );
     assert_eq!(
         with_cache(100, 0, 1).summary(false),
-        "100 B · 0 B lines · direct-mapped"
+        "100 B \u{b7} 0 B lines \u{b7} direct-mapped"
     );
 }
 
@@ -666,7 +669,8 @@ fn more_lines_than_fit_on_screen() {
     let too_many = (MAX_LINES + 1).next_power_of_two();
     let fitting = too_many / 2;
     let message = format!(
-        "Keep the cache to at most {} lines so every set fits on screen; {} B ÷ 16 B = {} lines.",
+        "Keep the cache to at most {} lines so every set fits on screen; {} B \u{f7} 16 B = \
+         {} lines.",
         grouped(MAX_LINES),
         grouped(too_many * 16),
         grouped(too_many)
@@ -733,7 +737,7 @@ fn more_words_per_line_than_a_row_holds() {
             word: 4,
         },
         &format!(
-            "A line can hold at most {} words; {} B ÷ 4 B = {}.",
+            "A line can hold at most {} words; {} B \u{f7} 4 B = {}.",
             grouped(MAX_WORDS_PER_LINE),
             grouped(line),
             grouped(too_many)
@@ -765,7 +769,7 @@ fn a_line_too_long_for_a_row_is_refused_before_the_tag_rule() {
             word: 8,
         },
         &format!(
-            "A line can hold at most {} words; {} B ÷ 8 B = {}.",
+            "A line can hold at most {} words; {} B \u{f7} 8 B = {}.",
             grouped(MAX_WORDS_PER_LINE),
             grouped(line),
             grouped(words)
