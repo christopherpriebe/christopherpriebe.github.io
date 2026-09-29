@@ -757,9 +757,9 @@ pub(crate) enum Blocked {
 
 impl Blocked {
     /// The refusal of `patch` on `target`, `machine` being the machine at
-    /// the cursor: the session's limit, the link's or the saved file's,
-    /// refused, or what to finish first, with caution; none offers another
-    /// edit.
+    /// the cursor: a guided module's unanswered prediction, the session's
+    /// limit, the link's or the saved file's, refused; or what to finish
+    /// first, with caution; none offers another edit.
     pub(crate) fn refusal(
         self,
         machine: &Machine,
