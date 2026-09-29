@@ -527,7 +527,7 @@ impl Module {
             return Err(invalid("preset", ModuleProblem::NotBasics));
         }
         let mut force = InForce {
-            config: self.preset.clone(),
+            config: self.preset,
             geometry,
             program: self.program.clone(),
             advanced: self.advanced,
@@ -579,7 +579,7 @@ impl Step {
                 ..
             } => {
                 check_hint(path, hint.as_deref())?;
-                let before = force.config.clone();
+                let before = force.config;
                 let mut switched = false;
                 if let Some(ops) = show_me {
                     switched = force.apply(path, "showMe", ops)?;
@@ -666,8 +666,7 @@ impl InForce {
     /// A machine at the start of a run of the configuration, which checks
     /// an op's form; the configuration is checked before it is in force.
     fn machine(&self, path: &str) -> Result<Machine, ModuleError> {
-        Machine::start(self.config.clone())
-            .map_err(|error| invalid(path, ModuleProblem::Config(error)))
+        Machine::start(self.config).map_err(|error| invalid(path, ModuleProblem::Config(error)))
     }
 
     /// Checks the ops listed under `key` of the step at `path`, each against
@@ -694,7 +693,7 @@ impl InForce {
                     if !self.advanced && !config.fits_basics() {
                         return Err(invalid(&at, ModuleProblem::NotBasics));
                     }
-                    self.config = config.clone();
+                    self.config = *config;
                     self.geometry = geometry;
                     self.check_program(&at)?;
                     switched = true;

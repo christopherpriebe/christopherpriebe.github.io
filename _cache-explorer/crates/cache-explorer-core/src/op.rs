@@ -735,9 +735,7 @@ mod tests {
         let config_json = serde_json::to_string(&config).unwrap();
         let shapes = [
             (
-                Op::Config {
-                    config: config.clone(),
-                },
+                Op::Config { config },
                 format!("{{\"op\":\"config\",\"config\":{config_json}}}"),
             ),
             (

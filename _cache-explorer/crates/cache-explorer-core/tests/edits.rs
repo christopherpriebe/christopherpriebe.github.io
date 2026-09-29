@@ -1296,7 +1296,7 @@ fn validating_and_invalidating_leave_ranks_alone_under_random_and_in_one_way_set
         two_way(WritePolicy::WriteBack, Replacement::Random),
         Preset::DirectMapped8.config(),
     ] {
-        let session = support::loads(config.clone(), &[0x0A4, 0x1A4]);
+        let session = support::loads(config, &[0x0A4, 0x1A4]);
         let invalid = way_patch(serde_json::json!({"valid": false}));
         let emptied = plan(&session, way(2, 0), &invalid);
         let empty = applied(&session, edit(way(2, 0), invalid));

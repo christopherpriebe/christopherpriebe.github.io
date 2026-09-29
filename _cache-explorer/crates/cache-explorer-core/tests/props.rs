@@ -1184,10 +1184,10 @@ mod support {
         /// A student on a first run of `config`, checking `checks`.
         fn new(config: &Config, checks: Checks) -> Result<Self, TestCaseError> {
             Ok(Student {
-                session: Session::with_config(config.clone()).map_err(fail)?,
+                session: Session::with_config(*config).map_err(fail)?,
                 addrs: BTreeSet::new(),
                 checks,
-                initial: config.clone(),
+                initial: *config,
             })
         }
 
@@ -1395,14 +1395,10 @@ mod support {
         /// A configuration change.
         fn change(&mut self, change: &Change) -> Result<(), TestCaseError> {
             match change {
-                Change::Apply(config) => self
-                    .apply(Op::Config {
-                        config: config.clone(),
-                    })
-                    .map(drop),
+                Change::Apply(config) => self.apply(Op::Config { config: *config }).map(drop),
                 Change::Propose { config, reset } => {
                     let before = self.before();
-                    match self.session.propose_config(config.clone()) {
+                    match self.session.propose_config(*config) {
                         Ok(ConfigChange::Applied) => self.after(before, Call::Appended),
                         Ok(ConfigChange::NeedsReset { config, .. }) => {
                             self.after(before, Call::Refused)?;
@@ -1418,7 +1414,7 @@ mod support {
                     }
                 }
                 Change::Reset => {
-                    let config = self.session.config().clone();
+                    let config = *self.session.config();
                     self.apply(Op::Config { config }).map(drop)
                 }
                 Change::Mode { advanced, reset } => {
@@ -1441,12 +1437,10 @@ mod support {
                     if config.validate().is_ok() {
                         return Ok(());
                     }
-                    let accepted = self.apply(Op::Config {
-                        config: config.clone(),
-                    })?;
+                    let accepted = self.apply(Op::Config { config: *config })?;
                     prop_assert!(!accepted, "an invalid configuration was appended");
                     let before = self.before();
-                    let result = self.session.propose_config(config.clone());
+                    let result = self.session.propose_config(*config);
                     prop_assert!(result.is_err(), "an invalid configuration was proposed");
                     self.after(before, Call::Refused)
                 }
@@ -1653,7 +1647,7 @@ mod support {
     pub(crate) fn without_mode(config: &Config) -> Config {
         Config {
             advanced: false,
-            ..config.clone()
+            ..*config
         }
     }
 
@@ -1693,7 +1687,7 @@ mod support {
         /// The fold of `session`'s log, the undone ops included.
         pub(crate) fn of(session: &Session) -> Self {
             Fold {
-                initial: session.initial().clone(),
+                initial: *session.initial(),
                 ops: session.ops().to_vec(),
                 machines: BTreeMap::new(),
             }
@@ -2597,7 +2591,7 @@ fn replay_is_a_pure_function_of_the_log() {
     check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         let session = &mut student.session;
-        let initial = session.initial().clone();
+        let initial = *session.initial();
         let ops = session.ops().to_vec();
         let replay = Session::replay(&initial, &ops);
         prop_assert_eq!(&replay, &Session::replay(&initial, &ops));
@@ -2618,7 +2612,7 @@ fn undo_redo_scrubbing_and_seeking_reach_the_fold() {
     check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         let session = &mut student.session;
-        let initial = session.initial().clone();
+        let initial = *session.initial();
         let ops = session.ops().to_vec();
         let ends = op_ends(session);
         let fold = |pos: u32| Session::replay_to(&initial, &ops, number(pos.into())).unwrap();
@@ -2681,7 +2675,7 @@ fn space_visits_every_event_in_order() {
     check(sessions(), &arb_session(), |(config, actions)| {
         let mut student = play(&config, &actions, Checks::default())?;
         let session = &mut student.session;
-        let initial = session.initial().clone();
+        let initial = *session.initial();
         let ops = session.ops().to_vec();
         let end = end(session).get();
         session.seek(number(0));
@@ -3322,7 +3316,7 @@ proptest! {
     /// share documents, saved files and modules read any text too.
     #[test]
     fn the_parsers_are_total(config in arb_config(), text in arb_text()) {
-        let session = Session::with_config(config.clone()).unwrap();
+        let session = Session::with_config(config).unwrap();
         let geometry = config.validate().unwrap();
         for format in [ProgramFormat::Asm, ProgramFormat::Trace] {
             let result = geometry.parse_program(&text, format);

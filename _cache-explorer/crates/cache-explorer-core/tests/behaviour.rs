@@ -229,7 +229,7 @@ mod support {
         vec![
             Case {
                 number: 1,
-                config: write_back.clone(),
+                config: write_back,
                 setup: vec![load(0x0A4), load(0x1A4)],
                 access: load(0x0A8),
                 events: vec![
@@ -280,7 +280,7 @@ mod support {
         vec![
             Case {
                 number: 3,
-                config: write_back.clone(),
+                config: write_back,
                 setup: vec![load(0x0A4), load(0x1A4)],
                 access: load(0x2A4),
                 events: vec![

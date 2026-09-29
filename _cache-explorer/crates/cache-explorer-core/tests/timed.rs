@@ -86,7 +86,7 @@ fn run(config: &Config, accesses: &[By]) -> Result<Vec<MicroEvent>, String> {
     let fixture = Fixture {
         name: "timed",
         description: "",
-        config: config.clone(),
+        config: *config,
         issues,
     };
     fixture.events().map_err(|error| error.to_string())
@@ -412,7 +412,7 @@ fn the_fixtures_stamp_only_timed_runs_and_show_every_kind_of_stall() -> Result<(
 /// A session on `config` with `accesses` issued one after another, from the
 /// run's start.
 fn session(config: &Config, accesses: &[By]) -> Result<Session, String> {
-    let mut session = Session::with_config(config.clone()).map_err(|error| error.to_string())?;
+    let mut session = Session::with_config(*config).map_err(|error| error.to_string())?;
     for access in accesses {
         let op = match *access {
             By::Load(at) => serde_json::json!({"op": "issue", "kind": "read", "addr": at}),

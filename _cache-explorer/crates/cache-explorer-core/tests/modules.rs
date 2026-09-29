@@ -433,7 +433,7 @@ fn a_configuration_change_in_the_middle_of_a_module() {
         instruct.text[0].text,
         "Switch Replacement to FIFO, then reset."
     );
-    let mut fifo = session.config().clone();
+    let mut fifo = *session.config();
     fifo.cache.replacement = Replacement::Fifo;
     session.apply(Op::Config { config: fifo }).unwrap();
     let next = run.sync(&mut session);

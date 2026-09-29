@@ -765,7 +765,7 @@ fn run(config: &Config, issues: &[Issue]) -> Result<Vec<MicroEvent>, FixtureErro
     Fixture {
         name: "isa",
         description: "",
-        config: config.clone(),
+        config: *config,
         issues: issues.to_vec(),
     }
     .events()

@@ -799,9 +799,7 @@ fn a_refused_op_of_each_kind_leaves_the_log_the_undone_ops_and_the_cursor_as_the
         session.seek(at);
         refused(
             &mut session,
-            &Op::Config {
-                config: bad_config.clone(),
-            },
+            &Op::Config { config: bad_config },
             &OpError::Config(config_error.clone()),
         );
         for (op, message) in &issue_errors {
@@ -906,10 +904,7 @@ fn a_change_on_an_empty_run_at_the_end_of_the_log_is_appended_at_once() {
             },
             ..config()
         };
-        assert_eq!(
-            session.propose_config(config.clone()),
-            Ok(ConfigChange::Applied)
-        );
+        assert_eq!(session.propose_config(config), Ok(ConfigChange::Applied));
         assert_eq!(session.config(), &config);
         assert!(session.position().at_run_origin);
     }
@@ -964,9 +959,9 @@ fn a_change_to_a_run_with_steps_asks_first_with_the_count() {
     let mut session = table();
     let before = session.clone();
     assert_eq!(
-        session.propose_config(two_way.clone()),
+        session.propose_config(two_way),
         Ok(ConfigChange::NeedsReset {
-            config: two_way.clone(),
+            config: two_way,
             message: "Configuration is fixed for a run. Applying starts a new, empty run; this \
                       one has 14 steps and stays reachable with Undo."
                 .to_owned()
@@ -977,9 +972,9 @@ fn a_change_to_a_run_with_steps_asks_first_with_the_count() {
     // With undone steps after the cursor, it says what a new run drops.
     session.seek(pos(5));
     assert_eq!(
-        session.propose_config(two_way.clone()),
+        session.propose_config(two_way),
         Ok(ConfigChange::NeedsReset {
-            config: two_way.clone(),
+            config: two_way,
             message: "Configuration is fixed for a run. Applying starts a new, empty run here \
                       and drops the 9 undone steps after this point; this run's 5 steps stay \
                       reachable with Undo."
@@ -988,8 +983,7 @@ fn a_change_to_a_run_with_steps_asks_first_with_the_count() {
     );
     // Inside an op, the op is kept whole.
     session.seek(pos(6));
-    let Ok(ConfigChange::NeedsReset { message, .. }) = session.propose_config(two_way.clone())
-    else {
+    let Ok(ConfigChange::NeedsReset { message, .. }) = session.propose_config(two_way) else {
         panic!("a change inside an op asks first");
     };
     assert!(
@@ -1002,8 +996,7 @@ fn a_change_to_a_run_with_steps_asks_first_with_the_count() {
     // One step reads in the singular.
     let mut session = self::session();
     apply_all(&mut session, [program("add r1, r0, #1"), Op::Step]);
-    let Ok(ConfigChange::NeedsReset { message, .. }) = session.propose_config(two_way.clone())
-    else {
+    let Ok(ConfigChange::NeedsReset { message, .. }) = session.propose_config(two_way) else {
         panic!("a run with a step asks first");
     };
     assert!(message.ends_with("this one has 1 step and stays reachable with Undo."));
@@ -1032,9 +1025,7 @@ fn applying_a_configuration_always_appends_a_new_run_that_undo_leaves() {
     let mut session = table();
     let old = session.machine().clone();
     let events = session
-        .apply(Op::Config {
-            config: two_way.clone(),
-        })
+        .apply(Op::Config { config: two_way })
         .unwrap()
         .to_vec();
     assert_eq!(session.op_count(), 5);
@@ -1064,12 +1055,8 @@ fn applying_a_configuration_always_appends_a_new_run_that_undo_leaves() {
     assert_eq!(session.config(), &two_way);
     // Reset is the displayed run's configuration applied again: a new, empty
     // run, undoable, that keeps the program.
-    let current = session.config().clone();
-    session
-        .apply(Op::Config {
-            config: current.clone(),
-        })
-        .unwrap();
+    let current = *session.config();
+    session.apply(Op::Config { config: current }).unwrap();
     assert_eq!(session.position().run, 3);
     assert_eq!(session.config(), &current);
     assert_eq!(session.op_count(), 6);
@@ -1205,15 +1192,7 @@ fn switching_mode_is_not_an_op_and_basics_asks_first_while_the_run_needs_advance
     assert_eq!(session.machine(), before.machine());
     // On a run that needs Advanced, switching to Basics changes nothing and
     // asks first, offering the configuration's Basics form.
-    apply_all(
-        &mut session,
-        [
-            Op::Config {
-                config: through.clone(),
-            },
-            load(0x0A4),
-        ],
-    );
+    apply_all(&mut session, [Op::Config { config: through }, load(0x0A4)]);
     let before = session.clone();
     assert_eq!(
         session.set_advanced(false),
@@ -1254,7 +1233,7 @@ fn switching_mode_is_not_an_op_and_basics_asks_first_while_the_run_needs_advance
 #[test]
 fn every_state_the_cursor_reaches_is_the_folds() {
     let mut session = varied();
-    let initial = session.initial().clone();
+    let initial = *session.initial();
     let ops = session.ops().to_vec();
     let replay = Session::replay(&initial, &ops).unwrap();
     assert_eq!(log(&session), replay.events);
@@ -1347,7 +1326,7 @@ fn a_seek_across_checkpoints_reaches_the_folds_state() {
         }
     }
     apply_all(&mut session, [program(ENDLESS), Op::StepAccess]);
-    let initial = session.initial().clone();
+    let initial = *session.initial();
     let ops = session.ops().to_vec();
     let end = log_end(&session).get();
     let mut positions: Vec<u32> = (0..=end).step_by(251).collect();
@@ -1478,7 +1457,7 @@ fn a_full_session_refuses_every_op_until_undo_makes_room() {
     editors_refuse_for_room(&session, RefusalReason::SessionFull, &message);
     session.seek(pos(full));
     // The fold refuses the same op at the same place.
-    let initial = session.initial().clone();
+    let initial = *session.initial();
     let mut ops = session.ops().to_vec();
     assert!(Session::replay(&initial, &ops).is_ok());
     ops.push(load(0x0A4));
@@ -1557,7 +1536,7 @@ fn a_log_as_long_as_a_link_can_hold_refuses_every_op_until_undo_makes_room() {
     editors_refuse_for_room(&session, RefusalReason::LinkFull, &message);
     session.seek(pos(end));
     // The fold refuses the same op at the same place.
-    let initial = session.initial().clone();
+    let initial = *session.initial();
     let mut ops = session.ops().to_vec();
     assert!(Session::replay(&initial, &ops).is_ok());
     ops.push(load(0x0A4));
@@ -1660,7 +1639,7 @@ fn a_log_as_large_as_a_file_can_hold_refuses_every_op_until_undo_makes_room() {
     assert_eq!(session.step_event(Some(&drawer(ADD_THEN_LOAD))), idle);
     assert_eq!(session.step_access(None), idle);
     // The fold refuses the same op at the same place, as far as it goes.
-    let initial = session.initial().clone();
+    let initial = *session.initial();
     let mut ops = session.ops().to_vec();
     assert!(Session::replay(&initial, &ops).is_ok());
     ops.push(Op::Step);
@@ -1728,32 +1707,24 @@ fn no_call_rewrites_an_op_the_log_keeps() {
     let small = Config {
         cache: CacheConfig {
             size_bytes: 64,
-            ..two_way.cache.clone()
+            ..two_way.cache
         },
-        ..two_way.clone()
+        ..two_way
     };
     let sample = drawer(ADD_THEN_LOAD);
     let calls: Vec<Call<'_>> = vec![
         Box::new(|session| apply_all(session, [load(0x0A4)])),
         Box::new(|session| {
             assert!(matches!(
-                session.propose_config(two_way.clone()),
+                session.propose_config(two_way),
                 Ok(ConfigChange::NeedsReset { .. })
             ));
         }),
         Box::new(|session| {
-            apply_all(
-                session,
-                [Op::Config {
-                    config: two_way.clone(),
-                }],
-            );
+            apply_all(session, [Op::Config { config: two_way }]);
         }),
         Box::new(|session| {
-            assert_eq!(
-                session.propose_config(small.clone()),
-                Ok(ConfigChange::Applied)
-            );
+            assert_eq!(session.propose_config(small), Ok(ConfigChange::Applied));
         }),
         Box::new(|session| {
             assert_eq!(session.set_advanced(true), ConfigChange::Applied);
@@ -1778,7 +1749,7 @@ fn no_call_rewrites_an_op_the_log_keeps() {
             session.undo();
         }),
         Box::new(|session| {
-            let current = session.config().clone();
+            let current = *session.config();
             apply_all(session, [Op::Config { config: current }]);
         }),
     ];
@@ -1861,7 +1832,7 @@ fn the_gate_refuses_every_op() {
     // Issue, an edit, Reset and "Reset and apply", a trace through Load,
     // a step: each refused, and nothing changes.
     let reset = Op::Config {
-        config: session.config().clone(),
+        config: *session.config(),
     };
     let trace = Op::Program {
         source: "R 0x0A4".to_owned(),
@@ -1886,7 +1857,7 @@ fn the_gate_refuses_every_op() {
     };
     assert_eq!(session.propose_config(two_way), Err(OpError::Gated));
     // Even a configuration equal to the displayed run's.
-    let same = session.config().clone();
+    let same = *session.config();
     assert_eq!(session.propose_config(same), Err(OpError::Gated));
     // Space and Shift+Space at the end of the log append nothing, the
     // drawer's program included.

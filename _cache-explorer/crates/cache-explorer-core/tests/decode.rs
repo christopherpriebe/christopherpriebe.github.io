@@ -48,7 +48,7 @@ fn with_cache(size_bytes: u32, line_bytes: u32, associativity: u32) -> Config {
             size_bytes,
             line_bytes,
             associativity,
-            ..default.cache.clone()
+            ..default.cache
         },
         ..default
     }
@@ -202,7 +202,7 @@ fn basics_is_write_back_write_allocate_and_untimed() {
     // Everything else is kept, the presentation flag included.
     assert_eq!(
         Config {
-            cache: advanced.cache.clone(),
+            cache: advanced.cache,
             timing: advanced.timing,
             ..basics
         },
@@ -310,7 +310,7 @@ fn advanced_summaries_add_the_write_and_allocate_policies() {
         cache: CacheConfig {
             write_policy: WritePolicy::WriteThrough,
             allocate_policy: AllocatePolicy::WriteNoAllocate,
-            ..two_way.cache.clone()
+            ..two_way.cache
         },
         timing: Some(Timing {
             hit_cycles: 1,
@@ -956,7 +956,7 @@ fn repair_keeps_what_was_valid() {
         Config {
             cache: CacheConfig {
                 size_bytes: 64,
-                ..config.cache.clone()
+                ..config.cache
             },
             ..config
         }
@@ -1063,7 +1063,7 @@ fn fully_associative_caches_up_to_max_lines_ways_validate() {
     for lines in line_counts {
         let geometry = Config {
             cache: with_cache(lines * 16, 16, lines).cache,
-            ..config.clone()
+            ..config
         }
         .validate()
         .unwrap();
@@ -2276,15 +2276,15 @@ fn geometry_and_repair_serialize_to_camel_case() {
     let repair = Config {
         cache: CacheConfig {
             associativity: 3,
-            ..config.cache.clone()
+            ..config.cache
         },
-        ..config.clone()
+        ..config
     }
     .repair()
     .unwrap();
     let value = serde_json::to_value(&repair).unwrap();
     assert_eq!(value["label"], "Open with 2-way instead");
-    assert_eq!(value["config"], serde_json::to_value(&config).unwrap());
+    assert_eq!(value["config"], serde_json::to_value(config).unwrap());
 }
 
 #[test]
@@ -2519,9 +2519,9 @@ fn the_bar_offers_the_designs_groups_and_options() {
         Config {
             cache: CacheConfig {
                 replacement: Replacement::Lru,
-                ..fifo.config.cache.clone()
+                ..fifo.config.cache
             },
-            ..fifo.config.clone()
+            ..fifo.config
         },
         Config::default()
     );
@@ -2792,11 +2792,7 @@ fn the_timing_fields_show_the_most_recent_timing_even_when_it_is_off() {
         timing: Some(timed(3, 15)),
         ..Config::default()
     };
-    session
-        .apply(Op::Config {
-            config: three.clone(),
-        })
-        .unwrap();
+    session.apply(Op::Config { config: three }).unwrap();
     let timing = session.config_controls(session.config()).timing;
     assert!(timing.on);
     assert_eq!(
@@ -2842,7 +2838,7 @@ fn a_typed_timing_number_is_applied_or_explained() {
                     hit_cycles: 5,
                     miss_cycles: 20
                 }),
-                ..shown.clone()
+                ..shown
             }
         }
     );
@@ -2851,7 +2847,7 @@ fn a_typed_timing_number_is_applied_or_explained() {
             hit_cycles: 2,
             miss_cycles: 9,
         }),
-        ..shown.clone()
+        ..shown
     };
     assert_eq!(
         session.read_config_number(
@@ -2865,7 +2861,7 @@ fn a_typed_timing_number_is_applied_or_explained() {
                     hit_cycles: 2,
                     miss_cycles: MAX_CYCLES
                 }),
-                ..shown.clone()
+                ..shown
             }
         }
     );
@@ -2926,14 +2922,14 @@ fn a_configuration_checked_on_its_own_gives_its_summary_or_its_error() {
     // Advanced when the configuration says so or needs it.
     let advanced = Config {
         advanced: true,
-        ..two_way.clone()
+        ..two_way
     };
     let through = Config {
         cache: CacheConfig {
             write_policy: WritePolicy::WriteThrough,
-            ..two_way.cache.clone()
+            ..two_way.cache
         },
-        ..two_way.clone()
+        ..two_way
     };
     for config in [advanced, through] {
         let ConfigCheck::Valid { summary, .. } = validate_config(&config) else {

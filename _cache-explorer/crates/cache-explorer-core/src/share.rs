@@ -576,7 +576,7 @@ impl ShareLoad {
                 return Self::failed(source, &unread.error, unread.doc.as_ref(), Some(text));
             }
         };
-        let session = match Session::with_config(doc.config.clone()) {
+        let session = match Session::with_config(doc.config) {
             Ok(session) => session,
             Err(error) => {
                 let error = LoadError::InitialConfig {
@@ -753,8 +753,8 @@ impl Opening {
                 Op::Config { config } => Some(config),
                 _ => None,
             })
-            .unwrap_or(&doc.config)
-            .clone();
+            .copied()
+            .unwrap_or(doc.config);
         Self {
             run: runs(before),
             config,
@@ -961,7 +961,7 @@ impl Session {
     fn share_config(&self) -> Config {
         Config {
             advanced: self.mode_chosen(),
-            ..self.initial().clone()
+            ..*self.initial()
         }
     }
 
@@ -1128,7 +1128,7 @@ fn frame(initial: &Config) -> usize {
                 schema_version: SCHEMA_VERSION,
                 config: Config {
                     advanced,
-                    ..initial.clone()
+                    ..*initial
                 },
                 ops: Vec::new(),
                 at: Some(at),
@@ -1362,7 +1362,7 @@ fn prefix(doc: &ShareDoc, error: &LoadError) -> Option<LoadOption> {
     let ops = doc.ops.get(..usize::try_from(*index).ok()?)?.to_vec();
     let prefix = ShareDoc {
         schema_version: SCHEMA_VERSION,
-        config: doc.config.clone(),
+        config: doc.config,
         ops,
         at: None,
     };
@@ -1523,7 +1523,7 @@ mod tests {
             schema_version: SCHEMA_VERSION,
             config: Config {
                 advanced: false,
-                ..initial.clone()
+                ..initial
             },
             ops: Vec::new(),
             at: Some(ShareAt {

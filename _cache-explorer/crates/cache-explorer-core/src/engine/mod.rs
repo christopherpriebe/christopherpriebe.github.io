@@ -416,7 +416,7 @@ pub(crate) fn resume(
 fn check(machine: &Machine, op: &Op, index: OpIndex, events: u64) -> Result<Checked, OpError> {
     room(events, index.get())?;
     match op {
-        Op::Config { config } => Machine::start(config.clone())
+        Op::Config { config } => Machine::start(*config)
             .map(|start| Checked::NewRun(Box::new(start)))
             .map_err(OpError::Config),
         Op::Issue { kind, addr, value } => {

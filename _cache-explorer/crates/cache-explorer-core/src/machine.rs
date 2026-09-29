@@ -678,7 +678,7 @@ mod tests {
     #[test]
     fn a_run_starts_with_an_empty_cache_and_a_seeded_generator() {
         let config = Preset::TwoWayLru.config();
-        let machine = start(config.clone());
+        let machine = start(config);
         assert_eq!(machine.geometry, config.validate().unwrap());
         assert_eq!(machine.cache, Cache::new(&machine.geometry));
         assert_eq!(
@@ -703,10 +703,7 @@ mod tests {
     fn a_run_cannot_start_from_an_invalid_configuration() {
         let mut config = Config::default();
         config.cache.associativity = 3;
-        assert_eq!(
-            Machine::start(config.clone()),
-            Err(config.validate().unwrap_err())
-        );
+        assert_eq!(Machine::start(config), Err(config.validate().unwrap_err()));
     }
 
     #[test]
@@ -753,13 +750,10 @@ mod tests {
             }
             machine
         };
-        let first = run(config.clone());
-        assert_eq!(first, run(config.clone()));
+        let first = run(config);
+        assert_eq!(first, run(config));
         assert_ne!(first.prng, Prng::new(config.seed));
-        let other = run(Config {
-            seed: 1,
-            ..config.clone()
-        });
+        let other = run(Config { seed: 1, ..config });
         assert_ne!(first.cache, other.cache);
     }
 

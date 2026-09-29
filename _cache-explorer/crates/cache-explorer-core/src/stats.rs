@@ -1087,7 +1087,7 @@ mod tests {
             MemoryWrites, Misses, Writearounds, Writebacks, Writethroughs,
         };
         let untimed = crate::config::Config::default();
-        let machine = after(untimed.clone(), &[]);
+        let machine = after(untimed, &[]);
         assert_eq!(
             keys(&Stats::new(&machine, Mode::Basics, &[]).rows),
             [Accesses, Hits, Misses, HitRate, Evictions, MemoryWrites]
@@ -1257,7 +1257,7 @@ mod tests {
     #[test]
     fn amat_and_the_measured_cost_are_there_in_timed_mode_only() {
         let untimed = crate::config::Config::default();
-        let mut machine = after(untimed.clone(), &[Outcome::Miss, Outcome::Hit]);
+        let mut machine = after(untimed, &[Outcome::Miss, Outcome::Hit]);
         let stats = Stats::new(&machine, Mode::Advanced, &[]);
         assert_eq!((stats.amat, stats.measured), (None, None));
         assert_eq!(stats.hit_rate.map(|rate| rate.text).as_deref(), Some("50%"));
@@ -1266,7 +1266,7 @@ mod tests {
             timing: Some(timing(1, 20)),
             ..untimed
         };
-        machine.config = config.clone();
+        machine.config = config;
         machine.counters.cycles = Cycle::new_unchecked(22);
         let stats = Stats::new(&machine, Mode::Advanced, &[]);
         assert_eq!(stats.amat, machine.counters.amat(timing(1, 20)));

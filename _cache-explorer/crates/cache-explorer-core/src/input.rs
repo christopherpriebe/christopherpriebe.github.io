@@ -346,7 +346,7 @@ pub(crate) fn read_config_number(
     ConfigNumberInput::Valid {
         config: Config {
             timing: Some(timing),
-            ..shown.clone()
+            ..*shown
         },
     }
 }

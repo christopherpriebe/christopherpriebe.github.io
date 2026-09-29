@@ -170,7 +170,7 @@ mod support {
     /// the ops `ops` describe applied; the events of each op are checked to
     /// be the same.
     pub(crate) fn twins(config: &Config, ops: &[&str]) -> (model::Session, Session) {
-        let mut core = model::Session::with_config(config.clone()).unwrap();
+        let mut core = model::Session::with_config(*config).unwrap();
         let mut facade = Session::with_config(&arg(config)).unwrap();
         for op in ops {
             apply_both(&mut core, &mut facade, op);
@@ -445,7 +445,7 @@ mod session {
             address_bits: MAX_ADDRESS_BITS + 1,
             ..Config::default()
         };
-        let expected = model::Session::with_config(invalid.clone())
+        let expected = model::Session::with_config(invalid)
             .unwrap_err()
             .to_string();
         let error = Session::with_config(&arg(&invalid)).unwrap_err();
@@ -684,14 +684,14 @@ mod session {
         // On an empty run, at once; after an access, a question.
         let change = same(
             facade.propose_config(&arg(&two_way)).unwrap(),
-            &core.propose_config(two_way.clone()).unwrap(),
+            &core.propose_config(two_way).unwrap(),
         );
         assert_eq!(text(&change, "status"), "applied");
         apply_both(&mut core, &mut facade, LOAD_0X0A4);
         let back = Config::first_visit();
         let change = same(
             facade.propose_config(&arg(&back)).unwrap(),
-            &core.propose_config(back.clone()).unwrap(),
+            &core.propose_config(back).unwrap(),
         );
         assert_eq!(text(&change, "status"), "needsReset");
         same_place(&core, &facade);
@@ -699,10 +699,7 @@ mod session {
             address_bits: MAX_ADDRESS_BITS + 1,
             ..Config::default()
         };
-        let expected = core
-            .propose_config(invalid.clone())
-            .unwrap_err()
-            .to_string();
+        let expected = core.propose_config(invalid).unwrap_err().to_string();
         let error = facade.propose_config(&arg(&invalid)).unwrap_err();
         assert_eq!(message(error), expected);
         let thrown = message(facade.propose_config(&ts("7")).unwrap_err());

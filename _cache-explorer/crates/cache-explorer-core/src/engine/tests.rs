@@ -1268,7 +1268,7 @@ fn random_replacement_draws_from_the_seeded_generator_and_never_ranks() {
         AllocatePolicy::WriteAllocate,
     );
     let lines: Vec<u32> = (0..24).map(|i| (i % 8) * 0x40).collect();
-    let mut run = Run::new(config.clone());
+    let mut run = Run::new(config);
     let mut expected = Prng::new(config.seed);
     for &at in &lines {
         let trace = run.trace(load(at, Register::R1));
@@ -1388,7 +1388,7 @@ fn a_loop_one_line_larger_than_a_fully_associative_lru_cache_always_misses() {
             .flat_map(|_| (0..lines).map(|line| load(line * 0x10, Register::R1)))
             .collect()
     };
-    let mut run = Run::new(config.clone());
+    let mut run = Run::new(config);
     outcomes(&mut run, &rounds(4));
     assert_eq!(
         (run.machine.counters.misses, run.machine.counters.hits),
@@ -2114,7 +2114,7 @@ fn quiet_and_recording_runs_reach_equal_machines() {
             )
         };
         let requests = request_stream(&config.validate().unwrap(), 7, 200);
-        let mut recording = Machine::start(config.clone()).unwrap();
+        let mut recording = Machine::start(config).unwrap();
         let mut quiet_machine = Machine::start(config).unwrap();
         let mut quiet = Quiet::default();
         let mut recorder = Recorder::default();
@@ -2711,7 +2711,7 @@ fn timed_hits_cost_the_hit_time_alone() {
     let warm = [load(0x0A4, Register::R1)];
     check_timed(
         1,
-        back.clone(),
+        back,
         &warm,
         load(0x0A8, Register::R2),
         &[(Decode, 0, None), (Hit, 2, None), (Complete, 2, None)],
@@ -2745,7 +2745,7 @@ fn timed_misses_stall_for_the_fill() {
     let through = direct_mapped(WritePolicy::WriteThrough, AllocatePolicy::WriteAllocate);
     check_timed(
         2,
-        back.clone(),
+        back,
         &[],
         load(0x0A4, Register::R1),
         &[
@@ -2802,7 +2802,7 @@ fn timed_dirty_victims_stall_for_the_write_back_and_the_fill() {
     ] {
         check_timed(
             case,
-            back.clone(),
+            back,
             &dirty,
             request,
             &[
@@ -3943,13 +3943,7 @@ fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
     }
     assert_eq!(machine.entries_in_run, 2);
     let config = preset(Preset::TwoWayLru);
-    let (result, events) = apply_op(
-        &mut machine,
-        &Op::Config {
-            config: config.clone(),
-        },
-        0,
-    );
+    let (result, events) = apply_op(&mut machine, &Op::Config { config }, 0);
     assert_eq!(result, Ok(()));
     let [setup] = events.as_slice() else {
         panic!("one setup: {events:?}");
@@ -3959,7 +3953,7 @@ fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
         (EventKind::Setup, 2, None)
     );
     assert!(setup.changed.is_empty());
-    let mut expected = Machine::start(config.clone()).unwrap();
+    let mut expected = Machine::start(config).unwrap();
     expected.run = 2;
     expected.program = Program::parse(
         &expected.geometry,
@@ -3974,13 +3968,7 @@ fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
         address_bits: 0,
         ..config
     };
-    let (result, events) = apply_op(
-        &mut machine,
-        &Op::Config {
-            config: invalid.clone(),
-        },
-        0,
-    );
+    let (result, events) = apply_op(&mut machine, &Op::Config { config: invalid }, 0);
     assert_eq!(
         result,
         Err(OpError::Config(invalid.validate().unwrap_err()))

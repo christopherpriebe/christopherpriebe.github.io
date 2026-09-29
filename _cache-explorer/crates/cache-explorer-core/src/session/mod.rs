@@ -176,7 +176,7 @@ impl Session {
     ///
     /// The [`ConfigError`] of the first rule `initial` breaks.
     pub fn with_config(initial: Config) -> Result<Session, ConfigError> {
-        let origin = Machine::start(initial.clone())?;
+        let origin = Machine::start(initial)?;
         Ok(Session {
             view: ViewSettings {
                 advanced: initial.advanced,
@@ -201,7 +201,7 @@ impl Session {
     /// limit leaves no room for, an op past the most a link can hold, and
     /// an op a saved file has no room for.
     pub fn replay(initial: &Config, ops: &[Op]) -> Result<Replay, ReplayError> {
-        let origin = Machine::start(initial.clone())?;
+        let origin = Machine::start(*initial)?;
         let start = Start::before_op(
             EventPos::new_unchecked(0),
             &origin,
@@ -226,7 +226,7 @@ impl Session {
     /// As for [`Session::replay`], for `initial` and for the ops the fold
     /// reaches before it stops.
     pub fn replay_to(initial: &Config, ops: &[Op], pos: EventPos) -> Result<Machine, ReplayError> {
-        let origin = Machine::start(initial.clone())?;
+        let origin = Machine::start(*initial)?;
         let start = Start::before_op(
             EventPos::new_unchecked(0),
             &origin,
@@ -317,7 +317,7 @@ impl Session {
             .steps_through(end)
             .saturating_sub(self.log.steps_through(origin));
         State {
-            config: machine.config.clone(),
+            config: machine.config,
             advanced,
             geometry: machine.geometry,
             event: event.cloned(),
@@ -510,7 +510,7 @@ impl Session {
         let displayed = self.config();
         let same = Config {
             advanced: displayed.advanced,
-            ..config.clone()
+            ..config
         };
         if same == *displayed {
             return Ok(ConfigChange::Applied);
@@ -519,9 +519,7 @@ impl Session {
             self.apply(Op::Config { config })?;
             return Ok(ConfigChange::Applied);
         }
-        self.room(&Op::Config {
-            config: config.clone(),
-        })?;
+        self.room(&Op::Config { config })?;
         Ok(ConfigChange::NeedsReset {
             message: self.reset_question(),
             config,
@@ -1258,7 +1256,7 @@ mod tests {
         let end = session.log.end().get();
         assert!(session.log.checkpoints().len() <= (end / CHECKPOINT_INTERVAL) as usize);
         // Seeks on either side of it, and from it, reach the fold's machines.
-        let initial = session.initial.clone();
+        let initial = session.initial;
         let ops = session.ops().to_vec();
         for at in (CHECKPOINT_INTERVAL - 2..=CHECKPOINT_INTERVAL + 3).chain([end, 0, end - 1]) {
             session.seek(pos(at));
@@ -1358,7 +1356,7 @@ mod tests {
         assert_eq!(memory.word(written), before);
         assert_eq!(session.machine().memory.word(written), after);
         // Seeks from the checkpoint still reach the fold's machines.
-        let initial = session.initial.clone();
+        let initial = session.initial;
         let ops = session.ops().to_vec();
         let end = session.log.end().get();
         for at in [at.get(), at.get() + 1, end - 1, end] {

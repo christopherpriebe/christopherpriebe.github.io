@@ -29,7 +29,7 @@ use crate::text::{Segments, TextSegment};
 
 /// A cache and machine configuration. Fixed for a run; a new configuration
 /// starts a new run.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
@@ -58,7 +58,7 @@ pub struct Config {
 }
 
 /// The cache's organisation and policies.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CacheConfig {
@@ -672,10 +672,10 @@ impl Config {
             cache: CacheConfig {
                 write_policy: WritePolicy::WriteBack,
                 allocate_policy: AllocatePolicy::WriteAllocate,
-                ..self.cache.clone()
+                ..self.cache
             },
             timing: None,
-            ..self.clone()
+            ..*self
         }
     }
 
@@ -717,14 +717,14 @@ impl Config {
                 size_bytes,
                 line_bytes: line,
                 associativity,
-                ..self.cache.clone()
+                ..self.cache
             },
             timing: self.timing.map(|timing| Timing {
                 hit_cycles: clamp_cycles(timing.hit_cycles),
                 miss_cycles: clamp_cycles(timing.miss_cycles),
             }),
             seed: self.seed.min(MAX_SEED),
-            ..self.clone()
+            ..*self
         }
     }
 }
@@ -1100,7 +1100,7 @@ fn controls(shown: &Config, advanced: bool, recent: Option<Timing>) -> ConfigCon
                 } else {
                     Some(timing)
                 },
-                ..shown.clone()
+                ..*shown
             },
         },
         error: shown
@@ -1225,7 +1225,7 @@ fn choices<T: Copy + PartialEq>(
     values
         .into_iter()
         .map(|value| {
-            let mut config = shown.clone();
+            let mut config = *shown;
             apply(&mut config, value);
             option(shown, label(value), value == current, config)
         })
@@ -1245,7 +1245,7 @@ fn associativities(shown: &Config) -> Vec<ConfigOption> {
         with_current(&WAY_OPTIONS, cache.associativity)
     };
     let with_ways = |ways: u32| {
-        let mut config = shown.clone();
+        let mut config = *shown;
         config.cache.associativity = ways;
         config
     };
@@ -1279,7 +1279,7 @@ fn associativities(shown: &Config) -> Vec<ConfigOption> {
 /// when `pressed`, and disabled with the rule's message when its
 /// configuration is invalid.
 fn option(shown: &Config, label: String, pressed: bool, config: Config) -> ConfigOption {
-    let config = if pressed { shown.clone() } else { config };
+    let config = if pressed { *shown } else { config };
     let error = config.validate().err();
     ConfigOption {
         label,
@@ -1304,7 +1304,7 @@ fn resized(shown: &Config, size: u32, line: u32) -> Config {
     } else {
         cache.associativity.min(lines)
     };
-    let mut config = shown.clone();
+    let mut config = *shown;
     config.cache.size_bytes = size;
     config.cache.line_bytes = line;
     config.cache.associativity = associativity;

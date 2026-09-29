@@ -248,7 +248,7 @@ impl ModuleRun {
     /// session and this run are then as they were, a gate included.
     pub fn start<'s>(&mut self, session: &'s mut Session) -> Result<&'s [MicroEvent], OpError> {
         let mut ops = vec![Op::Config {
-            config: self.module.preset().clone(),
+            config: *self.module.preset(),
         }];
         if let Some(program) = self.module.program() {
             ops.push(Op::Program {

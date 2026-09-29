@@ -261,7 +261,7 @@ mod support {
     pub(crate) fn same(loaded: &Session, original: &Session, context: &str) {
         let flagged = |config: &Config| Config {
             advanced: false,
-            ..config.clone()
+            ..*config
         };
         assert_eq!(
             flagged(loaded.initial()),
@@ -539,7 +539,7 @@ fn the_mode_chosen_is_kept() {
     assert_eq!(
         Config {
             advanced: false,
-            ..loaded.initial().clone()
+            ..*loaded.initial()
         },
         config()
     );
@@ -770,7 +770,7 @@ fn the_frame_5c_link_offers_its_repair() {
         .collect();
     let doc = ShareDoc {
         schema_version: SCHEMA_VERSION,
-        config: bad.clone(),
+        config: bad,
         ops: ops.clone(),
         at: Some(ShareAt { op: 3, event: 2 }),
     };
@@ -1538,7 +1538,7 @@ fn a_file_too_large_for_a_link_offers_no_link() {
         ..config()
     };
     let bad = ShareDoc {
-        config: three.clone(),
+        config: three,
         ..doc.clone()
     };
     let failure = file_failure(&bad.to_json());

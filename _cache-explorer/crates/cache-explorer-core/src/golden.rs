@@ -151,7 +151,7 @@ impl Fixture {
     /// does not parse, a step with no instruction to execute, or an edit its
     /// plan refuses.
     pub fn events(&self) -> Result<Vec<MicroEvent>, FixtureError> {
-        let mut session = Session::with_config(self.config.clone())?;
+        let mut session = Session::with_config(self.config)?;
         for issue in &self.issues {
             session.apply(issue.op())?;
         }
@@ -726,7 +726,7 @@ fn edits() -> Vec<Fixture> {
                           0x1A4 then miss as compulsory, since the edits took their lines out \
                           of the run's record of lines filled; they fill the lowest empty way \
                           first, and 0x1A4 reads the 12 memory kept.",
-            config: config.clone(),
+            config,
             issues: after(vec![
                 invalidate(2, 0),
                 invalidate(2, 1),
@@ -742,7 +742,7 @@ fn edits() -> Vec<Fixture> {
                           with 0x0C0, which it takes from memory, clean, at rank 0; and the \
                           dirty set 3, way 0 given 0x1B0, which discards the 5 at 0x0B0. Loads \
                           then hit on the edited words.",
-            config: config.clone(),
+            config,
             issues: after(vec![
                 edit_way(
                     2,
@@ -779,7 +779,7 @@ fn edits() -> Vec<Fixture> {
             name: "edit-memory-only",
             description: "A memory word no line holds, edited at the end of frame 3b's access \
                           #4: only memory changes, and a load then brings the new value in.",
-            config: config.clone(),
+            config,
             issues: after(vec![edit_memory(0x300, 1), load(0x300)]),
         },
         Fixture {
@@ -787,7 +787,7 @@ fn edits() -> Vec<Fixture> {
             description: "A memory word the clean line in set 2, way 0 holds, edited at the \
                           end of frame 3b's access #4: memory and the cached copy change \
                           together, so the line stays clean, and a load hits on the new value.",
-            config: config.clone(),
+            config,
             issues: after(vec![edit_memory(0x0A8, 12), load(0x0A8)]),
         },
         Fixture {
@@ -795,7 +795,7 @@ fn edits() -> Vec<Fixture> {
             description: "Editor state 4e applied: 0x0B0, which the dirty line in set 3, way 0 \
                           holds as 5, edited to 12 at the end of frame 3b's access #4. Memory \
                           changes and the word stays stale; a load still reads the line's 5.",
-            config: config.clone(),
+            config,
             issues: after(vec![edit_memory(0x0B0, 12), load(0x0B0)]),
         },
         Fixture {
@@ -1131,7 +1131,7 @@ mod tests {
         let fixture = |issues| Fixture {
             name: "refused",
             description: "",
-            config: config.clone(),
+            config,
             issues,
         };
         let word_bytes = config.word_bytes.bytes();
@@ -1155,7 +1155,7 @@ mod tests {
         let invalid = Fixture {
             config: Config {
                 address_bits: 0,
-                ..config.clone()
+                ..config
             },
             ..fixture(Vec::new())
         };

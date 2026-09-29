@@ -511,7 +511,7 @@ mod tests {
                 hit_cycles: 1,
                 miss_cycles: 20,
             }),
-            ..two_way.clone()
+            ..two_way
         };
         let line = "New run: 128 B \u{b7} 16 B lines \u{b7} 2-way \u{b7} LRU \u{b7} write-back \
                     \u{b7} allocate. The cache is empty and memory, registers and counters are \
@@ -526,7 +526,7 @@ mod tests {
             new_run(
                 &Config {
                     advanced: true,
-                    ..two_way.clone()
+                    ..two_way
                 },
                 None
             ),
