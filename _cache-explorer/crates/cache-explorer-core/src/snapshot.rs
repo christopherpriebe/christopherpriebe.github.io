@@ -19,7 +19,7 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::cache::{Set, Slot, Way};
-use crate::config::Config;
+use crate::config::{Config, Replacement};
 use crate::cpu::Halted;
 use crate::event::{ChangeRef, EventKind, MicroEvent};
 use crate::explain::{self, EntryNoun};
@@ -553,12 +553,7 @@ impl CacheView {
     /// The cache of `machine`, with the access in progress or just made.
     pub(crate) fn new(machine: &Machine) -> Self {
         let geometry = &machine.geometry;
-        let rank_header = machine
-            .config
-            .cache
-            .replacement
-            .policy()
-            .rank_header(geometry.ways());
+        let rank_header = rank_header(machine.config.cache.replacement, geometry.ways());
         let access = machine.access.as_ref();
         let sets = (0..geometry.sets())
             .map(SetIndex::new_unchecked)
@@ -665,13 +660,23 @@ pub(crate) fn lone_way_view(
     index: WayIndex,
     way: &Way,
 ) -> WayView {
-    let rank_header = machine
-        .config
-        .cache
-        .replacement
-        .policy()
-        .rank_header(machine.geometry.ways());
+    let rank_header = rank_header(machine.config.cache.replacement, machine.geometry.ways());
     way_view(machine, set, index, way, rank_header, None)
+}
+
+/// The head of the cache table's rank column for sets of `ways` ways under
+/// `replacement`, or `None` when the column is hidden: under random
+/// replacement, which keeps no order, and in one-way sets, whose only rank
+/// is 0. Neither ever moves a rank, so hiding the column hides no change.
+fn rank_header(replacement: Replacement, ways: u32) -> Option<RankHeader> {
+    if ways <= 1 {
+        return None;
+    }
+    match replacement {
+        Replacement::Lru => Some(RankHeader::Lru),
+        Replacement::Fifo => Some(RankHeader::Age),
+        Replacement::Random => None,
+    }
 }
 
 /// The mark of `rank` in a set of `ways` ways ranked as `header` says.
@@ -1154,6 +1159,26 @@ mod tests {
                 assert_eq!(rows.row_of(*at), Some(row), "{at:?} in {watch:?}");
             }
             assert_eq!(rows.row_of(line(0x0C0)), None);
+        }
+    }
+
+    #[test]
+    fn the_rank_column_is_shown_only_where_an_order_exists() {
+        for ways in [2, 4, 64] {
+            assert_eq!(
+                rank_header(Replacement::Lru, ways),
+                Some(RankHeader::Lru),
+                "{ways}"
+            );
+            assert_eq!(
+                rank_header(Replacement::Fifo, ways),
+                Some(RankHeader::Age),
+                "{ways}"
+            );
+            assert_eq!(rank_header(Replacement::Random, ways), None, "{ways}");
+        }
+        for policy in [Replacement::Lru, Replacement::Fifo, Replacement::Random] {
+            assert_eq!(rank_header(policy, 1), None, "{policy:?}");
         }
     }
 }

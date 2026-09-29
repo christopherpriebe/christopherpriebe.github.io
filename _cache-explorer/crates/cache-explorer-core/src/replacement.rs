@@ -23,7 +23,6 @@
 use crate::cache::Way;
 use crate::config::Replacement;
 use crate::prng::Prng;
-use crate::snapshot::RankHeader;
 use crate::units::WayIndex;
 
 /// Replacement behaviour over the ways of one set, in way order.
@@ -66,12 +65,6 @@ pub(crate) trait ReplacementPolicy {
     /// The victim of a set whose ways are all valid, of which there is more
     /// than one. Only [`RandomChoice`] touches `rng`.
     fn choose_full(&self, set: &[Way], rng: &mut Prng) -> VictimChoice;
-
-    /// The head of the cache table's rank column for sets of `ways` ways, or
-    /// `None` when the column is hidden: under random replacement, which
-    /// keeps no order, and in one-way sets, whose only rank is 0. Neither
-    /// ever moves a rank, so hiding the column hides no change.
-    fn rank_header(&self, ways: u32) -> Option<RankHeader>;
 }
 
 /// Least recently used: hits and fills move a way to the front, and a full
@@ -154,10 +147,6 @@ impl ReplacementPolicy for Lru {
             reason: VictimReason::LeastRecentlyUsed { rank },
         }
     }
-
-    fn rank_header(&self, ways: u32) -> Option<RankHeader> {
-        (ways > 1).then_some(RankHeader::Lru)
-    }
 }
 
 impl ReplacementPolicy for Fifo {
@@ -175,10 +164,6 @@ impl ReplacementPolicy for Fifo {
             way,
             reason: VictimReason::FirstIn { rank },
         }
-    }
-
-    fn rank_header(&self, ways: u32) -> Option<RankHeader> {
-        (ways > 1).then_some(RankHeader::Age)
     }
 }
 
@@ -198,10 +183,6 @@ impl ReplacementPolicy for RandomChoice {
             way: WayIndex::new_unchecked(rng.draw_way(ways)),
             reason: VictimReason::Random,
         }
-    }
-
-    fn rank_header(&self, _ways: u32) -> Option<RankHeader> {
-        None
     }
 }
 
@@ -673,18 +654,6 @@ mod tests {
                     .collect();
                 assert_eq!(moves, changed);
             }
-        }
-    }
-
-    #[test]
-    fn the_rank_column_is_shown_only_where_an_order_exists() {
-        for ways in [2, 4, 64] {
-            assert_eq!(Lru.rank_header(ways), Some(RankHeader::Lru), "{ways}");
-            assert_eq!(Fifo.rank_header(ways), Some(RankHeader::Age), "{ways}");
-            assert_eq!(RandomChoice.rank_header(ways), None, "{ways}");
-        }
-        for policy in [Replacement::Lru, Replacement::Fifo, Replacement::Random] {
-            assert_eq!(policy.policy().rank_header(1), None, "{policy:?}");
         }
     }
 }
