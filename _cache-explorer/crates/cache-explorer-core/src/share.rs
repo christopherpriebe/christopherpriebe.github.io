@@ -37,8 +37,8 @@ use crate::event::{EventKind, MicroEvent};
 use crate::explain;
 use crate::format;
 use crate::limits::{
-    MAX_PROGRAM_BYTES, MAX_SHARE_JSON_BYTES, MAX_SHARE_OPS, MAX_SHARE_TEXT_BYTES,
-    SESSION_EVENT_LIMIT,
+    LOAD_SLICE_EVENTS, MAX_PROGRAM_BYTES, MAX_SHARE_JSON_BYTES, MAX_SHARE_OPS,
+    MAX_SHARE_TEXT_BYTES, SESSION_EVENT_LIMIT,
 };
 use crate::module::{code_spans, Segments, TextSegment};
 use crate::op::{Op, OpError};
@@ -527,10 +527,8 @@ impl ShareLoad {
 
     /// Replays the next slice: at least one entry, then more while another
     /// entry is sure to fit within `max_events` events, stopping at an entry
-    /// boundary. The facade's `advance()` passes
-    /// [`LOAD_SLICE_EVENTS`](crate::limits::LOAD_SLICE_EVENTS), once per
-    /// animation frame. Once the load is done or has failed, every call
-    /// answers the same.
+    /// boundary. Once the load is done or has failed, every call answers the
+    /// same.
     pub fn advance(&mut self, max_events: u32) -> LoadProgress {
         if let LoadState::Replaying(replaying) = &mut self.state {
             match replaying.loader.advance(max_events) {
@@ -540,6 +538,12 @@ impl ShareLoad {
             }
         }
         self.progress()
+    }
+
+    /// Replays the next slice of about [`LOAD_SLICE_EVENTS`] events, once per
+    /// animation frame, as [`ShareLoad::advance`] does.
+    pub fn advance_slice(&mut self) -> LoadProgress {
+        self.advance(LOAD_SLICE_EVENTS)
     }
 
     /// The loaded session, its cursor where the document placed it, moved

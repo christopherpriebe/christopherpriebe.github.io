@@ -14,7 +14,6 @@
 
 #![forbid(unsafe_code)]
 
-use cache_explorer_core::limits::LOAD_SLICE_EVENTS;
 use cache_explorer_core::{
     self as model, AccessKind, Addr, AddressInput, ArgKind, ArgumentError, BuildInfo, Config,
     ConfigChange, ConfigCheck, ConfigControls, ConfigNumberField, ConfigNumberInput, Decoded,
@@ -654,7 +653,7 @@ impl ShareLoad {
     ///
     /// Never in practice: the progress always converts.
     pub fn advance(&mut self) -> Result<Ts<LoadProgress>, JsError> {
-        Ok(self.inner.advance(LOAD_SLICE_EVENTS).into_ts()?)
+        Ok(self.inner.advance_slice().into_ts()?)
     }
 
     /// The loaded session, its cursor where the document placed it.
