@@ -23,9 +23,10 @@
 //! the cells it changed; a refused call changes nothing, and an accepted one
 //! never rewrites the log before the point it appends at; a planned edit
 //! applies and drops no dirty data without saying so, and one the plan
-//! refuses is refused as an op too; every configuration repairs to a valid
-//! one, whose geometry splits and rebuilds every address; the parsers take
-//! any text; and every input type round-trips through JSON.
+//! refuses is refused as an op too, for want of room in the log as well,
+//! near each of its limits; every configuration repairs to a valid one,
+//! whose geometry splits and rebuilds every address; the parsers take any
+//! text; and every input type round-trips through JSON.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
@@ -43,11 +44,11 @@ use proptest::prelude::*;
 
 use support::{
     arb_access_match, arb_config, arb_config_match, arb_edit_patch, arb_edit_target,
-    arb_event_match, arb_long_session, arb_op, arb_predicate, arb_raw_config, arb_session,
-    arb_share_doc, arb_step, arb_text, arb_valid_config, arb_way_form, arb_way_patch, cells,
-    changes, check, checked_positions, end, event_kinds, every_position, load_in_slices, number,
-    number_fields, op_ends, op_start, play, play_long, registers, round_trip, seeks_reach,
-    undo_stops, without_mode, Checks, Fold, COUNTERS,
+    arb_event_match, arb_long_session, arb_near_limit, arb_op, arb_predicate, arb_raw_config,
+    arb_session, arb_share_doc, arb_step, arb_text, arb_valid_config, arb_way_form, arb_way_patch,
+    cells, changes, check, checked_positions, end, event_kinds, every_position, load_in_slices,
+    number, number_fields, op_ends, op_start, play, play_long, registers, round_trip, seeks_reach,
+    undo_stops, without_mode, Checks, Fold, Limits, COUNTERS,
 };
 
 /// How the properties over whole sessions run: with a quarter of the cases
@@ -76,6 +77,17 @@ fn long_sessions() -> ProptestConfig {
     }
 }
 
+/// How the property over the limits of the log runs: with half the cases of
+/// that over long sessions, since each walks logs tens of thousands of
+/// events long up to each limit and past it, cloning them at every step.
+fn near_limits() -> ProptestConfig {
+    let base = long_sessions();
+    ProptestConfig {
+        cases: (base.cases / 2).max(1),
+        ..base
+    }
+}
+
 /// How the properties over single values run, which cost little: with as
 /// many cases as proptest runs by default, or `PROPTEST_CASES`.
 fn values() -> ProptestConfig {
@@ -94,9 +106,10 @@ mod support {
     use std::fmt::Debug;
 
     use cache_explorer_core::limits::{
-        CHECKPOINT_INTERVAL, LOAD_SLICE_EVENTS, MAX_CYCLES, MAX_EVENTS_PER_ENTRY, MAX_LINES,
-        MAX_RUN_STEPS, MAX_SEED, MAX_SHARE_JSON_BYTES, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS,
-        MIN_CYCLES,
+        CHECKPOINT_INTERVAL, INSTRUCTION_BUDGET, LOAD_SLICE_EVENTS, MAX_CYCLES,
+        MAX_EVENTS_PER_ENTRY, MAX_LINES, MAX_PROGRAM_BYTES, MAX_RUN_STEPS, MAX_SEED,
+        MAX_SHARE_JSON_BYTES, MAX_SHARE_OPS, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS, MIN_CYCLES,
+        SESSION_EVENT_LIMIT,
     };
     use cache_explorer_core::{
         AccessKind, AccessMatch, Addr, AddrLoc, AllPredicate, AllocatePolicy, AnyPredicate,
@@ -105,7 +118,7 @@ mod support {
         CounterPredicate, Counters, EditPatch, EditPlan, EditTarget, EventKind, EventMatch,
         EventPos, EventPredicate, Geometry, LastAccessPredicate, LinePredicate, LoadProgress,
         Machine, MemoryInit, MemoryPredicate, MicroEvent, NotPredicate, Op, OpError, Outcome,
-        Position, Predicate, ProgramFormat, ProgramSource, RefusalReason, Register,
+        Position, Predicate, Preset, ProgramFormat, ProgramSource, RefusalReason, Register,
         RegisterPredicate, Replacement, Session, ShareAt, ShareDoc, ShareLoad, State, Step,
         StepOutcome, Timeline, Timing, Tone, WayForm, WayLoc, WayPatch, WayPredicate, WayView,
         WordBytes, WritePolicy,
@@ -1835,6 +1848,375 @@ mod support {
         changed
     }
 
+    // --- Sessions at the log's limits -----------------------------------
+
+    /// How many events short of [`LAST_OPEN`] the sessions near the events
+    /// limit are built.
+    const EVENTS_SHORT: u32 = 30;
+
+    /// How many ops short of the most a link can hold the session near the
+    /// ops limit is built.
+    const OPS_SHORT: u32 = 4;
+
+    /// The most events a log can hold and still take another op at its
+    /// end: the limit, less the most an entry has. An op is refused for want
+    /// of room once the log holds more.
+    const LAST_OPEN: u32 = SESSION_EVENT_LIMIT - MAX_EVENTS_PER_ENTRY;
+
+    /// The most bytes of room an edit can need in a saved file.
+    const FILE_WINDOW: usize = 2048;
+
+    /// The bytes of room in a saved file, beyond what the edit needs, that
+    /// the walks along the file limit start with.
+    const FILE_SLACK: usize = 40;
+
+    /// How many events short of [`LAST_OPEN`] each walk starts, a negative
+    /// number being past it.
+    const SHORTS: std::ops::RangeInclusive<i32> = -1..=4;
+
+    /// The accesses every session at a limit starts with, so that its cache
+    /// holds lines, some of them dirty, and memory words the cache has not
+    /// written.
+    const WARM_UP: [(AccessKind, u32, Option<u64>); 4] = [
+        (AccessKind::Write, 0x0A4, Some(9)),
+        (AccessKind::Read, 0x1A4, None),
+        (AccessKind::Write, 0x2A4, Some(4)),
+        (AccessKind::Read, 0x0B0, None),
+    ];
+
+    /// A load of the assembly program `source`.
+    fn assembly(source: &str) -> Op {
+        Op::Program {
+            source: source.to_owned(),
+            format: ProgramFormat::Asm,
+        }
+    }
+
+    /// The loop the sessions at a limit run: no exit and no memory access,
+    /// so one event per instruction.
+    const ENDLESS: &str = "        add r1, r0, #1\nloop:   bnez r1, loop";
+
+    /// A load of the loop, followed by a comment of `letters` letters, which
+    /// grows the op's JSON by exactly one byte a letter.
+    fn padded(letters: usize) -> Op {
+        assembly(&format!("{ENDLESS}\n; {}", "x".repeat(letters)))
+    }
+
+    /// A session with an empty log on `four-way-write-back`, after
+    /// [`WARM_UP`].
+    fn warmed() -> Session {
+        let mut session = Session::with_config(Preset::FourWayWriteBack.config()).unwrap();
+        for (kind, addr, value) in WARM_UP {
+            let op = Op::Issue {
+                kind,
+                addr: number(addr.into()),
+                value: value.map(number),
+            };
+            session.apply(op).unwrap();
+        }
+        session
+    }
+
+    /// `session` with more ops appended, `ops` of them in all, each running
+    /// the loop as many instructions as spread the log's events evenly over
+    /// them, so that its events number `events`; a loop that has used its
+    /// budget is loaded again, and the last op loads it, so that whatever
+    /// follows has all its budget.
+    fn spread(mut session: Session, ops: u32, events: u32) -> Session {
+        let mut left = 0;
+        while session.op_count() < ops - 1 {
+            if left == 0 {
+                session.apply(padded(0)).unwrap();
+                // The budget, less the instruction the load starts with.
+                left = INSTRUCTION_BUDGET - 1;
+                continue;
+            }
+            let ops_left = ops - 1 - session.op_count();
+            let events_left = events.saturating_sub(end(&session).get());
+            let n = (events_left / ops_left).clamp(1, MAX_RUN_STEPS).min(left);
+            session.apply(Op::Run { n }).unwrap();
+            left -= n;
+        }
+        session.apply(padded(0)).unwrap();
+        assert!(end(&session).get().abs_diff(events) < 8);
+        session
+    }
+
+    /// Runs the loop on `session`, in one op, to `short` events short of
+    /// [`LAST_OPEN`]; or, if `short` is negative, past it: the op that
+    /// starts with room for another entry and ends without it.
+    fn run_to(session: &mut Session, short: i32) {
+        let gap = LAST_OPEN - end(session).get();
+        let n = if short < 0 {
+            gap + 3
+        } else {
+            gap - short.unsigned_abs()
+        };
+        session.apply(Op::Run { n }).unwrap();
+    }
+
+    /// An edit to plan and apply near each limit of the log.
+    #[derive(Clone, Copy, Debug)]
+    pub(crate) struct NearLimit {
+        /// The edit, resolved on the session at each limit.
+        edit: EditIntent,
+        /// How many undo stops the cursor goes back, once a limit has been
+        /// passed, before the edit is checked once more.
+        undos: u32,
+    }
+
+    /// An edit, and how far the cursor goes back.
+    pub(crate) fn arb_near_limit() -> impl Strategy<Value = NearLimit> {
+        (arb_edit_intent(), 0..=2_u32).prop_map(|(edit, undos)| NearLimit { edit, undos })
+    }
+
+    /// The sessions near each limit of the log, built once, since building
+    /// one takes a log as long as the limit, and cloned for each case.
+    pub(crate) struct Limits {
+        /// A log of a few dozen ops whose events are a few dozen short of
+        /// [`LAST_OPEN`].
+        events: Session,
+        /// A log a few ops short of the most a link can hold, whose events
+        /// are a few dozen short of [`LAST_OPEN`].
+        ops: Session,
+        /// A log of padded programs, whose saved file has room for one more
+        /// padded program of `letters` letters, to the byte, and no more,
+        /// and whose events are a few dozen short of [`LAST_OPEN`].
+        file: Session,
+        /// The letters of the longest padded program `file` has room for.
+        letters: usize,
+    }
+
+    impl Limits {
+        /// The sessions near each limit.
+        pub(crate) fn new() -> Self {
+            let short = LAST_OPEN - EVENTS_SHORT;
+            let events = spread(warmed(), 80, short);
+            let ops = spread(warmed(), MAX_SHARE_OPS - OPS_SHORT, short);
+            // Half the longest program at a time, while the longest fits:
+            // what is left then has room for more than half of it.
+            let most = MAX_PROGRAM_BYTES as usize - ENDLESS.len() - "\n; ".len();
+            let fits = |session: &Session, letters| session.clone().apply(padded(letters)).is_ok();
+            let mut file = warmed();
+            while fits(&file, most) {
+                file.apply(padded(most / 2)).unwrap();
+            }
+            let ops_so_far = file.op_count();
+            let file = spread(file, ops_so_far + 60, short);
+            let (mut letters, mut high) = (0, most);
+            assert!(fits(&file, letters));
+            while high - letters > 1 {
+                let mid = letters.midpoint(high);
+                if fits(&file, mid) {
+                    letters = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            assert!(letters > FILE_WINDOW + FILE_SLACK);
+            Limits {
+                events,
+                ops,
+                file,
+                letters,
+            }
+        }
+
+        /// `file` with `room` bytes left in its saved file, to the byte.
+        fn file_with(&self, room: usize) -> Session {
+            let mut session = self.file.clone();
+            session.apply(padded(self.letters - room)).unwrap();
+            session
+        }
+    }
+
+    /// The error refusing an op for want of room that `reason` names, if it
+    /// names one.
+    fn room_error(reason: RefusalReason) -> Option<OpError> {
+        match reason {
+            RefusalReason::SessionFull => Some(OpError::SessionFull),
+            RefusalReason::LinkFull => Some(OpError::LinkFull),
+            RefusalReason::FileFull => Some(OpError::FileFull),
+            _ => None,
+        }
+    }
+
+    /// What the checks along a limit have found: whether the edit had room,
+    /// and the refusals for want of room it met.
+    #[derive(Default)]
+    struct Seen {
+        /// The edit had room somewhere.
+        open: bool,
+        /// The refusals met.
+        refusals: Vec<OpError>,
+    }
+
+    impl Seen {
+        /// Notes the refusal `refused`, if it is one.
+        fn note(&mut self, refused: Option<OpError>) {
+            match refused {
+                Some(error) => self.refusals.push(error),
+                None => self.open = true,
+            }
+        }
+
+        /// Checks that the edit had room somewhere, and that each of
+        /// `errors` refused it somewhere.
+        fn met(&self, errors: &[OpError]) -> Result<(), TestCaseError> {
+            prop_assert!(self.open, "the edit never had room");
+            for error in errors {
+                prop_assert!(self.refusals.contains(error), "{:?} was never met", error);
+            }
+            Ok(())
+        }
+    }
+
+    /// Plans the edit of `patch` on `target` and applies it as an op on
+    /// `session`, and checks that the plan names no room the log lacks that
+    /// the op does not, and the op none that the plan does not, whatever
+    /// else refuses them. Gives the refusal for want of room, if there is
+    /// one. An edit accepted is left undone after the cursor, which is
+    /// where it was.
+    fn room_refusals_agree(
+        session: &mut Session,
+        target: EditTarget,
+        patch: &EditPatch,
+    ) -> Result<Option<OpError>, TestCaseError> {
+        let planned = session
+            .plan_edit(&target, patch)
+            .err()
+            .and_then(|refusal| room_error(refusal.reason));
+        let at = session.position().pos;
+        let op = Op::Edit {
+            target,
+            patch: patch.clone(),
+        };
+        let applied = session.apply(op).map(drop);
+        if applied.is_ok() {
+            session.seek(at);
+        }
+        let applied = applied.err().filter(|error| {
+            matches!(
+                error,
+                OpError::SessionFull | OpError::LinkFull | OpError::FileFull
+            )
+        });
+        prop_assert_eq!(&planned, &applied);
+        Ok(planned)
+    }
+
+    /// [`room_refusals_agree`] with the cursor where it is and, when the
+    /// last op has more than one event, inside that op, where the edit goes
+    /// at the op's end all the same: so the room is the same, and the plan
+    /// names it before it asks for the op to be finished.
+    fn room_refusals_agree_here(
+        session: &mut Session,
+        target: EditTarget,
+        patch: &EditPatch,
+    ) -> Result<Option<OpError>, TestCaseError> {
+        let at = session.position().pos;
+        let refused = room_refusals_agree(session, target, patch)?;
+        if let Some(before) = at.get().checked_sub(1) {
+            session.seek(number(before.into()));
+            if session.position().boundary < Boundary::OpEnd {
+                let inside = room_refusals_agree(session, target, patch)?;
+                prop_assert_eq!(&inside, &refused);
+            }
+            session.seek(at);
+        }
+        Ok(refused)
+    }
+
+    impl NearLimit {
+        /// Checks that the edit is refused for want of room as an op
+        /// exactly when the plan says so, with the same error, near each
+        /// limit, on both sides of it, and that the refusals each limit
+        /// leads to have all been met, in every order they can come in.
+        pub(crate) fn check(self, limits: &Limits) -> Result<(), TestCaseError> {
+            let mut events = Seen::default();
+            self.walks(&limits.events, &mut events)?;
+            events.met(&[OpError::SessionFull])?;
+            let mut ops = Seen::default();
+            self.walks(&limits.ops, &mut ops)?;
+            ops.met(&[OpError::LinkFull, OpError::SessionFull])?;
+            let mut file = Seen::default();
+            self.file(limits, &mut file)?;
+            file.met(&[OpError::FileFull, OpError::SessionFull])
+        }
+
+        /// Walks along the log of `session` from each of [`SHORTS`].
+        fn walks(self, session: &Session, seen: &mut Seen) -> Result<(), TestCaseError> {
+            for short in SHORTS {
+                let mut session = session.clone();
+                run_to(&mut session, short);
+                self.walk(session, seen)?;
+            }
+            Ok(())
+        }
+
+        /// Goes on with `session` by ops of one event, until one is
+        /// refused, checking the edit before each; then goes back, and
+        /// checks it once more.
+        fn walk(self, mut session: Session, seen: &mut Seen) -> Result<(), TestCaseError> {
+            let (target, patch, _) = self.edit.resolve(&session);
+            loop {
+                let refused = room_refusals_agree_here(&mut session, target, &patch)?;
+                seen.note(refused);
+                if session.apply(Op::Step).is_err() {
+                    break;
+                }
+            }
+            for _ in 0..self.undos {
+                session.undo();
+            }
+            room_refusals_agree_here(&mut session, target, &patch).map(drop)
+        }
+
+        /// Checks the edit with the room of the saved file just short of
+        /// what it needs, just enough, and one byte more, each on its own;
+        /// then walks from a few more bytes of room. A saved file's room is
+        /// left to the byte by a padded program of the letters that leave
+        /// exactly that room.
+        fn file(self, limits: &Limits, seen: &mut Seen) -> Result<(), TestCaseError> {
+            let (target, patch, _) = self.edit.resolve(&limits.file);
+            let refused = |room: usize| {
+                let op = Op::Edit {
+                    target,
+                    patch: patch.clone(),
+                };
+                limits.file_with(room).apply(op).map(drop) == Err(OpError::FileFull)
+            };
+            prop_assert!(refused(0), "no op fits in no room");
+            prop_assert!(
+                !refused(FILE_WINDOW),
+                "an edit needs over {FILE_WINDOW} bytes"
+            );
+            // The edit is refused for want of room with `low` bytes, and has
+            // room with `high`.
+            let (mut low, mut high) = (0, FILE_WINDOW);
+            while high - low > 1 {
+                let mid = low.midpoint(high);
+                if refused(mid) {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            for (room, closed) in [(low, true), (high, false), (high + 1, false)] {
+                let mut session = limits.file_with(room);
+                let refusal = room_refusals_agree_here(&mut session, target, &patch)?;
+                prop_assert_eq!(refusal.is_some(), closed, "{} bytes", room);
+                seen.note(refusal);
+            }
+            for short in SHORTS {
+                let mut session = limits.file_with(high + FILE_SLACK);
+                run_to(&mut session, short);
+                self.walk(session, seen)?;
+            }
+            Ok(())
+        }
+    }
+
     // --- Round trips ----------------------------------------------------
 
     /// Checks that `value` reads back from its JSON text, and from its JSON
@@ -2843,9 +3225,22 @@ fn seeks_across_checkpoints_reach_the_fold() {
     });
 }
 
+/// Near each limit of the log, the events a session keeps, the ops a link
+/// can hold and the bytes a saved file can hold, an edit is refused for want
+/// of room as an op exactly when the plan says so, with the same error: at
+/// the end of the log and inside its last op, on both sides of the limit,
+/// with the events limit close by the other two so that either is reached
+/// first or both together, and once the cursor has gone back.
+#[test]
+fn edits_are_refused_for_room_as_planned_near_each_limit() {
+    let limits = Limits::new();
+    check(near_limits(), &arb_near_limit(), |near| near.check(&limits));
+}
+
 /// The properties over whole sessions run their share of the cases, and the
-/// property over long sessions its share, whatever `PROPTEST_CASES` says:
-/// the `proptest!` macro would run as many as `PROPTEST_CASES` of each.
+/// properties over long sessions and over the limits of the log theirs,
+/// whatever `PROPTEST_CASES` says: the `proptest!` macro would run as many as
+/// `PROPTEST_CASES` of each.
 #[test]
 fn session_properties_run_their_share_of_the_cases() {
     let cases = Cell::new(0);
@@ -2860,6 +3255,12 @@ fn session_properties_run_their_share_of_the_cases() {
         Ok(())
     });
     assert_eq!(cases.get(), long_sessions().cases);
+    cases.set(0);
+    check(near_limits(), &arb_near_limit(), |_| {
+        cases.set(cases.get() + 1);
+        Ok(())
+    });
+    assert_eq!(cases.get(), near_limits().cases);
     assert_eq!(sessions().cases, (values().cases / 4).max(1));
 }
 
