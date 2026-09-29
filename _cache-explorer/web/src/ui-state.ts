@@ -1,0 +1,100 @@
+// Presentation and unsent input: what the student has typed, which panels are open, where the
+// lists are scrolled. Nothing here is machine state, and nothing here is derived from it; the
+// core answers for that, and each render asks it again.
+
+import type {
+  AccessKind,
+  Addr,
+  Cause,
+  Config,
+  ModuleIndexView,
+  ModuleRun,
+  ProgramFormat,
+  WayForm,
+} from '../pkg/cache_explorer';
+import type { Layout } from './layout';
+
+/** The address the first visit has typed, decoded and marked in the address strip. */
+export const FIRST_VISIT_ADDRESS = '0x0A4';
+/** The value a store would write, until the student types another. */
+export const FIRST_VISIT_VALUE = '7';
+/** The program the first visit's drawer holds, not yet loaded: five instructions on set 2. */
+export const SAMPLE_PROGRAM = [
+  'start:',
+  '  ld  r1, [0x0A4]',
+  '  ld  r2, [0x0A8]',
+  '  ld  r3, [0x1A4]',
+  '  st  [0x0A4], #7',
+  '  ld  r4, [0x0A4]',
+].join('\n');
+
+export interface WayEditor {
+  kind: 'way';
+  set: number;
+  way: number;
+  form: WayForm;
+  /** Which data inputs the student has typed in; the others show what the core reads for them. */
+  typed: boolean[];
+}
+
+export interface MemoryEditor {
+  kind: 'memory';
+  addr: Addr;
+  valueText: string;
+}
+
+export interface UiState {
+  layout: Layout;
+  /** The configuration bar: open at desktop, collapsed to its summary line at tablet. */
+  configOpen: boolean;
+  /** After a change that needs a new run: the configuration "Reset and apply" would append. */
+  pending: Config | null;
+  /** Why the core asked for a reset, shown by "Reset to apply?". */
+  pendingMessage: string | null;
+  /** The group a `why:` link is flashing, until the flash has run its course. */
+  flashGroup: Cause | null;
+  draft: { kind: AccessKind; addrText: string; valueText: string };
+  /** What the address strip follows: the access at the cursor, or the typed address until the cursor next moves. */
+  stripSource: 'cursor' | 'draft';
+  editor: WayEditor | MemoryEditor | null;
+  jumpText: string;
+  program: { open: boolean; editing: boolean; format: ProgramFormat; text: string };
+  modules: { open: boolean; index: ModuleIndexView | null; run: ModuleRun | null };
+  /** The Run timer is stepping. */
+  running: boolean;
+  sheetOpen: boolean;
+  /** The transport's status line. */
+  status: string;
+  /** The link to show in a field when the clipboard is not available. */
+  shareFallback: string | null;
+  /** The first log entry in view. */
+  logFirst: number;
+  /** The first memory row in view. */
+  memoryFirst: number;
+  /** The cursor at the previous render: motion plays only when it has moved since. */
+  lastPos: number;
+}
+
+/** The state of a first visit at this layout. */
+export function initialUiState(layout: Layout): UiState {
+  return {
+    layout,
+    configOpen: layout === 'desktop',
+    pending: null,
+    pendingMessage: null,
+    flashGroup: null,
+    draft: { kind: 'read', addrText: FIRST_VISIT_ADDRESS, valueText: FIRST_VISIT_VALUE },
+    stripSource: 'cursor',
+    editor: null,
+    jumpText: '',
+    program: { open: true, editing: false, format: 'asm', text: SAMPLE_PROGRAM },
+    modules: { open: false, index: null, run: null },
+    running: false,
+    sheetOpen: false,
+    status: '',
+    shareFallback: null,
+    logFirst: 0,
+    memoryFirst: 0,
+    lastPos: 0,
+  };
+}

@@ -1,11 +1,64 @@
 /*
  * The design's tokens, each falling back to the site's --site-* property and then to the value the
  * design gives, so the development page and the tests render without the site's stylesheet.
+ * Signal and ramp colours are fills, strokes and grounds, never type.
  */
 .cache-explorer {
+  /* The plane and its type */
   --cache-explorer-plane: var(--site-concrete, #f1f1ef);
+  --cache-explorer-surface: var(--site-paper, #fbfbfa);
   --cache-explorer-empty: var(--site-concrete-deep, #e4e5e2);
+  --cache-explorer-rule: var(--site-rule, #c8cac6);
   --cache-explorer-text: var(--site-slate, #2c4467);
+  --cache-explorer-strong: var(--site-navy, #16243a);
+  --cache-explorer-ink: var(--site-ink, #0b1420);
+
+  /* The three fields of an address */
+  --cache-explorer-tag: var(--site-ramp-3, #335d9b);
+  --cache-explorer-index: var(--site-ramp-2, #5d87c5);
+  --cache-explorer-offset: var(--site-ramp-1, #8eadda);
+
+  /* Events: shape first, colour second */
+  --cache-explorer-hit: var(--site-navy, #16243a);
+  --cache-explorer-miss: var(--site-navy, #16243a);
+  --cache-explorer-evict: var(--site-signal-red, #af3c3a);
+  --cache-explorer-fill: var(--site-navy, #16243a);
+  --cache-explorer-writeback: var(--site-signal-teal, #007e81);
+  --cache-explorer-writethrough: var(--site-signal-blue, #3568b2);
+
+  /* State */
+  --cache-explorer-dirty: var(--site-signal-amber, #a07100);
+  --cache-explorer-stale: var(--cache-explorer-dirty);
+  --cache-explorer-hatch: repeating-linear-gradient(
+    45deg,
+    var(--cache-explorer-dirty) 0 3px,
+    var(--cache-explorer-plane) 3px 5px
+  );
+  --cache-explorer-changed: #f2e2a0;
+  --cache-explorer-changed-ring: var(--site-ink, #0b1420);
+
+  /* Feedback */
+  --cache-explorer-correct: var(--site-signal-green, #247c3a);
+  --cache-explorer-incorrect: var(--site-signal-red, #af3c3a);
+  --cache-explorer-shadow-pop: 0 9px 27px rgb(11 20 32 / 0.16);
+
+  /* Type: the weight, size and line height, then the site's family and the design's fallback */
+  --cache-explorer-font-title: 500 24px/30px
+    var(--site-font-display, Archivo, 'Helvetica Neue', Arial, sans-serif);
+  --cache-explorer-font-body: 400 15px/23px
+    var(--site-font-body, 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif);
   --cache-explorer-font-label: 400 13px/21px
     var(--site-font-mono, 'IBM Plex Mono', ui-monospace, Menlo, monospace);
+  --cache-explorer-font-figure: 400 21px/29px
+    var(--site-font-mono, 'IBM Plex Mono', ui-monospace, Menlo, monospace);
+  --cache-explorer-font-bit: 400 17px/34px
+    var(--site-font-mono, 'IBM Plex Mono', ui-monospace, Menlo, monospace);
+
+  /* Layers: no component picks its own number */
+  --cache-explorer-z-plane: 0;
+  --cache-explorer-z-mark: 10;
+  --cache-explorer-z-popover: 30;
+  --cache-explorer-z-overlay: 40;
+  --cache-explorer-z-sheet: 50;
+  --cache-explorer-z-status: 60;
 }
