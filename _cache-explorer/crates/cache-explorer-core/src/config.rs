@@ -19,7 +19,7 @@ use thiserror::Error;
 use crate::de::deserialize_unit_enum;
 use crate::explain;
 use crate::format;
-use crate::geometry::{log2, Geometry, Placement};
+use crate::geometry::{Geometry, Placement};
 use crate::limits::{
     MAX_ADDRESS_BITS, MAX_CYCLES, MAX_LINES, MAX_SEED, MAX_WORDS_PER_LINE, MIN_ADDRESS_BITS,
     MIN_CYCLES,
@@ -573,10 +573,10 @@ impl Config {
         if !(MIN_ADDRESS_BITS..=MAX_ADDRESS_BITS).contains(&address_bits) {
             return Err(ConfigError::AddressBits { got: address_bits });
         }
-        let (sets, ways, _lines) = self.cache.organisation(self.word_bytes)?;
+        let (sets, ways, lines) = self.cache.organisation(self.word_bytes)?;
         let word = self.word_bytes.bytes();
         let line = self.cache.line_bytes;
-        let geometry = Geometry::new(address_bits, word, line, sets, ways)
+        let geometry = Geometry::new(address_bits, word, line, sets, ways, lines)
             .ok_or(ConfigError::NoTagBits { bits: address_bits })?;
         if let Some(timing) = self.timing {
             check_cycles(ConfigNumberField::HitCycles, timing.hit_cycles)?;
@@ -1343,6 +1343,15 @@ fn clamp_cycles(cycles: u32) -> u32 {
 /// The largest power of two not above `n`; 1 for 0.
 fn floor_power_of_two(n: u32) -> u32 {
     n.checked_ilog2().map_or(1, |bits| 1 << bits)
+}
+
+/// The base-2 logarithm of a power of two.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a u32 has at most 32 trailing zeros, which fits a u8"
+)]
+fn log2(power_of_two: u32) -> u8 {
+    power_of_two.trailing_zeros() as u8
 }
 
 /// Step 5 of [`Config::repair`]: the largest power-of-two size, not above

@@ -240,14 +240,15 @@ impl Geometry {
     /// [`crate::config::ConfigError::NoTagBits`].
     ///
     /// `sets`, `ways`, `line_bytes` and `word_bytes` must already be non-zero
-    /// powers of two with `sets × ways` fitting a `u32`; `Config::validate`
-    /// establishes that before calling this.
+    /// powers of two, and `lines` their product; `Config::validate` computes
+    /// and validates all four before calling this.
     pub(crate) fn new(
         address_bits: u8,
         word_bytes: u32,
         line_bytes: u32,
         sets: u32,
         ways: u32,
+        lines: u32,
     ) -> Option<Geometry> {
         let offset_bits = log2(line_bytes);
         let index_bits = log2(sets);
@@ -261,7 +262,7 @@ impl Geometry {
             line_bytes,
             ways,
             sets,
-            lines: sets * ways,
+            lines,
             words_per_line: line_bytes / word_bytes,
             offset_bits,
             index_bits,
@@ -497,7 +498,7 @@ impl BitRange {
     clippy::cast_possible_truncation,
     reason = "a u32 has at most 32 trailing zeros, which fits a u8"
 )]
-pub(crate) fn log2(power_of_two: u32) -> u8 {
+fn log2(power_of_two: u32) -> u8 {
     power_of_two.trailing_zeros() as u8
 }
 
