@@ -11,9 +11,8 @@
 
 use serde::Serialize;
 
-use super::{last_op, EntryBase, Keep, ReplayError, Session, Start};
+use super::{last_op, Keep, ReplayError, Session, Start};
 use crate::explain;
-use crate::machine::Machine;
 use crate::op::{Op, OpError, ProgramSource};
 use crate::units::{EventPos, OpIndex};
 
@@ -86,87 +85,105 @@ pub enum StepOutcome {
     },
 }
 
-/// Where the cursor is on the log: its position, the machine there, what its
-/// entry started from, and whether it last moved by a single event.
-///
-/// The machine is the fold of the log's ops stopped after the event at the
-/// position, and the entry base belongs to the entry that event is in. Each
-/// is written together with the position, by one of the placing methods, and
-/// nowhere else.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Cursor {
-    /// The position.
-    pos: EventPos,
-    /// The machine at the position, recomputed on every move.
-    machine: Machine,
-    /// What the cursor's entry changes, with the values before it, which the
-    /// highlight compares the machine at the cursor with; none at a run's
-    /// origin.
-    entry_base: Option<EntryBase>,
-    /// Whether the cursor last moved by a single event, as Space moves it,
-    /// rather than across several.
-    stepped: bool,
-}
+/// The cursor's state, in a module of its own. A private field is visible to
+/// the whole module that declares it, so the moves of [`Session`] below, which
+/// share this file's module, could write it; here only `place` and
+/// `place_in_entry` can write the position.
+mod placed {
+    use crate::machine::Machine;
+    use crate::session::EntryBase;
+    use crate::units::EventPos;
 
-impl Cursor {
-    /// A cursor at position 0, where `origin` is, outside every entry.
-    pub(super) fn new(origin: Machine) -> Self {
-        Self {
-            pos: EventPos::new_unchecked(0),
-            machine: origin,
-            entry_base: None,
-            stepped: false,
+    /// Where the cursor is on the log: its position, the machine there, what
+    /// its entry started from, and whether it last moved by a single event.
+    ///
+    /// The machine is the fold of the log's ops stopped after the event at the
+    /// position, and the entry base belongs to the entry that event is in.
+    /// Each is written together with the position, by one of the placing
+    /// methods, and nowhere else.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub(in crate::session) struct Cursor {
+        /// The position.
+        pos: EventPos,
+        /// The machine at the position, recomputed on every move.
+        machine: Machine,
+        /// What the cursor's entry changes, with the values before it, which
+        /// the highlight compares the machine at the cursor with; none at a
+        /// run's origin.
+        entry_base: Option<EntryBase>,
+        /// Whether the cursor last moved by a single event, as Space moves it,
+        /// rather than across several.
+        stepped: bool,
+    }
+
+    impl Cursor {
+        /// A cursor at position 0, where `origin` is, outside every entry.
+        pub(in crate::session) fn new(origin: Machine) -> Self {
+            Self {
+                pos: EventPos::new_unchecked(0),
+                machine: origin,
+                entry_base: None,
+                stepped: false,
+            }
+        }
+
+        /// The position.
+        pub(in crate::session) fn pos(&self) -> EventPos {
+            self.pos
+        }
+
+        /// The machine at the position.
+        pub(in crate::session) fn machine(&self) -> &Machine {
+            &self.machine
+        }
+
+        /// What the entry at the position started from; none outside every
+        /// entry.
+        pub(in crate::session) fn entry_base(&self) -> Option<&EntryBase> {
+            self.entry_base.as_ref()
+        }
+
+        /// Whether the cursor last moved by a single event, as Space moves it.
+        pub(in crate::session) fn stepped(&self) -> bool {
+            self.stepped
+        }
+
+        /// Places the cursor at `pos`, where `machine` is, in the entry whose
+        /// values before it are `base`, or outside every entry if there is
+        /// none.
+        pub(in crate::session) fn place(
+            &mut self,
+            pos: EventPos,
+            machine: Machine,
+            base: Option<EntryBase>,
+        ) {
+            self.entry_base = base;
+            self.arrive(pos, machine);
+        }
+
+        /// Places the cursor at `pos`, where `machine` is, in the entry the
+        /// cursor is already in, which keeps the base it has.
+        pub(in crate::session) fn place_in_entry(&mut self, pos: EventPos, machine: Machine) {
+            self.arrive(pos, machine);
+        }
+
+        /// Sets whether the cursor last moved by a single event, over what the
+        /// move that placed it says.
+        pub(in crate::session) fn set_stepped(&mut self, stepped: bool) {
+            self.stepped = stepped;
+        }
+
+        /// Moves to `pos`, where `machine` is, and notes whether that was one
+        /// event away.
+        fn arrive(&mut self, pos: EventPos, machine: Machine) {
+            self.stepped = pos.get().abs_diff(self.pos.get()) == 1;
+            self.pos = pos;
+            self.machine = machine;
         }
     }
-
-    /// The position.
-    pub(super) fn pos(&self) -> EventPos {
-        self.pos
-    }
-
-    /// The machine at the position.
-    pub(super) fn machine(&self) -> &Machine {
-        &self.machine
-    }
-
-    /// What the entry at the position started from; none outside every
-    /// entry.
-    pub(super) fn entry_base(&self) -> Option<&EntryBase> {
-        self.entry_base.as_ref()
-    }
-
-    /// Whether the cursor last moved by a single event, as Space moves it.
-    pub(super) fn stepped(&self) -> bool {
-        self.stepped
-    }
-
-    /// Places the cursor at `pos`, where `machine` is, in the entry whose
-    /// values before it are `base`, or outside every entry if there is none.
-    pub(super) fn place(&mut self, pos: EventPos, machine: Machine, base: Option<EntryBase>) {
-        self.entry_base = base;
-        self.arrive(pos, machine);
-    }
-
-    /// Places the cursor at `pos`, where `machine` is, in the entry the
-    /// cursor is already in, which keeps the base it has.
-    pub(super) fn place_in_entry(&mut self, pos: EventPos, machine: Machine) {
-        self.arrive(pos, machine);
-    }
-
-    /// Sets whether the cursor last moved by a single event, over what the
-    /// move that placed it says.
-    pub(super) fn set_stepped(&mut self, stepped: bool) {
-        self.stepped = stepped;
-    }
-
-    /// Moves to `pos`, where `machine` is, and notes whether that was one
-    /// event away.
-    fn arrive(&mut self, pos: EventPos, machine: Machine) {
-        self.stepped = pos.get().abs_diff(self.pos.get()) == 1;
-        self.pos = pos;
-        self.machine = machine;
-    }
 }
+
+pub(super) use placed::Cursor;
 
 impl Session {
     /// How many ops are complete at the cursor: the spec's `cursor()`.
@@ -433,6 +450,8 @@ mod tests {
 
     use super::*;
     use crate::config::Preset;
+    use crate::machine::Machine;
+    use crate::session::EntryBase;
 
     fn pos(value: u32) -> EventPos {
         EventPos::new_unchecked(value)
