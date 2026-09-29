@@ -52,6 +52,7 @@ mod load;
 mod timeline;
 
 use std::collections::BTreeSet;
+use std::ops::Range;
 
 use serde::Serialize;
 use thiserror::Error;
@@ -310,14 +311,14 @@ impl Session {
         self.events.get(..slot(self.cursor)).unwrap_or_default()
     }
 
-    /// The events whose ids run from `start` up to but not including `end`,
-    /// as far as the log holds them, the undone ones after the cursor
-    /// included: a window of the log that does not grow with it.
-    pub fn events_range(&self, start: u32, end: u32) -> &[MicroEvent] {
-        let end = usize::try_from(end)
+    /// The events whose ids run from `range.start` up to but not including
+    /// `range.end`, as far as the log holds them, the undone ones after the
+    /// cursor included: a window of the log that does not grow with it.
+    pub fn events_range(&self, range: Range<u32>) -> &[MicroEvent] {
+        let end = usize::try_from(range.end)
             .unwrap_or(usize::MAX)
             .min(self.events.len());
-        let start = usize::try_from(start).unwrap_or(usize::MAX).min(end);
+        let start = usize::try_from(range.start).unwrap_or(usize::MAX).min(end);
         self.events.get(start..end).unwrap_or_default()
     }
 

@@ -74,6 +74,12 @@ mod support {
         value.into_ts().unwrap()
     }
 
+    /// `value`, read back as the `T` it serializes, the way the page would
+    /// read a value the facade handed it.
+    pub(crate) fn from_ts<T: Tsify + DeserializeOwned>(value: Ts<T>) -> T {
+        serde_wasm_bindgen::from_value(value.into()).unwrap()
+    }
+
     /// `object` with `key` set to `value`.
     pub(crate) fn with(object: JsValue, key: &str, value: &JsValue) -> JsValue {
         Reflect::set(&object, &JsValue::from_str(key), value).unwrap();
@@ -349,8 +355,8 @@ mod session {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     use super::support::{
-        apply_both, apply_op_both, arg, big, get, has, items, js, json_text, message, nest, rust,
-        same, text, timed_two_way, ts, twins, with, FRAME_3B, LOAD_0X0A4,
+        apply_both, apply_op_both, arg, big, from_ts, get, has, items, js, json_text, message,
+        nest, rust, same, text, timed_two_way, ts, twins, with, FRAME_3B, LOAD_0X0A4,
     };
 
     /// A configuration with 8-byte words, the widest data values, and
@@ -814,7 +820,7 @@ mod session {
         for (start, end) in [(3, 9), (0, u32::MAX), (9, 3), (1_000, 2_000)] {
             same(
                 facade.events_range(start, end).unwrap(),
-                &MicroEvents(core.events_range(start, end).to_vec()),
+                &MicroEvents(core.events_range(start..end).to_vec()),
             );
         }
         let all: JsValue = facade.events_range(0, u32::MAX).unwrap().into();
@@ -1198,13 +1204,24 @@ mod session {
             r#"{"counter":"accesses","op":"==","value":1000}"#,
         ];
         for predicate in predicates {
-            let found = facade.find_event(&ts(predicate)).unwrap();
+            let found = facade
+                .find_event(&ts(predicate))
+                .unwrap()
+                .map(from_ts)
+                .map(model::EventPos::get);
             let expected = core
                 .find_event(&rust::<Predicate>(predicate))
                 .map(model::EventPos::get);
             assert_eq!(found, expected, "{predicate}");
         }
-        assert_eq!(facade.find_event(&ts(predicates[2])).unwrap(), None);
+        assert_eq!(
+            facade
+                .find_event(&ts(predicates[2]))
+                .unwrap()
+                .map(from_ts)
+                .map(model::EventPos::get),
+            None
+        );
         let thrown = message(facade.find_event(&ts(r#"{"nothing":1}"#)).unwrap_err());
         assert_eq!(
             thrown,
@@ -1226,7 +1243,15 @@ mod session {
             // The deepest predicate the core reads is read and evaluated.
             let deepest = Ts::new_unchecked(nest(no_accesses(), key, list, MAX_PREDICATE_DEPTH));
             assert!(eval_predicate(&session, &deepest).unwrap(), "{key}");
-            assert_eq!(session.find_event(&deepest).unwrap(), Some(0), "{key}");
+            assert_eq!(
+                session
+                    .find_event(&deepest)
+                    .unwrap()
+                    .map(from_ts)
+                    .map(model::EventPos::get),
+                Some(0),
+                "{key}"
+            );
             // Far deeper than the stack could follow, it is refused before
             // it is read that deep, by both calls, and again.
             let deep = Ts::new_unchecked(nest(no_accesses(), key, list, 10_000));

@@ -72,8 +72,9 @@ pub struct Cycle(u64);
 #[serde(transparent)]
 pub struct EventPos(u32);
 
-/// An index into the session's ops.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+/// An index into the session's ops. Output-only: the boundary never reads
+/// one back in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(transparent)]
 pub struct OpIndex(u32);
@@ -435,22 +436,14 @@ mod tests {
 
     #[test]
     fn input_newtypes_deserialize_from_bare_numbers() {
-        let (addr, line, tag, set, way, pos, op): (
-            Addr,
-            LineAddr,
-            Tag,
-            SetIndex,
-            WayIndex,
-            EventPos,
-            OpIndex,
-        ) = serde_json::from_str("[164,160,1,2,3,9,4]").unwrap();
+        let (addr, line, tag, set, way, pos): (Addr, LineAddr, Tag, SetIndex, WayIndex, EventPos) =
+            serde_json::from_str("[164,160,1,2,3,9]").unwrap();
         assert_eq!(addr, Addr::new_unchecked(164));
         assert_eq!(line, LineAddr::new_unchecked(160));
         assert_eq!(tag, Tag::new_unchecked(1));
         assert_eq!(set, SetIndex::new_unchecked(2));
         assert_eq!(way, WayIndex::new_unchecked(3));
         assert_eq!(pos, EventPos::new_unchecked(9));
-        assert_eq!(op, OpIndex::new_unchecked(4));
         assert!(serde_json::from_str::<Addr>("-1").is_err());
         assert!(serde_json::from_str::<Addr>("4294967296").is_err());
     }

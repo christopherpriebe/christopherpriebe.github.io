@@ -276,8 +276,8 @@ mod support {
         expected.config = flagged(&expected.config);
         assert_eq!(state, expected, "{context}");
         assert_eq!(
-            loaded.events_range(0, u32::MAX),
-            original.events_range(0, u32::MAX),
+            loaded.events_range(0..u32::MAX),
+            original.events_range(0..u32::MAX),
             "{context}"
         );
         let mut timeline = loaded.timeline();
@@ -1424,7 +1424,7 @@ fn the_session_limit_stops_a_pathological_link() {
     assert_eq!(prefix.label, format!("Open the first {index} actions"));
     let before = Session::from_share_string(&prefix.share).unwrap();
     assert_eq!(before.op_count(), index);
-    let events = u32::try_from(before.events_range(0, u32::MAX).len()).unwrap();
+    let events = u32::try_from(before.events_range(0..u32::MAX).len()).unwrap();
     assert!(events <= SESSION_EVENT_LIMIT);
     assert!(events + MAX_EVENTS_PER_ENTRY > SESSION_EVENT_LIMIT);
 }

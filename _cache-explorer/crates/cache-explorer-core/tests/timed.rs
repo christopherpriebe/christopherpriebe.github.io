@@ -444,7 +444,7 @@ fn position(event: &MicroEvent) -> Result<EventPos, String> {
 /// `session`'s log.
 fn position_of(session: &Session, entry: u32, kind: EventKind) -> Result<EventPos, String> {
     let event = session
-        .events_range(0, u32::MAX)
+        .events_range(0..u32::MAX)
         .iter()
         .find(|event| event.entry == Some(entry) && event.kind == kind)
         .ok_or_else(|| format!("entry {entry} has no {kind:?}"))?;
@@ -646,7 +646,7 @@ fn amat_and_the_measured_cost_wait_for_an_access_in_flight_to_complete() -> Resu
 
     // The same at every event before the access's last, values included.
     let events: Vec<MicroEvent> = session
-        .events_range(0, u32::MAX)
+        .events_range(0..u32::MAX)
         .iter()
         .filter(|event| event.entry == Some(5))
         .cloned()

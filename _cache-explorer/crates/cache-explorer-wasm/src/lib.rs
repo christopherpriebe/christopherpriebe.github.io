@@ -305,7 +305,7 @@ impl Session {
     /// Never in practice: events always convert.
     #[wasm_bindgen(js_name = eventsRange)]
     pub fn events_range(&self, start: u32, end: u32) -> Result<Ts<MicroEvents>, JsError> {
-        Ok(MicroEvents(self.inner.events_range(start, end).to_vec()).into_ts()?)
+        Ok(MicroEvents(self.inner.events_range(start..end).to_vec()).into_ts()?)
     }
 
     /// The displayed run's timeline: the scrubber, the log's header and the
@@ -497,11 +497,12 @@ impl Session {
     ///
     /// Throws when `p` is not a predicate.
     #[wasm_bindgen(js_name = findEvent)]
-    pub fn find_event(&self, p: &Ts<Predicate>) -> Result<Option<u32>, JsError> {
+    pub fn find_event(&self, p: &Ts<Predicate>) -> Result<Option<Ts<EventPos>>, JsError> {
         Ok(self
             .inner
             .find_event(&arg(p, ArgKind::Predicate)?)
-            .map(EventPos::get))
+            .map(|pos| pos.into_ts())
+            .transpose()?)
     }
 
     /// The run as Share describes it.

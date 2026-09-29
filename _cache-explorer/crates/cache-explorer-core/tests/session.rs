@@ -367,7 +367,7 @@ mod support {
     /// The position after the last event of `session`'s log, which a gate
     /// does not clamp.
     pub(crate) fn end_of(session: &Session) -> EventPos {
-        pos(u32::try_from(session.events_range(0, u32::MAX).len()).unwrap())
+        pos(u32::try_from(session.events_range(0..u32::MAX).len()).unwrap())
     }
 }
 

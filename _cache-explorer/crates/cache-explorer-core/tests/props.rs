@@ -35,9 +35,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use cache_explorer_core::limits::MAX_PARSE_ERRORS;
 use cache_explorer_core::{
     parse_module_index, AccessKind, Addr, AllocatePolicy, Boundary, ChangeRef, Config, EventKind,
-    EventPos, LineAddr, MemoryWordView, MicroEvent, Module, ModuleRun, Op, OpIndex, Outcome,
-    ParseResult, Predicate, ProgramFormat, ProgramSource, Session, SetIndex, ShareDoc, StepOutcome,
-    Tag, WayIndex, WayLoc, WayPredicate, Word, WritePolicy,
+    EventPos, LineAddr, MemoryWordView, MicroEvent, Module, ModuleRun, Op, Outcome, ParseResult,
+    Predicate, ProgramFormat, ProgramSource, Session, SetIndex, ShareDoc, StepOutcome, Tag,
+    WayIndex, WayLoc, WayPredicate, Word, WritePolicy,
 };
 use proptest::prelude::*;
 
@@ -1108,7 +1108,7 @@ mod support {
         fn of(session: &Session) -> Self {
             Self {
                 ops: session.ops().to_vec(),
-                events: session.events_range(0, u32::MAX).to_vec(),
+                events: session.events_range(0..u32::MAX).to_vec(),
                 position: session.position(),
                 state: session.state(),
                 timeline: session.timeline(),
@@ -1341,7 +1341,7 @@ mod support {
             let before = self.before();
             let result = self.session.apply(op);
             if let (Ok(events), true) = (&result, self.checks.append_only) {
-                let all = self.session.events_range(0, u32::MAX);
+                let all = self.session.events_range(0..u32::MAX);
                 prop_assert!(!events.is_empty());
                 prop_assert_eq!(events.as_slice(), &all[all.len() - events.len()..]);
                 prop_assert_eq!(self.session.position().boundary, Boundary::LogEnd);
@@ -1610,13 +1610,13 @@ mod support {
 
     /// The position after the last event of the log.
     pub(crate) fn end(session: &Session) -> EventPos {
-        number(session.events_range(0, u32::MAX).len() as u64)
+        number(session.events_range(0..u32::MAX).len() as u64)
     }
 
     /// Where each op of the log ends: the position after its last event.
     pub(crate) fn op_ends(session: &Session) -> Vec<u32> {
         let mut ends = vec![0; session.ops().len()];
-        for event in session.events_range(0, u32::MAX) {
+        for event in session.events_range(0..u32::MAX) {
             ends[event.op_index.get() as usize] = u32::try_from(event.id + 1).unwrap();
         }
         ends
@@ -1655,7 +1655,7 @@ mod support {
         session: &mut Session,
         mut visit: impl FnMut(&Session, Option<&MicroEvent>) -> Result<(), TestCaseError>,
     ) -> Result<(), TestCaseError> {
-        let events = session.events_range(0, u32::MAX).to_vec();
+        let events = session.events_range(0..u32::MAX).to_vec();
         let at = std::iter::once(None).chain(events.iter().map(Some));
         for (pos, event) in (0_u32..).zip(at) {
             session.seek(number(pos.into()));
@@ -1704,7 +1704,7 @@ mod support {
     /// its op; the position after each boundary; and a position past any
     /// entry a checkpoint of the log before a cut could be at.
     pub(crate) fn checked_positions(session: &Session, picks: &[u32]) -> BTreeSet<u32> {
-        let events = session.events_range(0, u32::MAX);
+        let events = session.events_range(0..u32::MAX);
         let end = end(session).get();
         let boundary = |pos: u32| events.get(pos as usize).is_none_or(|event| event.seq == 1);
         let mut positions: BTreeSet<u32> = [0, end].into();
@@ -2222,7 +2222,7 @@ fn replay_is_a_pure_function_of_the_log() {
         let replay = replay.unwrap();
         session.seek(end(session));
         prop_assert_eq!(session.machine(), &replay.machine);
-        prop_assert_eq!(session.events_range(0, u32::MAX), replay.events.as_slice());
+        prop_assert_eq!(session.events_range(0..u32::MAX), replay.events.as_slice());
         Ok(())
     });
 }
@@ -2314,7 +2314,7 @@ fn space_visits_every_event_in_order() {
             let quiet = Session::replay_to(&initial, &ops, number(end.into()));
             prop_assert_eq!(quiet, Ok(recorded));
         }
-        let events = session.events_range(0, u32::MAX).to_vec();
+        let events = session.events_range(0..u32::MAX).to_vec();
         let mut run = 1;
         let mut entry = 0;
         let mut previous: Option<&MicroEvent> = None;
@@ -2389,8 +2389,8 @@ fn share_strings_and_files_give_the_session_back() {
                 prop_assert_eq!(loaded.ops(), session.ops());
                 prop_assert_eq!(loaded.position(), session.position());
                 prop_assert_eq!(
-                    loaded.events_range(0, u32::MAX),
-                    session.events_range(0, u32::MAX)
+                    loaded.events_range(0..u32::MAX),
+                    session.events_range(0..u32::MAX)
                 );
                 let (mut ours, mut theirs) = (session.state(), loaded.state());
                 prop_assert_eq!(without_mode(&ours.config), without_mode(&theirs.config));
@@ -2796,7 +2796,7 @@ fn seeks_across_checkpoints_reach_the_fold() {
         let session = &mut student.session;
         let end = end(session).get();
         let replay = Session::replay(session.initial(), session.ops()).unwrap();
-        prop_assert_eq!(session.events_range(0, u32::MAX), replay.events.as_slice());
+        prop_assert_eq!(session.events_range(0..u32::MAX), replay.events.as_slice());
         prop_assert_eq!(session.machine(), &replay.machine);
         let positions = checked_positions(session, &long.picks);
         let mut fold = Fold::of(session);
@@ -2832,8 +2832,8 @@ fn seeks_across_checkpoints_reach_the_fold() {
             );
             prop_assert_eq!(loaded.ops(), session.ops());
             prop_assert_eq!(
-                loaded.events_range(0, u32::MAX),
-                session.events_range(0, u32::MAX)
+                loaded.events_range(0..u32::MAX),
+                session.events_range(0..u32::MAX)
             );
             prop_assert_eq!(loaded.position(), session.position());
             prop_assert_eq!(loaded.machine(), fold.at(at));
@@ -3043,7 +3043,6 @@ proptest! {
         round_trip(&number::<SetIndex>(small.into()))?;
         round_trip(&number::<WayIndex>(small.into()))?;
         round_trip(&number::<EventPos>(small.into()))?;
-        round_trip(&number::<OpIndex>(small.into()))?;
         round_trip(&number::<Word>(large))?;
         round_trip(&WayLoc { set: number(small.into()), way: number(large >> 32) })?;
         round_trip(&registers()[pick % 8])?;

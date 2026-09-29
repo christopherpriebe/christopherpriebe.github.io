@@ -1177,7 +1177,7 @@ fn the_state_does_not_depend_on_how_the_cursor_got_there() {
         .unwrap();
     session.apply(store(0x0A4, 1)).unwrap();
     session.apply(load(0x1A4)).unwrap();
-    let end = u32::try_from(session.events_range(0, u32::MAX).len()).unwrap();
+    let end = u32::try_from(session.events_range(0..u32::MAX).len()).unwrap();
     // Every position reached by a seek from the end of the log ...
     let sought: Vec<State> = (0..=end)
         .map(|at| {
@@ -1254,12 +1254,13 @@ fn a_window_of_events_covers_the_log_undone_events_included() {
     let mut session = frame_3b();
     session.seek(pos(3));
     assert_eq!(session.events().len(), 3);
-    let window = session.events_range(20, 24);
+    let window = session.events_range(20..24);
     let ids: Vec<u64> = window.iter().map(|event| event.id).collect();
     assert_eq!(ids, [20, 21, 22, 23]);
-    assert_eq!(session.events_range(26, 100).len(), 2);
-    assert!(session.events_range(30, 40).is_empty());
-    assert!(session.events_range(5, 2).is_empty());
+    assert_eq!(session.events_range(26..100).len(), 2);
+    assert!(session.events_range(30..40).is_empty());
+    let (start, end) = (5, 2);
+    assert!(session.events_range(start..end).is_empty());
 }
 
 #[test]
@@ -1301,7 +1302,7 @@ fn the_snapshot_serializes_with_its_tags() {
 #[test]
 fn the_boundarys_lists_serialize_as_bare_arrays() {
     let session = frame_3b();
-    let events = session.events_range(0, 6).to_vec();
+    let events = session.events_range(0..6).to_vec();
     assert_eq!(
         serde_json::to_value(MicroEvents(events.clone())).unwrap(),
         serde_json::to_value(&events).unwrap()

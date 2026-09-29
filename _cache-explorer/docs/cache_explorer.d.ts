@@ -524,7 +524,8 @@ export interface EditRefusal {
 }
 
 /**
- * An index into the session's ops.
+ * An index into the session's ops. Output-only: the boundary never reads
+ * one back in.
  */
 export type OpIndex = number;
 
@@ -2861,7 +2862,7 @@ export class Session {
      *
      * Throws when `p` is not a predicate.
      */
-    findEvent(p: Predicate): number | undefined;
+    findEvent(p: Predicate): EventPos | undefined;
     /**
      * A session on `Config::first_visit()`, the default configuration with
      * pattern memory: the page's first visit, and "Start fresh".
