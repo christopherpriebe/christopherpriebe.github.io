@@ -694,7 +694,7 @@ impl Session {
     fn base(&self) -> (EventPos, u32) {
         match self.log.op_holding(self.cursor.pos()) {
             Some(op) => (
-                self.log.op_end(op).unwrap_or_else(|| self.cursor.pos()),
+                self.log.op_end(op).unwrap_or(self.cursor.pos()),
                 op.get().saturating_add(1),
             ),
             None => (EventPos::new_unchecked(0), 0),
@@ -776,7 +776,7 @@ impl Session {
                 let base = EntryBase::from_start(
                     first,
                     events,
-                    at_start.as_ref().unwrap_or_else(|| self.cursor.machine()),
+                    at_start.as_ref().unwrap_or(self.cursor.machine()),
                 );
                 self.cursor.place(pos, machine, Some(base));
             }
