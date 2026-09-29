@@ -465,7 +465,7 @@ fn the_document_keeps_the_undone_ops_and_position_0() {
     let loaded = Session::from_share_string(&original.to_share_string().unwrap()).unwrap();
     same(&loaded, &original, "position 0");
     assert_eq!(loaded.op_count(), 3);
-    let mut redone = loaded.clone();
+    let mut redone = loaded;
     assert!(redone.redo());
     assert_eq!(redone.position().pos, pos(5));
     // An empty log has no op to place the cursor by, and opens at 0.
@@ -517,7 +517,7 @@ fn the_mode_chosen_is_kept() {
         config()
     );
     // Back in Basics, the flag follows.
-    let mut basics = loaded.clone();
+    let mut basics = loaded;
     assert_eq!(basics.set_advanced(false), ConfigChange::Applied);
     assert!(!basics.share_doc().config.advanced);
     assert!(

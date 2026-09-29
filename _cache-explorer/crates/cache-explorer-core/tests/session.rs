@@ -1607,9 +1607,7 @@ fn a_log_as_large_as_a_file_can_hold_refuses_every_op_until_undo_makes_room() {
     // configuration bar, rather than ask about a new run.
     editors_refuse_for_room(&session, RefusalReason::FileFull, &message);
     change_refused(&mut session, &OpError::FileFull);
-    let idle = StepOutcome::Idle {
-        message: message.clone(),
-    };
+    let idle = StepOutcome::Idle { message };
     assert_eq!(session.step_event(None), idle);
     assert_eq!(session.step_event(Some(&drawer(ADD_THEN_LOAD))), idle);
     assert_eq!(session.step_access(None), idle);

@@ -369,7 +369,7 @@ fn check_register_address_fault(source: &str, at: Option<Addr>) {
             ..before.cpu
         },
         entries_in_run: before.entries_in_run + 1,
-        ..before.clone()
+        ..before
     };
     assert_eq!(after, &expected);
     let line = u32::try_from(lines).unwrap();

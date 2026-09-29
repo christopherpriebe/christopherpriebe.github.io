@@ -873,10 +873,7 @@ mod tests {
         });
         let shapes = [
             (
-                Op::Edit {
-                    target: way,
-                    patch: patch.clone(),
-                },
+                Op::Edit { target: way, patch },
                 "{\"op\":\"edit\",\"target\":{\"kind\":\"way\",\"set\":2,\"way\":0},\
                  \"patch\":{\"kind\":\"way\",\"line\":192,\"data\":[18446744073709551615],\
                  \"dirty\":true}}",

@@ -1396,7 +1396,7 @@ fn validating_a_way_fills_it_from_memory_clean_and_first() {
             WordMark::Changed
         ]
     );
-    let after = applied(&session, edit(way(3, 1), validate.patch.clone()));
+    let after = applied(&session, edit(way(3, 1), validate.patch));
     let filled = &after.state().cache.sets[3].ways[1];
     assert_eq!(filled.words, ["51", "64", "77", "90"]);
     assert!(!filled.dirty);
@@ -1803,7 +1803,7 @@ fn an_edit_is_an_entry_of_its_own_in_the_log() {
     assert_eq!(entry.label, "edit memory 0x0B0");
     assert_eq!(memory.state().changed_summary, "memory 0x0B0");
     // Undo takes each edit back.
-    let mut undone = memory.clone();
+    let mut undone = memory;
     assert!(undone.undo());
     assert_eq!(undone.machine(), after.machine());
     assert!(undone.undo());
