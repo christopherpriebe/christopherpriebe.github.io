@@ -15,6 +15,42 @@
 //! cross the boundary. The optional `golden` feature, enabled only by tests,
 //! adds the `golden` module: the golden fixtures and the canonical text of
 //! their events.
+//!
+//! # Examples
+//!
+//! A student issues a load, the page reads the counters, and the run is
+//! shared as a link that opens to the same log:
+//!
+//! ```
+//! use cache_explorer_core::{AccessKind, Config, EventKind, Op, Session};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let config = Config::default();
+//! let addr = config
+//!     .validate()?
+//!     .addr(0x0A4)
+//!     .ok_or("0x0A4 does not fit the address width")?;
+//! let mut session = Session::with_config(config)?;
+//!
+//! let events = session.apply(Op::Issue {
+//!     kind: AccessKind::Read,
+//!     addr,
+//!     value: None,
+//! })?;
+//! assert_eq!(events.first().map(|event| event.kind), Some(EventKind::Decode));
+//! assert_eq!(events.last().map(|event| event.kind), Some(EventKind::Complete));
+//!
+//! let counters = session.stats().counters;
+//! assert_eq!((counters.accesses, counters.misses), (1, 1));
+//! assert_eq!(session.cursor(), 1);
+//!
+//! let link = session.to_share_string()?;
+//! let reopened = Session::from_share_string(&link)?;
+//! assert_eq!(reopened.ops(), session.ops());
+//! assert_eq!(reopened.events(), session.events());
+//! # Ok(())
+//! # }
+//! ```
 
 #![forbid(unsafe_code)]
 

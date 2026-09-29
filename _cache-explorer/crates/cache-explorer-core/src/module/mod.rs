@@ -448,6 +448,44 @@ impl Module {
     ///
     /// [`ModuleError::Json`] for JSON without the format's shape, and
     /// otherwise the [`ModuleError::Invalid`] of the first rule broken.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cache_explorer_core::{Module, ModuleError};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let json = r#"{
+    ///     "id": "01-first-miss",
+    ///     "title": "First miss",
+    ///     "description": "A first access *misses*.",
+    ///     "advanced": false,
+    ///     "preset": {
+    ///         "addressBits": 12,
+    ///         "wordBytes": 4,
+    ///         "cache": {
+    ///             "sizeBytes": 128,
+    ///             "lineBytes": 16,
+    ///             "associativity": 1,
+    ///             "replacement": "lru",
+    ///             "writePolicy": "writeBack",
+    ///             "allocatePolicy": "writeAllocate"
+    ///         },
+    ///         "seed": 12345
+    ///     },
+    ///     "steps": [{"kind": "explain", "text": "The low 4 bits are the `offset`."}]
+    /// }"#;
+    /// let module = Module::parse(json)?;
+    /// assert_eq!(module.title(), "First miss");
+    /// assert_eq!(module.steps().len(), 1);
+    ///
+    /// assert!(matches!(
+    ///     Module::parse(r#"{"id": "01-first-miss"}"#),
+    ///     Err(ModuleError::Json { .. })
+    /// ));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn parse(json: &str) -> Result<Module, ModuleError> {
         let raw: RawModule = serde_json::from_str(json).map_err(|error| ModuleError::Json {
             message: error.to_string(),

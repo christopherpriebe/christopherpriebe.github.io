@@ -574,6 +574,26 @@ impl Config {
     /// # Errors
     ///
     /// The [`ConfigError`] of the first rule the configuration breaks.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cache_explorer_core::{Config, ConfigError, Placement};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let geometry = Config::default().validate()?;
+    /// assert_eq!((geometry.sets(), geometry.ways()), (8, 1));
+    /// assert_eq!(geometry.placement(), Placement::DirectMapped);
+    ///
+    /// let mut three_way = Config::default();
+    /// three_way.cache.associativity = 3;
+    /// assert_eq!(
+    ///     three_way.validate(),
+    ///     Err(ConfigError::AssociativityNotPowerOfTwo { got: 3, lines: 8 })
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn validate(&self) -> Result<Geometry, ConfigError> {
         let address_bits = self.address_bits;
         if !(MIN_ADDRESS_BITS..=MAX_ADDRESS_BITS).contains(&address_bits) {

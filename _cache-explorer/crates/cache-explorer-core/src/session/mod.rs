@@ -175,6 +175,28 @@ impl Session {
     /// # Errors
     ///
     /// The [`ConfigError`] of the first rule `initial` breaks.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cache_explorer_core::{Config, ConfigError, Session};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let session = Session::with_config(Config::first_visit())?;
+    /// assert_eq!(session.cursor(), 0);
+    /// assert!(session.events().is_empty());
+    ///
+    /// let narrow = Config {
+    ///     address_bits: 4,
+    ///     ..Config::default()
+    /// };
+    /// assert!(matches!(
+    ///     Session::with_config(narrow),
+    ///     Err(ConfigError::AddressBits { got: 4 })
+    /// ));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn with_config(initial: Config) -> Result<Session, ConfigError> {
         let origin = Machine::start(initial)?;
         Ok(Session {
@@ -478,6 +500,34 @@ impl Session {
     ///
     /// The [`OpError`] refusing the op. A refused op changes nothing: the
     /// log, the undone ops and the cursor are as they were.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cache_explorer_core::{AccessKind, Config, Op, Session};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = Config::default();
+    /// let addr = config
+    ///     .validate()?
+    ///     .addr(0x0A4)
+    ///     .ok_or("0x0A4 does not fit the address width")?;
+    /// let mut session = Session::with_config(config)?;
+    /// let load = || Op::Issue {
+    ///     kind: AccessKind::Read,
+    ///     addr,
+    ///     value: None,
+    /// };
+    ///
+    /// // The first load of a word misses; the second finds its line.
+    /// session.apply(load())?;
+    /// assert_eq!(session.stats().counters.misses, 1);
+    /// session.apply(load())?;
+    /// assert_eq!(session.stats().counters.hits, 1);
+    /// assert_eq!(session.cursor(), 2);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn apply(&mut self, op: Op) -> Result<&[MicroEvent], OpError> {
         self.apply_all(vec![op])
     }

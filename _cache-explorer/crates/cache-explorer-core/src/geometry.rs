@@ -358,6 +358,31 @@ impl Geometry {
     ///
     /// [`AccessError::OutOfRange`] if `addr` does not fit `address_bits`; such
     /// an address has no decoding.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cache_explorer_core::{AccessError, Config};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let geometry = Config::default().validate()?;
+    ///
+    /// let decoded = geometry.decode(0x0A4)?;
+    /// assert_eq!(decoded.tag_text, "0x01");
+    /// assert_eq!(decoded.index.get(), 2);
+    /// assert_eq!(decoded.offset, 4);
+    /// assert!(decoded.aligned);
+    ///
+    /// assert_eq!(
+    ///     geometry.decode(0x1000),
+    ///     Err(AccessError::OutOfRange {
+    ///         addr: 0x1000,
+    ///         address_bits: 12
+    ///     })
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn decode(&self, addr: u32) -> Result<Decoded, AccessError> {
         let addr = self.addr(addr).ok_or_else(|| AccessError::OutOfRange {
             addr: u64::from(addr),
