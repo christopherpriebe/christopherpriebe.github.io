@@ -10,17 +10,13 @@
 //! can be appended, so the log cannot change under the gate and its limit
 //! always names the same state.
 
-use super::timeline::EntryAccess;
-use super::{
-    resume_into, EntryKind, EntryOutcome, EntryRecord, ReplayError, Session, Start, Waiting,
-};
+use super::{resume_into, LastAccess, ReplayError, Session, Start, Waiting};
 use crate::engine::{EventSink, Flow};
 use crate::event::MicroEvent;
 use crate::machine::Machine;
 use crate::module::{EvalContext, Predicate};
-use crate::op::{AccessKind, OpError};
-use crate::stats::Outcome;
-use crate::units::{Addr, EventPos, OpIndex};
+use crate::op::OpError;
+use crate::units::EventPos;
 
 /// What an unanswered prediction holds the session to: the furthest
 /// position the cursor may reach, and the message every refusal gives.
@@ -44,20 +40,6 @@ impl Gate {
     pub fn message(&self) -> &str {
         &self.message
     }
-}
-
-/// The most recent access the displayed run completed at or before a
-/// position, and the serial of the op that made it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct LastAccess {
-    /// Whether it loaded or stored.
-    pub(crate) kind: AccessKind,
-    /// The word's address.
-    pub(crate) addr: Addr,
-    /// Whether it hit or missed.
-    pub(crate) outcome: Outcome,
-    /// The serial of the op that made it.
-    pub(crate) serial: u64,
 }
 
 impl Session {
@@ -100,17 +82,12 @@ impl Session {
     /// holds it or not; 0 before the first. Every op appended after this
     /// call gets a greater one.
     pub(crate) fn last_serial(&self) -> u64 {
-        self.last_serial
-    }
-
-    /// The serial of op `op`.
-    fn serial(&self, op: OpIndex) -> Option<u64> {
-        self.serials.get(usize::try_from(op.get()).ok()?).copied()
+        self.log.last_serial()
     }
 
     /// The cursor's position.
     pub(crate) fn cursor_position(&self) -> EventPos {
-        self.cursor
+        self.cursor.pos()
     }
 
     /// The most recent access of run `run` completed at or before `pos`: the
@@ -120,42 +97,7 @@ impl Session {
     /// appended, so finding it costs a search of the entries, however long
     /// the run.
     pub(crate) fn last_access(&self, pos: EventPos, run: u32) -> Option<LastAccess> {
-        let done = self.entries.partition_point(|record| record.last <= pos);
-        let latest = done.checked_sub(1)?;
-        // The latest entry done is an earlier run's while this run has none
-        // done yet.
-        if self.entries.get(latest)?.run != run {
-            return None;
-        }
-        let index = (*self.last_accesses.get(latest)?)?;
-        let record = self.entries.get(usize::try_from(index).ok()?)?;
-        let (access, outcome) = completed(record)?;
-        let op = self.event_at(record.first)?.op_index;
-        Some(LastAccess {
-            kind: access.kind,
-            addr: access.addr,
-            outcome,
-            serial: self.serial(op)?,
-        })
-    }
-
-    /// Appends `records` to the log's entries, noting for each the latest
-    /// access of its run, at or before it, that reached its tag compare.
-    pub(super) fn extend_entries(&mut self, records: Vec<EntryRecord>) {
-        self.entries.reserve(records.len());
-        self.last_accesses.reserve(records.len());
-        for record in records {
-            let latest = if completed(&record).is_some() {
-                u32::try_from(self.entries.len()).ok()
-            } else {
-                self.entries
-                    .last()
-                    .filter(|before| before.run == record.run)
-                    .and_then(|_| self.last_accesses.last().copied().flatten())
-            };
-            self.last_accesses.push(latest);
-            self.entries.push(record);
-        }
+        self.log.last_access(pos, run)
     }
 
     /// Whether `predicate` holds at the cursor, every op of the log counting
@@ -192,7 +134,7 @@ impl Session {
         predicate: &Predicate,
         since: u64,
     ) -> Result<Option<EventPos>, ReplayError> {
-        let (origin, end) = self.run_bounds(self.current.run);
+        let (origin, end) = self.log.run_bounds(self.cursor.machine().run);
         let at_origin = self.machine_at(origin)?;
         if predicate.eval(&EvalContext::at(self, &at_origin, origin, since)) {
             return Ok(Some(origin));
@@ -203,7 +145,7 @@ impl Session {
         // Replays from the checkpoint at or before the origin, looking at
         // each event after the origin, until the predicate holds or the run
         // ends.
-        let start = Start::from(self.checkpoints.at_or_before(origin));
+        let start = Start::from(self.log.checkpoints().at_or_before(origin));
         let mut finder = Finder {
             session: self,
             predicate,
@@ -214,21 +156,9 @@ impl Session {
             found: None,
             done: false,
         };
-        resume_into(start, &self.ops, &mut finder, None)?;
+        resume_into(start, self.log.ops(), &mut finder, None)?;
         Ok(finder.found)
     }
-}
-
-/// The load or store `record` makes and whether it hit or missed, when it
-/// is an access that reached its tag compare.
-fn completed(record: &EntryRecord) -> Option<(EntryAccess, Outcome)> {
-    let outcome = match record.outcome {
-        EntryOutcome::Hit => Outcome::Hit,
-        EntryOutcome::Miss => Outcome::Miss,
-        _ => return None,
-    };
-    let access = record.access.filter(|_| record.kind == EntryKind::Access)?;
-    Some((access, outcome))
 }
 
 /// Looks for the first event after a run's origin at which a predicate
@@ -292,7 +222,8 @@ mod tests {
 
     use super::*;
     use crate::config::Preset;
-    use crate::op::{Op, ProgramFormat};
+    use crate::op::{AccessKind, Op, ProgramFormat};
+    use crate::stats::Outcome;
     use crate::units::Addr;
 
     fn load(addr: u32) -> Op {
@@ -308,44 +239,9 @@ mod tests {
     }
 
     #[test]
-    fn serials_rise_and_are_never_reused() {
-        let mut session = session();
-        assert_eq!(session.last_serial(), 0);
-        for addr in [0x0A4, 0x0A8, 0x1A4] {
-            session.apply(load(addr)).unwrap();
-        }
-        assert_eq!(session.serials, [1, 2, 3]);
-        // Undone and replaced: the dropped serial is not given again.
-        assert!(session.undo());
-        session.apply(load(0x2A4)).unwrap();
-        assert_eq!(session.serials, [1, 2, 4]);
-        assert_eq!(session.last_serial(), 4);
-        // A refused op takes none.
-        assert!(session.apply(load(0x0A6)).is_err());
-        assert_eq!(session.last_serial(), 4);
-        // Several ops appended together take one each.
-        session.apply_all(vec![load(0x0B0), load(0x0B4)]).unwrap();
-        assert_eq!(session.serials, [1, 2, 4, 5, 6]);
-    }
-
-    #[test]
-    fn a_loaded_session_numbers_its_ops_from_1() {
-        let mut session = session();
-        for addr in [0x0A4, 0x0A8, 0x1A4] {
-            session.apply(load(addr)).unwrap();
-        }
-        session.undo();
-        session.apply(load(0x2A4)).unwrap();
-        let loaded = Session::from_json(&session.to_json()).unwrap();
-        assert_eq!(loaded.serials, [1, 2, 3]);
-        assert_eq!(loaded.last_serial(), 3);
-        assert!(loaded.gate().is_none());
-    }
-
-    #[test]
     fn the_last_access_is_the_run_s_latest_complete_one() {
         let mut session = session();
-        assert_eq!(session.last_access(session.cursor, 1), None);
+        assert_eq!(session.last_access(session.cursor.pos(), 1), None);
         session.apply(load(0x0A4)).unwrap();
         session
             .apply(Op::Program {
@@ -356,67 +252,13 @@ mod tests {
         session.apply(Op::Step).unwrap();
         // An instruction without an access and a program load are passed
         // over.
-        let last = session.last_access(session.cursor, 1).unwrap();
+        let last = session.last_access(session.cursor.pos(), 1).unwrap();
         assert_eq!(last.addr.get(), 0x0A4);
         assert_eq!(last.kind, AccessKind::Read);
         assert_eq!(last.outcome, Outcome::Miss);
         assert_eq!(last.serial, 1);
         // Another run has none of this run's.
-        assert_eq!(session.last_access(session.cursor, 2), None);
-    }
-
-    /// The latest access of each entry's run at or before it that reached
-    /// its tag compare, found by walking back along the run.
-    fn walked(session: &Session) -> Vec<Option<u32>> {
-        (0..session.entries.len())
-            .map(|entry| {
-                let run = session.entries[entry].run;
-                (0..=entry)
-                    .rev()
-                    .take_while(|&index| session.entries[index].run == run)
-                    .find(|&index| completed(&session.entries[index]).is_some())
-                    .map(|index| u32::try_from(index).unwrap())
-            })
-            .collect()
-    }
-
-    #[test]
-    fn each_entry_notes_its_run_s_latest_access() {
-        let mut session = session();
-        let ops = [
-            load(0x0A4),
-            Op::Program {
-                source: "add r1, r0, #1\nld r2, [0x0B0]\nadd r3, r0, #2\nst [0x1A4], r3".to_owned(),
-                format: ProgramFormat::Asm,
-            },
-            Op::Run { n: 3 },
-            Op::Edit {
-                target: serde_json::from_str(r#"{"kind": "memory", "addr": 164}"#).unwrap(),
-                patch: serde_json::from_str(r#"{"kind": "memory", "value": 9}"#).unwrap(),
-            },
-            // A new run, which keeps the program: an instruction without an
-            // access, then a load.
-            Op::Config {
-                config: Preset::TwoWayLru.config(),
-            },
-            Op::Step,
-            Op::Step,
-            Op::StepAccess,
-        ];
-        for op in ops {
-            session.apply(op).unwrap();
-            assert_eq!(session.last_accesses, walked(&session));
-        }
-        assert!(session.last_accesses.contains(&None));
-        // Undone, then truncated by a new op.
-        assert!(session.undo());
-        assert!(session.undo());
-        session.apply(Op::Step).unwrap();
-        assert_eq!(session.last_accesses, walked(&session));
-        assert_eq!(session.last_accesses.len(), session.entries.len());
-        // A loaded session notes the same.
-        let loaded = Session::from_json(&session.to_json()).unwrap();
-        assert_eq!(loaded.last_accesses, session.last_accesses);
+        assert_eq!(session.last_access(session.cursor.pos(), 2), None);
     }
 
     #[test]
@@ -439,7 +281,7 @@ mod tests {
         for json in predicates {
             let predicate: Predicate = serde_json::from_str(json).unwrap();
             let found = session.find_event(&predicate).unwrap();
-            let machine = Session::replay_to(&session.initial, &session.ops, found).unwrap();
+            let machine = Session::replay_to(&session.initial, session.ops(), found).unwrap();
             assert!(
                 predicate.eval(&EvalContext::at(&session, &machine, found, 0)),
                 "{json}"
@@ -447,7 +289,7 @@ mod tests {
             // No earlier position of the run holds it.
             for pos in 0..found.get() {
                 let pos = EventPos::new_unchecked(pos);
-                let machine = Session::replay_to(&session.initial, &session.ops, pos).unwrap();
+                let machine = Session::replay_to(&session.initial, session.ops(), pos).unwrap();
                 assert!(
                     !predicate.eval(&EvalContext::at(&session, &machine, pos, 0)),
                     "{json} at {pos:?}"

@@ -49,6 +49,7 @@ mod cursor;
 mod edit;
 mod gate;
 mod load;
+mod log;
 mod timeline;
 
 use std::collections::BTreeSet;
@@ -65,6 +66,8 @@ pub(crate) use load::{position_in_op, Loader};
 pub(crate) use timeline::EntryRecord;
 
 use checkpoints::{due, Checkpoint, CheckpointRef, Checkpoints};
+use cursor::Cursor;
+use log::{op_start, Extension, LastAccess, Log};
 use timeline::{Entries, EntryBase};
 
 use crate::config::{Config, ConfigError, Timing};
@@ -75,7 +78,7 @@ use crate::geometry::{AccessError, Decoded};
 use crate::isa::ParseResult;
 use crate::machine::Machine;
 use crate::op::{Op, OpError, ProgramFormat};
-use crate::share::{self, FileRoom, SavedOps};
+use crate::share::{self, FileRoom};
 use crate::snapshot::{
     self, BusView, CacheView, ControlAction, Controls, CpuView, Labels, MemoryLineView, MemoryRows,
     MemoryView, ProgramView, RequestView, State,
@@ -89,53 +92,26 @@ use crate::units::{EventPos, LineAddr, OpIndex};
 pub struct Session {
     /// The first run's configuration, which is not an op.
     initial: Config,
-    /// Whether the student chose Advanced rather than Basics: a presentation
-    /// setting that no op records and the fold never reads.
-    advanced: bool,
-    /// The memory lines the student asked to see, the "Jump to" rows: a
-    /// presentation setting too.
-    watch: BTreeSet<LineAddr>,
+    /// What the page shows that no op records.
+    view: ViewSettings,
     /// Set by a guided module while its prediction is unanswered: every op
     /// is refused, and the cursor stays at or before the gate's limit.
     gate: Option<Gate>,
-    /// Every op, the undone ones after the cursor included.
-    ops: Vec<Op>,
-    /// Each op's serial, in the order of `ops`: the serials rise along the
-    /// log and are never reused, whatever is dropped.
-    serials: Vec<u64>,
-    /// The serial the last op appended was given, dropped or not; 0 before
-    /// the first.
-    last_serial: u64,
-    /// Each op as a share document writes it, kept as ops are appended and
-    /// dropped, so a share string written after a cursor move serializes
-    /// only the cursor, and the saved file's size is known op by op.
-    saved: SavedOps,
-    /// Every event of every op, in order; at most
-    /// [`SESSION_EVENT_LIMIT`](crate::limits::SESSION_EVENT_LIMIT).
-    events: Vec<MicroEvent>,
-    /// Where each op ends: the position after its last event.
-    op_ends: Vec<EventPos>,
-    /// Every entry of the log, in order, each written once as its events
-    /// were recorded.
-    entries: Vec<EntryRecord>,
-    /// For each entry, in the order of `entries`, the index of the latest
-    /// access of its run, at or before it, that reached its tag compare;
-    /// none while the run has made none. The last access at a position is
-    /// then one lookup, not a walk back along the run.
-    last_accesses: Vec<Option<u32>>,
-    /// Copies of the machine along the log, which seeks replay from.
-    checkpoints: Checkpoints,
-    /// The cursor's position.
-    cursor: EventPos,
-    /// The machine at the cursor, recomputed on every move.
-    current: Machine,
-    /// What the cursor's entry changes, with the values before it, which the
-    /// highlight compares the machine at the cursor with; none at a run's
-    /// origin.
-    entry_base: Option<EntryBase>,
-    /// Whether the cursor last moved by a single event, as Space moves it,
-    /// rather than across several.
-    stepped: bool,
+    /// Every op, the undone ones after the cursor included, and what was
+    /// recorded of running them.
+    log: Log,
+    /// The cursor's position, the machine there, and what its entry started
+    /// from.
+    cursor: Cursor,
+}
+
+/// The settings of the page that no op records and the fold never reads.
+#[derive(Clone, Debug)]
+struct ViewSettings {
+    /// Whether the student chose Advanced rather than Basics.
+    advanced: bool,
+    /// The memory lines the student asked to see, the "Jump to" rows.
+    watch: BTreeSet<LineAddr>,
 }
 
 /// The result of the fold: the machine after every op, and every event.
@@ -201,23 +177,14 @@ impl Session {
     pub fn with_config(initial: Config) -> Result<Session, ConfigError> {
         let origin = Machine::start(initial.clone())?;
         Ok(Session {
-            advanced: initial.advanced,
-            saved: SavedOps::new(&initial),
+            view: ViewSettings {
+                advanced: initial.advanced,
+                watch: BTreeSet::new(),
+            },
+            log: Log::new(&initial, origin.clone()),
             initial,
-            watch: BTreeSet::new(),
             gate: None,
-            ops: Vec::new(),
-            serials: Vec::new(),
-            last_serial: 0,
-            events: Vec::new(),
-            op_ends: Vec::new(),
-            entries: Vec::new(),
-            last_accesses: Vec::new(),
-            checkpoints: Checkpoints::new(origin.clone()),
-            cursor: EventPos::new_unchecked(0),
-            current: origin,
-            entry_base: None,
-            stepped: false,
+            cursor: Cursor::new(origin),
         })
     }
 
@@ -276,64 +243,72 @@ impl Session {
     /// The displayed run's configuration: the configuration of the run the
     /// cursor is in.
     pub fn config(&self) -> &Config {
-        &self.current.config
+        &self.cursor.machine().config
     }
 
     /// Whether the page shows Advanced: the mode the student chose, or
     /// Advanced whatever the choice while the displayed run's configuration
     /// needs it, as after undoing back into a write-through run.
     pub fn advanced(&self) -> bool {
-        self.advanced || !self.current.config.fits_basics()
+        self.view.advanced || !self.config().fits_basics()
     }
 
     /// The machine at the cursor.
     pub fn machine(&self) -> &Machine {
-        &self.current
+        self.cursor.machine()
     }
 
     /// Every op of the log, the undone ones after the cursor included.
     pub fn ops(&self) -> &[Op] {
-        &self.ops
+        self.log.ops()
     }
 
     /// How many ops the log holds, the undone ones after the cursor
     /// included.
     pub fn op_count(&self) -> u32 {
-        u32::try_from(self.ops.len()).unwrap_or(u32::MAX)
+        self.log.op_count()
     }
 
     /// Every event up to the cursor, in order.
     pub fn events(&self) -> &[MicroEvent] {
-        self.events.get(..slot(self.cursor)).unwrap_or_default()
+        self.log
+            .events()
+            .get(..slot(self.cursor.pos()))
+            .unwrap_or_default()
     }
 
     /// The events whose ids run from `range.start` up to but not including
     /// `range.end`, as far as the log holds them, the undone ones after the
     /// cursor included: a window of the log that does not grow with it.
     pub fn events_range(&self, range: Range<u32>) -> &[MicroEvent] {
+        let events = self.log.events();
         let end = usize::try_from(range.end)
             .unwrap_or(usize::MAX)
-            .min(self.events.len());
+            .min(events.len());
         let start = usize::try_from(range.start).unwrap_or(usize::MAX).min(end);
-        self.events.get(start..end).unwrap_or_default()
+        events.get(start..end).unwrap_or_default()
     }
 
     /// What the page draws at the cursor: the machine's views, the event
     /// there, the highlight of the cursor's entry and its summary, the live
     /// controls and the texts over the workbench.
     pub fn state(&self) -> State {
-        let machine = &self.current;
+        let machine = self.cursor.machine();
         let advanced = self.advanced();
         let position = self.position();
-        let event = self.event_at(self.cursor);
-        let entry = self.record_at(self.cursor).map(|(_, record)| record);
+        let event = self.log.event_at(self.cursor.pos());
+        let entry = self
+            .log
+            .record_at(self.cursor.pos())
+            .map(|(_, record)| record);
         let highlight = self.highlight();
-        let rows = MemoryRows::new(machine, &self.watch);
+        let rows = MemoryRows::new(machine, &self.view.watch);
         let bus = snapshot::bus_line(machine, event);
-        let (origin, end) = self.run_bounds(machine.run);
+        let (origin, end) = self.log.run_bounds(machine.run);
         let steps = self
+            .log
             .steps_through(end)
-            .saturating_sub(self.steps_through(origin));
+            .saturating_sub(self.log.steps_through(origin));
         State {
             config: machine.config.clone(),
             advanced,
@@ -360,16 +335,16 @@ impl Session {
     /// The Stats region at the cursor, in the mode shown, with the rows the
     /// cursor's entry has changed so far marked.
     pub fn stats(&self) -> Stats {
-        Stats::new(&self.current, self.advanced(), &self.highlight())
+        Stats::new(self.cursor.machine(), self.advanced(), &self.highlight())
     }
 
     /// The memory table's rows from its `first`, at most `count` of them,
     /// for the rows in view: the lines the displayed run has touched and the
     /// lines watched, in ascending order.
     pub fn memory_lines(&self, first: u32, count: u32) -> Vec<MemoryLineView> {
-        let machine = &self.current;
-        let bus = snapshot::bus_line(machine, self.event_at(self.cursor));
-        MemoryRows::new(machine, &self.watch)
+        let machine = self.cursor.machine();
+        let bus = snapshot::bus_line(machine, self.log.event_at(self.cursor.pos()));
+        MemoryRows::new(machine, &self.view.watch)
             .iter()
             .skip(usize::try_from(first).unwrap_or(usize::MAX))
             .take(usize::try_from(count).unwrap_or(usize::MAX))
@@ -385,8 +360,8 @@ impl Session {
     pub fn set_memory_watch(&mut self, lines: &[LineAddr]) {
         // Extended rather than collected: collecting sorts the lines first,
         // with a sort the wasm would carry for this type alone.
-        self.watch.clear();
-        self.watch.extend(lines.iter().copied());
+        self.view.watch.clear();
+        self.view.watch.extend(lines.iter().copied());
     }
 
     /// `addr` split into its tag, index and offset under the displayed run's
@@ -396,26 +371,26 @@ impl Session {
     ///
     /// [`AccessError::OutOfRange`] if `addr` does not fit the address width.
     pub fn decode(&self, addr: u32) -> Result<Decoded, AccessError> {
-        self.current.geometry.decode(addr)
+        self.cursor.machine().geometry.decode(addr)
     }
 
     /// `source` parsed as a program or a trace under the displayed run's
     /// configuration: the drawer's summary, or its errors.
     pub fn parse_program(&self, source: &str, format: ProgramFormat) -> ParseResult {
-        self.current.geometry.parse_program(source, format)
+        self.cursor.machine().geometry.parse_program(source, format)
     }
 
     /// The most recent timing in the log up to the cursor: the timing of
     /// the latest timed configuration among the `Config` ops the cursor has
     /// reached, or the initial configuration's; none if neither is timed.
     pub(crate) fn recent_timing(&self) -> Option<Timing> {
-        let reached = self.op_holding(self.cursor).map_or(0, |op| {
+        let reached = self.log.op_holding(self.cursor.pos()).map_or(0, |op| {
             usize::try_from(op.get())
                 .unwrap_or(usize::MAX)
                 .saturating_add(1)
         });
-        self.ops
-            .get(..reached.min(self.ops.len()))
+        let ops = self.log.ops();
+        ops.get(..reached.min(ops.len()))
             .unwrap_or_default()
             .iter()
             .rev()
@@ -433,7 +408,7 @@ impl Session {
     /// append an op or move the cursor on.
     fn controls(&self) -> Controls {
         let mut enabled = Vec::new();
-        if self.cursor.get() > 0 {
+        if self.cursor.pos().get() > 0 {
             enabled.push(ControlAction::Undo);
         }
         let limit = self.limit();
@@ -455,12 +430,13 @@ impl Session {
             ControlAction::StepAccess,
             ControlAction::Run,
         ]);
-        let run = self.run_entries(self.current.run);
+        let run = self.log.run_entries(self.cursor.machine().run);
         let reached = self
-            .entries
+            .log
+            .entries()
             .get(run)
             .and_then(<[EntryRecord]>::first)
-            .is_some_and(|record| record.first <= self.cursor);
+            .is_some_and(|record| record.first <= self.cursor.pos());
         if reached {
             enabled.push(ControlAction::Reset);
         }
@@ -524,7 +500,7 @@ impl Session {
             return Err(OpError::Gated);
         }
         config.validate()?;
-        let displayed = &self.current.config;
+        let displayed = self.config();
         let same = Config {
             advanced: displayed.advanced,
             ..config.clone()
@@ -532,7 +508,7 @@ impl Session {
         if same == *displayed {
             return Ok(ConfigChange::Applied);
         }
-        if self.cursor == self.end() && self.at_run_origin(self.cursor) {
+        if self.cursor.pos() == self.log.end() && self.at_run_origin(self.cursor.pos()) {
             self.apply(Op::Config { config })?;
             return Ok(ConfigChange::Applied);
         }
@@ -557,14 +533,14 @@ impl Session {
     /// while a gate is set, or once the log has no room for it, the op is
     /// refused when the student agrees, as Reset is.
     pub fn set_advanced(&mut self, on: bool) -> ConfigChange {
-        let displayed = &self.current.config;
+        let displayed = self.config();
         if !on && !displayed.fits_basics() {
             return ConfigChange::NeedsReset {
                 config: displayed.to_basics(),
                 message: self.reset_question(),
             };
         }
-        self.advanced = on;
+        self.view.advanced = on;
         ConfigChange::Applied
     }
 
@@ -573,7 +549,7 @@ impl Session {
     /// steps a new op would drop.
     fn reset_question(&self) -> String {
         let base = slot(self.base().0);
-        let run = self.current.run;
+        let run = self.cursor.machine().run;
         let steps = |events: &[MicroEvent]| {
             let count = events
                 .iter()
@@ -581,7 +557,8 @@ impl Session {
                 .count();
             u32::try_from(count).unwrap_or(u32::MAX)
         };
-        let (kept, dropped) = self.events.split_at(base.min(self.events.len()));
+        let events = self.log.events();
+        let (kept, dropped) = events.split_at(base.min(events.len()));
         let run_start = kept
             .iter()
             .rposition(|event| event.run != run)
@@ -606,7 +583,7 @@ impl Session {
         let plan = self.plan(ops, Keep::End)?;
         let first = slot(plan.base);
         self.commit(plan);
-        Ok(self.events.get(first..).unwrap_or_default())
+        Ok(self.log.events().get(first..).unwrap_or_default())
     }
 
     /// Checks `ops` in turn, each against the machine the ones before it
@@ -628,11 +605,11 @@ impl Session {
             base: u64::from(base.get()),
             events: Vec::new(),
             op: OpIndex::new_unchecked(kept),
-            last: self.checkpoints.last_at_or_before(base),
+            last: self.log.checkpoints().last_at_or_before(base),
             checkpoints: Vec::new(),
-            entries: Entries::new(&machine, self.steps_through(base)),
+            entries: Entries::new(&machine, self.log.steps_through(base)),
         };
-        let mut file = self.saved.room_after(slot_of(kept));
+        let mut file = self.log.room_after(kept);
         let mut ops_json = Vec::with_capacity(ops.len());
         let mut op_ends = Vec::with_capacity(ops.len());
         let last = last_op(kept, ops.len());
@@ -662,12 +639,14 @@ impl Session {
         Ok(Plan {
             base,
             kept,
-            ops,
-            ops_json,
-            events,
-            op_ends,
-            checkpoints,
-            records,
+            extension: Extension {
+                ops,
+                ops_json,
+                events,
+                op_ends,
+                checkpoints,
+                records,
+            },
             last_base,
             last_start,
             end: machine,
@@ -678,47 +657,9 @@ impl Session {
     /// ops, their JSON, events and entries, each op with the next serial, and
     /// puts the cursor on its last event.
     fn commit(&mut self, plan: Plan) {
-        let from = self.cursor;
-        let kept = slot_of(plan.kept);
-        self.ops.truncate(kept);
-        self.serials.truncate(kept);
-        for _ in &plan.ops {
-            self.last_serial = self.last_serial.saturating_add(1);
-            self.serials.push(self.last_serial);
-        }
-        self.saved.truncate(kept);
-        self.op_ends.truncate(kept);
-        self.events.truncate(slot(plan.base));
-        let entries = self
-            .entries
-            .partition_point(|record| record.last <= plan.base);
-        self.entries.truncate(entries);
-        self.last_accesses.truncate(entries);
-        self.checkpoints.truncate_after(plan.base);
-        for json in &plan.ops_json {
-            self.saved.push(json);
-        }
-        self.ops.extend(plan.ops);
-        self.op_ends.extend(plan.op_ends);
-        // An empty log (a fresh session, or one undone back to its start)
-        // takes the plan's buffer instead of copying it in: a share load
-        // builds tens of thousands of events, and extending an empty `Vec`
-        // would still allocate and copy every one of them into a second,
-        // exact-size buffer while the plan's own buffer is still alive.
-        if self.events.is_empty() {
-            self.events = plan.events;
-            self.events.shrink_to_fit();
-        } else {
-            self.events.extend(plan.events);
-        }
-        self.extend_entries(plan.records);
-        for (pos, checkpoint) in plan.checkpoints {
-            self.checkpoints.insert(pos, checkpoint);
-        }
-        self.cursor = self.end();
-        self.current = plan.end;
-        self.entry_base = plan.last_base;
-        self.stepped = self.cursor.get().abs_diff(from.get()) == 1;
+        self.log.truncate_after(plan.kept);
+        self.log.append(plan.extension);
+        self.cursor.place(self.log.end(), plan.end, plan.last_base);
     }
 
     /// Whether the log has room for `op` where a new op would go, as
@@ -732,7 +673,7 @@ impl Session {
     /// The [`Room`] that is lacking, the first that fails.
     fn room(&self, op: &Op) -> Result<(), Room> {
         let (base, kept) = self.base();
-        let mut file = self.saved.room_after(slot_of(kept));
+        let mut file = self.log.room_after(kept);
         check_room(
             u64::from(base.get()),
             OpIndex::new_unchecked(kept),
@@ -746,9 +687,9 @@ impl Session {
     /// position 0 if there is none; and how many ops the log keeps before
     /// it.
     fn base(&self) -> (EventPos, u32) {
-        match self.op_holding(self.cursor) {
+        match self.log.op_holding(self.cursor.pos()) {
             Some(op) => (
-                self.op_end(op).unwrap_or(self.cursor),
+                self.log.op_end(op).unwrap_or(self.cursor.pos()),
                 op.get().saturating_add(1),
             ),
             None => (EventPos::new_unchecked(0), 0),
@@ -759,10 +700,11 @@ impl Session {
     /// the end of an op and lies after the nearest checkpoint at or before
     /// `target` without passing `target`, and otherwise that checkpoint.
     fn replay_start(&self, target: EventPos) -> Start<'_> {
-        let checkpoint = Start::from(self.checkpoints.at_or_before(target));
-        if checkpoint.pos < self.cursor && self.cursor <= target && self.is_op_end(self.cursor) {
-            let done = OpIndex::new_unchecked(self.ops_done(self.cursor));
-            Start::before_op(self.cursor, &self.current, done)
+        let checkpoint = Start::from(self.log.checkpoints().at_or_before(target));
+        let cursor = self.cursor.pos();
+        if checkpoint.pos < cursor && cursor <= target && self.log.is_op_end(cursor) {
+            let done = OpIndex::new_unchecked(self.log.ops_done(cursor));
+            Start::before_op(cursor, self.cursor.machine(), done)
         } else {
             checkpoint
         }
@@ -772,10 +714,10 @@ impl Session {
     /// it that the session holds a machine for: a checkpoint, or the cursor
     /// when it is at the end of an op.
     fn machine_at(&self, pos: EventPos) -> Result<Machine, ReplayError> {
-        if pos == self.cursor {
-            return Ok(self.current.clone());
+        if pos == self.cursor.pos() {
+            return Ok(self.cursor.machine().clone());
         }
-        replay_quietly(self.replay_start(pos), &self.ops, pos)
+        replay_quietly(self.replay_start(pos), self.log.ops(), pos)
     }
 
     /// The machines at `capture` and at `pos`, `capture` not after `pos`,
@@ -787,7 +729,8 @@ impl Session {
         pos: EventPos,
     ) -> Result<(Machine, Machine), ReplayError> {
         let start = self.replay_start(capture);
-        let (machine, captured) = replay_capturing(start, &self.ops, pos, Some(capture), None)?;
+        let (machine, captured) =
+            replay_capturing(start, self.log.ops(), pos, Some(capture), None)?;
         let captured = captured.unwrap_or_else(|| machine.clone());
         Ok((captured, machine))
     }
@@ -803,44 +746,44 @@ impl Session {
     /// The [`ReplayError`] of a replay of ops the session has accepted,
     /// which only a bug could cause; the cursor then stays where it was.
     fn move_to(&mut self, pos: EventPos) -> Result<(), ReplayError> {
-        if pos == self.cursor {
+        if pos == self.cursor.pos() {
             return Ok(());
         }
-        let from = self.cursor;
         let entry = self
+            .log
             .record_at(pos)
             .map(|(_, record)| (record.first, record.last));
         let known = entry.is_some_and(|(first, _)| {
-            self.entry_base
-                .as_ref()
+            self.cursor
+                .entry_base()
                 .is_some_and(|base| base.first == first)
         });
         match entry {
             Some((first, last)) if !known => {
                 let start = EventPos::new_unchecked(first.get().saturating_sub(1));
-                let (at_start, machine) = if start == self.cursor {
+                let (at_start, machine) = if start == self.cursor.pos() {
                     (None, self.machine_at(pos)?)
                 } else {
                     let (at_start, machine) = self.machines_at(start, pos)?;
                     (Some(at_start), machine)
                 };
-                let events = self.events_between(first, last);
+                let events = self.log.events_between(first, last);
                 let base = EntryBase::from_start(
                     first,
                     events,
-                    at_start.as_ref().unwrap_or(&self.current),
+                    at_start.as_ref().unwrap_or(self.cursor.machine()),
                 );
-                self.entry_base = Some(base);
-                self.current = machine;
+                self.cursor.place(pos, machine, Some(base));
             }
-            Some(_) => self.current = self.machine_at(pos)?,
+            Some(_) => {
+                let machine = self.machine_at(pos)?;
+                self.cursor.place_in_entry(pos, machine);
+            }
             None => {
-                self.current = self.machine_at(pos)?;
-                self.entry_base = None;
+                let machine = self.machine_at(pos)?;
+                self.cursor.place(pos, machine, None);
             }
         }
-        self.cursor = pos;
-        self.stepped = pos.get().abs_diff(from.get()) == 1;
         Ok(())
     }
 
@@ -858,60 +801,22 @@ impl Session {
         self.move_to(pos).is_ok()
     }
 
-    /// The position after the last event.
-    fn end(&self) -> EventPos {
-        position(self.events.len())
-    }
-
     /// The event the cursor rests on at `pos`: the one whose id is `pos − 1`;
     /// none at position 0.
     pub(crate) fn event_at(&self, pos: EventPos) -> Option<&MicroEvent> {
-        let id = pos.get().checked_sub(1)?;
-        self.events.get(usize::try_from(id).ok()?)
-    }
-
-    /// The op holding position `pos`: the op of the event there; none at
-    /// position 0.
-    fn op_holding(&self, pos: EventPos) -> Option<OpIndex> {
-        self.event_at(pos).map(|event| event.op_index)
-    }
-
-    /// Where op `op` ends.
-    fn op_end(&self, op: OpIndex) -> Option<EventPos> {
-        self.op_ends.get(usize::try_from(op.get()).ok()?).copied()
-    }
-
-    /// Whether `pos` is the end of an op, position 0 included, as the end of
-    /// an op before the first.
-    fn is_op_end(&self, pos: EventPos) -> bool {
-        self.op_holding(pos)
-            .is_none_or(|op| self.op_end(op) == Some(pos))
-    }
-
-    /// How many ops are complete at `pos`.
-    fn ops_done(&self, pos: EventPos) -> u32 {
-        match self.op_holding(pos) {
-            None => 0,
-            Some(op) if self.op_end(op) == Some(pos) => op.get().saturating_add(1),
-            Some(op) => op.get(),
-        }
+        self.log.event_at(pos)
     }
 
     /// Whether `pos` is a run's origin: position 0, where the first run
     /// starts, or the `Setup` event of a `Config` op, which starts a new one.
     fn at_run_origin(&self, pos: EventPos) -> bool {
-        match self.event_at(pos) {
+        match self.log.event_at(pos) {
             None => true,
             Some(event) => {
                 event.kind == EventKind::Setup
-                    && matches!(self.op(event.op_index), Some(Op::Config { .. }))
+                    && matches!(self.log.op(event.op_index), Some(Op::Config { .. }))
             }
         }
-    }
-
-    /// Op `op`.
-    fn op(&self, op: OpIndex) -> Option<&Op> {
-        self.ops.get(usize::try_from(op.get()).ok()?)
     }
 }
 
@@ -943,18 +848,8 @@ struct Plan {
     base: EventPos,
     /// How many ops the log keeps before them.
     kept: u32,
-    /// The ops.
-    ops: Vec<Op>,
-    /// Each op as a share document writes it.
-    ops_json: Vec<String>,
-    /// Their events.
-    events: Vec<MicroEvent>,
-    /// Where each ends.
-    op_ends: Vec<EventPos>,
-    /// The checkpoints due along them.
-    checkpoints: Vec<(EventPos, Checkpoint)>,
-    /// The records of their entries.
-    records: Vec<EntryRecord>,
+    /// The ops, and what running them produced, for the log.
+    extension: Extension,
     /// The base of the entry of their last event, if it belongs to one.
     last_base: Option<EntryBase>,
     /// The machine at the start of the last op, when the plan was asked to
@@ -1328,7 +1223,7 @@ mod tests {
             if at >= target {
                 break;
             }
-            let left = INSTRUCTION_BUDGET - session.current.cpu.executed;
+            let left = INSTRUCTION_BUDGET - session.machine().cpu.executed;
             if left <= 1 {
                 session.apply(endless()).unwrap();
                 continue;
@@ -1341,33 +1236,25 @@ mod tests {
     }
 
     #[test]
-    fn a_share_loads_events_end_with_no_spare_capacity() {
-        let mut session = Session::with_config(Preset::TwoWayLru.config()).unwrap();
-        session.apply(endless()).unwrap();
-        session.apply(Op::Run { n: 200 }).unwrap();
-        let shared = session.to_share_string().unwrap();
-        let loaded = Session::from_share_string(&shared).unwrap();
-        assert!(!loaded.events.is_empty());
-        assert_eq!(loaded.events.capacity(), loaded.events.len());
-    }
-
-    #[test]
     fn a_checkpoint_is_taken_inside_an_op_that_crosses_an_interval() {
         let mut session = across_an_interval();
         let last = OpIndex::new_unchecked(session.op_count() - 1);
-        let (at, checkpoint) = session.checkpoints.at_or_before(pos(CHECKPOINT_INTERVAL));
+        let (at, checkpoint) = session
+            .log
+            .checkpoints()
+            .at_or_before(pos(CHECKPOINT_INTERVAL));
         assert_eq!(at, pos(CHECKPOINT_INTERVAL));
         assert_eq!(checkpoint.op, last);
         assert_eq!(checkpoint.progress.get(), 1);
-        let end = session.end().get();
-        assert!(session.checkpoints.len() <= (end / CHECKPOINT_INTERVAL) as usize);
+        let end = session.log.end().get();
+        assert!(session.log.checkpoints().len() <= (end / CHECKPOINT_INTERVAL) as usize);
         // Seeks on either side of it, and from it, reach the fold's machines.
         let initial = session.initial.clone();
-        let ops = session.ops.clone();
+        let ops = session.ops().to_vec();
         for at in (CHECKPOINT_INTERVAL - 2..=CHECKPOINT_INTERVAL + 3).chain([end, 0, end - 1]) {
             session.seek(pos(at));
             assert_eq!(
-                Ok(&session.current),
+                Ok(session.machine()),
                 Session::replay_to(&initial, &ops, pos(at)).as_ref(),
                 "at {at}"
             );
@@ -1377,12 +1264,12 @@ mod tests {
     #[test]
     fn checkpoints_after_the_point_an_op_is_appended_are_dropped() {
         let mut session = across_an_interval();
-        assert!(session.checkpoints.len() >= 1);
+        assert!(session.log.checkpoints().len() >= 1);
         session.seek(pos(CHECKPOINT_INTERVAL / 2));
-        let Some(op) = session.op_holding(session.cursor) else {
+        let Some(op) = session.log.op_holding(session.cursor.pos()) else {
             panic!("the cursor is inside the log");
         };
-        let base = session.op_end(op).unwrap();
+        let base = session.log.op_end(op).unwrap();
         session
             .apply(Op::Issue {
                 kind: AccessKind::Read,
@@ -1390,9 +1277,15 @@ mod tests {
                 value: None,
             })
             .unwrap();
-        assert_eq!(session.checkpoints.last_at_or_before(session.end()), pos(0));
+        assert_eq!(
+            session
+                .log
+                .checkpoints()
+                .last_at_or_before(session.log.end()),
+            pos(0)
+        );
         assert!(base < pos(CHECKPOINT_INTERVAL));
-        assert_eq!(session.checkpoints.len(), 0);
+        assert_eq!(session.log.checkpoints().len(), 0);
     }
 
     #[test]
@@ -1416,13 +1309,13 @@ mod tests {
             session.apply(issue(AccessKind::Read, at, None)).unwrap();
         }
         let mut session = run_across_an_interval(session);
-        let (at, checkpoint) = session.checkpoints.at_or_before(session.end());
+        let (at, checkpoint) = session.log.checkpoints().at_or_before(session.log.end());
         assert!(at >= pos(CHECKPOINT_INTERVAL));
         let touched = checkpoint.machine.memory.touched_count() as usize;
         assert_eq!(touched, 3);
         // The checkpoint holds no bytes of its own: every line it has is
         // shared with the machine at the cursor.
-        let current = &session.current.memory;
+        let current = &session.machine().memory;
         assert_eq!(
             checkpoint.machine.memory.lines_shared_with(current),
             touched
@@ -1435,22 +1328,22 @@ mod tests {
         session
             .apply(issue(AccessKind::Write, written.get(), Some(after)))
             .unwrap();
-        let (_, checkpoint) = session.checkpoints.at_or_before(at);
+        let (_, checkpoint) = session.log.checkpoints().at_or_before(at);
         let memory = &checkpoint.machine.memory;
         assert_eq!(
-            memory.lines_shared_with(&session.current.memory),
+            memory.lines_shared_with(&session.machine().memory),
             touched - 1
         );
         assert_eq!(memory.word(written), before);
-        assert_eq!(session.current.memory.word(written), after);
+        assert_eq!(session.machine().memory.word(written), after);
         // Seeks from the checkpoint still reach the fold's machines.
         let initial = session.initial.clone();
-        let ops = session.ops.clone();
-        let end = session.end().get();
+        let ops = session.ops().to_vec();
+        let end = session.log.end().get();
         for at in [at.get(), at.get() + 1, end - 1, end] {
             session.seek(pos(at));
             assert_eq!(
-                Ok(&session.current),
+                Ok(session.machine()),
                 Session::replay_to(&initial, &ops, pos(at)).as_ref(),
                 "at {at}"
             );

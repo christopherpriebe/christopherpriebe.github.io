@@ -561,22 +561,23 @@ impl Session {
     /// view: the run, its bounds and steps, the header, the live region's
     /// sentence, and the cursor's entry with its events.
     pub fn timeline(&self) -> Timeline {
-        let run = self.current.run;
-        let (origin, end) = self.run_bounds(run);
-        let at_origin = self.steps_through(origin);
-        let entries = self.run_entries(run);
-        let current = self.record_at(self.cursor).map(|(index, record)| {
+        let run = self.cursor.machine().run;
+        let cursor = self.cursor.pos();
+        let (origin, end) = self.log.run_bounds(run);
+        let at_origin = self.log.steps_through(origin);
+        let entries = self.log.run_entries(run);
+        let current = self.log.record_at(cursor).map(|(index, record)| {
             let index = index.saturating_sub(entries.start);
             self.entry_view(index, record)
         });
-        let step = self.steps_through(self.cursor).saturating_sub(at_origin);
-        let step_count = self.steps_through(end).saturating_sub(at_origin);
+        let step = self.log.steps_through(cursor).saturating_sub(at_origin);
+        let step_count = self.log.steps_through(end).saturating_sub(at_origin);
         Timeline {
             run,
-            runs: self.events.last().map_or(1, |event| event.run),
+            runs: self.log.events().last().map_or(1, |event| event.run),
             origin,
             end,
-            cursor: self.cursor,
+            cursor,
             step,
             step_count,
             header_text: explain::log_header(step, step_count),
@@ -590,7 +591,7 @@ impl Session {
     /// them, for the rows of the log in view. The current entry comes with
     /// its events; the others without.
     pub fn entries(&self, first: u32, count: u32) -> Vec<EntryView> {
-        let entries = self.run_entries(self.current.run);
+        let entries = self.log.run_entries(self.cursor.machine().run);
         let start = entries
             .start
             .saturating_add(usize::try_from(first).unwrap_or(usize::MAX))
@@ -598,7 +599,8 @@ impl Session {
         let end = start
             .saturating_add(usize::try_from(count).unwrap_or(usize::MAX))
             .min(entries.end);
-        self.entries
+        self.log
+            .entries()
             .get(start..end)
             .unwrap_or_default()
             .iter()
@@ -610,8 +612,9 @@ impl Session {
     /// One byte per step of the displayed run, in order: bit 0 set on an
     /// entry's first step, bit 1 on every step of an entry that missed.
     pub fn ticks(&self) -> Vec<u8> {
-        let entries = self.run_entries(self.current.run);
-        self.entries
+        let entries = self.log.run_entries(self.cursor.machine().run);
+        self.log
+            .entries()
             .get(entries)
             .unwrap_or_default()
             .iter()
@@ -629,17 +632,19 @@ impl Session {
     /// The view of `record`, the run's entry `index`, as the cursor now
     /// finds it.
     fn entry_view(&self, index: usize, record: &EntryRecord) -> EntryView {
-        let tense = record.tense(self.cursor);
+        let cursor = self.cursor.pos();
+        let tense = record.tense(cursor);
         let changed_summary = match (tense, record.kind) {
             (_, EntryKind::Program) | (Tense::Future, _) => None,
             (Tense::Past, _) => record.summary.clone(),
             (Tense::Current, _) => Some(explain::changed_summary(
-                &self.current.geometry,
+                &self.cursor.machine().geometry,
                 &self.highlight(),
             )),
         };
         let events = if tense == Tense::Current {
-            self.events_between(record.first, record.last)
+            self.log
+                .events_between(record.first, record.last)
                 .iter()
                 .map(|event| {
                     let pos = position_of(event);
@@ -649,7 +654,7 @@ impl Session {
                         kind: event.kind,
                         text: event.explain.clone(),
                         cause: event.cause,
-                        tense: tense_of(pos, self.cursor),
+                        tense: tense_of(pos, cursor),
                     }
                 })
                 .collect()
@@ -675,13 +680,14 @@ impl Session {
     /// its entry's number, label and outcome unless the cursor last moved
     /// by a single step, as Space moves it. Empty at position 0.
     fn live_text(&self) -> String {
-        let Some(event) = self.event_at(self.cursor) else {
+        let cursor = self.cursor.pos();
+        let Some(event) = self.log.event_at(cursor) else {
             return String::new();
         };
-        let entry = if self.stepped {
+        let entry = if self.cursor.stepped() {
             None
         } else {
-            self.record_at(self.cursor).and_then(|(_, record)| {
+            self.log.record_at(cursor).and_then(|(_, record)| {
                 record
                     .number
                     .map(|number| (number, record.label.as_str(), record.outcome_text.as_str()))
@@ -695,18 +701,21 @@ impl Session {
     /// before the entry, with every word of a way that now holds another
     /// line. Empty at a run's origin and on a program load.
     pub(crate) fn highlight(&self) -> Vec<ChangeRef> {
-        let Some((_, record)) = self.record_at(self.cursor) else {
+        let cursor = self.cursor.pos();
+        let Some((_, record)) = self.log.record_at(cursor) else {
             return Vec::new();
         };
         let Some(base) = self
-            .entry_base
-            .as_ref()
+            .cursor
+            .entry_base()
             .filter(|base| base.first == record.first && record.kind != EntryKind::Program)
         else {
             return Vec::new();
         };
+        let machine = self.cursor.machine();
         let mut cells: Vec<ChangeRef> = self
-            .events_between(record.first, self.cursor)
+            .log
+            .events_between(record.first, cursor)
             .iter()
             .flat_map(|event| event.changed.iter().copied())
             .collect();
@@ -719,68 +728,9 @@ impl Session {
                 .before
                 .get(&cell)
                 .copied()
-                .unwrap_or_else(|| self.current.cell(cell));
-            (cell, before, self.current.cell(cell))
+                .unwrap_or_else(|| machine.cell(cell));
+            (cell, before, machine.cell(cell))
         }))
-    }
-
-    /// The entry the cursor at `pos` rests on, with its index among all the
-    /// log's entries; none at a run's origin.
-    pub(crate) fn record_at(&self, pos: EventPos) -> Option<(usize, &EntryRecord)> {
-        let index = self.entries.partition_point(|record| record.last < pos);
-        self.entries
-            .get(index)
-            .filter(|record| record.holds(pos))
-            .map(|record| (index, record))
-    }
-
-    /// The steps of the log up to and including position `pos`.
-    pub(crate) fn steps_through(&self, pos: EventPos) -> u32 {
-        let started = self.entries.partition_point(|record| record.first <= pos);
-        let Some(record) = started
-            .checked_sub(1)
-            .and_then(|index| self.entries.get(index))
-        else {
-            return 0;
-        };
-        let within = if record.kind == EntryKind::Program {
-            0
-        } else {
-            pos.min(record.last)
-                .get()
-                .saturating_sub(record.first.get())
-                .saturating_add(1)
-        };
-        record.steps_before.saturating_add(within)
-    }
-
-    /// Where run `run` starts, at its origin, and the position after its
-    /// last event.
-    pub(crate) fn run_bounds(&self, run: u32) -> (EventPos, EventPos) {
-        let first = self.events.partition_point(|event| event.run < run);
-        let end = self.events.partition_point(|event| event.run <= run);
-        // A run after the first starts at its `Setup` event, the first of its
-        // events; the first run starts at position 0.
-        let origin = if run <= 1 {
-            EventPos::new_unchecked(0)
-        } else {
-            super::position(first.saturating_add(1))
-        };
-        (origin, super::position(end).max(origin))
-    }
-
-    /// The indices of run `run`'s entries among all the log's entries.
-    pub(crate) fn run_entries(&self, run: u32) -> std::ops::Range<usize> {
-        let start = self.entries.partition_point(|record| record.run < run);
-        let end = self.entries.partition_point(|record| record.run <= run);
-        start..end.max(start)
-    }
-
-    /// The events at positions `first` to `last`, both included.
-    pub(crate) fn events_between(&self, first: EventPos, last: EventPos) -> &[MicroEvent] {
-        let start = super::slot(first).saturating_sub(1);
-        let end = super::slot(last).min(self.events.len());
-        self.events.get(start..end.max(start)).unwrap_or_default()
     }
 }
 
@@ -884,16 +834,17 @@ mod tests {
     /// entry and at `pos`, replayed from the start, compared over the cells
     /// its events up to `pos` list.
     fn replayed_highlight(session: &Session, at: EventPos) -> Vec<ChangeRef> {
-        let Some((_, record)) = session.record_at(at) else {
+        let Some((_, record)) = session.log.record_at(at) else {
             return Vec::new();
         };
         if record.kind == EntryKind::Program {
             return Vec::new();
         }
         let start = pos(record.first.get() - 1);
-        let before = Session::replay_to(&session.initial, &session.ops, start).unwrap();
-        let now = Session::replay_to(&session.initial, &session.ops, at).unwrap();
+        let before = Session::replay_to(&session.initial, session.ops(), start).unwrap();
+        let now = Session::replay_to(&session.initial, session.ops(), at).unwrap();
         let cells: BTreeSet<ChangeRef> = session
+            .log
             .events_between(record.first, at)
             .iter()
             .flat_map(|event| event.changed.iter().copied())
@@ -908,8 +859,8 @@ mod tests {
     #[test]
     fn the_highlight_is_the_net_change_since_the_entry_began_wherever_the_cursor_comes_from() {
         let mut session = varied();
-        let end = session.end().get();
-        assert_eq!(session.current.run, 2);
+        let end = session.log.end().get();
+        assert_eq!(session.machine().run, 2);
         // Backwards, so every move but the first lands in another entry
         // from a position that is not its start; then forwards one event at
         // a time, as Space moves.
@@ -924,11 +875,11 @@ mod tests {
         }
         // Undo and redo land on op ends from far away.
         while session.undo() {
-            let at = session.cursor;
+            let at = session.cursor.pos();
             assert_eq!(session.highlight(), replayed_highlight(&session, at));
         }
         while session.redo() {
-            let at = session.cursor;
+            let at = session.cursor.pos();
             assert_eq!(session.highlight(), replayed_highlight(&session, at));
         }
     }
@@ -936,18 +887,19 @@ mod tests {
     #[test]
     fn a_summary_is_the_net_change_of_its_whole_entry() {
         let session = varied();
-        assert!(session.entries.len() > 20);
+        assert!(session.log.entries().len() > 20);
         // The new run could not keep the program, whose last line does not
         // fit 8-bit addresses: its error entry names no instruction.
         assert!(session
-            .entries
+            .log
+            .entries()
             .iter()
             .any(|record| record.kind == EntryKind::Error
                 && record.label == explain::no_instruction()
                 && record.number == Some(1)));
-        for record in &session.entries {
+        for record in session.log.entries() {
             let expected = (record.kind != EntryKind::Program).then(|| {
-                let geometry = Session::replay_to(&session.initial, &session.ops, record.last)
+                let geometry = Session::replay_to(&session.initial, session.ops(), record.last)
                     .unwrap()
                     .geometry;
                 explain::changed_summary(&geometry, &replayed_highlight(&session, record.last))
@@ -961,7 +913,7 @@ mod tests {
         let session = varied();
         let mut covered = 0_u32;
         let mut next = 1;
-        for record in &session.entries {
+        for record in session.log.entries() {
             // Only a new run's setup lies between two entries.
             while next < record.first.get() {
                 let event = session.event_at(pos(next)).unwrap();
@@ -973,7 +925,8 @@ mod tests {
         }
         let setups = u32::try_from(
             session
-                .events
+                .log
+                .events()
                 .iter()
                 .filter(|event| event.kind == EventKind::Setup && event.entry.is_none())
                 .count(),
@@ -981,13 +934,14 @@ mod tests {
         .unwrap();
         let programs = u32::try_from(
             session
-                .entries
+                .log
+                .entries()
                 .iter()
                 .filter(|record| record.kind == EntryKind::Program)
                 .count(),
         )
         .unwrap();
-        assert_eq!(covered + (setups - programs), session.end().get());
+        assert_eq!(covered + (setups - programs), session.log.end().get());
     }
 
     #[test]

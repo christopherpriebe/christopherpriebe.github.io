@@ -11,8 +11,9 @@
 
 use serde::Serialize;
 
-use super::{last_op, Keep, ReplayError, Session, Start};
+use super::{last_op, EntryBase, Keep, ReplayError, Session, Start};
 use crate::explain;
+use crate::machine::Machine;
 use crate::op::{Op, OpError, ProgramSource};
 use crate::units::{EventPos, OpIndex};
 
@@ -85,22 +86,104 @@ pub enum StepOutcome {
     },
 }
 
+/// Where the cursor is on the log: its position, the machine there, what its
+/// entry started from, and whether it last moved by a single event.
+///
+/// The machine is the fold of the log's ops stopped after the event at the
+/// position, and the entry base belongs to the entry that event is in. Each
+/// is written together with the position, by one of the placing methods, and
+/// nowhere else.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Cursor {
+    /// The position.
+    pos: EventPos,
+    /// The machine at the position, recomputed on every move.
+    machine: Machine,
+    /// What the cursor's entry changes, with the values before it, which the
+    /// highlight compares the machine at the cursor with; none at a run's
+    /// origin.
+    entry_base: Option<EntryBase>,
+    /// Whether the cursor last moved by a single event, as Space moves it,
+    /// rather than across several.
+    stepped: bool,
+}
+
+impl Cursor {
+    /// A cursor at position 0, where `origin` is, outside every entry.
+    pub(super) fn new(origin: Machine) -> Self {
+        Self {
+            pos: EventPos::new_unchecked(0),
+            machine: origin,
+            entry_base: None,
+            stepped: false,
+        }
+    }
+
+    /// The position.
+    pub(super) fn pos(&self) -> EventPos {
+        self.pos
+    }
+
+    /// The machine at the position.
+    pub(super) fn machine(&self) -> &Machine {
+        &self.machine
+    }
+
+    /// What the entry at the position started from; none outside every
+    /// entry.
+    pub(super) fn entry_base(&self) -> Option<&EntryBase> {
+        self.entry_base.as_ref()
+    }
+
+    /// Whether the cursor last moved by a single event, as Space moves it.
+    pub(super) fn stepped(&self) -> bool {
+        self.stepped
+    }
+
+    /// Places the cursor at `pos`, where `machine` is, in the entry whose
+    /// values before it are `base`, or outside every entry if there is none.
+    pub(super) fn place(&mut self, pos: EventPos, machine: Machine, base: Option<EntryBase>) {
+        self.entry_base = base;
+        self.arrive(pos, machine);
+    }
+
+    /// Places the cursor at `pos`, where `machine` is, in the entry the
+    /// cursor is already in, which keeps the base it has.
+    pub(super) fn place_in_entry(&mut self, pos: EventPos, machine: Machine) {
+        self.arrive(pos, machine);
+    }
+
+    /// Sets whether the cursor last moved by a single event, over what the
+    /// move that placed it says.
+    pub(super) fn set_stepped(&mut self, stepped: bool) {
+        self.stepped = stepped;
+    }
+
+    /// Moves to `pos`, where `machine` is, and notes whether that was one
+    /// event away.
+    fn arrive(&mut self, pos: EventPos, machine: Machine) {
+        self.stepped = pos.get().abs_diff(self.pos.get()) == 1;
+        self.pos = pos;
+        self.machine = machine;
+    }
+}
+
 impl Session {
     /// How many ops are complete at the cursor: the spec's `cursor()`.
     pub fn cursor(&self) -> u32 {
-        self.ops_done(self.cursor)
+        self.log.ops_done(self.cursor.pos())
     }
 
     /// Where the cursor is.
     pub fn position(&self) -> Position {
-        let pos = self.cursor;
-        let log_end = pos == self.end();
-        let Some(event) = self.event_at(pos) else {
+        let pos = self.cursor.pos();
+        let log_end = pos == self.log.end();
+        let Some(event) = self.log.event_at(pos) else {
             return Position {
                 pos,
                 ops_done: 0,
                 op: None,
-                run: self.current.run,
+                run: self.cursor.machine().run,
                 entry: None,
                 seq: 0,
                 entry_length: 0,
@@ -116,7 +199,8 @@ impl Session {
         // The events after this one in its entry: each entry's events are
         // numbered from 1, so the next entry starts where the number drops.
         let rest = self
-            .events
+            .log
+            .events()
             .get(super::slot(pos)..)
             .unwrap_or_default()
             .iter()
@@ -124,7 +208,7 @@ impl Session {
             .count();
         let boundary = if log_end {
             Boundary::LogEnd
-        } else if self.is_op_end(pos) {
+        } else if self.log.is_op_end(pos) {
             Boundary::OpEnd
         } else if rest == 0 {
             Boundary::EntryEnd
@@ -133,7 +217,7 @@ impl Session {
         };
         Position {
             pos,
-            ops_done: self.ops_done(pos),
+            ops_done: self.log.ops_done(pos),
             op: Some(event.op_index),
             run: event.run,
             entry: event.entry,
@@ -152,14 +236,14 @@ impl Session {
     /// after the cursor are kept, for redo. Returns false at position 0,
     /// where there is nothing to undo.
     pub fn undo(&mut self) -> bool {
-        let Some(holding) = self.op_holding(self.cursor) else {
+        let Some(holding) = self.log.op_holding(self.cursor.pos()) else {
             return false;
         };
         let target = (0..holding.get())
             .rev()
             .map(OpIndex::new_unchecked)
             .find(|&op| self.is_undo_stop(op))
-            .and_then(|op| self.op_end(op))
+            .and_then(|op| self.log.op_end(op))
             .unwrap_or(EventPos::new_unchecked(0));
         self.move_or_stay(target)
     }
@@ -178,11 +262,11 @@ impl Session {
     /// that is an undo stop, from the op holding the cursor, when the cursor
     /// is inside it, or the op after; none at the end of the log.
     pub(crate) fn redo_target(&self) -> Option<EventPos> {
-        let first = self.ops_done(self.cursor);
+        let first = self.log.ops_done(self.cursor.pos());
         (first..self.op_count())
             .map(OpIndex::new_unchecked)
             .find(|&op| self.is_undo_stop(op))
-            .and_then(|op| self.op_end(op))
+            .and_then(|op| self.log.op_end(op))
     }
 
     /// Moves the cursor to the end of op `op_index − 1`, where `op_index`
@@ -193,7 +277,7 @@ impl Session {
         let done = op_index.min(self.op_count());
         let target = done
             .checked_sub(1)
-            .and_then(|last| self.op_end(OpIndex::new_unchecked(last)))
+            .and_then(|last| self.log.op_end(OpIndex::new_unchecked(last)))
             .unwrap_or(EventPos::new_unchecked(0));
         let target = self.clamp_to_gate(target);
         self.move_or_stay(target);
@@ -202,7 +286,7 @@ impl Session {
     /// Moves the cursor to position `pos`, or to the end of the log if `pos`
     /// is past it; while a gate is set, to its limit if `pos` is beyond it.
     pub fn seek(&mut self, pos: EventPos) {
-        let target = self.clamp_to_gate(pos.min(self.end()));
+        let target = self.clamp_to_gate(pos.min(self.log.end()));
         self.move_or_stay(target);
     }
 
@@ -218,8 +302,9 @@ impl Session {
     /// and while a gate is set, with its message, when the move would pass
     /// its limit or an op would be appended.
     pub fn step_event(&mut self, program: Option<&ProgramSource>) -> StepOutcome {
-        if self.cursor < self.end() {
-            let next = EventPos::new_unchecked(self.cursor.get().saturating_add(1));
+        let at = self.cursor.pos();
+        if at < self.log.end() {
+            let next = EventPos::new_unchecked(at.get().saturating_add(1));
             if !self.within_gate(next) {
                 return idle(OpError::Gated);
             }
@@ -232,13 +317,14 @@ impl Session {
             Err(error) => return idle(error),
         };
         let step_base = plan
+            .extension
             .op_ends
             .iter()
             .rev()
             .nth(1)
             .copied()
             .unwrap_or(plan.base);
-        let step = last_op(plan.kept, plan.ops.len());
+        let step = last_op(plan.kept, plan.extension.ops.len());
         let last_start = plan.last_start.take();
         self.commit(plan);
         if let Some(machine) = last_start {
@@ -248,15 +334,14 @@ impl Session {
             // `move_to` would not use, so it replays here itself. As in
             // [`Session::move_or_stay`], the cursor stays at the op's end if
             // the replay fails.
-            if let Ok(machine) = super::replay_quietly(start, &self.ops, first) {
-                self.current = machine;
-                self.cursor = first;
+            if let Ok(machine) = super::replay_quietly(start, self.log.ops(), first) {
+                self.cursor.place_in_entry(first, machine);
             }
         }
         // Space shows one event at a time, even when it loads the drawer's
         // program first; the step's entry is the plan's last, whose base the
         // plan kept.
-        self.stepped = true;
+        self.cursor.set_stepped(true);
         StepOutcome::Applied
     }
 
@@ -268,15 +353,16 @@ impl Session {
     /// While a gate is set, nothing happens, with its message, when the move
     /// would pass its limit or an op would be appended.
     pub fn step_access(&mut self, program: Option<&ProgramSource>) -> StepOutcome {
-        if self.cursor < self.end() {
-            let op = if self.is_op_end(self.cursor) {
-                Some(OpIndex::new_unchecked(self.ops_done(self.cursor)))
+        let at = self.cursor.pos();
+        if at < self.log.end() {
+            let op = if self.log.is_op_end(at) {
+                Some(OpIndex::new_unchecked(self.log.ops_done(at)))
             } else {
-                self.op_holding(self.cursor)
+                self.log.op_holding(at)
             };
             let target = op
-                .and_then(|op| self.op_end(op))
-                .unwrap_or_else(|| self.end());
+                .and_then(|op| self.log.op_end(op))
+                .unwrap_or_else(|| self.log.end());
             if !self.within_gate(target) {
                 return idle(OpError::Gated);
             }
@@ -298,9 +384,14 @@ impl Session {
     /// same format is the same program.
     fn load_first(&self, program: Option<&ProgramSource>) -> Option<Op> {
         let program = program?;
-        let same = self.current.program.as_ref().is_some_and(|loaded| {
-            loaded.source() == program.source && loaded.format() == program.format
-        });
+        let same = self
+            .cursor
+            .machine()
+            .program
+            .as_ref()
+            .is_some_and(|loaded| {
+                loaded.source() == program.source && loaded.format() == program.format
+            });
         (!same).then(|| Op::Program {
             source: program.source.clone(),
             format: program.format,
@@ -311,7 +402,7 @@ impl Session {
     /// `Program` op that another op follows.
     fn is_undo_stop(&self, op: OpIndex) -> bool {
         let last = op.get().saturating_add(1) >= self.op_count();
-        last || !matches!(self.op(op), Some(Op::Program { .. }))
+        last || !matches!(self.log.op(op), Some(Op::Program { .. }))
     }
 }
 
@@ -341,6 +432,49 @@ mod tests {
     #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
     use super::*;
+    use crate::config::Preset;
+
+    fn pos(value: u32) -> EventPos {
+        EventPos::new_unchecked(value)
+    }
+
+    fn origin() -> Machine {
+        Machine::start(Preset::DirectMapped8.config()).unwrap()
+    }
+
+    #[test]
+    fn a_cursor_notes_whether_it_moved_by_one_event() {
+        let mut cursor = Cursor::new(origin());
+        assert_eq!(cursor.pos(), pos(0));
+        assert!(!cursor.stepped());
+        cursor.place(pos(1), origin(), None);
+        assert!(cursor.stepped());
+        cursor.place(pos(4), origin(), None);
+        assert!(!cursor.stepped());
+        // Back by one is a step as well; not moving is not.
+        cursor.place_in_entry(pos(3), origin());
+        assert!(cursor.stepped());
+        cursor.place_in_entry(pos(3), origin());
+        assert!(!cursor.stepped());
+        cursor.set_stepped(true);
+        assert!(cursor.stepped());
+        cursor.set_stepped(false);
+        assert!(!cursor.stepped());
+    }
+
+    #[test]
+    fn a_cursor_keeps_its_entry_base_until_placed_with_another() {
+        let base = EntryBase::from_start(pos(3), &[], &origin());
+        let mut cursor = Cursor::new(origin());
+        assert_eq!(cursor.entry_base(), None);
+        cursor.place(pos(3), origin(), Some(base.clone()));
+        assert_eq!(cursor.entry_base(), Some(&base));
+        cursor.place_in_entry(pos(4), origin());
+        assert_eq!(cursor.pos(), pos(4));
+        assert_eq!(cursor.entry_base(), Some(&base));
+        cursor.place(pos(9), origin(), None);
+        assert_eq!(cursor.entry_base(), None);
+    }
 
     #[test]
     fn boundaries_are_ordered_by_how_much_ends() {

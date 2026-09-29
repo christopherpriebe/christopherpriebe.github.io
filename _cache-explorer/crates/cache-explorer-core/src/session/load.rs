@@ -18,7 +18,7 @@
 //! `n`-th event, or with `n` = 0 just before the op, so position 0 of a log
 //! with ops has a place too.
 
-use super::{check_room, Builder, Entries, Plan, ReplayError, Session};
+use super::{check_room, op_start, Builder, Entries, Extension, Plan, ReplayError, Session};
 use crate::engine::{self, Emitter, EventSink, Flow, OpProgress};
 use crate::event::MicroEvent;
 use crate::limits::{MAX_EVENTS_PER_ENTRY, PARSE_BYTES_PER_EVENT};
@@ -59,7 +59,10 @@ impl Loader {
     /// mode are the loaded session's. Nothing is replayed yet.
     pub(crate) fn new(session: Session, ops: Vec<Op>) -> Loader {
         // The machine at position 0: the first run's start.
-        let (_, origin) = session.checkpoints.at_or_before(EventPos::new_unchecked(0));
+        let (_, origin) = session
+            .log
+            .checkpoints()
+            .at_or_before(EventPos::new_unchecked(0));
         let machine = origin.machine.clone();
         let builder = Builder {
             base: 0,
@@ -69,7 +72,7 @@ impl Loader {
             checkpoints: Vec::new(),
             entries: Entries::new(&machine, 0),
         };
-        let file = session.saved.room_after(0);
+        let file = session.log.room_after(0);
         Loader {
             session,
             ops,
@@ -189,20 +192,22 @@ impl Loader {
         session.commit(Plan {
             base: EventPos::new_unchecked(0),
             kept: 0,
-            ops,
-            ops_json,
-            events,
-            op_ends,
-            checkpoints,
-            records,
+            extension: Extension {
+                ops,
+                ops_json,
+                events,
+                op_ends,
+                checkpoints,
+                records,
+            },
             last_base,
             last_start: None,
             end: machine,
         });
-        session.move_or_stay(cursor.min(session.end()));
+        session.move_or_stay(cursor.min(session.log.end()));
         // The session opens where the document says, not after a step, so
         // the live region reads the entry whole.
-        session.stepped = false;
+        session.cursor.set_stepped(false);
         session
     }
 }
@@ -212,25 +217,26 @@ impl Session {
     /// many of its events are done, from 1. Position 0 is op 0 with none
     /// done. None for an empty log, which has no op to place it by.
     pub(crate) fn cursor_in_op(&self) -> Option<(OpIndex, u32)> {
-        if self.ops.is_empty() {
+        if self.log.ops().is_empty() {
             return None;
         }
-        let Some(op) = self.op_holding(self.cursor) else {
+        let cursor = self.cursor.pos();
+        let Some(op) = self.log.op_holding(cursor) else {
             return Some((OpIndex::new_unchecked(0), 0));
         };
-        let start = op_start(&self.op_ends, op.get());
-        Some((op, self.cursor.get().saturating_sub(start.get())))
+        let start = self.log.op_start(op);
+        Some((op, cursor.get().saturating_sub(start.get())))
     }
 
     /// The mode the student chose, which a share document keeps: Basics or
     /// Advanced, whatever the displayed run needs.
     pub(crate) fn mode_chosen(&self) -> bool {
-        self.advanced
+        self.view.advanced
     }
 
     /// Each op as a share document writes it, with the saved file's size.
     pub(crate) fn saved_ops(&self) -> &SavedOps {
-        &self.saved
+        self.log.saved()
     }
 }
 
@@ -246,14 +252,6 @@ pub(crate) fn position_in_op(op_ends: &[EventPos], op: u32, event: u32) -> Event
     };
     let start = op_start(op_ends, op);
     EventPos::new_unchecked(start.get().saturating_add(event).min(end.get()))
-}
-
-/// Where op `op` starts: the end of the op before it, or position 0.
-fn op_start(op_ends: &[EventPos], op: u32) -> EventPos {
-    op.checked_sub(1)
-        .and_then(|before| op_ends.get(usize::try_from(before).ok()?))
-        .copied()
-        .unwrap_or(EventPos::new_unchecked(0))
 }
 
 /// Whether a slice that has replayed `replayed` events, and parsed programs
@@ -412,7 +410,7 @@ mod tests {
             }
             // Every slice ends at an entry boundary.
             let last = loader.events().last().unwrap();
-            let next = whole.events.get(loader.events().len()).unwrap();
+            let next = whole.log.events().get(loader.events().len()).unwrap();
             assert_eq!(next.seq, 1, "a slice of {max_events} ended after {last:?}");
         }
         let end = loader.op_ends().last().copied().unwrap();
@@ -424,19 +422,12 @@ mod tests {
         let ops = ops();
         let whole = applied(&ops);
         assert!(
-            whole.end().get() > CHECKPOINT_INTERVAL,
+            whole.log.end().get() > CHECKPOINT_INTERVAL,
             "the loop run to the end of its budget crosses a checkpoint interval"
         );
         for max_events in [1, MAX_EVENTS_PER_ENTRY, 50, LOAD_SLICE_EVENTS, u32::MAX] {
             let (session, slices) = loaded(&ops, max_events, &whole);
-            assert_eq!(session.ops, whole.ops, "{max_events}");
-            assert_eq!(session.saved, whole.saved, "{max_events}");
-            assert_eq!(session.events, whole.events, "{max_events}");
-            assert_eq!(session.op_ends, whole.op_ends, "{max_events}");
-            assert_eq!(session.entries, whole.entries, "{max_events}");
-            assert_eq!(session.checkpoints, whole.checkpoints, "{max_events}");
-            assert_eq!(session.current, whole.current, "{max_events}");
-            assert_eq!(session.entry_base, whole.entry_base, "{max_events}");
+            assert_eq!(session.log, whole.log, "{max_events}");
             assert_eq!(session.cursor, whole.cursor, "{max_events}");
             // A slice replays at most its events once they hold an entry.
             if max_events >= MAX_EVENTS_PER_ENTRY {
@@ -520,7 +511,11 @@ mod tests {
                 }
             }
             let end = loader.op_ends().last().copied().unwrap();
-            assert_eq!(loader.finish(end).events, whole.events, "{max_events}");
+            assert_eq!(
+                loader.finish(end).log.events(),
+                whole.log.events(),
+                "{max_events}"
+            );
         }
     }
 
@@ -547,18 +542,20 @@ mod tests {
     fn a_place_in_an_op_is_a_position_and_back() {
         let ops = ops();
         let mut session = applied(&ops);
-        let op_ends = session.op_ends.clone();
+        let op_ends: Vec<EventPos> = (0..session.op_count())
+            .map(|op| session.log.op_end(OpIndex::new_unchecked(op)).unwrap())
+            .collect();
         let last = u32::try_from(op_ends.len()).unwrap() - 1;
         assert_eq!(position_in_op(&op_ends, 0, 0).get(), 0);
         assert_eq!(position_in_op(&op_ends, 1, 0), op_ends[0]);
         assert_eq!(position_in_op(&op_ends, 1, 1).get(), op_ends[0].get() + 1);
         // Beyond the op's events is its end; beyond the log, the log's end.
         assert_eq!(position_in_op(&op_ends, 1, u32::MAX), op_ends[1]);
-        assert_eq!(position_in_op(&op_ends, last + 1, 0), session.end());
+        assert_eq!(position_in_op(&op_ends, last + 1, 0), session.log.end());
         assert_eq!(position_in_op(&[], 3, 2).get(), 0);
-        for pos in (0..=session.end().get())
+        for pos in (0..=session.log.end().get())
             .step_by(97)
-            .chain([session.end().get()])
+            .chain([session.log.end().get()])
         {
             session.seek(EventPos::new_unchecked(pos));
             let (op, event) = session.cursor_in_op().unwrap();
@@ -576,14 +573,14 @@ mod tests {
     fn a_loaded_session_opens_where_it_is_asked_to() {
         let ops = ops();
         let mut whole = applied(&ops);
-        let target = EventPos::new_unchecked(whole.end().get() / 2);
+        let target = EventPos::new_unchecked(whole.log.end().get() / 2);
         whole.seek(target);
         let mut loader = Loader::new(empty(), ops);
         assert!(loader.advance(u32::MAX).unwrap());
         let session = loader.finish(target);
-        assert_eq!(session.cursor, target);
-        assert_eq!(session.current, whole.current);
-        assert_eq!(session.entry_base, whole.entry_base);
-        assert!(!session.stepped);
+        assert_eq!(session.cursor.pos(), target);
+        assert_eq!(session.cursor.machine(), whole.cursor.machine());
+        assert_eq!(session.cursor.entry_base(), whole.cursor.entry_base());
+        assert!(!session.cursor.stepped());
     }
 }

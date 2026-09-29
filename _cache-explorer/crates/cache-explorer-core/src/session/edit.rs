@@ -16,7 +16,7 @@ use crate::engine::{self, Blocked, EditDraft, EditPlan, EditRefusal, MemoryEditD
 use crate::explain::Unfinished;
 use crate::op::{EditPatch, EditTarget, Op};
 use crate::snapshot;
-use crate::units::{Addr, EventPos, OpIndex, SetIndex, WayIndex};
+use crate::units::{Addr, SetIndex, WayIndex};
 
 impl Session {
     /// Plans `patch` on `target` at the cursor: refused while a guided
@@ -37,9 +37,10 @@ impl Session {
         target: &EditTarget,
         patch: &EditPatch,
     ) -> Result<EditPlan, EditRefusal> {
+        let machine = self.cursor.machine();
         match self.blocked(target, patch) {
-            Some(blocked) => Err(blocked.refusal(&self.current, target, patch)),
-            None => engine::plan_edit(&self.current, target, patch),
+            Some(blocked) => Err(blocked.refusal(machine, target, patch)),
+            None => engine::plan_edit(machine, target, patch),
         }
     }
 
@@ -47,7 +48,7 @@ impl Session {
     /// cursor: every field read, the patch Apply sends, its plan or refusal,
     /// and the way as it would be.
     pub fn draft_edit(&self, set: SetIndex, way: WayIndex, form: &WayForm) -> EditDraft {
-        engine::draft_way(&self.current, set, way, form, |target, patch| {
+        engine::draft_way(self.cursor.machine(), set, way, form, |target, patch| {
             self.blocked(target, patch)
         })
     }
@@ -56,7 +57,7 @@ impl Session {
     /// the cursor: the value read, the patch Apply sends, and its plan or
     /// refusal.
     pub fn draft_memory_edit(&self, addr: Addr, value_text: &str) -> MemoryEditDraft {
-        engine::draft_memory(&self.current, addr, value_text, |target, patch| {
+        engine::draft_memory(self.cursor.machine(), addr, value_text, |target, patch| {
             self.blocked(target, patch)
         })
     }
@@ -88,27 +89,24 @@ impl Session {
     /// to the op's end, not to the end of the access the cursor may be in.
     /// None at the end of an op, position 0 included.
     fn unfinished(&self) -> Option<Unfinished> {
-        if self.is_op_end(self.cursor) {
+        let cursor = self.cursor.pos();
+        if self.log.is_op_end(cursor) {
             return None;
         }
-        let op = self.op_holding(self.cursor)?;
-        let end = self.op_end(op)?;
-        let start = op
-            .get()
-            .checked_sub(1)
-            .and_then(|before| self.op_end(OpIndex::new_unchecked(before)))
-            .unwrap_or(EventPos::new_unchecked(0));
-        let from = self.entries.partition_point(|record| record.first <= start);
-        let to = self.entries.partition_point(|record| record.first <= end);
-        let mut numbered = self
-            .entries
+        let op = self.log.op_holding(cursor)?;
+        let end = self.log.op_end(op)?;
+        let start = self.log.op_start(op);
+        let entries = self.log.entries();
+        let from = entries.partition_point(|record| record.first <= start);
+        let to = entries.partition_point(|record| record.first <= end);
+        let mut numbered = entries
             .get(from..to)
             .unwrap_or_default()
             .iter()
             .filter_map(|record| record.number.map(|number| (number, record)));
         let (first, earliest) = numbered.next()?;
         let (last, record) = numbered.next_back().unwrap_or((first, earliest));
-        if first == last || record.holds(self.cursor) {
+        if first == last || record.holds(cursor) {
             Some(Unfinished::Entry {
                 noun: snapshot::noun(record.kind),
                 number: last,
