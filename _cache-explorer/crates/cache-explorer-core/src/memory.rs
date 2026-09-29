@@ -17,6 +17,7 @@
 //! memory is stale when a valid dirty way holds its line with a different
 //! value for it; that is derived when asked for, never stored.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -78,11 +79,13 @@ impl Memory {
         Word::new_unchecked(value)
     }
 
-    /// The bytes of `line`, `line_bytes` of them.
-    pub(crate) fn line(&self, line: LineAddr) -> Vec<u8> {
-        self.lines
-            .get(&line)
-            .map_or_else(|| self.initial_line(line), |bytes| bytes.to_vec())
+    /// The bytes of `line`, `line_bytes` of them: borrowed when the run has
+    /// touched the line, built when it has not.
+    pub(crate) fn line(&self, line: LineAddr) -> Cow<'_, [u8]> {
+        self.lines.get(&line).map_or_else(
+            || Cow::Owned(self.initial_line(line)),
+            |bytes| Cow::Borrowed(&**bytes),
+        )
     }
 
     /// True when `line`'s bytes are `data`, as a clean cached copy's must be.
@@ -142,8 +145,8 @@ impl Memory {
     /// as they were.
     pub(crate) fn touch(&mut self, line: LineAddr) {
         if !self.lines.contains_key(&line) {
-            let initial = self.initial_line(line);
-            self.lines.insert(line, initial.into());
+            let initial = self.initial_shared_line(line);
+            self.lines.insert(line, initial);
         }
     }
 
@@ -167,12 +170,14 @@ impl Memory {
     /// are this memory's own: copied first when a copy of this memory
     /// shares them, so the copy keeps the bytes it had.
     fn touched_line(&mut self, line: LineAddr) -> &mut [u8] {
-        let initial = if self.lines.contains_key(&line) {
-            Vec::new()
-        } else {
-            self.initial_line(line)
-        };
-        Arc::make_mut(self.lines.entry(line).or_insert_with(|| initial.into()))
+        // Built before the entry borrows the lines, and only for a line the
+        // run has not touched, which the entry then takes.
+        let initial = (!self.lines.contains_key(&line)).then(|| self.initial_shared_line(line));
+        let held = self
+            .lines
+            .entry(line)
+            .or_insert_with(|| initial.unwrap_or_default());
+        Arc::make_mut(held)
     }
 
     /// The line holding `addr`, and `addr`'s byte within it.
@@ -199,15 +204,35 @@ impl Memory {
 
     /// The bytes of `line` before the run writes it.
     fn initial_line(&self, line: LineAddr) -> Vec<u8> {
-        let mut bytes = vec![0; usize::try_from(self.line_bytes).unwrap_or(0)];
+        let mut bytes = vec![0; self.line_len()];
+        self.fill_initial(line, &mut bytes);
+        bytes
+    }
+
+    /// The bytes of `line` before the run writes it, in the allocation the
+    /// memory's copies will share: built by one allocation, not built and
+    /// then copied into another.
+    fn initial_shared_line(&self, line: LineAddr) -> Arc<[u8]> {
+        let mut bytes: Arc<[u8]> = std::iter::repeat_n(0, self.line_len()).collect();
+        self.fill_initial(line, Arc::make_mut(&mut bytes));
+        bytes
+    }
+
+    /// Writes the initial words of `line` into `bytes`, which are zero and
+    /// `line_bytes` long.
+    fn fill_initial(&self, line: LineAddr, bytes: &mut [u8]) {
         if self.init == MemoryInit::Pattern {
             let words = self.line_bytes.checked_div(self.word_bytes).unwrap_or(0);
             for offset in (0..words).map(|word| word * self.word_bytes) {
                 let value = self.initial_word(line.get().saturating_add(offset));
-                set_word_at(&mut bytes, offset, self.word_bytes, value);
+                set_word_at(bytes, offset, self.word_bytes, value);
             }
         }
-        bytes
+    }
+
+    /// How many bytes a line has.
+    fn line_len(&self) -> usize {
+        usize::try_from(self.line_bytes).unwrap_or(0)
     }
 }
 
@@ -339,7 +364,7 @@ mod tests {
     #[test]
     fn touching_records_a_line_with_its_current_contents() {
         let mut memory = memory(&Preset::DirectMapped8.config());
-        let before = memory.line(line(0x0A0));
+        let before = memory.line(line(0x0A0)).into_owned();
         memory.touch(line(0x0A0));
         assert!(memory.is_touched(line(0x0A0)));
         assert_eq!(memory.line(line(0x0A0)), before);
@@ -417,7 +442,7 @@ mod tests {
         assert_eq!(count(&checkpoint, 0x1A0), 1);
         assert_eq!(count(&checkpoint, 0x2A0), 2);
         assert_eq!(memory.word(addr(0x0A8)).get(), 9);
-        assert_eq!(memory.line(line(0x1A0)), [5; 16]);
+        assert_eq!(*memory.line(line(0x1A0)), [5; 16]);
         assert_eq!(checkpoint.word(addr(0x0A4)).get(), 7);
         assert_eq!(checkpoint.word(addr(0x0A8)).get(), 66);
         assert_eq!(checkpoint.line(line(0x1A0)), initial);
@@ -435,6 +460,37 @@ mod tests {
         assert_ne!(checkpoint.word(addr(0x2A4)).get(), 11);
         assert_eq!(copy.lines_shared_with(&checkpoint), 2);
         assert_eq!(copy.lines_shared_with(&memory), 0);
+    }
+
+    #[test]
+    fn a_touched_line_is_borrowed_and_an_untouched_one_is_built() {
+        let mut memory = memory(&Preset::DirectMapped8.config());
+        assert!(matches!(memory.line(line(0x0A0)), Cow::Owned(_)));
+        memory.touch(line(0x0A0));
+        assert!(matches!(memory.line(line(0x0A0)), Cow::Borrowed(_)));
+        assert!(matches!(memory.line(line(0x0B0)), Cow::Owned(_)));
+    }
+
+    #[test]
+    fn touching_a_line_keeps_the_bytes_it_read_as() {
+        for word_bytes in WordBytes::ALL {
+            for memory_init in [MemoryInit::Zero, MemoryInit::Pattern] {
+                let config = Config {
+                    word_bytes,
+                    memory_init,
+                    ..Preset::DirectMapped8.config()
+                };
+                let mut memory = memory(&config);
+                let before = memory.line(line(0x100)).into_owned();
+                memory.touch(line(0x100));
+                assert_eq!(
+                    *memory.line(line(0x100)),
+                    *before,
+                    "{word_bytes:?}, {memory_init:?}"
+                );
+                assert_eq!(before.len(), 16);
+            }
+        }
     }
 
     #[test]

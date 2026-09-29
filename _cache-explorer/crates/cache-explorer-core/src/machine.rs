@@ -611,7 +611,7 @@ mod tests {
                 let line = machine.geometry.line_addr(tag, set(number));
                 machine.memory.touch(line);
                 let data = match dirty {
-                    Dirtiness::Clean => machine.memory.line(line),
+                    Dirtiness::Clean => machine.memory.line(line).into_owned(),
                     Dirtiness::Dirty => data,
                 };
                 Slot::Valid { tag, dirty, data }
@@ -629,7 +629,7 @@ mod tests {
         let decoded = machine.geometry.decode(addr).unwrap();
         let policy = machine.config.cache.replacement.policy();
         machine.memory.touch(decoded.line);
-        let data = machine.memory.line(decoded.line);
+        let data = machine.memory.line(decoded.line).into_owned();
         let set = machine.cache.set_mut(decoded.index).unwrap();
         let choice = policy.victim(set.ways(), &mut machine.prng);
         set.way_mut(choice.way).unwrap().slot = Slot::Valid {

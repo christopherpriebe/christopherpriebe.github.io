@@ -209,17 +209,13 @@ fn lookup(
     let held = tags.first().copied().flatten();
     let class = classify(machine, request, location.line, hit.is_some());
     machine.recent.push(mark);
-    let counters: Vec<Counter> = [Counter::Accesses, kind, outcome]
-        .into_iter()
-        .chain(class)
-        .collect();
-    for &counter in &counters {
+    // The three counters every tag compare moves, its miss class, and the
+    // hit time: room for all of them, so the list never grows.
+    let mut changed: Vec<ChangeRef> = Vec::with_capacity(5);
+    for counter in [Counter::Accesses, kind, outcome].into_iter().chain(class) {
         machine.counters.add(counter, 1);
+        changed.push(ChangeRef::Counter { counter });
     }
-    let mut changed: Vec<ChangeRef> = counters
-        .into_iter()
-        .map(|counter| ChangeRef::Counter { counter })
-        .collect();
     changed.extend(charge(machine, Cost::Hit));
     if let Some(access) = &mut machine.access {
         access.lookup = Some(Lookup { hit, tags });
@@ -402,7 +398,8 @@ fn evict(
     };
     victim.slot = Slot::Invalid;
     machine.counters.add(Counter::Evictions, 1);
-    let mut changed = line_cells(machine, set, way);
+    // The dirty bit and the counter follow the line's cells: room for both.
+    let mut changed = line_cells(machine, set, way, 2);
     if dirty {
         changed.push(ChangeRef::Dirty { set, way });
     }
@@ -433,7 +430,7 @@ fn fill(
     let set = location.set;
     machine.memory.touch(location.line);
     machine.filled.insert(location.line);
-    let data = machine.memory.line(location.line);
+    let data = machine.memory.line(location.line).into_owned();
     let Some(target) = machine.cache.way_mut(set, way) else {
         return Err(lost(machine, set));
     };
@@ -447,7 +444,8 @@ fn fill(
         access.victim = None;
         access.way = Some(way);
     }
-    let mut changed = line_cells(machine, set, way);
+    // The counter and the miss penalty follow the line's cells: room for both.
+    let mut changed = line_cells(machine, set, way, 2);
     changed.push(ChangeRef::Counter {
         counter: Counter::Fills,
     });
@@ -573,7 +571,9 @@ fn write(
         return Ok(());
     }
 
-    let mut changed = to_memory(machine, target, word);
+    // The memory cell, the counter, and the pc: room for all of them.
+    let mut changed = Vec::with_capacity(3);
+    changed.extend(to_memory(machine, target, word));
     machine.counters.add(Counter::Writethroughs, 1);
     changed.push(ChangeRef::Counter {
         counter: Counter::Writethroughs,
@@ -606,7 +606,10 @@ fn write_around(
     let word = machine.geometry.fit_word(value);
     let start = word_start(machine, location.word);
     let target = Addr::new_unchecked(location.line.get() + start);
-    let mut changed = to_memory(machine, target, word);
+    // The memory cell, the counter, the miss penalty and the pc: room for
+    // all of them.
+    let mut changed = Vec::with_capacity(4);
+    changed.extend(to_memory(machine, target, word));
     machine.counters.add(Counter::Writearounds, 1);
     changed.push(ChangeRef::Counter {
         counter: Counter::Writearounds,
@@ -723,14 +726,10 @@ fn charge(machine: &mut Machine, cost: Cost) -> Option<ChangeRef> {
 
 /// Writes `word` to memory at `addr`, and returns the memory cell if its
 /// value changed.
-fn to_memory(machine: &mut Machine, addr: Addr, word: Word) -> Vec<ChangeRef> {
+fn to_memory(machine: &mut Machine, addr: Addr, word: Word) -> Option<ChangeRef> {
     let before = machine.memory.word(addr);
     machine.memory.write_word(addr, word);
-    if before == word {
-        Vec::new()
-    } else {
-        vec![ChangeRef::Memory { addr }]
-    }
+    (before != word).then_some(ChangeRef::Memory { addr })
 }
 
 /// Marks the access as done: the event about to be emitted is its last, so
@@ -798,17 +797,23 @@ fn victim_cause(reason: VictimReason) -> Cause {
 
 /// The cells that change when a way takes or loses a line: its valid bit,
 /// its tag and every word, whether or not a number happens to be equal,
-/// since a different line now occupies the way.
-fn line_cells(machine: &Machine, set: SetIndex, way: WayIndex) -> Vec<ChangeRef> {
-    let words = (0..machine.geometry.words_per_line()).map(|word| ChangeRef::Word {
+/// since a different line now occupies the way. The list has room for
+/// `spare` more changes, which the event adds, so that it does not grow.
+fn line_cells(machine: &Machine, set: SetIndex, way: WayIndex, spare: usize) -> Vec<ChangeRef> {
+    let words = machine.geometry.words_per_line();
+    let room = usize::try_from(words)
+        .unwrap_or(0)
+        .saturating_add(spare)
+        .saturating_add(2);
+    let mut cells = Vec::with_capacity(room);
+    cells.push(ChangeRef::Valid { set, way });
+    cells.push(ChangeRef::Tag { set, way });
+    cells.extend((0..words).map(|word| ChangeRef::Word {
         set,
         way,
         word: WordIndex::new_unchecked(word),
-    });
-    [ChangeRef::Valid { set, way }, ChangeRef::Tag { set, way }]
-        .into_iter()
-        .chain(words)
-        .collect()
+    }));
+    cells
 }
 
 /// The byte offset of each word within a line.

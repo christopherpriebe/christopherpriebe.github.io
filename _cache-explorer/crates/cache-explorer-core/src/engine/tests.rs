@@ -543,7 +543,7 @@ fn case_2_a_load_miss_fills_an_invalid_way() {
         Slot::Valid { tag, dirty, data } => {
             assert_eq!(*tag, Tag::new_unchecked(0x02));
             assert_eq!(*dirty, Dirtiness::Clean);
-            assert_eq!(data, &run.machine.memory.line(line_addr(0x0A0)));
+            assert_eq!(*data, *run.machine.memory.line(line_addr(0x0A0)));
         }
         Slot::Invalid => panic!("way 0 was filled"),
     }
