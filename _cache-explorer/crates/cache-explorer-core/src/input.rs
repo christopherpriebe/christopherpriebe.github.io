@@ -400,8 +400,8 @@ impl Session {
 ///
 /// # Errors
 ///
-/// The word-fit message, for a number the word cannot hold: `300 does not
-/// fit a 1-byte word (−128 to 255).`
+/// [`InputError::WordTooWide`], for a number the word cannot hold; its
+/// message reads `300 does not fit a 1-byte word (−128 to 255).`
 pub(crate) fn fit_word(
     negative: bool,
     magnitude: u64,
