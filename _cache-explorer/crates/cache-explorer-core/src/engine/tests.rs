@@ -3081,7 +3081,7 @@ impl Driven {
             assert_eq!(after.check_invariants(), Ok(()), "after {}", event.label);
             let counters = after.counters;
             assert_eq!(counters.hits + counters.misses, counters.accesses);
-            let length = after.program.as_ref().map_or(0, Program::len);
+            let length = after.program.as_deref().map_or(0, Program::len);
             assert!(after.cpu.pc <= length);
         }
         (
@@ -3204,7 +3204,7 @@ fn a_program_load_resets_the_cpu_and_keeps_the_cache() {
     assert_eq!(after.memory, before.memory);
     assert_eq!(after.counters, before.counters);
     assert_eq!(after.entries_in_run, before.entries_in_run);
-    assert_eq!(after.program.as_ref().map(Program::len), Some(1));
+    assert_eq!(after.program.as_deref().map(Program::len), Some(1));
 
     // The new program's load hits the line the old one brought in.
     let kinds = kinds(
@@ -3966,7 +3966,8 @@ fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
         "ld r1, [0x0A4]\nst [0x0A8], #7",
         ProgramFormat::Asm,
     )
-    .ok();
+    .ok()
+    .map(Arc::new);
     assert_eq!(machine, expected);
     // An invalid configuration is refused and changes nothing.
     let invalid = Config {

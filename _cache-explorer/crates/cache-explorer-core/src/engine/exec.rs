@@ -28,6 +28,8 @@
 //! instructions they check the session's limit, and stop with an `Error`
 //! event, as the budget does, when the log has no room for another entry.
 
+use std::sync::Arc;
+
 use crate::cpu::{Cpu, Halted};
 use crate::engine::access::{access, Origin, Request};
 use crate::engine::{end_entry, Draft, Emitter, Flow, Halt, OpProgress};
@@ -89,7 +91,7 @@ pub(crate) fn load_program(machine: &mut Machine, program: Program, out: &mut Em
     }
     machine.cpu = Cpu::default();
     let (format, instructions) = (program.format(), program.len());
-    machine.program = Some(program);
+    machine.program = Some(Arc::new(program));
     let draft = Draft {
         changed,
         ..Draft::new(EventKind::Setup, None)

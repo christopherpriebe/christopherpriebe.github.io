@@ -35,6 +35,8 @@ pub use edit::{
     MemoryEditDraft, RefusalReason, Suggestion, Tone, WayForm, WordMark,
 };
 
+use std::sync::Arc;
+
 use access::access;
 use exec::{execute, load_program, ready, step, Until};
 
@@ -529,7 +531,7 @@ fn new_run(machine: &mut Machine, start: Machine, out: &mut Emitter<'_>) {
         .map(|program| Program::parse(&machine.geometry, program.source(), program.format()))
     {
         Some(Ok(program)) => {
-            machine.program = Some(program);
+            machine.program = Some(Arc::new(program));
             None
         }
         Some(Err(failure)) => Some(failure),

@@ -26,6 +26,7 @@
 //!   as touched.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use thiserror::Error;
 
@@ -65,8 +66,11 @@ pub struct Machine {
     pub(crate) memory: Memory,
     /// The CPU's registers.
     pub(crate) registers: Registers,
-    /// The loaded program or trace, if any.
-    pub(crate) program: Option<Program>,
+    /// The loaded program or trace, if any. It is never changed once
+    /// parsed, so a copy of the machine, such as a checkpoint, shares it
+    /// with the machine it was copied from; `Arc` rather than `Rc` keeps
+    /// machines and sessions `Send` and `Sync`.
+    pub(crate) program: Option<Arc<Program>>,
     /// The CPU's place in the program: the pc, the instructions executed
     /// against the budget, and whether the program stopped early.
     pub(crate) cpu: Cpu,

@@ -1185,6 +1185,8 @@ impl Waiting for Stopper {
 mod tests {
     #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
+    use std::sync::Arc;
+
     use super::*;
     use crate::config::{CacheConfig, Preset, WritePolicy};
     use crate::limits::{CHECKPOINT_INTERVAL, INSTRUCTION_BUDGET, MAX_RUN_STEPS};
@@ -1260,6 +1262,18 @@ mod tests {
                 "at {at}"
             );
         }
+    }
+
+    #[test]
+    fn a_checkpoint_shares_the_loaded_program_with_the_machine_at_the_cursor() {
+        let session = across_an_interval();
+        let (at, checkpoint) = session.log.checkpoints().at_or_before(session.log.end());
+        assert!(at >= pos(CHECKPOINT_INTERVAL));
+        let (Some(held), Some(current)) = (&checkpoint.machine.program, &session.machine().program)
+        else {
+            panic!("the loop is loaded at the checkpoint and at the cursor");
+        };
+        assert!(Arc::ptr_eq(held, current));
     }
 
     #[test]
