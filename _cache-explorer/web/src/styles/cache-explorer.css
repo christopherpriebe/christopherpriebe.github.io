@@ -1,0 +1,50 @@
+/*
+ * The tool's root is the page's own div; the entry adds the block class. It extends to a 27px inset
+ * from the right edge of the viewport, into the page's right padding, as the design draws the plane,
+ * and sits 90px below the page head. The fallback is the site's own right padding.
+ */
+.cache-explorer,
+.cache-explorer *,
+.cache-explorer *::before,
+.cache-explorer *::after {
+  box-sizing: border-box;
+}
+
+.cache-explorer {
+  margin-top: 90px;
+  margin-right: calc(27px - var(--site-page-pad-right, clamp(27px, 7vw, 126px)));
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__plane {
+  padding: 45px 54px;
+  background: var(--cache-explorer-plane);
+}
+
+.cache-explorer__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 27px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.cache-explorer__label {
+  font: var(--cache-explorer-font-label);
+}
+
+.cache-explorer__skeleton {
+  display: grid;
+  gap: 3px;
+  margin-top: 27px;
+}
+
+.cache-explorer__skeleton > div {
+  height: 30px;
+  background: var(--cache-explorer-empty);
+}
+
+.cache-explorer__note {
+  margin: 18px 0 0;
+  font: var(--cache-explorer-font-label);
+}

@@ -1,0 +1,195 @@
+<!doctype html>
+<!--
+  The development page: `npm run dev` serves it, and the screenshots are taken from it. It is not
+  part of the build. It approximates the site around the tool (the fonts, the page column, its
+  plumb line and the page head) with the site's values written out, and sets no --site-*
+  property, so it also shows the tool's fallbacks. The site's own page is _pages/cache-explorer.md.
+-->
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Christopher Priebe - Interactive Cache Explorer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100,400..700&family=IBM+Plex+Mono:wght@400&family=Public+Sans:wght@400;500&display=swap"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #fbfbfa;
+      }
+
+      body {
+        color: #2c4467;
+        font-family:
+          'Public Sans',
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+        font-size: 17px;
+        line-height: 29px;
+        font-weight: 400;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      a {
+        color: #2c4467;
+        text-decoration: none;
+      }
+
+      a:hover,
+      a:focus {
+        color: #0b1420;
+      }
+
+      p {
+        text-wrap: pretty;
+      }
+
+      /* Links in running copy carry a hairline, as the site's do. */
+      p a,
+      li a {
+        text-decoration: underline;
+        text-decoration-color: #c8cac6;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 0.22em;
+      }
+
+      p a:hover,
+      p a:focus,
+      li a:hover,
+      li a:focus {
+        text-decoration-color: currentColor;
+      }
+
+      img {
+        max-width: 100%;
+        height: auto;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+        color: inherit;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        margin: 0;
+        color: #16243a;
+      }
+
+      ::selection {
+        background-color: #16243a;
+        color: #fbfbfa;
+      }
+
+      :focus-visible {
+        outline: 2px solid #16243a;
+        outline-offset: 2px;
+      }
+
+      /* The site's .page: anchored left, with its plumb line two modules left of the type. */
+      .page {
+        position: relative;
+        width: 100%;
+        max-width: 1180px;
+        padding: 0 clamp(27px, 7vw, 126px) 0 clamp(27px, 9vw, 144px);
+      }
+
+      .page::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: calc(clamp(27px, 9vw, 144px) - 18px);
+        width: 2px;
+        height: 306px;
+        background-color: #16243a;
+        pointer-events: none;
+      }
+
+      .site-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 9px 27px;
+        align-items: baseline;
+        padding-top: 45px;
+        font-size: 15px;
+        line-height: 29px;
+      }
+
+      .site-nav__home {
+        font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+      }
+
+      .page-head {
+        max-width: 612px;
+        padding-top: 144px;
+      }
+
+      .page-title {
+        font-family: Archivo, 'Helvetica Neue', Arial, sans-serif;
+        font-variation-settings: 'wdth' 100;
+        font-weight: 600;
+        font-size: clamp(38px, 5.5vw, 60px);
+        line-height: 1;
+        letter-spacing: -0.03em;
+      }
+
+      .lede {
+        margin: 34px 0 0;
+        font-size: 21px;
+        line-height: 34px;
+        letter-spacing: -0.01em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <nav class="site-nav" aria-label="Site">
+          <a class="site-nav__home" href="#" aria-label="Home">./</a>
+          <a href="#">About</a>
+          <a href="#">Publications</a>
+          <a href="#">Projects</a>
+          <a href="#">Writing</a>
+          <a href="#">Food</a>
+          <a href="#">Efforts</a>
+          <a href="#">CV</a>
+        </nav>
+      </header>
+
+      <main aria-label="Content">
+        <div class="page-head">
+          <h1 class="page-title">Interactive Cache Explorer</h1>
+          <p class="lede">
+            You are the CPU. Issue loads and stores to one L1 cache backed by main memory, and watch
+            what happens on every access.
+          </p>
+        </div>
+        <div id="cache-explorer" data-modules="/modules/index.json"></div>
+        <script type="module" src="/src/main.ts"></script>
+      </main>
+
+      <noscript>
+        <p>This page needs JavaScript and WebAssembly.</p>
+      </noscript>
+    </div>
+  </body>
+</html>

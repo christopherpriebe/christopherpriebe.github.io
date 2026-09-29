@@ -1,0 +1,11 @@
+/*
+ * The design's tokens, each falling back to the site's --site-* property and then to the value the
+ * design gives, so the development page and the tests render without the site's stylesheet.
+ */
+.cache-explorer {
+  --cache-explorer-plane: var(--site-concrete, #f1f1ef);
+  --cache-explorer-empty: var(--site-concrete-deep, #e4e5e2);
+  --cache-explorer-text: var(--site-slate, #2c4467);
+  --cache-explorer-font-label: 400 13px/21px
+    var(--site-font-mono, 'IBM Plex Mono', ui-monospace, Menlo, monospace);
+}

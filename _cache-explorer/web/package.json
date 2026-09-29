@@ -7,12 +7,26 @@
   },
   "scripts": {
     "build:wasm": "node ../scripts/build-wasm.mjs",
+    "build": "npm run build:wasm && tsc --noEmit -p tsconfig.json && vite build",
+    "dev": "vite",
+    "test": "vitest run",
     "test:glue": "node ../scripts/test-glue.mjs",
     "test:wasm": "node ../scripts/test-wasm.mjs",
-    "test:wasm:node": "wasm-pack test --node ../crates/cache-explorer-wasm"
+    "test:wasm:node": "wasm-pack test --node ../crates/cache-explorer-wasm",
+    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && eslint . && prettier --check . && node ../scripts/check-tokens.mjs && node ../scripts/check-package.mjs && vitest run",
+    "size": "sh ../scripts/wasm-size.sh ../../assets/cache-explorer/cache_explorer_bg.wasm"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.6",
     "binaryen": "132.0.0",
+    "eslint": "10.11.0",
+    "jsdom": "30.1.1",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1",
+    "vite": "8.3.0",
+    "vitest": "5.0.1",
     "wasm-pack": "0.15.0"
   },
   "allowScripts": {
