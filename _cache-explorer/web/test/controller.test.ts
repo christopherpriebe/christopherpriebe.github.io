@@ -106,7 +106,7 @@ describe('buildSnapshot', () => {
   it('draws the memory editor the student opened, and no other', () => {
     const ui = initialUiState('desktop');
     expect(buildSnapshot(current(), ui).snapshot.editor).toBeUndefined();
-    ui.editor = { kind: 'memory', addr: 0xa4, valueText: '9' };
+    ui.editor = { kind: 'memory', addr: 0xa4, addrText: '0x0A4', valueText: '9' };
     expect(buildSnapshot(current(), ui).snapshot.editor).toBeDefined();
   });
 

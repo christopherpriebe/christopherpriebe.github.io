@@ -41,6 +41,8 @@ export interface WayEditor {
 export interface MemoryEditor {
   kind: 'memory';
   addr: Addr;
+  /** The address as the core writes it, `0x0B0`, for the editor's title. */
+  addrText: string;
   valueText: string;
 }
 

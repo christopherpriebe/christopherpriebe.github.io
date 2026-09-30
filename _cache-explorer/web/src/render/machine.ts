@@ -8,6 +8,7 @@ import { beatOf } from '../motion';
 import type { UiState } from '../ui-state';
 import { createCache, renderCache, type CacheBox } from './cache';
 import { renderCpu } from './cpu';
+import { memoryEditor, memoryEditorOf, wayEditor, wayEditorOf } from './editor';
 import type { Snapshot } from './index';
 import { renderRequestLane, renderTransferLane } from './lanes';
 import { marksOf } from './marks';
@@ -55,9 +56,29 @@ export function renderMachine(
   const beat = beatOf(state.position.pos, ui.lastPos);
   // A step brings the line on the bus into view; the student's own jump brings the row they asked for.
   const reveal = beat === null ? ui.memoryReveal : (state.memory.busRow ?? null);
-  renderMemory(root, machine.memory, snap, ui, marks, reveal);
+  const word = memoryEditorOf(snap, ui);
+  renderMemory(
+    root,
+    machine.memory,
+    snap,
+    ui,
+    marks,
+    reveal,
+    word && ((put) => memoryEditor(put, root, word.editor, word.draft)),
+  );
   renderTransferLane(machine.transfer, state.bus, beat);
-  renderCache(machine.cache, snap, source, marks);
+  const way = wayEditorOf(snap, ui);
+  renderCache(
+    machine.cache,
+    snap,
+    source,
+    marks,
+    way && {
+      set: way.editor.set,
+      way: way.editor.way,
+      build: (put) => wayEditor(put, root, snap, way.editor, way.draft),
+    },
+  );
   renderRequestLane(machine.request, source);
   renderCpu(machine.cpu, snap, marks);
 }

@@ -3,6 +3,7 @@
 
 import type { Action } from './actions';
 import type { Context } from './context';
+import { applyEditor, closeEditor, openFocused } from './edit-actions';
 import { issue, redo, stepAccess, step, toggleRun, toggleSheet, undo } from './transport-actions';
 
 /** A control the student types in: the shortcuts leave its keys alone. */
@@ -48,8 +49,7 @@ function escape(context: Context): boolean {
     return true;
   }
   if (ui.editor) {
-    ui.editor = null;
-    context.refresh();
+    closeEditor(context);
     return true;
   }
   return false;
@@ -57,13 +57,18 @@ function escape(context: Context): boolean {
 
 /**
  * A key pressed inside the tool. It is ignored with Ctrl, Meta or Alt held, and in a control the
- * student types in, except for Enter in the address and value boxes, which issues, and Escape,
- * which closes an open sheet or editor unless the student is typing outside it. `preventDefault` is called only when a
- * shortcut fires.
+ * student types in, except for Enter in the address and value boxes, which issues, Enter in an
+ * editor's field, which applies, and Escape, which closes an open sheet or editor unless the
+ * student is typing outside it. Enter on a focused way or memory word opens its editor. Inside an
+ * open editor the other keys are the browser's. `preventDefault` is called only when a shortcut
+ * fires.
  */
 export function onKeydown(context: Context, event: KeyboardEvent, action: Action | null): void {
   if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
   const typing = isTyping(event.target);
+  // A control of an open editor keeps its own keys: Space presses its button, and Enter applies.
+  const inEditor =
+    event.target instanceof Element && event.target.closest('.cache-explorer__editor') !== null;
   if (event.key === 'Escape') {
     // A box the student is typing in keeps its focus, unless it is inside the sheet or an editor.
     const inside =
@@ -77,7 +82,16 @@ export function onKeydown(context: Context, event: KeyboardEvent, action: Action
     if (event.key === 'Enter' && box) {
       event.preventDefault();
       issue(context);
+    } else if (event.key === 'Enter' && inEditor) {
+      event.preventDefault();
+      applyEditor(context);
     }
+    return;
+  }
+  if (inEditor) return;
+  // Enter on a focused way or memory word opens its editor.
+  if (event.key === 'Enter' && event.target === action?.element) {
+    if (openFocused(context, action)) event.preventDefault();
     return;
   }
   const run = shortcut(event);

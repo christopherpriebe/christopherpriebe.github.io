@@ -4,7 +4,7 @@
 // the length of the whole list and the rows in view are built.
 
 import type { MemoryLineView, MemoryWordView } from '../../pkg/cache_explorer';
-import { commit, control } from '../controls';
+import { commit, control, type Put } from '../controls';
 import { copy } from '../copy';
 import { cls, h } from '../dom';
 import { MEMORY_ROW_PX } from '../metrics';
@@ -19,18 +19,22 @@ export interface MemoryBox {
   header: HTMLElement;
   /** The scroller: kept, so its scroll position is, and its content rebuilt. */
   scroller: HTMLElement;
+  /** Under the table: the memory editor while one is open. */
+  editor: HTMLElement;
 }
 
 export function createMemory(): MemoryBox {
   const header = h('div', { class: 'cache-explorer__box-head' });
   const scroller = h('div', { class: 'cache-explorer__scroller', 'data-scroll': 'memory' });
+  const editor = h('div', { class: 'cache-explorer__mem-editor' });
   const element = h(
     'div',
     { class: 'cache-explorer__box cache-explorer__box--memory' },
     header,
     scroller,
+    editor,
   );
-  return { element, header, scroller };
+  return { element, header, scroller, editor };
 }
 
 /** The id of the message under the jump box, which the box points to while it is shown. */
@@ -67,6 +71,7 @@ function wordCell(word: MemoryWordView, marks: Marks): HTMLElement {
       class: cls('cache-explorer__mem-word', ...marks.classes(cellKey.memory(word.addr))),
       'data-action': 'edit-memory',
       'data-addr': word.addr,
+      'data-value': word.text,
       tabindex: 0,
       title: stale ? stale.text : word.description,
       'aria-label': `${stale ? `${word.description} ${stale.text}` : word.description} ${copy.memory.edit}`,
@@ -159,6 +164,7 @@ export function renderMemory(
   ui: UiState,
   marks: Marks,
   revealRow: number | null,
+  editor: ((put: Put) => HTMLElement) | null,
 ): void {
   const { memory: table } = snap.state;
   commit(memory.header, (put) => [
@@ -203,4 +209,5 @@ export function renderMemory(
     memory.scroller.append(h('p', { class: 'cache-explorer__empty' }, copy.memory.empty));
   }
   if (revealRow !== null) reveal(memory.scroller, revealRow);
+  commit(memory.editor, (put) => (editor ? [editor(put)] : []));
 }

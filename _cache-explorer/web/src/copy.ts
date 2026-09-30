@@ -84,6 +84,27 @@ export const copy = {
       invalid: { glyph: '≠', title: 'Empty way: no tag to match' },
     },
   },
+  editor: {
+    edit: 'Edit',
+    close: 'Close',
+    cancel: 'Cancel',
+    /** The primary button while the core offers nothing to apply. */
+    cannot: 'Cannot apply',
+    /** The primary button while there is nothing to change. */
+    apply: 'Apply',
+    goToEnd: 'Go to the end',
+    valid: 'Valid',
+    lineAddress: 'Line address',
+    data: 'Data',
+    dirty: 'Dirty',
+    rank: 'rank',
+    value: 'Value',
+    tag: 'tag',
+    index: 'index',
+    word: 'Word',
+    /** What a swatch or a field shows while there is nothing to read. */
+    none: '—',
+  },
   strip: {
     address: 'Address',
     /** The name of each field, before its value. */

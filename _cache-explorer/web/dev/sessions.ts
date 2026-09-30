@@ -75,6 +75,28 @@ export const SCENARIOS: Record<string, () => Session> = {
     return session;
   },
 
+  /**
+   * Frame 3b's run at the end of access #4, where the editors' frames are staged: an edit is only
+   * taken at the end of an operation.
+   */
+  'editors-end-of-access': () => {
+    const session = Session.withConfig(
+      config(128, 16, 2, { timing: { hitCycles: 1, missCycles: 20 }, advanced: true }),
+    );
+    for (let i = 0; i < 4; i++) session.stepAccess(FRAME_3B);
+    return session;
+  },
+
+  /** Frame 3b's run part way through access #5, where every edit is refused until it is finished. */
+  'editors-mid-access': () => {
+    const session = Session.withConfig(
+      config(128, 16, 2, { timing: { hitCycles: 1, missCycles: 20 }, advanced: true }),
+    );
+    for (let i = 0; i < 4; i++) session.stepAccess(FRAME_3B);
+    session.stepEvent(FRAME_3B);
+    return session;
+  },
+
   /** Two sets of four ways: the most ways a set shows side by side. */
   'four-way': () => loads(Session.withConfig(config(128, 16, 4)), [0x0a4, 0x1a4, 0x2a4, 0x0a8]),
 

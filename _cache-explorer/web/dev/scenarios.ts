@@ -1,6 +1,8 @@
 // Opens the tool in one of the states of sessions.ts, on the development page: the page picks one
 // with `?scenario=<name>`, may move the cursor with `&pos=<n>`, and may type an address into the
-// memory table's jump box with `&jump=<address>`. Nothing here is in the build.
+// memory table's jump box with `&jump=<address>`. `&do=click:<selector>` and
+// `&do=type:<selector>=<text>`, as many as wanted, then press a control and type into a field, in
+// order, to reach a state of the editors. Nothing here is in the build.
 
 import '../src/styles/tokens.css';
 import '../src/styles/cache-explorer.css';
@@ -32,4 +34,20 @@ if (jump !== null && box) {
   box.value = jump;
   box.dispatchEvent(new Event('input', { bubbles: true }));
   box.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+for (const step of params.getAll('do')) {
+  const verb = step.slice(0, step.indexOf(':'));
+  const rest = step.slice(step.indexOf(':') + 1);
+  if (verb === 'click') {
+    root.querySelector<HTMLElement>(rest)?.click();
+  } else if (verb === 'type') {
+    const at = rest.lastIndexOf('=');
+    const field = root.querySelector<HTMLInputElement>(rest.slice(0, at));
+    if (field) {
+      field.value = rest.slice(at + 1);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
 }

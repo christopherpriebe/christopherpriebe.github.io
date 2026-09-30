@@ -6,6 +6,7 @@ import type { State, Timeline } from '../pkg/cache_explorer';
 import { configActions } from './config-actions';
 import type { ActionHandler, Context } from './context';
 import { delegate } from './delegate';
+import { editActions } from './edit-actions';
 import { logActions, LOG_MARGIN, scrollLog, stopScrub } from './log-actions';
 import { captureFocus, restoreFocus } from './focus';
 import type { Layout } from './layout';
@@ -33,6 +34,7 @@ export function buildSnapshot(
 ): { snapshot: Snapshot; log: LogWindow } {
   const state = session.state();
   const timeline = session.timeline();
+  keepEditor(ui, state);
   placeMemoryWindow(ui, state);
   placeLogWindow(ui, state, timeline);
   const { draft, program, editor, modules } = ui;
@@ -55,6 +57,22 @@ export function buildSnapshot(
   if (modules.run) snapshot.module = modules.run.view(session);
   if (modules.index) snapshot.modules = modules.index;
   return { snapshot, log: session.entries(ui.logFirst, LOG_WINDOW) };
+}
+
+/**
+ * Lets go of an editor whose way the run no longer has, as a new configuration ends its cache, and
+ * gives the way editor the inputs of the line the cache now has.
+ */
+function keepEditor(ui: UiState, state: State): void {
+  const { editor } = ui;
+  if (editor?.kind !== 'way') return;
+  const words = state.geometry.wordsPerLine;
+  if (!state.cache.sets[editor.set]?.ways[editor.way]) {
+    ui.editor = null;
+  } else if (editor.typed.length !== words) {
+    editor.form.wordTexts = Array.from({ length: words }, () => '');
+    editor.typed = Array.from({ length: words }, () => false);
+  }
 }
 
 /**
@@ -92,17 +110,20 @@ function placeLogWindow(ui: UiState, state: State, timeline: Timeline): void {
 /** What an event on an element with a `data-action` does; each region contributes its own. */
 const CLICKS: ReadonlyMap<string, ActionHandler> = new Map([
   ...configActions.clicks,
+  ...editActions.clicks,
   ...logActions.clicks,
   ...transportActions.clicks,
 ]);
 const INPUTS: ReadonlyMap<string, ActionHandler> = new Map([
   ...configActions.inputs,
+  ...editActions.inputs,
   ...logActions.inputs,
   ...machineActions.inputs,
   ...transportActions.inputs,
 ]);
 const CHANGES: ReadonlyMap<string, ActionHandler> = new Map([
   ...configActions.changes,
+  ...editActions.changes,
   ...machineActions.changes,
 ]);
 

@@ -1920,6 +1920,228 @@ rect.cache-explorer__tick--on {
   margin: 0;
 }
 
+/*
+ * The editors: a way's popover under its cell, and the memory editor under the memory table. Paper
+ * with a navy hairline and the popover shadow; the fields sit on a grid of a label and its control.
+ */
+
+.cache-explorer__way--editing:not(.cache-explorer__way--victim) {
+  outline: 2px solid var(--cache-explorer-strong);
+  outline-offset: -2px;
+}
+
+.cache-explorer__editor {
+  box-sizing: border-box;
+  padding: 18px;
+  border: 1px solid var(--cache-explorer-strong);
+  background: var(--cache-explorer-surface);
+  color: var(--cache-explorer-text);
+  font: var(--cache-explorer-font-body);
+  line-height: 24px;
+  cursor: default;
+  text-align: left;
+}
+
+.cache-explorer__editor--way {
+  position: absolute;
+  top: calc(100% + 9px);
+  z-index: var(--cache-explorer-z-popover);
+  width: 378px;
+  max-width: calc(100vw - 36px);
+  box-shadow: var(--cache-explorer-shadow-pop);
+}
+
+.cache-explorer__editor--way[data-side='left'] {
+  left: 0;
+}
+
+.cache-explorer__editor--way[data-side='right'] {
+  right: 0;
+}
+
+.cache-explorer__editor--memory {
+  max-width: 420px;
+  margin-top: 9px;
+  box-shadow: var(--cache-explorer-shadow-pop);
+}
+
+.cache-explorer__editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.cache-explorer__editor-close {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cache-explorer-text);
+  font: var(--cache-explorer-font-body);
+  cursor: pointer;
+}
+
+.cache-explorer__editor-close:hover {
+  background: none;
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__editor-grid {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 9px 13px;
+  align-items: center;
+  margin-top: 13px;
+}
+
+.cache-explorer__editor-grid > .cache-explorer__seg,
+.cache-explorer__editor-grid > .cache-explorer__select {
+  justify-self: start;
+}
+
+.cache-explorer__editor .cache-explorer__seg--inline .cache-explorer__seg-option {
+  padding: 5px 13px;
+}
+
+.cache-explorer__editor-label {
+  font: var(--cache-explorer-font-label);
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__editor-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: baseline;
+}
+
+.cache-explorer__editor-swatches {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+}
+
+.cache-explorer__swatch {
+  width: 9px;
+  height: 9px;
+}
+
+.cache-explorer__swatch--tag {
+  background: var(--cache-explorer-tag);
+}
+
+.cache-explorer__swatch--index {
+  margin-left: 3px;
+  background: var(--cache-explorer-index);
+}
+
+.cache-explorer__editor-words {
+  display: grid;
+  grid-template-columns: repeat(var(--cache-explorer-words), minmax(0, 1fr));
+  gap: 6px;
+}
+
+.cache-explorer__field--edit,
+.cache-explorer__field--edit-line,
+.cache-explorer__field--edit-value {
+  padding-block: 3px;
+  line-height: normal;
+}
+
+.cache-explorer__field--edit {
+  width: 100%;
+  min-width: 0;
+  text-align: right;
+}
+
+.cache-explorer__field--edit-line,
+.cache-explorer__field--edit-value {
+  width: 72px;
+}
+
+.cache-explorer__field--edit-value {
+  text-align: right;
+}
+
+/* A set with many ways gives its rank as a list, in the field's type. */
+.cache-explorer__select--edit {
+  padding-block: 3px;
+  color: var(--cache-explorer-ink);
+  font: var(--cache-explorer-font-label);
+  font-size: 15px;
+  line-height: normal;
+}
+
+/* A field that differs from the cell is underlined in navy; one that differs from memory sits on a tint. */
+.cache-explorer__field--changed {
+  border-bottom-color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__field--differs {
+  background: #f6f0d6;
+}
+
+.cache-explorer__editor-value {
+  display: flex;
+  gap: 13px;
+  align-items: baseline;
+  margin-top: 9px;
+}
+
+/* What the core says of the edit, on a bar whose colour is the verdict: ready, caution, offer, refused, idle. */
+.cache-explorer__editor-status {
+  margin-top: 15px;
+  padding: 6px 0 6px 13px;
+  border-left: 3px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__editor-status--ready {
+  border-left-color: var(--cache-explorer-correct);
+}
+
+.cache-explorer__editor-status--caution {
+  border-left-color: var(--cache-explorer-dirty);
+}
+
+.cache-explorer__editor-status--move {
+  border-left-color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__editor-status--refused {
+  border-left-color: var(--cache-explorer-incorrect);
+}
+
+.cache-explorer__editor-title {
+  font-weight: 500;
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__editor-text {
+  text-wrap: pretty;
+}
+
+.cache-explorer__editor-end {
+  margin-top: 9px;
+}
+
+.cache-explorer__editor-lines {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 15px;
+}
+
 .cache-explorer__button:disabled {
   opacity: 0.45;
   cursor: default;

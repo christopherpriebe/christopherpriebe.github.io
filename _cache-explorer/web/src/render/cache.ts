@@ -12,6 +12,7 @@ import type {
   WayCompare,
   WayView,
 } from '../../pkg/cache_explorer';
+import { commit, type Put } from '../controls';
 import { copy } from '../copy';
 import { cls, h, type Child } from '../dom';
 import { addressStrip } from './address-strip';
@@ -96,6 +97,15 @@ interface Drawing {
   /** The comparator of each way of the selected set, drawn in the way when the ways wrap. */
   badges: readonly WayCompare[] | null;
   selected: number | null;
+  /** The open way editor: the way it belongs to, and the popover drawn under its cell. */
+  editor: { set: number; way: number; popover: HTMLElement } | null;
+}
+
+/** What renderCache is given to draw an open way editor; `build` places its inputs with `put`. */
+export interface WayEditorSlot {
+  set: number;
+  way: number;
+  build: (put: Put) => HTMLElement;
 }
 
 function rankCell(way: WayView, drawing: Drawing, set: number, index: number): Child {
@@ -119,6 +129,8 @@ function wayCell(
 ): HTMLElement {
   const { cache, marks } = drawing;
   const words = way.valid ? way.words : cache.wordHeads.map(() => '·');
+  const { editor } = drawing;
+  const editing = editor?.set === set && editor.way === index;
   return h(
     tag,
     {
@@ -126,6 +138,7 @@ function wayCell(
         'cache-explorer__way',
         !way.valid && 'cache-explorer__way--empty',
         way.victim && 'cache-explorer__way--victim',
+        editing && 'cache-explorer__way--editing',
         cache.showRank && 'cache-explorer__way--rank',
         cache.showDirty && 'cache-explorer__way--dirty',
       ),
@@ -175,6 +188,7 @@ function wayCell(
         way.valid && way.dirty ? copy.cache.heads.dirty : '·',
       ),
     way.victim && h('span', { class: 'cache-explorer__victim' }, copy.cache.victim),
+    editing && editor.popover,
   );
 }
 
@@ -372,34 +386,40 @@ export function renderCache(
   snap: Snapshot,
   source: AddressSource,
   marks: Marks,
+  editor: WayEditorSlot | null,
 ): void {
   const { cache, geometry } = snap.state;
   const wrapped = wrapsWays(box, snap);
   box.wrapped = wrapped;
-  const drawing: Drawing = {
-    cache,
-    marks,
-    badges: wrapped ? source.compare : null,
-    selected: source.set,
-  };
-  box.element.replaceChildren(
-    h(
-      'div',
-      { class: 'cache-explorer__box-head' },
+  // The editor's inputs outlive a render, so the box is filled by `commit`, which moves them
+  // into the new table before the old one goes.
+  commit(box.element, (put) => {
+    const drawing: Drawing = {
+      cache,
+      marks,
+      badges: wrapped ? source.compare : null,
+      selected: source.set,
+      editor: editor && { set: editor.set, way: editor.way, popover: editor.build(put) },
+    };
+    return [
       h(
-        'span',
-        {
-          class:
-            'cache-explorer__label cache-explorer__label--strong cache-explorer__label--nowrap',
-        },
-        cache.header,
+        'div',
+        { class: 'cache-explorer__box-head' },
+        h(
+          'span',
+          {
+            class:
+              'cache-explorer__label cache-explorer__label--strong cache-explorer__label--nowrap',
+          },
+          cache.header,
+        ),
+        h('span', { class: 'cache-explorer__label' }, copy.cache.editHint),
       ),
-      h('span', { class: 'cache-explorer__label' }, copy.cache.editHint),
-    ),
-    wrapped ? wrappedTable(cache, drawing, geometry) : plainTable(cache, drawing, geometry.ways),
-    addressStrip(source, geometry),
-    box.wires.svg,
-    box.wires.badges,
-  );
+      wrapped ? wrappedTable(cache, drawing, geometry) : plainTable(cache, drawing, geometry.ways),
+      addressStrip(source, geometry),
+      box.wires.svg,
+      box.wires.badges,
+    ];
+  });
   setWires(box.wires, wireModel(cache, source, wrapped));
 }
