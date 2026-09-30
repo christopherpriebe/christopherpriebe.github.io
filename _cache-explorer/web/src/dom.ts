@@ -38,3 +38,8 @@ export function s<K extends keyof SVGElementTagNameMap>(
 ): SVGElementTagNameMap[K] {
   return fill(document.createElementNS(SVG_NAMESPACE, tag), attrs, children);
 }
+
+/** A class attribute from the names that are set: `false`, `null` and `undefined` leave one out. */
+export function cls(...names: (string | false | null | undefined)[]): string {
+  return names.filter((name) => typeof name === 'string' && name !== '').join(' ');
+}

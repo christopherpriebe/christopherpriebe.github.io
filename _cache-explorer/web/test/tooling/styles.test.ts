@@ -2,7 +2,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { FLASH_MS } from '../../src/motion';
+import { FLASH_MS, PACKET_MS, PACKET_TRAVEL_PX, PULSE_MS } from '../../src/motion';
+import { MEMORY_ROW_PX } from '../../src/metrics';
 
 const read = (name: string): string =>
   readFileSync(fileURLToPath(new URL(`../../src/styles/${name}`, import.meta.url)), 'utf8');
@@ -55,6 +56,9 @@ const TOKENS: Record<string, string> = {
   'font-label': `400 13px/21px ${MONO}`,
   'font-figure': `400 21px/29px ${MONO}`,
   'font-bit': `400 17px/34px ${MONO}`,
+  ways: '1',
+  words: '4',
+  'way-min': '292px',
   'z-plane': '0',
   'z-mark': '10',
   'z-popover': '30',
@@ -183,6 +187,98 @@ describe('cache-explorer.css', () => {
     expect(primary).toContain('border-color: var(--cache-explorer-strong)');
     expect(primary).toContain('background: var(--cache-explorer-strong)');
     expect(primary).toContain('color: var(--cache-explorer-surface)');
+  });
+
+  /** The declarations of every rule whose selector list ends with `selector`, together. */
+  const rule = (selector: string): string =>
+    [
+      ...componentsCss.matchAll(
+        new RegExp(
+          `(?:^|,\\s*)${selector.replace(/[.[\]()*+?^$|]/g, '\\$&')}\\s*\\{([^}]*)\\}`,
+          'gm',
+        ),
+      ),
+    ]
+      .map(([, body]) => body)
+      .join('');
+
+  it('rings a changed cell for as long as the script says, with two identical keyframes', () => {
+    for (const beat of ['a', 'b']) {
+      expect(rule(`.cache-explorer__pulse-${beat}`)).toContain(
+        `animation: cache-explorer-pulse-${beat} ${String(PULSE_MS)}ms ease-out`,
+      );
+    }
+    const keyframes = (name: string): string | undefined =>
+      new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(componentsCss)?.[1];
+    expect(keyframes('cache-explorer-pulse-a')).toMatch(
+      /from\s*\{\s*box-shadow: inset 0 0 0 2px var\(--cache-explorer-changed-ring\);/,
+    );
+    expect(keyframes('cache-explorer-pulse-a')).toMatch(
+      /to\s*\{\s*box-shadow: inset 0 0 0 2px transparent;/,
+    );
+    expect(keyframes('cache-explorer-pulse-b')).toBe(keyframes('cache-explorer-pulse-a'));
+  });
+
+  it('crosses a packet down or up the lane in the time and the distance the script says', () => {
+    for (const [direction, from] of [
+      ['down', -PACKET_TRAVEL_PX],
+      ['up', PACKET_TRAVEL_PX],
+    ] as const) {
+      for (const beat of ['a', 'b']) {
+        expect(rule(`.cache-explorer__packet--${direction}-${beat}`)).toContain(
+          `animation: cache-explorer-${direction}-${beat} ${String(PACKET_MS)}ms ease-out`,
+        );
+        expect(componentsCss).toMatch(
+          new RegExp(
+            `@keyframes cache-explorer-${direction}-${beat}\\s*\\{\\s*from\\s*\\{\\s*transform: translateY\\(${String(from)}px\\);`,
+          ),
+        );
+      }
+    }
+  });
+
+  it('gives a memory row the height the blank rows are counted in', () => {
+    const row = rule('.cache-explorer__mem-row');
+    expect(row).toContain('margin-top: 1px');
+    expect(row).toContain('line-height: 28px');
+    expect(28 + 1).toBe(MEMORY_ROW_PX);
+  });
+
+  it('gives the changed ground the last word among the cells that have a ground of their own', () => {
+    const at = (selector: string): number => componentsCss.indexOf(`\n${selector} {`);
+    for (const own of [
+      '.cache-explorer__mem-word',
+      '.cache-explorer__register',
+      '.cache-explorer__way',
+    ]) {
+      expect(at(own)).toBeGreaterThan(-1);
+      expect(at('.cache-explorer__changed')).toBeGreaterThan(at(own));
+    }
+  });
+
+  it('lays the columns of a way out as the design does, dropping the ones that are hidden', () => {
+    expect(rule('.cache-explorer__way--rank.cache-explorer__way--dirty')).toContain(
+      'grid-template-columns: 24px 58px minmax(0, 1fr) 50px 24px',
+    );
+    expect(rule('.cache-explorer__way--rank')).toContain(
+      'grid-template-columns: 24px 58px minmax(0, 1fr) 50px;',
+    );
+    expect(rule('.cache-explorer__way--dirty')).toContain(
+      'grid-template-columns: 24px 58px minmax(0, 1fr) 24px;',
+    );
+  });
+
+  it('gives the tiles of a wrapped set, and the heads over them, the same columns', () => {
+    const shared = /\.cache-explorer__tiles,\s*\.cache-explorer__wrap-heads\s*\{([^}]*)\}/.exec(
+      componentsCss,
+    )?.[1];
+    expect(shared).toContain(
+      'grid-template-columns: repeat(auto-fill, minmax(var(--cache-explorer-way-min), 1fr))',
+    );
+    // Only the first row of heads has a height; the copies that fall on later rows have none.
+    const heads = rule('.cache-explorer__wrap-heads');
+    expect(heads).toContain('grid-template-rows: auto');
+    expect(heads).toContain('grid-auto-rows: 0');
   });
 
   it('sets the layout thresholds through data-layout, which the entry measures', () => {

@@ -32,6 +32,18 @@ describe('delegate', () => {
     expect(action).toMatchObject({ name: 'step', params: { set: '1' }, element: step });
   });
 
+  it('hears a scroll that does not bubble, from any element inside the root', () => {
+    const scroll = vi.fn();
+    delegate(root, { scroll });
+    const scroller = h('div', { 'data-action': 'list' });
+    root.append(scroller);
+    scroller.dispatchEvent(new Event('scroll'));
+    expect(scroll).toHaveBeenCalledOnce();
+    expect(scroll.mock.calls[0]?.[1]).toMatchObject({ name: 'list', element: scroller });
+    const [event] = scroll.mock.calls[0] as [Event];
+    expect(event.target).toBe(scroller);
+  });
+
   it('routes input, change, keydown and focusin, each with its action', () => {
     const handlers = {
       input: vi.fn(),

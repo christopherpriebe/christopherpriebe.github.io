@@ -4,7 +4,7 @@
 
 import { actionAt, type Action } from './actions';
 
-type DelegatedEvent = 'click' | 'input' | 'change' | 'keydown' | 'focusin';
+type DelegatedEvent = 'click' | 'input' | 'change' | 'keydown' | 'focusin' | 'scroll';
 
 export type Handlers = {
   [K in DelegatedEvent]?: (event: HTMLElementEventMap[K], action: Action | null) => void;
@@ -21,7 +21,8 @@ export function delegate(root: HTMLElement, handlers: Handlers): () => void {
       (event) => {
         handler(event, actionAt(event.target, root));
       },
-      { signal: stop.signal },
+      // A scroll does not bubble, so it is heard on the way down.
+      { signal: stop.signal, capture: type === 'scroll' },
     );
   }
 
@@ -30,6 +31,7 @@ export function delegate(root: HTMLElement, handlers: Handlers): () => void {
   listen('change', handlers.change);
   listen('keydown', handlers.keydown);
   listen('focusin', handlers.focusin);
+  listen('scroll', handlers.scroll);
   return () => {
     stop.abort();
   };

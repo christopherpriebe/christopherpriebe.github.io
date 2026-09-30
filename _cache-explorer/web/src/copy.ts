@@ -52,6 +52,52 @@ export const copy = {
     },
     applied: 'New configuration applied. The run starts empty.',
   },
+  memory: {
+    caption: 'Main memory',
+    jump: 'Jump to',
+    jumpLabel: 'Jump to address',
+    jumpPlaceholder: '0x…',
+    /** A line the student asked to see: the title of its address, and its name for a screen reader. */
+    watched: 'Watched: you asked to see this line.',
+    empty: 'Nothing touched yet. A line appears here the first time the cache reads or writes it.',
+    stale: 'stale',
+    heads: { line: 'Line', tag: 'tag', set: 'set' },
+    /** The word's own description says what it is; this is the way to change it. */
+    edit: 'Press Enter to edit.',
+  },
+  cache: {
+    editHint: 'Click a way to edit it',
+    setHead: ['Set', 'index'],
+    way: 'Way',
+    heads: { valid: 'V', tag: 'Tag', data: 'Data', dirty: 'D' },
+    rank: { lru: 'LRU', age: 'Age' },
+    /** The word beside a rank at either end of the order. */
+    roles: { mru: 'MRU', lru: 'LRU', new: 'new', old: 'old' },
+    victim: 'victim',
+    /** What a screen reader is told after a way's own description. */
+    edit: 'Press Enter to edit.',
+    /** The badge in a wrapped way, by what the comparator says. */
+    compare: {
+      pending: { glyph: '=?', title: 'Tag not compared yet' },
+      match: { glyph: '=', title: 'Tag matches' },
+      mismatch: { glyph: '≠', title: 'Tag differs' },
+      invalid: { glyph: '≠', title: 'Empty way: no tag to match' },
+    },
+  },
+  strip: {
+    address: 'Address',
+    /** The name of each field, before its value. */
+    fields: { tag: 'Tag', index: 'Index', offset: 'Offset' },
+    /** The right-hand text of the strip's footer, and the request lane's sub-label, for a typed address. */
+    typed: 'typed, not issued yet',
+    none: 'type an address below',
+    /** The address text while nothing decodes. */
+    noAddress: '—',
+  },
+  cpu: {
+    title: 'CPU',
+    registers: 'Registers',
+  },
   notices: {
     noWebAssembly: {
       lead: 'The Interactive Cache Explorer needs WebAssembly, which this browser does not provide.',

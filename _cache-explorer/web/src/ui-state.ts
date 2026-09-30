@@ -68,6 +68,8 @@ export interface UiState {
   stripSource: 'cursor' | 'draft';
   editor: WayEditor | MemoryEditor | null;
   jumpText: string;
+  /** Why the core does not read the jump box's text as an address; null when it does. */
+  jumpError: string | null;
   program: { open: boolean; editing: boolean; format: ProgramFormat; text: string };
   modules: { open: boolean; index: ModuleIndexView | null; run: ModuleRun | null };
   /** The Run timer is stepping. */
@@ -79,8 +81,10 @@ export interface UiState {
   shareFallback: string | null;
   /** The first log entry in view. */
   logFirst: number;
-  /** The first memory row in view. */
+  /** The first memory row built: the rows around the ones in view. */
   memoryFirst: number;
+  /** A memory row to bring into view in the next render, and then not again; null for none. */
+  memoryReveal: number | null;
   /** The cursor at the previous render: motion plays only when it has moved since. */
   lastPos: number;
 }
@@ -100,6 +104,7 @@ export function initialUiState(layout: Layout): UiState {
     stripSource: 'cursor',
     editor: null,
     jumpText: '',
+    jumpError: null,
     program: { open: true, editing: false, format: 'asm', text: SAMPLE_PROGRAM },
     modules: { open: false, index: null, run: null },
     running: false,
@@ -108,6 +113,7 @@ export function initialUiState(layout: Layout): UiState {
     shareFallback: null,
     logFirst: 0,
     memoryFirst: 0,
+    memoryReveal: null,
     lastPos: 0,
   };
 }

@@ -445,6 +445,920 @@
   flex: 1 1 240px;
 }
 
+/*
+ * The machine: memory, the transfer lane, the cache with its address strip and wires, the request
+ * lane and the CPU, one column. A box is ruled in the strong colour; the wires and the comparators
+ * are drawn over the cache box by the script, and sit above what is drawn under them because they
+ * come later in it.
+ */
+
+.cache-explorer__machine {
+  margin-top: 36px;
+  min-width: 0;
+}
+
+.cache-explorer__box {
+  padding: 18px;
+  border: 1px solid var(--cache-explorer-strong);
+}
+
+.cache-explorer__box--cache {
+  position: relative;
+  margin-top: 6px;
+}
+
+.cache-explorer__box-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 18px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 9px;
+}
+
+.cache-explorer__box--cache > .cache-explorer__box-head {
+  row-gap: 0;
+}
+
+.cache-explorer__label--strong {
+  color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__label--nowrap {
+  white-space: nowrap;
+}
+
+/* Main memory */
+
+.cache-explorer__jump {
+  display: flex;
+  gap: 9px;
+  align-items: baseline;
+}
+
+.cache-explorer__field--jump {
+  width: 72px;
+  padding-block: 3px;
+}
+
+.cache-explorer__field--jump[aria-invalid='true'] {
+  border-bottom-color: var(--cache-explorer-incorrect);
+}
+
+/* The rows scroll under a head that stays; the table is as tall as the whole list, blank rows included. */
+.cache-explorer__scroller {
+  position: relative;
+  max-height: 252px;
+  overflow: auto;
+}
+
+.cache-explorer[data-layout='tablet'] .cache-explorer__scroller {
+  max-height: 196px;
+}
+
+.cache-explorer__mem,
+.cache-explorer__cache {
+  display: block;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* A table cell brings a pixel of padding of its own; none of these is meant to have it. */
+:where(.cache-explorer__mem, .cache-explorer__cache) :where(th, td) {
+  padding: 0;
+}
+
+.cache-explorer__mem thead,
+.cache-explorer__mem tbody,
+.cache-explorer__cache thead,
+.cache-explorer__cache tbody {
+  display: block;
+}
+
+.cache-explorer__mem thead {
+  position: sticky;
+  top: 0;
+  z-index: var(--cache-explorer-z-mark);
+  background: var(--cache-explorer-plane);
+}
+
+.cache-explorer__mem tr {
+  display: grid;
+  grid-template-columns: 64px 44px 36px repeat(var(--cache-explorer-words), minmax(0, 1fr));
+  gap: 1px;
+}
+
+.cache-explorer__mem-head {
+  padding: 0 0 3px 6px;
+  border-bottom: 4px solid var(--cache-explorer-rule);
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.cache-explorer__mem-head--line,
+.cache-explorer__mem-head--word {
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__mem-head--tag {
+  border-bottom-color: var(--cache-explorer-tag);
+}
+
+.cache-explorer__mem-head--set {
+  border-bottom-color: var(--cache-explorer-index);
+}
+
+.cache-explorer__mem-head--word {
+  padding: 0 6px 3px 0;
+  border-bottom-color: var(--cache-explorer-offset);
+  text-align: right;
+}
+
+.cache-explorer__mem-row {
+  margin-top: 1px;
+  font: var(--cache-explorer-font-label);
+  line-height: 28px;
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__mem-line,
+.cache-explorer__mem-quiet {
+  padding-left: 6px;
+  background: var(--cache-explorer-surface);
+}
+
+.cache-explorer__mem-line {
+  font-weight: 400;
+  text-align: left;
+}
+
+.cache-explorer__mem-line--bus {
+  background: var(--cache-explorer-empty);
+}
+
+/* A line the student asked to see: its address is underlined with dots, and its title says why. */
+.cache-explorer__mem-line--watched {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--cache-explorer-text);
+  text-underline-offset: 0.22em;
+}
+
+.cache-explorer__mem-quiet {
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__mem-word {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+  justify-content: flex-end;
+  padding: 0 6px 0 9px;
+  background: var(--cache-explorer-surface);
+  cursor: pointer;
+}
+
+.cache-explorer__mem-word:hover {
+  box-shadow: inset 0 0 0 1px var(--cache-explorer-strong);
+}
+
+/* Inside the cell, since the scroller would clip a ring drawn round it. */
+.cache-explorer__mem-word:focus-visible {
+  outline: 2px solid var(--cache-explorer-strong);
+  outline-offset: -2px;
+}
+
+.cache-explorer__stale-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--cache-explorer-hatch);
+}
+
+.cache-explorer__badge {
+  font-size: 10px;
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__mem-spacer {
+  display: block;
+}
+
+.cache-explorer__empty {
+  margin: 9px 0 0;
+  font: var(--cache-explorer-font-body);
+  line-height: 24px;
+}
+
+/* The lanes: a 2px arrow between two boxes with its label to the right of it */
+
+.cache-explorer__lane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+}
+
+.cache-explorer__lane--transfer {
+  height: 81px;
+  margin-top: 6px;
+}
+
+.cache-explorer__lane--request {
+  height: 72px;
+}
+
+.cache-explorer__lane svg {
+  display: block;
+}
+
+.cache-explorer__lane-line {
+  fill: none;
+  stroke-width: 2px;
+}
+
+.cache-explorer__lane-line--idle {
+  stroke: var(--cache-explorer-rule);
+  stroke-dasharray: 3 4;
+}
+
+.cache-explorer__lane-line--fill {
+  stroke: var(--cache-explorer-fill);
+}
+
+.cache-explorer__lane-line--write-back {
+  stroke: var(--cache-explorer-writeback);
+  stroke-dasharray: 6 4;
+}
+
+.cache-explorer__lane-line--write-through {
+  stroke: var(--cache-explorer-writethrough);
+  stroke-dasharray: 2 3;
+}
+
+.cache-explorer__lane-line--issued {
+  stroke: var(--cache-explorer-strong);
+}
+
+.cache-explorer__lane-line--typed {
+  stroke: var(--cache-explorer-rule);
+  stroke-dasharray: 4 4;
+}
+
+.cache-explorer__lane-head--fill,
+.cache-explorer__packet--fill {
+  fill: var(--cache-explorer-fill);
+}
+
+.cache-explorer__lane-head--write-back,
+.cache-explorer__packet--write-back {
+  fill: var(--cache-explorer-writeback);
+}
+
+.cache-explorer__lane-head--write-through,
+.cache-explorer__packet--write-through {
+  fill: var(--cache-explorer-writethrough);
+}
+
+.cache-explorer__lane-head--issued {
+  fill: var(--cache-explorer-strong);
+}
+
+.cache-explorer__lane-head--typed {
+  fill: var(--cache-explorer-rule);
+}
+
+.cache-explorer__lane-label {
+  font: var(--cache-explorer-font-label);
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__lane-label--idle {
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__lane-sub {
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.cache-explorer__chip {
+  display: inline-flex;
+  margin-top: 3px;
+  padding: 0 7px;
+  border: 1px solid var(--cache-explorer-strong);
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--cache-explorer-ink);
+}
+
+/* The packet sits where it arrives; a step plays its crossing there, down or up the lane. */
+.cache-explorer__packet--down-a {
+  animation: cache-explorer-down-a 900ms ease-out;
+}
+
+.cache-explorer__packet--down-b {
+  animation: cache-explorer-down-b 900ms ease-out;
+}
+
+.cache-explorer__packet--up-a {
+  animation: cache-explorer-up-a 900ms ease-out;
+}
+
+.cache-explorer__packet--up-b {
+  animation: cache-explorer-up-b 900ms ease-out;
+}
+
+@keyframes cache-explorer-down-a {
+  from {
+    transform: translateY(-58px);
+  }
+}
+
+@keyframes cache-explorer-down-b {
+  from {
+    transform: translateY(-58px);
+  }
+}
+
+@keyframes cache-explorer-up-a {
+  from {
+    transform: translateY(58px);
+  }
+}
+
+@keyframes cache-explorer-up-b {
+  from {
+    transform: translateY(58px);
+  }
+}
+
+/* The cache table: a row for each set, a cell for each way */
+
+.cache-explorer__cache-row {
+  display: grid;
+  grid-template-columns: 64px repeat(var(--cache-explorer-ways), minmax(0, 1fr));
+  gap: 9px;
+}
+
+.cache-explorer__cache-row--head {
+  align-items: end;
+}
+
+.cache-explorer__cache tbody .cache-explorer__cache-row {
+  margin-top: 3px;
+}
+
+.cache-explorer__set-head {
+  padding: 0 0 3px 9px;
+  border-bottom: 4px solid var(--cache-explorer-index);
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  text-align: left;
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__way-head {
+  min-width: 0;
+  font-weight: 400;
+  text-align: left;
+}
+
+.cache-explorer__way-name {
+  display: block;
+  padding-bottom: 3px;
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cache-explorer-ink);
+}
+
+/* The parts of a way, left to right, and what heads each: the head row uses the cell's own columns. */
+.cache-explorer__way,
+.cache-explorer__way-heads {
+  display: grid;
+  grid-template-columns: 24px 58px minmax(0, 1fr);
+}
+
+.cache-explorer__way--rank {
+  grid-template-columns: 24px 58px minmax(0, 1fr) 50px;
+}
+
+.cache-explorer__way--dirty {
+  grid-template-columns: 24px 58px minmax(0, 1fr) 24px;
+}
+
+.cache-explorer__way--rank.cache-explorer__way--dirty {
+  grid-template-columns: 24px 58px minmax(0, 1fr) 50px 24px;
+}
+
+.cache-explorer__way-heads {
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.cache-explorer__sub-head {
+  padding: 0 0 3px 6px;
+  border-bottom: 4px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__sub-head--tag {
+  border-bottom-color: var(--cache-explorer-tag);
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__sub-head--data {
+  overflow: hidden;
+  border-bottom-color: var(--cache-explorer-offset);
+  color: var(--cache-explorer-ink);
+  white-space: nowrap;
+}
+
+.cache-explorer__set {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding-left: 9px;
+  border-left: 4px solid transparent;
+  font: var(--cache-explorer-font-label);
+  font-size: 15px;
+  line-height: 21px;
+  font-weight: 400;
+  text-align: left;
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__set--selected {
+  border-left-color: var(--cache-explorer-index);
+}
+
+.cache-explorer__way {
+  position: relative;
+  min-width: 0;
+  background: var(--cache-explorer-surface);
+  font: var(--cache-explorer-font-label);
+  line-height: 30px;
+  color: var(--cache-explorer-ink);
+  cursor: pointer;
+}
+
+.cache-explorer__way:hover {
+  box-shadow: inset 0 0 0 1px var(--cache-explorer-strong);
+}
+
+.cache-explorer__way:focus-visible {
+  outline: 2px solid var(--cache-explorer-strong);
+  outline-offset: 2px;
+}
+
+.cache-explorer__way--empty {
+  background: var(--cache-explorer-empty);
+}
+
+/* Drawn inside the cell, so that the ring of a focused cell is free to be a solid one. */
+.cache-explorer__way--victim::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px dashed var(--cache-explorer-evict);
+  pointer-events: none;
+}
+
+.cache-explorer__way--empty .cache-explorer__word {
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__dirty-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--cache-explorer-hatch);
+}
+
+.cache-explorer__valid {
+  padding-left: 7px;
+}
+
+.cache-explorer__tag,
+.cache-explorer__rank,
+.cache-explorer__dirty {
+  padding-left: 6px;
+}
+
+.cache-explorer__tag,
+.cache-explorer__rank {
+  white-space: nowrap;
+}
+
+.cache-explorer__words {
+  display: flex;
+  gap: 1px;
+  min-width: 0;
+  padding-left: 6px;
+  overflow: hidden;
+}
+
+.cache-explorer__word {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-right: 4px;
+  text-align: right;
+}
+
+/* The word an access reads or writes, once its way holds the line. */
+.cache-explorer__word--addressed {
+  box-shadow: inset 0 -3px 0 var(--cache-explorer-offset);
+}
+
+.cache-explorer__role {
+  margin-left: 3px;
+  font-size: 10px;
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__victim {
+  position: absolute;
+  top: -10px;
+  right: 0;
+  z-index: var(--cache-explorer-z-mark);
+  padding: 0 5px;
+  border: 1px dashed var(--cache-explorer-evict);
+  background: var(--cache-explorer-surface);
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--cache-explorer-ink);
+}
+
+/*
+ * Ways that wrap. A set is one cell holding tiles, a way's name over its cell, in as many columns
+ * as fit. The column heads are drawn once over the first row of tiles, in a grid of the same
+ * columns whose later rows have no height; a way's comparator is the small circle beside its name.
+ */
+
+.cache-explorer__cache--wrapped .cache-explorer__cache-row {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
+/* A set is several rows of tiles, so the sets are ruled apart. */
+.cache-explorer__cache--wrapped tbody .cache-explorer__cache-row {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__cache--wrapped tbody .cache-explorer__cache-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.cache-explorer__tiles,
+.cache-explorer__wrap-heads {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--cache-explorer-way-min), 1fr));
+  gap: 3px 9px;
+  min-width: 0;
+  padding: 0;
+}
+
+.cache-explorer__wrap-heads {
+  grid-template-rows: auto;
+  grid-auto-rows: 0;
+  row-gap: 0;
+  overflow: hidden;
+  font-weight: 400;
+  text-align: left;
+}
+
+.cache-explorer__wrap-head {
+  min-width: 0;
+}
+
+.cache-explorer__tile {
+  min-width: 0;
+}
+
+.cache-explorer__tile > .cache-explorer__way-name {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* A way's comparator: the small circle of the wires' comparators, beside the way's name. */
+.cache-explorer__compare {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--cache-explorer-strong);
+  border-radius: 50%;
+  background: var(--cache-explorer-surface);
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 14px;
+  text-align: center;
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__compare--pending {
+  font-size: 9px;
+}
+
+.cache-explorer__compare--match {
+  background: var(--cache-explorer-strong);
+  color: var(--cache-explorer-surface);
+}
+
+/* The address strip: bits in blocks, a field's share of the width being its share of the bits */
+
+.cache-explorer__strip {
+  margin-top: 72px;
+}
+
+.cache-explorer__fields {
+  display: grid;
+  column-gap: 9px;
+}
+
+.cache-explorer__field-col {
+  min-width: 0;
+}
+
+.cache-explorer__bits {
+  display: block;
+  width: 100%;
+  height: 40px;
+}
+
+.cache-explorer__strip--blank .cache-explorer__bits {
+  opacity: 0.55;
+}
+
+.cache-explorer__bit {
+  fill: var(--cache-explorer-surface);
+}
+
+.cache-explorer__bit-rule--tag {
+  fill: var(--cache-explorer-tag);
+}
+
+.cache-explorer__bit-rule--index {
+  fill: var(--cache-explorer-index);
+}
+
+.cache-explorer__bit-rule--offset {
+  fill: var(--cache-explorer-offset);
+}
+
+.cache-explorer__bit-seam {
+  fill: var(--cache-explorer-plane);
+}
+
+.cache-explorer__bit-digit {
+  fill: var(--cache-explorer-ink);
+  font: var(--cache-explorer-font-bit);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.cache-explorer__field-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 9px;
+  align-items: baseline;
+  padding-top: 9px;
+}
+
+.cache-explorer__swatch {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+}
+
+.cache-explorer__swatch--tag {
+  background: var(--cache-explorer-tag);
+}
+
+.cache-explorer__swatch--index {
+  background: var(--cache-explorer-index);
+}
+
+.cache-explorer__swatch--offset {
+  background: var(--cache-explorer-offset);
+}
+
+.cache-explorer__field-value {
+  font: var(--cache-explorer-font-label);
+  font-weight: 400;
+  color: var(--cache-explorer-ink);
+  white-space: nowrap;
+}
+
+.cache-explorer__field-note {
+  font: var(--cache-explorer-font-label);
+}
+
+.cache-explorer__strip-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 18px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 9px;
+}
+
+/* The wires over the cache box, and the comparators on them */
+
+.cache-explorer__wires,
+.cache-explorer__comparators {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.cache-explorer__wires {
+  overflow: visible;
+}
+
+.cache-explorer__wire {
+  fill: none;
+  stroke-width: 2px;
+}
+
+.cache-explorer__wire--tag {
+  stroke: var(--cache-explorer-tag);
+}
+
+.cache-explorer__wire--index {
+  stroke: var(--cache-explorer-index);
+}
+
+.cache-explorer__wire--offset {
+  stroke: var(--cache-explorer-offset);
+}
+
+.cache-explorer__wire--strong {
+  stroke: var(--cache-explorer-strong);
+}
+
+.cache-explorer__wire-head--tag,
+.cache-explorer__wire-dot--tag {
+  fill: var(--cache-explorer-tag);
+}
+
+.cache-explorer__wire-head--index,
+.cache-explorer__wire-dot--index {
+  fill: var(--cache-explorer-index);
+}
+
+.cache-explorer__wire-head--offset,
+.cache-explorer__wire-dot--offset {
+  fill: var(--cache-explorer-offset);
+}
+
+.cache-explorer__wire-head--strong,
+.cache-explorer__wire-dot--strong {
+  fill: var(--cache-explorer-strong);
+}
+
+.cache-explorer__comparator {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--cache-explorer-strong);
+  border-radius: 50%;
+  background: var(--cache-explorer-surface);
+  font: var(--cache-explorer-font-label);
+  font-size: 14px;
+  line-height: 18px;
+  text-align: center;
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__comparator--pending {
+  font-size: 10px;
+}
+
+.cache-explorer__comparator--match {
+  background: var(--cache-explorer-strong);
+  color: var(--cache-explorer-surface);
+}
+
+/* The CPU */
+
+.cache-explorer__cpu {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px 27px;
+  align-items: start;
+  padding: 18px;
+  border: 1px solid var(--cache-explorer-strong);
+  background: var(--cache-explorer-surface);
+}
+
+.cache-explorer__cpu-main {
+  min-width: 0;
+}
+
+.cache-explorer__instruction {
+  font: var(--cache-explorer-font-figure);
+  color: var(--cache-explorer-ink);
+  white-space: pre;
+}
+
+.cache-explorer__cpu-status {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.cache-explorer__marker {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--cache-explorer-strong);
+}
+
+.cache-explorer__marker--hit {
+  border-color: var(--cache-explorer-hit);
+  background: var(--cache-explorer-hit);
+}
+
+.cache-explorer__marker--miss {
+  border-color: var(--cache-explorer-miss);
+}
+
+.cache-explorer__marker--none {
+  border-color: transparent;
+}
+
+.cache-explorer__registers {
+  display: grid;
+  grid-template-columns: repeat(4, 54px);
+  gap: 1px;
+  border: 1px solid var(--cache-explorer-rule);
+  background: var(--cache-explorer-rule);
+}
+
+.cache-explorer__register {
+  padding: 3px 7px;
+  background: var(--cache-explorer-surface);
+}
+
+.cache-explorer__register-name {
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.cache-explorer__register-value {
+  font: var(--cache-explorer-font-label);
+  font-size: 15px;
+  line-height: 21px;
+  color: var(--cache-explorer-ink);
+}
+
+/* What the step changed: the ground stays; the ring plays once, and only when the cursor moved. */
+
+.cache-explorer__changed {
+  background: var(--cache-explorer-changed);
+}
+
+.cache-explorer__pulse-a {
+  animation: cache-explorer-pulse-a 900ms ease-out;
+}
+
+.cache-explorer__pulse-b {
+  animation: cache-explorer-pulse-b 900ms ease-out;
+}
+
+@keyframes cache-explorer-pulse-a {
+  from {
+    box-shadow: inset 0 0 0 2px var(--cache-explorer-changed-ring);
+  }
+
+  to {
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+}
+
+@keyframes cache-explorer-pulse-b {
+  from {
+    box-shadow: inset 0 0 0 2px var(--cache-explorer-changed-ring);
+  }
+
+  to {
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cache-explorer *,
   .cache-explorer *::before,

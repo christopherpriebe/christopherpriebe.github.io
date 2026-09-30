@@ -15,6 +15,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['test/**/*.test.ts'],
+    setupFiles: ['test/support/dom.ts'],
     // The web-target package runs the shipped artifact through initSync (test/support/wasm.ts).
     provide: { wasmBytes: wasmBytes() },
     restoreMocks: true,

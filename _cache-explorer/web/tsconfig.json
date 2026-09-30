@@ -13,6 +13,6 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true
   },
-  "include": ["src", "test"],
+  "include": ["src", "test", "dev"],
   "exclude": ["test/tooling"]
 }

@@ -2,14 +2,16 @@
 // else touches the DOM. It never works out what the machine does: after every change it asks the
 // core again and draws the answer.
 
+import type { State } from '../pkg/cache_explorer';
 import { configActions } from './config-actions';
 import type { ActionHandler, Context } from './context';
 import { delegate } from './delegate';
 import { captureFocus, restoreFocus } from './focus';
 import type { Layout } from './layout';
+import { machineActions, MEMORY_MARGIN, scrollMemory } from './machine-actions';
 import { FLASH_MS } from './motion';
 import { watchPress } from './press';
-import { render, type LogWindow, type Snapshot } from './render';
+import { detach, render, type LogWindow, type Snapshot } from './render';
 import { initialUiState, type UiState } from './ui-state';
 import type { Session } from './wasm';
 
@@ -27,6 +29,7 @@ export function buildSnapshot(
   now: number = performance.now(),
 ): { snapshot: Snapshot; log: LogWindow } {
   const state = session.state();
+  placeMemoryWindow(ui, state);
   const { draft, program, editor, modules } = ui;
   const snapshot: Snapshot = {
     state,
@@ -49,10 +52,34 @@ export function buildSnapshot(
   return { snapshot, log: session.entries(ui.logFirst, LOG_WINDOW) };
 }
 
+/**
+ * Keeps the window of memory rows on the rows that matter: when the cursor has moved to an event
+ * on the bus, the window is moved to the line it moves if that line is not built, and the window
+ * never starts past the last row, which an Undo may have moved back.
+ */
+function placeMemoryWindow(ui: UiState, state: State): void {
+  const { busRow, lineCount } = state.memory;
+  const moved = state.position.pos !== ui.lastPos;
+  if (
+    moved &&
+    busRow !== undefined &&
+    (busRow < ui.memoryFirst || busRow >= ui.memoryFirst + MEMORY_WINDOW)
+  ) {
+    ui.memoryFirst = Math.max(0, busRow - MEMORY_MARGIN);
+  }
+  ui.memoryFirst = Math.min(ui.memoryFirst, Math.max(0, lineCount - 1));
+}
+
 /** What an event on an element with a `data-action` does; each region contributes its own. */
 const CLICKS: ReadonlyMap<string, ActionHandler> = new Map(configActions.clicks);
-const INPUTS: ReadonlyMap<string, ActionHandler> = new Map(configActions.inputs);
-const CHANGES: ReadonlyMap<string, ActionHandler> = new Map(configActions.changes);
+const INPUTS: ReadonlyMap<string, ActionHandler> = new Map([
+  ...configActions.inputs,
+  ...machineActions.inputs,
+]);
+const CHANGES: ReadonlyMap<string, ActionHandler> = new Map([
+  ...configActions.changes,
+  ...machineActions.changes,
+]);
 
 export interface Controller {
   /** Asks the session again and draws what it says. */
@@ -70,6 +97,9 @@ export interface Controller {
 export function start(root: HTMLElement, session: Session, layout: Layout): Controller {
   let owned: Session | null = session;
   const ui = initialUiState(layout);
+  // A session that opens part way through a run, as a link or a file does, is not a step: its
+  // first draw plays nothing.
+  ui.lastPos = session.position().pos;
 
   function current(): Session {
     if (!owned) throw new Error('the controller has been disposed');
@@ -82,6 +112,7 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
     render(root, snapshot, log, ui);
     restoreFocus(root, focus);
     ui.lastPos = snapshot.state.position.pos;
+    ui.memoryReveal = null;
   }
 
   /** A redraw asked for while a press was down, which waits until the press and its click are over. */
@@ -136,12 +167,19 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
     change(_, action) {
       if (action) CHANGES.get(action.name)?.(context, action);
     },
+    scroll(event) {
+      const { target } = event;
+      if (target instanceof HTMLElement && target.dataset.scroll === 'memory') {
+        scrollMemory(context, target);
+      }
+    },
   });
 
   function dispose(): void {
     clearTimeout(flashTimer);
     press.stop();
     stopListening();
+    detach(root);
     const session = owned;
     owned = null;
     session?.free();

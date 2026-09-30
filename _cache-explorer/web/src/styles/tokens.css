@@ -54,6 +54,11 @@
   --cache-explorer-font-bit: 400 17px/34px
     var(--site-font-mono, 'IBM Plex Mono', ui-monospace, Menlo, monospace);
 
+  /* Drawing: what a render sets from the run's geometry, and what stands until it does */
+  --cache-explorer-ways: 1;
+  --cache-explorer-words: 4;
+  --cache-explorer-way-min: 292px;
+
   /* Layers: no component picks its own number */
   --cache-explorer-z-plane: 0;
   --cache-explorer-z-mark: 10;

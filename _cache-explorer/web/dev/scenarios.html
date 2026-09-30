@@ -1,0 +1,76 @@
+<!doctype html>
+<!--
+  A development page for looking at the tool in a state that takes many steps to reach. It is not
+  part of the build (the build's only entry is src/main.ts) and the site never serves it: `npm run
+  dev` does, at /dev/scenarios.html?scenario=<name>, where the names are in scenarios.ts. Like
+  ../index.html it approximates the page around the tool and sets no --site-* property.
+-->
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interactive Cache Explorer: scenarios</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100,400..700&family=IBM+Plex+Mono:wght@400&family=Public+Sans:wght@400;500&display=swap"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #fbfbfa;
+      }
+
+      body {
+        color: #2c4467;
+        font-family:
+          'Public Sans',
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+        font-size: 17px;
+        line-height: 29px;
+        font-weight: 400;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+        color: inherit;
+      }
+
+      :focus-visible {
+        outline: 2px solid #16243a;
+        outline-offset: 2px;
+      }
+
+      .page {
+        position: relative;
+        width: 100%;
+        max-width: 1180px;
+        padding: 0 clamp(27px, 7vw, 126px) 0 clamp(27px, 9vw, 144px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <main aria-label="Content">
+        <div id="cache-explorer"></div>
+        <script type="module" src="./scenarios.ts"></script>
+      </main>
+    </div>
+  </body>
+</html>
