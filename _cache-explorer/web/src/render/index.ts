@@ -28,6 +28,7 @@ import { renderKey } from './key';
 import { createLog, refitsTicks, renderLog, stopLog, type LogBox } from './log';
 import { createMachine, renderMachine, stopMachine, type Machine } from './machine';
 import { renderStats } from './stats';
+import { createTransport, renderTransport, type Transport } from './transport';
 
 /** Everything one render draws from the session, asked of the facade again after each change. */
 export interface Snapshot {
@@ -67,6 +68,7 @@ interface Shell {
   log: LogBox;
   stats: HTMLElement;
   key: HTMLElement;
+  transport: Transport;
   live: HTMLElement;
   /**
    * What the last render of the workbench drew from and who to ask for another when the cache
@@ -99,6 +101,7 @@ function shellOf(root: HTMLElement): Shell {
     });
     const stats = h('div', { class: 'cache-explorer__stats' });
     const key = h('div', { class: 'cache-explorer__key-box' });
+    const transport = createTransport();
     const plane = h(
       'section',
       {
@@ -111,9 +114,22 @@ function shellOf(root: HTMLElement): Shell {
       machine.element,
       log.element,
       h('div', { class: 'cache-explorer__lower' }, stats, key),
+      transport.element,
       live,
     );
-    shell = { plane, head, config, machine, log, stats, key, live, last: null, refit: null };
+    shell = {
+      plane,
+      head,
+      config,
+      machine,
+      log,
+      stats,
+      key,
+      transport,
+      live,
+      last: null,
+      refit: null,
+    };
     shells.set(root, shell);
   }
   return shell;
@@ -166,7 +182,7 @@ export function render(
     return;
   }
   const shell = shellOf(root);
-  const { plane, head, config, machine, log: logBox, stats, key, live } = shell;
+  const { plane, head, config, machine, log: logBox, stats, key, transport, live } = shell;
   // The plane is on the page before the machine is drawn: the cache table is drawn to the width
   // of its box, which a box that is not on the page does not have.
   mount(root, plane);
@@ -180,6 +196,7 @@ export function render(
   renderLog(root, logBox, snap, log, ui);
   renderStats(stats, snap);
   renderKey(key, snap);
+  renderTransport(root, transport, snap, ui);
   if (live.textContent !== snap.timeline.liveText) live.textContent = snap.timeline.liveText;
 }
 

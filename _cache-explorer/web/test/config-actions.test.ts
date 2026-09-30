@@ -796,7 +796,14 @@ describe('what the handlers say to the status line', () => {
     session = Session.firstVisit();
     ui = initialUiState('desktop');
     refresh = vi.fn<() => void>();
-    context = { session, ui, refresh, flash: vi.fn<(cause: Cause) => void>() };
+    context = {
+      root: document.body,
+      session,
+      ui,
+      refresh,
+      flash: vi.fn<(cause: Cause) => void>(),
+      setRunning: vi.fn<(on: boolean) => void>(),
+    };
     for (let i = 0; i < 2; i += 1) session.stepEvent(program);
   });
 

@@ -1771,6 +1771,149 @@ rect.cache-explorer__tick--on {
   flex: 0 0 auto;
 }
 
+/* The transport bar: ruled off from the stats, the boxes and Issue, the buttons, then the corner */
+
+.cache-explorer__transport {
+  margin-top: 36px;
+  padding-top: 27px;
+  border-top: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__transport-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 36px;
+  align-items: flex-end;
+}
+
+.cache-explorer__issue {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 13px;
+  align-items: flex-end;
+}
+
+.cache-explorer__typed {
+  display: grid;
+}
+
+.cache-explorer__typed > .cache-explorer__label {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.cache-explorer__field--address,
+.cache-explorer__field--value {
+  padding-block: 6px;
+  font-size: 17px;
+}
+
+.cache-explorer__field--address {
+  width: 90px;
+}
+
+.cache-explorer__seg--tools {
+  flex-wrap: wrap;
+}
+
+.cache-explorer__seg--tools .cache-explorer__seg-option {
+  padding-inline: 13px;
+}
+
+.cache-explorer__transport-end {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+  margin-left: auto;
+  font: var(--cache-explorer-font-body);
+}
+
+.cache-explorer__keys-button {
+  padding: 0 7px;
+  border: 1px solid var(--cache-explorer-rule);
+  border-radius: 0;
+  background: var(--cache-explorer-surface);
+  color: var(--cache-explorer-text);
+  font: var(--cache-explorer-font-label);
+  line-height: 22px;
+  cursor: pointer;
+}
+
+.cache-explorer__keys-button:hover {
+  background: var(--cache-explorer-plane);
+}
+
+/* Empty, the status line takes no room; the core's words about a refusal appear under the bar. */
+.cache-explorer__status {
+  color: var(--cache-explorer-strong);
+  font: var(--cache-explorer-font-label);
+  line-height: 21px;
+}
+
+.cache-explorer__status:not(:empty) {
+  margin-top: 13px;
+}
+
+/* The shortcuts sheet: over the plane's corner, above the marks and the popovers */
+.cache-explorer__sheet {
+  position: absolute;
+  right: 54px;
+  bottom: 45px;
+  z-index: var(--cache-explorer-z-sheet);
+  box-sizing: border-box;
+  width: min(342px, calc(100% - 54px));
+  padding: 22px;
+  border: 1px solid var(--cache-explorer-strong);
+  background: var(--cache-explorer-surface);
+  box-shadow: var(--cache-explorer-shadow-pop);
+}
+
+.cache-explorer[data-layout='tablet'] .cache-explorer__sheet {
+  right: 36px;
+}
+
+.cache-explorer__sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.cache-explorer__sheet-head > .cache-explorer__label {
+  color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__sheet-close {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cache-explorer-text);
+  font: var(--cache-explorer-font-body);
+  cursor: pointer;
+}
+
+.cache-explorer__sheet-keys {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 6px 13px;
+  margin: 13px 0 0;
+  font: var(--cache-explorer-font-body);
+  line-height: 24px;
+}
+
+.cache-explorer__sheet-keys dt {
+  color: var(--cache-explorer-ink);
+  font: var(--cache-explorer-font-label);
+}
+
+.cache-explorer__sheet-keys dd {
+  margin: 0;
+}
+
+.cache-explorer__button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cache-explorer *,
   .cache-explorer *::before,

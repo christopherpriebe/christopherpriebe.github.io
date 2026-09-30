@@ -190,7 +190,8 @@ describe('the groups', () => {
     expect(labels('lineSize')).toEqual(['8 B', '16 B', '32 B']);
     expect(labels('associativity')).toEqual(['Direct', '2-way', '4-way', '8-way', 'Full']);
     expect(labels('replacement')).toEqual(['LRU', 'FIFO', 'Random']);
-    const pressed = [...root.querySelectorAll('[aria-pressed="true"]')].map((b) => b.textContent);
+    const bar = query('.cache-explorer__config');
+    const pressed = [...bar.querySelectorAll('[aria-pressed="true"]')].map((b) => b.textContent);
     expect(pressed).toEqual(['Basics', '128 B', '16 B', 'Direct', 'LRU']);
   });
 

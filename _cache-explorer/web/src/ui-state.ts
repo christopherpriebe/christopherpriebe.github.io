@@ -75,6 +75,8 @@ export interface UiState {
   /** The Run timer is stepping. */
   running: boolean;
   sheetOpen: boolean;
+  /** A shortcut handled the press of Space on a button: its release must not click the button. */
+  spaceHeld: boolean;
   /** The transport's status line. */
   status: string;
   /** The link to show in a field when the clipboard is not available. */
@@ -114,6 +116,7 @@ export function initialUiState(layout: Layout): UiState {
     modules: { open: false, index: null, run: null },
     running: false,
     sheetOpen: false,
+    spaceHeld: false,
     status: '',
     shareFallback: null,
     logFirst: 0,

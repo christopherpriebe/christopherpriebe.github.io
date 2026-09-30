@@ -726,7 +726,7 @@ describe('the machine’s parts', () => {
     ).toEqual(parts);
   });
 
-  it('come in the order the design stacks them, inside the plane, then the log, the stats and key, and the live region', () => {
+  it('come in the order the design stacks them, inside the plane, then the log, the stats and key, the transport and the live region', () => {
     draw();
     const machine = query('.cache-explorer__machine');
     expect([...machine.children].map((element) => element.className.split(' ')[0])).toEqual([
@@ -740,7 +740,12 @@ describe('the machine’s parts', () => {
     for (let next = machine.nextElementSibling; next; next = next.nextElementSibling) {
       after.push(next.className.split(' ')[0] ?? '');
     }
-    expect(after).toEqual(['cache-explorer__log', 'cache-explorer__lower', 'cache-explorer__live']);
+    expect(after).toEqual([
+      'cache-explorer__log',
+      'cache-explorer__lower',
+      'cache-explorer__transport',
+      'cache-explorer__live',
+    ]);
   });
 });
 

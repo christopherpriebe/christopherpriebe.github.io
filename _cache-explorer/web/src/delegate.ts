@@ -4,7 +4,7 @@
 
 import { actionAt, type Action } from './actions';
 
-type DelegatedEvent = 'click' | 'input' | 'change' | 'keydown' | 'focusin' | 'scroll';
+type DelegatedEvent = 'click' | 'input' | 'change' | 'keydown' | 'keyup' | 'focusin' | 'scroll';
 
 export type Handlers = {
   [K in DelegatedEvent]?: (event: HTMLElementEventMap[K], action: Action | null) => void;
@@ -30,6 +30,7 @@ export function delegate(root: HTMLElement, handlers: Handlers): () => void {
   listen('input', handlers.input);
   listen('change', handlers.change);
   listen('keydown', handlers.keydown);
+  listen('keyup', handlers.keyup);
   listen('focusin', handlers.focusin);
   listen('scroll', handlers.scroll);
   return () => {

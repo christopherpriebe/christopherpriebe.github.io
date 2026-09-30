@@ -8,12 +8,16 @@ import type { UiState } from './ui-state';
 import type { Session } from './wasm';
 
 export interface Context {
+  /** The element the tool is drawn into: where focus goes back to after a sheet or an editor closes. */
+  readonly root: HTMLElement;
   readonly session: Session;
   readonly ui: UiState;
   /** Asks the session again and draws what it says. */
   refresh(): void;
   /** Opens the configuration bar and flashes the group `cause` names. */
   flash(cause: Cause): void;
+  /** Starts or stops the Run timer, and says so in the UI state; it does not draw. */
+  setRunning(on: boolean): void;
 }
 
 /** What an event on an element with a `data-action` does. */

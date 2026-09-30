@@ -10,9 +10,11 @@ import { logActions, LOG_MARGIN, scrollLog, stopScrub } from './log-actions';
 import { captureFocus, restoreFocus } from './focus';
 import type { Layout } from './layout';
 import { machineActions, MEMORY_MARGIN, scrollMemory } from './machine-actions';
-import { FLASH_MS } from './motion';
+import { onKeydown, onKeyup } from './keyboard';
+import { FLASH_MS, RUN_MS } from './motion';
 import { watchPress } from './press';
 import { detach, render, type LogWindow, type Snapshot } from './render';
+import { transportActions, tick } from './transport-actions';
 import { initialUiState, type UiState } from './ui-state';
 import type { Session } from './wasm';
 
@@ -91,11 +93,13 @@ function placeLogWindow(ui: UiState, state: State, timeline: Timeline): void {
 const CLICKS: ReadonlyMap<string, ActionHandler> = new Map([
   ...configActions.clicks,
   ...logActions.clicks,
+  ...transportActions.clicks,
 ]);
 const INPUTS: ReadonlyMap<string, ActionHandler> = new Map([
   ...configActions.inputs,
   ...logActions.inputs,
   ...machineActions.inputs,
+  ...transportActions.inputs,
 ]);
 const CHANGES: ReadonlyMap<string, ActionHandler> = new Map([
   ...configActions.changes,
@@ -132,6 +136,8 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
 
   function draw(): void {
     const focus = captureFocus(root);
+    // The strip follows what is typed only until the cursor next moves.
+    if (current().position().pos !== ui.lastPos) ui.stripSource = 'cursor';
     const { snapshot, log } = buildSnapshot(current(), ui);
     render(root, snapshot, log, ui, refresh);
     restoreFocus(root, focus);
@@ -159,8 +165,10 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
   const press = watchPress(root, release);
 
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
+  let runTimer: ReturnType<typeof setInterval> | undefined;
 
   const context: Context = {
+    root,
     get session() {
       return current();
     },
@@ -179,6 +187,17 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
       }, FLASH_MS);
       refresh();
     },
+    setRunning(on) {
+      clearInterval(runTimer);
+      runTimer = undefined;
+      ui.running = on;
+      if (!on || !owned) return;
+      runTimer = setInterval(() => {
+        if (!owned) return;
+        if (!tick(context)) context.setRunning(false);
+        refresh();
+      }, RUN_MS);
+    },
   };
 
   const stopListening = delegate(root, {
@@ -191,6 +210,12 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
     change(_, action) {
       if (action) CHANGES.get(action.name)?.(context, action);
     },
+    keydown(event, action) {
+      onKeydown(context, event, action);
+    },
+    keyup(event) {
+      onKeyup(context, event);
+    },
     scroll(event) {
       const { target } = event;
       if (!(target instanceof HTMLElement)) return;
@@ -201,6 +226,7 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
 
   function dispose(): void {
     clearTimeout(flashTimer);
+    clearInterval(runTimer);
     stopScrub(ui);
     press.stop();
     stopListening();

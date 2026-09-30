@@ -24,3 +24,6 @@ export function beatOf(pos: number, lastPos: number): Beat | null {
   if (pos === lastPos) return null;
   return pos % 2 === 0 ? 'b' : 'a';
 }
+
+/** How long the Run button waits between one micro-event and the next. */
+export const RUN_MS = 450;
