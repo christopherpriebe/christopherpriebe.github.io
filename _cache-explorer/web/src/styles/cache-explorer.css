@@ -505,6 +505,12 @@
   border-bottom-color: var(--cache-explorer-incorrect);
 }
 
+/* Why the jump box's text is not an address, on a line of its own under the head. */
+.cache-explorer__box-head > .cache-explorer__note {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
 /* The rows scroll under a head that stays; the table is as tall as the whole list, blank rows included. */
 .cache-explorer__scroller {
   position: relative;
@@ -1126,16 +1132,20 @@
   dominant-baseline: central;
 }
 
+/* The swatch in a column of its own, and the text, which wraps at its spaces, beside it. */
 .cache-explorer__field-label {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 9px;
+  display: grid;
+  grid-template-columns: 11px minmax(0, 1fr);
+  column-gap: 9px;
   align-items: baseline;
   padding-top: 9px;
 }
 
+.cache-explorer__field-text {
+  text-wrap: pretty;
+}
+
 .cache-explorer__swatch {
-  flex: 0 0 auto;
   width: 11px;
   height: 11px;
 }
@@ -1156,10 +1166,11 @@
   font: var(--cache-explorer-font-label);
   font-weight: 400;
   color: var(--cache-explorer-ink);
-  white-space: nowrap;
 }
 
+/* The note is wrapped as one piece, on the line under the value when it does not fit beside it. */
 .cache-explorer__field-note {
+  display: inline-block;
   font: var(--cache-explorer-font-label);
 }
 
@@ -1279,6 +1290,7 @@
   margin-top: 6px;
 }
 
+/* A miss, and a step with neither, are open squares, as the design draws them. */
 .cache-explorer__marker {
   flex: 0 0 auto;
   width: 11px;
@@ -1293,10 +1305,6 @@
 
 .cache-explorer__marker--miss {
   border-color: var(--cache-explorer-miss);
-}
-
-.cache-explorer__marker--none {
-  border-color: transparent;
 }
 
 .cache-explorer__registers {

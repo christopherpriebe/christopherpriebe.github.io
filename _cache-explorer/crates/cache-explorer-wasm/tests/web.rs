@@ -866,6 +866,10 @@ mod session {
             facade.memory_lines(0, 64).unwrap(),
             &MemoryLines(core.memory_lines(0, 64)),
         );
+        // The state names the row of the lowest watched line, which is the
+        // first row here.
+        let state = same(facade.state().unwrap(), &core.state());
+        assert_eq!(get(&get(&state, "memory"), "watchRow").as_f64(), Some(0.0));
         let mut session = Session::new().unwrap();
         session.set_memory_watch(js("[160, 176]")).unwrap();
         assert_eq!(watched(&session), [160.0, 176.0]);

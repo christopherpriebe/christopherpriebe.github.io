@@ -1,10 +1,26 @@
 // The CPU box: the instruction it is executing, what it is doing about it, and its eight
 // registers, with the one an event just wrote on the changed ground.
 
+import type { HitMarker } from '../../pkg/cache_explorer';
 import { copy } from '../copy';
 import { cls, h } from '../dom';
 import type { Snapshot } from './index';
 import { cellKey, type Marks } from './marks';
+
+/**
+ * A hit is a filled square and a miss an open one, as in the log, and the words for them go with
+ * the square. With neither, the square is open as the design draws it, and means nothing.
+ */
+function marker(kind: HitMarker): HTMLElement {
+  const words = kind === 'none' ? null : copy.cpu.marker[kind];
+  return h('span', {
+    class: `cache-explorer__marker cache-explorer__marker--${kind}`,
+    role: words === null ? null : 'img',
+    'aria-label': words,
+    'aria-hidden': words === null ? 'true' : null,
+    title: words,
+  });
+}
 
 /** Draws the CPU box into `box`. */
 export function renderCpu(box: HTMLElement, snap: Snapshot, marks: Marks): void {
@@ -18,11 +34,7 @@ export function renderCpu(box: HTMLElement, snap: Snapshot, marks: Marks): void 
       h(
         'div',
         { class: 'cache-explorer__cpu-status' },
-        // A hit is a filled square and a miss an open one, as in the log; with neither, no mark.
-        h('span', {
-          class: `cache-explorer__marker cache-explorer__marker--${cpu.hitMarker}`,
-          'aria-hidden': 'true',
-        }),
+        marker(cpu.hitMarker),
         h('span', { class: 'cache-explorer__label cache-explorer__label--strong' }, cpu.statusText),
       ),
     ),

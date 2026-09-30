@@ -113,12 +113,19 @@ function label(field: Field): HTMLElement {
       class: `cache-explorer__swatch cache-explorer__swatch--${field.field}`,
       'aria-hidden': 'true',
     }),
+    // The name and the note run on as one text, beside the swatch, so a narrow field wraps them
+    // together and never leaves the swatch on a line of its own.
     h(
-      'b',
-      { class: 'cache-explorer__field-value' },
-      field.valueText === '' ? name : `${name} ${field.valueText}`,
+      'span',
+      { class: 'cache-explorer__field-text' },
+      h(
+        'b',
+        { class: 'cache-explorer__field-value' },
+        field.valueText === '' ? name : `${name} ${field.valueText}`,
+      ),
+      field.note !== '' && ' ',
+      field.note !== '' && h('span', { class: 'cache-explorer__field-note' }, field.note),
     ),
-    field.note !== '' && h('span', { class: 'cache-explorer__field-note' }, field.note),
   );
 }
 

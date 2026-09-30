@@ -82,13 +82,22 @@ export const SCENARIOS: Record<string, () => Session> = {
   'wrapped-fully-associative': () =>
     loads(Session.withConfig(config(128, 16, 8)), [0x0a4, 0x1a4, 0x2a4, 0x0a8]),
 
-  /** Four sets of eight ways, timed, write-back, mid-access on a miss that evicts. */
+  /**
+   * Four sets of eight ways, timed, write-back, paused on the write-back of a dirty victim: the
+   * store to 0x0A4 fills set 2's first way and dirties it, seven loads fill the rest, and the load
+   * of 0x8A4 misses and evicts the store's line.
+   */
   'wrapped-four-sets': () => {
     const session = Session.withConfig(
       config(512, 16, 8, { timing: { hitCycles: 1, missCycles: 20 }, advanced: true }),
     );
-    loads(session, [0x0a4, 0x1a4, 0x2a4, 0x3a4, 0x4a4, 0x5a4, 0x6a4, 0x7a4, 0x0a4, 0x8a4]);
-    session.applyOp({ op: 'issue', kind: 'write', addr: 0x0a8, value: 9n });
+    session.applyOp({ op: 'issue', kind: 'write', addr: 0x0a4, value: 9n });
+    loads(session, [0x1a4, 0x2a4, 0x3a4, 0x4a4, 0x5a4, 0x6a4, 0x7a4, 0x8a4]);
+    // Back from the end of the run to the last write-back, which is the eviction's.
+    for (let pos = session.position().pos; pos > 0; pos--) {
+      session.seek(pos);
+      if (session.state().event?.kind === 'writeBack') break;
+    }
     return session;
   },
 

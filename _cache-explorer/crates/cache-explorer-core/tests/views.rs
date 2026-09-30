@@ -808,6 +808,16 @@ fn memory_lists_the_lines_touched_and_the_lines_watched() {
     assert_eq!(state.memory.caption, "4 lines touched");
     assert_eq!(state.memory.line_count, 5);
     assert_eq!(state.memory.bus_row, None);
+    // The watch row is where the lowest watched line is, whether or not the
+    // run has touched it; nothing watched, or nothing that fits, has none.
+    assert_eq!(state.memory.watch_row, Some(0));
+    session.set_memory_watch(&[line(0x124), line(0x1000)]);
+    assert_eq!(session.state().memory.watch_row, Some(2));
+    session.set_memory_watch(&[line(0x1000)]);
+    assert_eq!(session.state().memory.watch_row, None);
+    session.set_memory_watch(&[]);
+    assert_eq!(session.state().memory.watch_row, None);
+    session.set_memory_watch(&[line(0x124), line(0x0A0), line(0x1000), line(0x124)]);
     // The fill of 0x2A0 is on the bus; the rows are windowed.
     session.seek(pos(26));
     assert_eq!(session.state().memory.bus_row, Some(4));

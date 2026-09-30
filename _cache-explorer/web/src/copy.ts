@@ -97,6 +97,8 @@ export const copy = {
   cpu: {
     title: 'CPU',
     registers: 'Registers',
+    /** What the square before the status says, for a screen reader and the pointer. */
+    marker: { hit: 'Hit', miss: 'Miss' },
   },
   notices: {
     noWebAssembly: {

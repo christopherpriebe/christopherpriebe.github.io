@@ -239,9 +239,25 @@ describe('cache-explorer.css', () => {
 
   it('gives a memory row the height the blank rows are counted in', () => {
     const row = rule('.cache-explorer__mem-row');
-    expect(row).toContain('margin-top: 1px');
-    expect(row).toContain('line-height: 28px');
-    expect(28 + 1).toBe(MEMORY_ROW_PX);
+    const px = (property: string): number =>
+      Number(new RegExp(`${property}: (\\d+)px`).exec(row)?.[1] ?? Number.NaN);
+    expect(px('line-height') + px('margin-top')).toBe(MEMORY_ROW_PX);
+  });
+
+  it('draws the CPU box’s square open unless it is a hit, a step with neither included, as the design does', () => {
+    expect(rule('.cache-explorer__marker')).toContain(
+      'border: 1px solid var(--cache-explorer-strong)',
+    );
+    expect(rule('.cache-explorer__marker--hit')).toContain('background: var(--cache-explorer-hit)');
+    expect(componentsCss).not.toContain('marker--none');
+  });
+
+  it('keeps a strip field’s swatch beside its name, and wraps its note as one piece', () => {
+    const label = rule('.cache-explorer__field-label');
+    expect(label).toContain('display: grid');
+    expect(label).toContain('grid-template-columns: 11px minmax(0, 1fr)');
+    expect(rule('.cache-explorer__field-value')).not.toContain('nowrap');
+    expect(rule('.cache-explorer__field-note')).toContain('display: inline-block');
   });
 
   it('gives the changed ground the last word among the cells that have a ground of their own', () => {

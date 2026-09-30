@@ -295,6 +295,10 @@ pub struct MemoryView {
     /// view.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bus_row: Option<u32>,
+    /// The row of the lowest line the student asked to watch, to scroll it
+    /// into view after a jump.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub watch_row: Option<u32>,
 }
 
 /// What the transfer lane shows.
@@ -775,6 +779,13 @@ impl<'m> MemoryRows<'m> {
         })
     }
 
+    /// The row of the lowest watched line, when any is.
+    pub(crate) fn watch_row(&self) -> Option<u32> {
+        self.watched
+            .first()
+            .and_then(|watched| self.row_of(*watched))
+    }
+
     /// The rows in order, each with whether it is watched.
     pub(crate) fn iter(&self) -> impl Iterator<Item = (LineAddr, bool)> + '_ {
         let mut touched = self.memory.touched().peekable();
@@ -813,6 +824,7 @@ impl MemoryView {
             word_heads: word_heads(&machine.geometry),
             line_count: rows.count(),
             bus_row: bus.and_then(|bus| rows.row_of(bus)),
+            watch_row: rows.watch_row(),
         }
     }
 }
@@ -1158,6 +1170,13 @@ mod tests {
                 assert_eq!(rows.row_of(*at), Some(row), "{at:?} in {watch:?}");
             }
             assert_eq!(rows.row_of(line(0x0C0)), None);
+            // The watch row is the row of the lowest watched line that fits.
+            let lowest = expected.iter().position(|(_, watched)| *watched);
+            assert_eq!(
+                rows.watch_row(),
+                lowest.map(|row| u32::try_from(row).unwrap()),
+                "{watch:?}"
+            );
         }
     }
 

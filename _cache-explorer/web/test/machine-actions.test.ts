@@ -2,7 +2,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { SCENARIOS } from '../dev/sessions';
 import { buildSnapshot, start, type Controller } from '../src/controller';
 import { h } from '../src/dom';
-import { rowOf } from '../src/machine-actions';
 import { MEMORY_ROW_PX } from '../src/metrics';
 import { initialUiState } from '../src/ui-state';
 import { Session } from '../src/wasm';
@@ -86,30 +85,6 @@ afterEach(() => {
   owned?.free();
 });
 
-describe('rowOf', () => {
-  it('finds a line among the rows the core lists, by asking for one row at a time', () => {
-    const run = scenario('long-memory');
-    const calls: number[] = [];
-    const ask = run.memoryLines.bind(run);
-    run.memoryLines = (first, count) => {
-      calls.push(count);
-      return ask(first, count);
-    };
-    expect(rowOf(run, 30 * 16, 40)).toBe(30);
-    expect(rowOf(run, 0, 40)).toBe(0);
-    expect(rowOf(run, 39 * 16, 40)).toBe(39);
-    expect(calls.every((count) => count === 1)).toBe(true);
-    expect(calls.length).toBeLessThan(20);
-  });
-
-  it('finds none for a line that is not a row, and none in an empty list', () => {
-    const run = scenario('long-memory');
-    expect(rowOf(run, 0x300, 40)).toBeNull();
-    expect(rowOf(run, 8, 40)).toBeNull();
-    expect(rowOf(Session.firstVisit(), 0, 0)).toBeNull();
-  });
-});
-
 describe('the jump box', () => {
   it('watches a line the run has not touched, gives it a row, and takes the window to it', () => {
     scenario('long-memory');
@@ -124,6 +99,27 @@ describe('the jump box', () => {
       root.querySelector('.cache-explorer__box--memory .cache-explorer__box-head span')
         ?.textContent,
     ).toContain('40 lines touched');
+  });
+
+  it('takes the row to show from the core, and looks for it in none of the rows', () => {
+    scenario('long-memory');
+    begin();
+    const asked: number[] = [];
+    const ask = lent.memoryLines.bind(lent);
+    lent.memoryLines = (first, count) => {
+      asked.push(count);
+      return ask(first, count);
+    };
+    jump('0x1A0');
+    expect(lent.state().memory.watchRow).toBe(26);
+    // Only the window the redraw builds is asked for; no row is fetched to find another.
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((count) => count > 1)).toBe(true);
+    // A line the run has not touched has its row too, among those the core lists.
+    jump('0x300');
+    expect(lent.state().memory.watchRow).toBe(40);
+    jump('');
+    expect(lent.state().memory.watchRow).toBeUndefined();
   });
 
   it('marks a line the run has touched, and takes the window to it', () => {
@@ -164,23 +160,29 @@ describe('the jump box', () => {
     expect(lent.state().memory.lineCount).toBe(40);
   });
 
-  it('says why the text is not an address, on the box, and leaves the watch as it was', () => {
+  it('says why the text is not an address, beside the box, and leaves the watch as it was', () => {
     scenario('long-memory');
     begin();
     jump('0x300');
+    expect(root.querySelector('#cache-explorer-jump-note')).toBeNull();
     jump('banana');
-    const message = lent.readAddress('banana');
-    expect(message.status).toBe('invalid');
+    const reason = lent.readAddress('banana');
+    expect(reason.status).toBe('invalid');
+    const message = reason.status === 'invalid' ? reason.message : '';
+    expect(message).not.toBe('');
     expect(jumpBox().getAttribute('aria-invalid')).toBe('true');
-    expect(jumpBox().getAttribute('title')).toBe(
-      message.status === 'invalid' ? message.message : '',
-    );
+    // The message is text in the memory box's head, and the box points to it.
+    const note = query('#cache-explorer-jump-note');
+    expect(note.textContent).toBe(message);
+    expect(note.closest('.cache-explorer__box--memory')).not.toBeNull();
+    expect(jumpBox().getAttribute('aria-describedby')).toBe(note.id);
     expect(all('.cache-explorer__mem-line--watched').map((cell) => cell.textContent)).toEqual([
       '0x300',
     ]);
     jump('0x310');
     expect(jumpBox().hasAttribute('aria-invalid')).toBe(false);
-    expect(jumpBox().hasAttribute('title')).toBe(false);
+    expect(jumpBox().hasAttribute('aria-describedby')).toBe(false);
+    expect(root.querySelector('#cache-explorer-jump-note')).toBeNull();
   });
 
   it('is the same box every render, and keeps what is typed in it until it is left', () => {

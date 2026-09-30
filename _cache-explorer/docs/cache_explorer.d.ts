@@ -1846,6 +1846,11 @@ export interface MemoryView {
      * view.
      */
     busRow?: number;
+    /**
+     * The row of the lowest line the student asked to watch, to scroll it
+     * into view after a jump.
+     */
+    watchRow?: number;
 }
 
 /**

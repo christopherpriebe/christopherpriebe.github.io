@@ -109,7 +109,7 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
   function draw(): void {
     const focus = captureFocus(root);
     const { snapshot, log } = buildSnapshot(current(), ui);
-    render(root, snapshot, log, ui);
+    render(root, snapshot, log, ui, refresh);
     restoreFocus(root, focus);
     ui.lastPos = snapshot.state.position.pos;
     ui.memoryReveal = null;

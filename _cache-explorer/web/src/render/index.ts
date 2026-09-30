@@ -19,7 +19,7 @@ import type {
 } from '../../pkg/cache_explorer';
 import { copy } from '../copy';
 import { h } from '../dom';
-import { captureFocus, PLANE_CLASS, restoreFocus } from '../focus';
+import { PLANE_CLASS } from '../focus';
 import { narrowState } from '../page-states';
 import type { UiState } from '../ui-state';
 import { refits } from './cache';
@@ -62,9 +62,12 @@ interface Shell {
   config: ConfigBar;
   machine: Machine;
   live: HTMLElement;
-  /** What the last render drew from, so that it can be drawn again when the cache box's size asks. */
-  last: { snap: Snapshot; log: LogWindow; ui: UiState } | null;
-  /** The frame a redraw for a change of size waits for, or null. */
+  /**
+   * What the last render of the workbench drew from and who to ask for another when the cache
+   * box's size asks, or null while the notice is drawn in its place.
+   */
+  last: { snap: Snapshot; redraw: (() => void) | undefined } | null;
+  /** The frame a request for a change of size waits for, or null. */
   refit: number | null;
 }
 
@@ -104,24 +107,19 @@ function shellOf(root: HTMLElement): Shell {
 }
 
 /**
- * The cache box changed size. If its ways now fit differently from how they were drawn, the
- * workbench is drawn again, a frame later, from what it was drawn from, which is still what the
- * core says: a resize changes nothing else. No step is played again, since the cursor has not
- * moved. The frame keeps the redraw out of the observer's own notification, which the redraw
- * would resize the box in.
+ * The cache box changed size. If its ways now fit differently from how they were drawn, the caller
+ * is asked, a frame later, to draw again: it asks the core again and draws from what the core
+ * says and what the student has typed by then, which a resize changes none of. The frame keeps
+ * the request out of the observer's own notification, which the new drawing would resize the box in.
  */
 function redrawIfRefit(root: HTMLElement): void {
   const shell = shells.get(root);
+  // A request already waiting, or a root the tool has let go of, asks for nothing.
   if (shell?.refit !== null) return;
   shell.refit = requestAnimationFrame(() => {
     shell.refit = null;
     const { last } = shell;
-    if (!last || last.ui.layout === 'narrow') return;
-    if (!refits(shell.machine.cache, last.snap)) return;
-    // The controller keeps focus across its own draws; this one is not the controller's.
-    const focus = captureFocus(root);
-    render(root, last.snap, last.log, last.ui);
-    restoreFocus(root, focus);
+    if (last?.redraw && refits(shell.machine.cache, last.snap)) last.redraw();
   });
 }
 
@@ -130,15 +128,30 @@ function mount(root: HTMLElement, plane: HTMLElement): void {
   if (root.firstElementChild !== plane || root.childElementCount !== 1) root.replaceChildren(plane);
 }
 
-/** Draws the tool into `root`; the workbench, or a notice when the root is too narrow for it. */
-export function render(root: HTMLElement, snap: Snapshot, log: LogWindow, ui: UiState): void {
+/**
+ * Draws the tool into `root`; the workbench, or a notice when the root is too narrow for it.
+ * `redraw`, when there is one, is called when the cache box has changed size so that the table
+ * wants drawing the other way; it draws the tool again.
+ */
+export function render(
+  root: HTMLElement,
+  snap: Snapshot,
+  log: LogWindow,
+  ui: UiState,
+  redraw?: () => void,
+): void {
   if (ui.layout === 'narrow') {
+    const kept = shells.get(root);
+    if (kept) kept.last = null;
     root.replaceChildren(narrowState());
     return;
   }
   const shell = shellOf(root);
   const { plane, head, config, machine, live } = shell;
-  shell.last = { snap, log, ui };
+  // The plane is on the page before the machine is drawn: the cache table is drawn to the width
+  // of its box, which a box that is not on the page does not have.
+  mount(root, plane);
+  shell.last = { snap, redraw };
   head.replaceChildren(
     h('span', { class: 'cache-explorer__label' }, copy.title),
     h('span', { class: 'cache-explorer__label' }, snap.state.labels.statusText),
@@ -146,7 +159,6 @@ export function render(root: HTMLElement, snap: Snapshot, log: LogWindow, ui: Ui
   renderConfigBar(root, config, snap, ui);
   renderMachine(root, machine, snap, ui);
   if (live.textContent !== snap.timeline.liveText) live.textContent = snap.timeline.liveText;
-  mount(root, plane);
 }
 
 /** Stops what the root's tool watches, when the tool is done with the root. */

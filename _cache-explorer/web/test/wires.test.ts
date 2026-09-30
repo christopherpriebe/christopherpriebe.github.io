@@ -1,7 +1,8 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SCENARIOS } from '../dev/sessions';
-import { buildSnapshot } from '../src/controller';
+import { buildSnapshot, start, type Controller } from '../src/controller';
 import { h } from '../src/dom';
+import { MEMORY_ROW_PX } from '../src/metrics';
 import { detach, render } from '../src/render';
 import { routeWires, type Measured, type WireModel } from '../src/render/wires';
 import { initialUiState, type UiState } from '../src/ui-state';
@@ -140,9 +141,10 @@ describe('the wires over the cache box', () => {
     return session;
   }
 
+  /** One render, which asks to be drawn again, as the controller's does, when the box refits. */
   function draw(): void {
     const { snapshot, log } = buildSnapshot(current(), ui);
-    render(root, snapshot, log, ui);
+    render(root, snapshot, log, ui, draw);
   }
 
   /** Gives the page the frames it asked for. */
@@ -370,14 +372,33 @@ describe('the wires over the cache box', () => {
     /** What the cache box measures now; the test moves it. */
     let width = 0;
 
+    /** The controller a test has started, which owns its session. */
+    let controller: Controller | null;
+
     beforeEach(() => {
       width = 0;
+      controller = null;
+      // A box that is not on the page has no width, as in a browser.
       vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
         this: HTMLElement,
       ) {
-        return this.classList.contains('cache-explorer__box--cache') ? width : 0;
+        return this.isConnected && this.classList.contains('cache-explorer__box--cache')
+          ? width
+          : 0;
       });
     });
+
+    afterEach(() => {
+      controller?.dispose();
+    });
+
+    /** Starts a controller on the scenario, which owns the session from here. */
+    function begin(name: string): Controller {
+      session?.free();
+      session = null;
+      controller = start(root, SCENARIOS[name]?.() ?? Session.firstVisit(), 'desktop');
+      return controller;
+    }
 
     /** Opens a scenario. */
     function scenario(name: string): void {
@@ -424,6 +445,29 @@ describe('the wires over the cache box', () => {
       expect(wrapped()).toBe(false);
     });
 
+    it('are wrapped from the first draw of a box that is narrow, not from the frame after', () => {
+      scenario('frame-3b');
+      width = 500;
+      draw();
+      expect(wrapped()).toBe(true);
+      expect(root.querySelectorAll('.cache-explorer__compare')).toHaveLength(2);
+      flush();
+      expect(wrapped()).toBe(true);
+      expect(root.querySelectorAll('.cache-explorer__comparator')).toHaveLength(0);
+    });
+
+    it('are measured on the page again when the tool comes back from the notice', () => {
+      scenario('frame-3b');
+      width = 500;
+      draw();
+      ui.layout = 'narrow';
+      draw();
+      expect(root.querySelector('.cache-explorer__plane--workbench')).toBeNull();
+      ui.layout = 'desktop';
+      draw();
+      expect(wrapped()).toBe(true);
+    });
+
     it('go back to one row only when there is room to spare', () => {
       scenario('frame-3b');
       // Two ways of four words need 654px.
@@ -457,10 +501,68 @@ describe('the wires over the cache box', () => {
       expect(wrapped()).toBe(false);
     });
 
-    it('keep the focus on the way that had it, when the table is drawn the other way', () => {
+    it('ask the caller to draw again, and draw nothing themselves, when the box is resized across the line', () => {
       scenario('frame-3b');
       width = 913;
-      draw();
+      const redraw = vi.fn();
+      const { snapshot, log } = buildSnapshot(current(), ui);
+      render(root, snapshot, log, ui, redraw);
+      flush();
+      resize(913);
+      expect(redraw).not.toHaveBeenCalled();
+      const plain = query('table[data-cachetable]');
+      resize(500);
+      expect(redraw).toHaveBeenCalledTimes(1);
+      // The table is the caller's to draw, from what it asks the core then.
+      expect(query('table[data-cachetable]')).toBe(plain);
+      expect(wrapped()).toBe(false);
+    });
+
+    it('ask for nothing while the notice is drawn in the tool’s place', () => {
+      scenario('frame-3b');
+      width = 913;
+      const redraw = vi.fn();
+      const { snapshot, log } = buildSnapshot(current(), ui);
+      render(root, snapshot, log, ui, redraw);
+      ui.layout = 'narrow';
+      render(root, snapshot, log, ui, redraw);
+      resize(500);
+      expect(redraw).not.toHaveBeenCalled();
+    });
+
+    it('are drawn by the controller from what the core says now, and only once a press is over', async () => {
+      begin('long-memory');
+      width = 913;
+      controller?.refresh();
+      expect(wrapped()).toBe(false);
+      const firstRow = (): string | undefined => query('.cache-explorer__mem-row').dataset.row;
+      expect(firstRow()).toBe('0');
+      // A press is down on a control, so the redraws wait for it; meanwhile the memory table is scrolled.
+      query('input[data-action="jump"]').dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, button: 0 }),
+      );
+      const scroller = query('.cache-explorer__scroller');
+      Object.defineProperty(scroller, 'scrollTop', {
+        value: 20 * MEMORY_ROW_PX,
+        configurable: true,
+      });
+      scroller.dispatchEvent(new Event('scroll'));
+      resize(300);
+      // Nothing was drawn from the rows built before the scroll and the scroll after it.
+      expect(wrapped()).toBe(false);
+      expect(firstRow()).toBe('0');
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+      await new Promise((done) => setTimeout(done, 0));
+      expect(wrapped()).toBe(true);
+      expect(firstRow()).toBe('16');
+      expect(query('.cache-explorer__mem-row').dataset.line).toBe(String(16 * 16));
+    });
+
+    it('keep the focus on the way that had it, when the controller draws the table the other way', () => {
+      begin('frame-3b');
+      width = 913;
+      controller?.refresh();
+      expect(wrapped()).toBe(false);
       const cell = query("[data-action='edit-way'][data-set='3'][data-way='1']");
       cell.focus();
       expect(document.activeElement).toBe(cell);

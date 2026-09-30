@@ -33,6 +33,9 @@ export function createMemory(): MemoryBox {
   return { element, header, scroller };
 }
 
+/** The id of the message under the jump box, which the box points to while it is shown. */
+const JUMP_NOTE_ID = 'cache-explorer-jump-note';
+
 function jumpBox(root: HTMLElement, ui: UiState): HTMLInputElement {
   const input = control(root, 'jump', () =>
     h('input', {
@@ -47,10 +50,10 @@ function jumpBox(root: HTMLElement, ui: UiState): HTMLInputElement {
   );
   if (ui.jumpError === null) {
     input.removeAttribute('aria-invalid');
-    input.removeAttribute('title');
+    input.removeAttribute('aria-describedby');
   } else {
     input.setAttribute('aria-invalid', 'true');
-    input.title = ui.jumpError;
+    input.setAttribute('aria-describedby', JUMP_NOTE_ID);
   }
   return input;
 }
@@ -170,6 +173,10 @@ export function renderMemory(
       h('span', { class: 'cache-explorer__label' }, copy.memory.jump),
       put(jumpBox(root, ui), ui.jumpText),
     ),
+    // The core's reason, in the head, where the box it is about is.
+    ...(ui.jumpError === null
+      ? []
+      : [h('p', { class: 'cache-explorer__note', id: JUMP_NOTE_ID }, ui.jumpError)]),
   ]);
 
   const { memoryFirst: first } = ui;

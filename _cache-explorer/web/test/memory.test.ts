@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { SCENARIOS } from '../dev/sessions';
 import { buildSnapshot } from '../src/controller';
 import { h } from '../src/dom';
+import { MEMORY_MARGIN } from '../src/machine-actions';
 import { MEMORY_ROW_PX } from '../src/metrics';
 import { render } from '../src/render';
 import { initialUiState, type UiState } from '../src/ui-state';
@@ -217,7 +218,6 @@ describe('the memory window', () => {
 
   it('moves the window to the row a step puts on the bus, and scrolls it into view', () => {
     longRun();
-    const total = current().state().memory.lineCount;
     let pos = 0;
     while (current().state().memory.busRow !== 30) {
       current().seek(++pos);
@@ -243,8 +243,7 @@ describe('the memory window', () => {
     ui.lastPos = pos - 1;
     draw();
     expect(all('.cache-explorer__mem-row').some((row) => row.dataset.row === '30')).toBe(true);
-    expect(ui.memoryFirst).toBeGreaterThan(0);
-    expect(ui.memoryFirst + 24).toBeLessThanOrEqual(total + 24);
+    expect(ui.memoryFirst).toBe(30 - MEMORY_MARGIN);
     // The row's bottom edge rests on the bottom of the view.
     expect(scroller.scrollTop).toBe(23 + 30 * MEMORY_ROW_PX + 28 - 200);
 

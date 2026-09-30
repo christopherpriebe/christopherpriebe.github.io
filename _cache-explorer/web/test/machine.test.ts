@@ -299,6 +299,18 @@ describe('a cache with more ways than fit in a row', () => {
       expect(badge.getAttribute('title')).toMatch(/^(Tag|Empty way)/);
     }
   });
+
+  it('opens paused on the write-back of a dirty victim, with the victim’s tile marked', () => {
+    eight();
+    draw();
+    expect(current().state().event?.kind).toBe('writeBack');
+    const victims = all('.cache-explorer__way--victim');
+    expect(victims).toHaveLength(1);
+    const [victim] = victims;
+    expect(victim?.closest('.cache-explorer__tile')).not.toBeNull();
+    expect(victim ? all('.cache-explorer__dirty-bar', victim) : []).toHaveLength(1);
+    expect(victim ? texts('.cache-explorer__victim', victim) : []).toEqual(['victim']);
+  });
 });
 
 describe('the marks a step puts on cells', () => {
@@ -531,6 +543,25 @@ describe('the address strip', () => {
     expect(texts('.cache-explorer__strip-foot span')).toEqual(['Address 0x1A4', 'from access #3']);
   });
 
+  it('keeps a field’s name, value and note in one text beside its swatch', () => {
+    open(SCENARIOS['frame-3a']?.() ?? Session.firstVisit());
+    draw();
+    const labels = all('.cache-explorer__field-label');
+    expect(labels).toHaveLength(3);
+    for (const label of labels) {
+      expect([...label.children].map((child) => child.className)).toEqual([
+        expect.stringContaining('cache-explorer__swatch'),
+        'cache-explorer__field-text',
+      ]);
+      const text = query('.cache-explorer__field-text', label);
+      expect(all('.cache-explorer__field-value, .cache-explorer__field-note', text)).toHaveLength(
+        2,
+      );
+    }
+    // The note runs on after the value at a space, so a narrow field wraps them as text.
+    expect(texts('.cache-explorer__field-text')[0]).toBe('Tag 0x03 5 bits');
+  });
+
   it('gives each field a share of the width that is its share of the bits, and a block for each bit', () => {
     open(SCENARIOS['frame-3a']?.() ?? Session.firstVisit());
     draw();
@@ -633,6 +664,30 @@ describe('the CPU box', () => {
     const hit = current().state().cpu.hitMarker;
     draw();
     expect(marker()).toBe(`cache-explorer__marker--${hit}`);
+  });
+
+  it('says in words what a hit or a miss square means, and hides the square that means nothing', () => {
+    const square = (): HTMLElement => query('.cache-explorer__marker');
+    draw();
+    expect(current().state().cpu.hitMarker).toBe('none');
+    expect(square().getAttribute('aria-hidden')).toBe('true');
+    expect(square().hasAttribute('aria-label')).toBe(false);
+    expect(square().hasAttribute('title')).toBe(false);
+
+    open(SCENARIOS['frame-3a']?.() ?? Session.firstVisit());
+    draw();
+    expect(current().state().cpu.hitMarker).toBe('miss');
+    expect(square().getAttribute('role')).toBe('img');
+    expect(square().getAttribute('aria-label')).toBe('Miss');
+    expect(square().getAttribute('title')).toBe('Miss');
+    expect(square().hasAttribute('aria-hidden')).toBe(false);
+
+    for (let pos = 0; current().state().cpu.hitMarker !== 'hit'; pos++) {
+      current().seek(pos);
+      if (pos > current().timeline().stepCount) throw new Error('no step ever hits');
+    }
+    draw();
+    expect(square().getAttribute('aria-label')).toBe('Hit');
   });
 
   it('puts the register an event wrote on the changed ground', () => {
