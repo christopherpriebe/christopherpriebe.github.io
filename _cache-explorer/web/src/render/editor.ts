@@ -275,12 +275,13 @@ export function wayEditor(
   else line.removeAttribute('aria-invalid');
   const right = geometry.ways > 1 && editor.way >= geometry.ways / 2;
   const rank = draft.result.rank;
-  const title = `${copy.editor.edit} set ${String(editor.set)} · way ${String(editor.way)}`;
+  const title = copy.editor.wayTitle(editor.set, editor.way);
   return h(
     'div',
     {
       class: cls('cache-explorer__editor', 'cache-explorer__editor--way'),
       role: 'dialog',
+      tabindex: -1,
       'aria-label': title,
       'data-side': right ? 'right' : 'left',
     },
@@ -359,12 +360,13 @@ export function memoryEditor(
   );
   if (unread(draft.value)) value.setAttribute('aria-invalid', 'true');
   else value.removeAttribute('aria-invalid');
-  const title = `${copy.editor.edit} memory ${editor.addrText}`;
+  const title = copy.editor.memoryTitle(editor.addrText);
   return h(
     'div',
     {
       class: 'cache-explorer__editor cache-explorer__editor--memory',
       role: 'dialog',
+      tabindex: -1,
       'aria-label': title,
     },
     head(title),
@@ -372,7 +374,7 @@ export function memoryEditor(
       'label',
       { class: 'cache-explorer__editor-value' },
       h('span', { class: 'cache-explorer__editor-label' }, copy.editor.value),
-      put(value, editor.valueText),
+      put(value, editor.typed ? editor.valueText : editor.shown),
     ),
     statusBar(outcome, primary.preview, goToEnd(outcome)),
     actions(primary),

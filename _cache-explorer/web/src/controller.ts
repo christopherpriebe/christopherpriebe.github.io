@@ -2,7 +2,7 @@
 // else touches the DOM. It never works out what the machine does: after every change it asks the
 // core again and draws the answer.
 
-import type { State, Timeline } from '../pkg/cache_explorer';
+import type { MemoryLines, State, Timeline } from '../pkg/cache_explorer';
 import { configActions } from './config-actions';
 import type { ActionHandler, Context } from './context';
 import { delegate } from './delegate';
@@ -16,7 +16,7 @@ import { FLASH_MS, RUN_MS } from './motion';
 import { watchPress } from './press';
 import { detach, render, type LogWindow, type Snapshot } from './render';
 import { transportActions, tick } from './transport-actions';
-import { initialUiState, type UiState } from './ui-state';
+import { initialUiState, type MemoryEditor, type UiState } from './ui-state';
 import type { Session } from './wasm';
 
 /** The rows and entries fetched around the first one in view: more than the scrollers show. */
@@ -38,11 +38,13 @@ export function buildSnapshot(
   placeMemoryWindow(ui, state);
   placeLogWindow(ui, state, timeline);
   const { draft, program, editor, modules } = ui;
+  const memoryRows = session.memoryLines(ui.memoryFirst, MEMORY_WINDOW);
+  if (editor?.kind === 'memory') keepValue(editor, memoryRows);
   const snapshot: Snapshot = {
     state,
     timeline,
     ticks: session.ticks(),
-    memoryRows: session.memoryLines(ui.memoryFirst, MEMORY_WINDOW),
+    memoryRows,
     config: session.configControls(ui.pending ?? state.config),
     draft: session.draftIssue(draft.kind, draft.addrText, draft.valueText),
     flashAge: ui.flash ? Math.max(0, now - ui.flash.since) : null,
@@ -52,7 +54,7 @@ export function buildSnapshot(
   if (editor?.kind === 'way') {
     snapshot.editor = session.draftEdit(editor.set, editor.way, editor.form);
   } else if (editor?.kind === 'memory') {
-    snapshot.editor = session.draftMemoryEdit(editor.addr, editor.valueText);
+    snapshot.editor = session.draftMemoryEdit(editor.addr, editor.typed ? editor.valueText : '');
   }
   if (modules.run) snapshot.module = modules.run.view(session);
   if (modules.index) snapshot.modules = modules.index;
@@ -67,11 +69,32 @@ function keepEditor(ui: UiState, state: State): void {
   const { editor } = ui;
   if (editor?.kind !== 'way') return;
   const words = state.geometry.wordsPerLine;
-  if (!state.cache.sets[editor.set]?.ways[editor.way]) {
+  const view = state.cache.sets[editor.set]?.ways[editor.way];
+  if (!view) {
     ui.editor = null;
-  } else if (editor.typed.length !== words) {
+    return;
+  }
+  // What the student has not set follows the way at the cursor, so that Apply never puts back
+  // contents the run has since moved past.
+  const { form, touched } = editor;
+  if (!touched.valid) form.valid = view.valid;
+  if (!touched.line) form.lineText = view.lineText ?? '';
+  if (!touched.dirty) form.dirty = view.valid && view.dirty;
+  if (editor.typed.length !== words) {
     editor.form.wordTexts = Array.from({ length: words }, () => '');
     editor.typed = Array.from({ length: words }, () => false);
+  }
+}
+
+/** Lets the memory editor's box show the word's value at the cursor, while the student has not typed. */
+function keepValue(editor: MemoryEditor, rows: MemoryLines): void {
+  if (editor.typed) return;
+  for (const row of rows) {
+    const word = row.words.find((w) => w.addr === editor.addr);
+    if (word) {
+      editor.shown = word.text;
+      return;
+    }
   }
 }
 

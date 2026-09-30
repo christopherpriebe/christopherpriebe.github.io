@@ -85,7 +85,10 @@ export const copy = {
     },
   },
   editor: {
-    edit: 'Edit',
+    /** The way popover's title and name. */
+    wayTitle: (set: number, way: number): string => `Edit set ${String(set)} · way ${String(way)}`,
+    /** The memory editor's title and name. */
+    memoryTitle: (addrText: string): string => `Edit memory ${addrText}`,
     close: 'Close',
     cancel: 'Cancel',
     /** The primary button while the core offers nothing to apply. */

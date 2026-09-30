@@ -46,6 +46,7 @@ function openWay(context: Context, action: Action): void {
       wordTexts: Array.from({ length: geometry.wordsPerLine }, () => ''),
       dirty: view.valid && view.dirty,
     },
+    touched: { valid: false, line: false, dirty: false },
     typed: Array.from({ length: geometry.wordsPerLine }, () => false),
   };
   context.refresh();
@@ -61,7 +62,9 @@ function openMemory(context: Context, action: Action): void {
     kind: 'memory',
     addr,
     addrText: session.decode(addr).addrText,
-    valueText: action.element.dataset.value ?? '',
+    valueText: '',
+    typed: false,
+    shown: action.element.dataset.value ?? '',
   };
   context.refresh();
   focusFirstField(context);
@@ -94,7 +97,7 @@ function outcomeOf(context: Context): {
     };
   }
   if (editor?.kind === 'memory') {
-    const draft = session.draftMemoryEdit(editor.addr, editor.valueText);
+    const draft = session.draftMemoryEdit(editor.addr, editor.typed ? editor.valueText : '');
     return {
       outcome: draft.outcome,
       target: { kind: 'memory', addr: editor.addr },
@@ -143,6 +146,7 @@ function chooseValid(context: Context, action: Action): void {
   const editor = wayForm(context);
   if (!editor) return;
   editor.form.valid = action.params.option === '1';
+  editor.touched.valid = true;
   context.refresh();
 }
 
@@ -150,6 +154,7 @@ function chooseDirty(context: Context, action: Action): void {
   const editor = wayForm(context);
   if (!editor) return;
   editor.form.dirty = action.params.option === '1';
+  editor.touched.dirty = true;
   context.refresh();
 }
 
@@ -167,6 +172,7 @@ function typeLine(context: Context, action: Action): void {
   const editor = wayForm(context);
   if (!editor || !(action.element instanceof HTMLInputElement)) return;
   editor.form.lineText = action.element.value;
+  editor.touched.line = true;
   context.refresh();
 }
 
@@ -195,6 +201,7 @@ function typeValue(context: Context, action: Action): void {
   const { editor } = context.ui;
   if (editor?.kind !== 'memory' || !(action.element instanceof HTMLInputElement)) return;
   editor.valueText = action.element.value;
+  editor.typed = true;
   context.refresh();
 }
 

@@ -1930,6 +1930,10 @@ rect.cache-explorer__tick--on {
   outline-offset: -2px;
 }
 
+.cache-explorer__editor:focus {
+  outline: none;
+}
+
 .cache-explorer__editor {
   box-sizing: border-box;
   padding: 18px;

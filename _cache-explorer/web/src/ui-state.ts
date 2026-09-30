@@ -34,6 +34,8 @@ export interface WayEditor {
   set: number;
   way: number;
   form: WayForm;
+  /** Which of the form's first three fields the student has set; the others follow the way. */
+  touched: { valid: boolean; line: boolean; dirty: boolean };
   /** Which data inputs the student has typed in; the others show what the core reads for them. */
   typed: boolean[];
 }
@@ -43,7 +45,12 @@ export interface MemoryEditor {
   addr: Addr;
   /** The address as the core writes it, `0x0B0`, for the editor's title. */
   addrText: string;
+  /** What the student typed; the core reads it only once `typed`, and reads an empty text as the word's own. */
   valueText: string;
+  /** Whether the student has typed in the value box. */
+  typed: boolean;
+  /** The word's value as the run has it at the cursor, which the box shows until the student types. */
+  shown: string;
 }
 
 export interface UiState {

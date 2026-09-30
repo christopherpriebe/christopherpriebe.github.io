@@ -308,6 +308,62 @@ describe('the way editor', () => {
     expect(root.querySelector('[data-action="edit-end"]')).toBeNull();
   });
 
+  it('follows the way at the cursor for what the student has not set (mid-access, Go to the end)', () => {
+    begin('editors-mid-access');
+    wayCell(2, 1).click();
+    expect(title()).toBe('Finish this access first');
+    query('[data-action="edit-end"]').click();
+    expect(title()).toBe('No changes');
+    expect(primary().disabled).toBe(true);
+  });
+
+  it('keeps a field the student set when the cursor moves', () => {
+    begin('editors-mid-access');
+    wayCell(2, 1).click();
+    option('edit-dirty', 1).click();
+    query('[data-action="edit-end"]').click();
+    expect(title()).not.toBe('No changes');
+  });
+
+  it('keeps focus inside the dialog when its plain text is pressed, so keys stay the browser’s', () => {
+    begin('editors-mid-access');
+    wayCell(2, 0).click();
+    const before = lent.position().pos;
+    const box = dialog();
+    box.focus();
+    expect(document.activeElement).toBe(box);
+    expect(press(' ', box).defaultPrevented).toBe(false);
+    expect(lent.position().pos).toBe(before);
+  });
+
+  it('gives the editor one input per word when the line size changes under it', () => {
+    begin('editors-end-of-access');
+    wayCell(2, 0).click();
+    type(input('input[data-action="edit-word"][data-pos="1"]'), '9');
+    const { config } = lent.state();
+    const { cache } = config;
+    // The same sets and ways with a line twice the size.
+    lent.applyOp({
+      op: 'config',
+      config: {
+        ...config,
+        cache: { ...cache, sizeBytes: cache.sizeBytes * 2, lineBytes: cache.lineBytes * 2 },
+      },
+    });
+    controller?.refresh();
+    const fields = [...root.querySelectorAll<HTMLInputElement>('input[data-action="edit-word"]')];
+    expect(fields).toHaveLength(lent.state().geometry.wordsPerLine);
+    const form = { valid: false, lineText: '', wordTexts: fields.map(() => ''), dirty: false };
+    const view = lent.state().cache.sets[2]?.ways[0];
+    const read = lent.draftEdit(2, 0, {
+      ...form,
+      valid: view?.valid ?? false,
+      lineText: view?.lineText ?? '',
+      dirty: (view?.valid && view.dirty) ?? false,
+    });
+    expect(fields.map((f) => f.value)).toEqual(read.wordTexts);
+  });
+
   it('shows a gated refusal as the core words it, with nothing to apply', () => {
     begin('editors-end-of-access');
     const ask = lent.draftEdit.bind(lent);
@@ -394,6 +450,16 @@ describe('the memory editor', () => {
     word.focus();
     press('Enter', word);
     expect(dialog().getAttribute('aria-label')).toBe('Edit memory 0x0A4');
+  });
+
+  it('follows the word at the cursor until the student types (mid-access, Go to the end)', () => {
+    begin('editors-mid-access');
+    memoryWord(0x1a4).click();
+    // A press on the button takes focus from the box, as a click does in a browser.
+    query('[data-action="edit-end"]').focus();
+    query('[data-action="edit-end"]').click();
+    expect(title()).toBe('No changes');
+    expect(input('input[data-action="edit-value"]').value).toBe(memoryWord(0x1a4).dataset.value);
   });
 
   it('updates the cached copy too when a clean line holds the word (M4)', () => {
