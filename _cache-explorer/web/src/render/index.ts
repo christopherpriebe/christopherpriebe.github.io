@@ -27,6 +27,7 @@ import { createConfigBar, renderConfigBar, type ConfigBar } from './config-bar';
 import { renderKey } from './key';
 import { createLog, refitsTicks, renderLog, stopLog, type LogBox } from './log';
 import { createMachine, renderMachine, stopMachine, type Machine } from './machine';
+import { createProgramDrawer, renderProgram, type ProgramDrawer } from './program';
 import { renderStats } from './stats';
 import { createTransport, renderTransport, type Transport } from './transport';
 
@@ -69,6 +70,7 @@ interface Shell {
   stats: HTMLElement;
   key: HTMLElement;
   transport: Transport;
+  program: ProgramDrawer;
   live: HTMLElement;
   /**
    * What the last render of the workbench drew from and who to ask for another when the cache
@@ -102,6 +104,7 @@ function shellOf(root: HTMLElement): Shell {
     const stats = h('div', { class: 'cache-explorer__stats' });
     const key = h('div', { class: 'cache-explorer__key-box' });
     const transport = createTransport();
+    const program = createProgramDrawer();
     const plane = h(
       'section',
       {
@@ -115,6 +118,7 @@ function shellOf(root: HTMLElement): Shell {
       log.element,
       h('div', { class: 'cache-explorer__lower' }, stats, key),
       transport.element,
+      program.element,
       live,
     );
     shell = {
@@ -126,6 +130,7 @@ function shellOf(root: HTMLElement): Shell {
       stats,
       key,
       transport,
+      program,
       live,
       last: null,
       refit: null,
@@ -182,7 +187,7 @@ export function render(
     return;
   }
   const shell = shellOf(root);
-  const { plane, head, config, machine, log: logBox, stats, key, transport, live } = shell;
+  const { plane, head, config, machine, log: logBox, stats, key, transport, program, live } = shell;
   // The plane is on the page before the machine is drawn: the cache table is drawn to the width
   // of its box, which a box that is not on the page does not have.
   mount(root, plane);
@@ -197,6 +202,7 @@ export function render(
   renderStats(stats, snap);
   renderKey(key, snap);
   renderTransport(root, transport, snap, ui);
+  renderProgram(root, program, snap, ui);
   if (live.textContent !== snap.timeline.liveText) live.textContent = snap.timeline.liveText;
 }
 

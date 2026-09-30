@@ -12,6 +12,7 @@ import { captureFocus, restoreFocus } from './focus';
 import type { Layout } from './layout';
 import { machineActions, MEMORY_MARGIN, scrollMemory } from './machine-actions';
 import { onKeydown, onKeyup } from './keyboard';
+import { programActions } from './program-actions';
 import { FLASH_MS, RUN_MS } from './motion';
 import { watchPress } from './press';
 import { detach, render, type LogWindow, type Snapshot } from './render';
@@ -135,6 +136,7 @@ const CLICKS: ReadonlyMap<string, ActionHandler> = new Map([
   ...configActions.clicks,
   ...editActions.clicks,
   ...logActions.clicks,
+  ...programActions.clicks,
   ...transportActions.clicks,
 ]);
 const INPUTS: ReadonlyMap<string, ActionHandler> = new Map([
@@ -142,6 +144,7 @@ const INPUTS: ReadonlyMap<string, ActionHandler> = new Map([
   ...editActions.inputs,
   ...logActions.inputs,
   ...machineActions.inputs,
+  ...programActions.inputs,
   ...transportActions.inputs,
 ]);
 const CHANGES: ReadonlyMap<string, ActionHandler> = new Map([
@@ -281,6 +284,10 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
   }
 
   try {
+    // A run that opens with a program in it, as a link or a file does, has that program in the
+    // drawer: the drawer's text is what the next step passes on, and must not replace it.
+    const loaded = session.state().program;
+    if (loaded) ui.program = { ...ui.program, format: loaded.format, text: loaded.source };
     draw();
   } catch (error) {
     dispose();

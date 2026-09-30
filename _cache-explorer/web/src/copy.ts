@@ -193,6 +193,38 @@ export const copy = {
     needAddress: 'Type an address to issue.',
     needValue: 'Type a value to store.',
   },
+  program: {
+    /** The drawer's name, by what it holds. */
+    title: { asm: 'Program', trace: 'Trace' },
+    /** The listing's and the text box's names for a screen reader, by what the drawer holds. */
+    listing: { asm: 'Program listing', trace: 'Trace listing' },
+    text: { asm: 'Program', trace: 'Trace' },
+    errors: { asm: 'Program errors', trace: 'Trace errors' },
+    format: 'Input type',
+    formats: { asm: 'Program', trace: 'Trace' },
+    edit: 'Edit program',
+    done: 'Done editing',
+    /** Where the listing would be, when there is nothing written. */
+    empty: {
+      asm: 'Nothing written yet. Edit the program to write one.',
+      trace: 'Nothing written yet. Edit the trace to write one.',
+    },
+    /** In the drawer's line, when there is nothing to parse. */
+    none: 'nothing written yet',
+    /** Under the listing's side notes, when the text is not the program the run holds. */
+    pending: 'Not loaded yet. The next Step, Step access or Run loads it and logs the load.',
+    /** The one-line syntax reminder, as the design words it. */
+    help: {
+      asm: [
+        'ld r1, [0x40]',
+        'st [0x40], #7   or  st [0x40], r2',
+        'add r1, r1, #4',
+        'bnez r1, loop',
+        'loop:   labels end in a colon',
+      ],
+      trace: ['One access per line:', 'R 0x0A4   load', 'W 0x0A4 7   store 7'],
+    },
+  },
   sheet: {
     title: 'Keyboard',
     close: 'Close',

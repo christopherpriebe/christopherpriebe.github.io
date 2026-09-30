@@ -3,7 +3,18 @@
 // delegated listeners read them, and focus is kept across a render by them.
 
 /** The attributes that parameterise an action, without their `data-` prefix. */
-export const PARAMS = ['set', 'way', 'pos', 'step', 'group', 'option', 'addr'] as const;
+export const PARAMS = [
+  'set',
+  'way',
+  'pos',
+  'step',
+  'group',
+  'option',
+  'addr',
+  'line',
+  'column',
+  'length',
+] as const;
 export type Param = (typeof PARAMS)[number];
 
 export interface Action {

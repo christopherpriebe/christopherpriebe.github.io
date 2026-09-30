@@ -59,7 +59,8 @@
 }
 
 /* Read by screen readers, drawn nowhere. */
-.cache-explorer__live {
+.cache-explorer__live,
+.cache-explorer__visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -2149,6 +2150,185 @@ rect.cache-explorer__tick--on {
 .cache-explorer__button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* The program drawer: a line that opens it, then the listing or the text box beside the input type */
+
+.cache-explorer__program {
+  margin-top: 22px;
+}
+
+.cache-explorer__program-toggle {
+  display: flex;
+  gap: 9px;
+  align-items: baseline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cache-explorer-text);
+  font: var(--cache-explorer-font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.cache-explorer__program-glyph {
+  width: 9px;
+  font: var(--cache-explorer-font-label);
+  color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__program-title {
+  color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__program-toggle:hover .cache-explorer__program-summary {
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__program-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 252px;
+  gap: 18px 36px;
+  margin-top: 13px;
+  padding: 18px 0;
+  border-top: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__program-body:empty {
+  display: none;
+}
+
+.cache-explorer__program-main {
+  min-width: 0;
+}
+
+/* Rows of 23px, in the gutter the design draws: the number, the mark, then the line as written. */
+.cache-explorer__listing {
+  max-height: 322px;
+  padding: 9px 0;
+  overflow: auto;
+  border: 1px solid var(--cache-explorer-rule);
+  background: var(--cache-explorer-surface);
+  cursor: text;
+}
+
+.cache-explorer__listing-row {
+  display: grid;
+  grid-template-columns: 36px 27px minmax(0, 1fr);
+  font: var(--cache-explorer-font-label);
+  font-size: 14px;
+  line-height: 23px;
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__listing-row--current {
+  background: var(--cache-explorer-changed);
+}
+
+/* A line the core could not read has a bar in the error colour and a "!" as well. */
+.cache-explorer__listing-row--wrong {
+  box-shadow: inset 3px 0 0 var(--cache-explorer-incorrect);
+}
+
+.cache-explorer__listing-number {
+  text-align: right;
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__listing-mark {
+  text-align: center;
+  color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__listing-text {
+  white-space: pre;
+}
+
+.cache-explorer__listing-empty {
+  margin: 0;
+  padding: 0 13px;
+  font: var(--cache-explorer-font-body);
+  line-height: 23px;
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__program-text {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 162px;
+  padding: 9px 13px;
+  border: 1px solid var(--cache-explorer-rule);
+  border-radius: 0;
+  background: var(--cache-explorer-surface);
+  color: var(--cache-explorer-ink);
+  font: var(--cache-explorer-font-label);
+  font-size: 14px;
+  line-height: 23px;
+  resize: vertical;
+}
+
+.cache-explorer__program-text:focus {
+  outline: none;
+  border-color: var(--cache-explorer-strong);
+  box-shadow: 0 0 0 1px var(--cache-explorer-strong);
+}
+
+.cache-explorer__program-text[aria-invalid='true'] {
+  border-color: var(--cache-explorer-incorrect);
+}
+
+/* What the core found wrong: one row for each, with its line and column, on the error bar. */
+.cache-explorer__program-errors {
+  margin: 13px 0 0;
+  padding: 3px 0 3px 13px;
+  border-left: 3px solid var(--cache-explorer-incorrect);
+  list-style: none;
+}
+
+.cache-explorer__program-error {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cache-explorer-ink);
+  font: var(--cache-explorer-font-label);
+  line-height: 21px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cache-explorer__program-error:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--cache-explorer-rule);
+  text-underline-offset: 0.22em;
+}
+
+.cache-explorer__program-side {
+  font: var(--cache-explorer-font-label);
+  line-height: 21px;
+}
+
+.cache-explorer__program-help {
+  margin: 13px 0 0;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre-line;
+}
+
+.cache-explorer__program-pending {
+  margin: 9px 0 0;
+  font: var(--cache-explorer-font-body);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--cache-explorer-text);
+  text-wrap: pretty;
+}
+
+.cache-explorer__link.cache-explorer__program-edit {
+  display: block;
+  margin: 9px 0 0;
+  font-size: 13px;
 }
 
 @media (prefers-reduced-motion: reduce) {
