@@ -71,7 +71,7 @@ export function redo(context: Context): void {
 export function reset(context: Context): void {
   move(context, 'reset', () => {
     context.session.applyOp({ op: 'config', config: context.session.state().config });
-    return undefined;
+    return copy.transport.resetDone;
   });
 }
 

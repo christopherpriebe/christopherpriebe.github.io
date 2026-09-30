@@ -163,6 +163,39 @@ describe('the transport bar', () => {
     button('undo').click();
     expect(stepCount()).toBeGreaterThan(0);
   });
+
+  it('says the configuration is unchanged after a Reset', () => {
+    button('step').click();
+    button('reset').click();
+    expect(status()).toBe('Reset. The configuration is unchanged.');
+  });
+
+  it('issues a store with Enter in the value box', () => {
+    query('button[data-option="write"]').click();
+    const apply = vi.spyOn(lent, 'applyOp');
+    const enter = press('Enter', {}, input('value'));
+    expect(enter.defaultPrevented).toBe(true);
+    expect(apply).toHaveBeenCalledWith({ op: 'issue', kind: 'write', addr: 0x0a4, value: 7n });
+  });
+
+  it('puts the strip on what is typed until the cursor next moves', () => {
+    const typed = 'typed, not issued yet';
+    press(' ', { shiftKey: true });
+    expect(root.textContent).not.toContain(typed);
+    const box = input('addr');
+    box.value = '0x0A8';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(root.textContent).toContain(typed);
+    press(' ', { shiftKey: true });
+    expect(root.textContent).not.toContain(typed);
+  });
+
+  it('puts the strip on the typed access when Load or Store is chosen', () => {
+    press(' ', { shiftKey: true });
+    expect(root.textContent).not.toContain('typed, not issued yet');
+    query('button[data-action="kind"][data-option="write"]').click();
+    expect(root.textContent).toContain('typed, not issued yet');
+  });
 });
 
 describe('the keyboard', () => {
@@ -251,6 +284,33 @@ describe('the keyboard', () => {
     expect(esc.defaultPrevented).toBe(true);
     expect(root.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(button('sheet'));
+  });
+
+  it('leaves the sheet open and focus in the box on Escape in the address box', () => {
+    button('sheet').click();
+    const box = input('addr');
+    box.focus();
+    expect(press('Escape', {}, box).defaultPrevented).toBe(false);
+    expect(root.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.activeElement).toBe(box);
+  });
+
+  it('keeps the shortcuts working after Undo or Redo disables itself', () => {
+    button('step').click();
+    button('step').click();
+    const undo = button('undo');
+    undo.focus();
+    while (!button('undo').disabled) button('undo').click();
+    expect(document.activeElement).toBe(query('.cache-explorer__plane'));
+    const before = lent.position().pos;
+    expect(press('y', {}, query('.cache-explorer__plane')).defaultPrevented).toBe(true);
+    expect(lent.position().pos).toBeGreaterThan(before);
+    button('redo').focus();
+    while (!button('redo').disabled) button('redo').click();
+    expect(document.activeElement).toBe(query('.cache-explorer__plane'));
+    const after = lent.position().pos;
+    press('z', {}, query('.cache-explorer__plane'));
+    expect(lent.position().pos).toBeLessThan(after);
   });
 
   it('opens and closes the sheet with its buttons', () => {

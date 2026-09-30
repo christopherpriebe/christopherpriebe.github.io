@@ -1812,6 +1812,17 @@ rect.cache-explorer__tick--on {
   width: 90px;
 }
 
+.cache-explorer__field--address:focus,
+.cache-explorer__field--value:focus {
+  outline: none;
+  border-bottom-color: var(--cache-explorer-strong);
+  box-shadow: 0 1px 0 var(--cache-explorer-strong);
+}
+
+.cache-explorer__issue > .cache-explorer__button--primary {
+  padding-inline: 18px;
+}
+
 .cache-explorer__seg--tools {
   flex-wrap: wrap;
 }

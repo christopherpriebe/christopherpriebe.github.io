@@ -163,6 +163,7 @@ export const copy = {
     reset: 'Reset',
     undo: 'Undo',
     redo: 'Redo',
+    resetDone: 'Reset. The configuration is unchanged.',
     shortcuts: 'Keyboard shortcuts',
     /** What Issue says when the address box holds nothing, or a store's value box does. */
     needAddress: 'Type an address to issue.',

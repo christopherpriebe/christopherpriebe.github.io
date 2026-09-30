@@ -73,9 +73,15 @@ export function restoreFocus(root: HTMLElement, memory: FocusMemory | null): voi
   // An element that kept focus is left alone: setting its caret again would end a composition.
   if (survived && root.ownerDocument.activeElement === element) return;
   const successor = survived ? element : memory.key && findByKey(root, memory.key);
-  const target = successor ?? root.querySelector<HTMLElement>(`.${PLANE_CLASS}`);
+  const plane = root.querySelector<HTMLElement>(`.${PLANE_CLASS}`);
+  const target = successor ?? plane;
   if (!target) return;
   target.focus({ preventScroll: true });
+  // A successor that cannot take focus, a button the render has just disabled, is as good as gone.
+  if (target !== plane && root.ownerDocument.activeElement !== target) {
+    plane?.focus({ preventScroll: true });
+    return;
+  }
   if (
     memory.selection &&
     (successor instanceof HTMLInputElement || successor instanceof HTMLTextAreaElement)

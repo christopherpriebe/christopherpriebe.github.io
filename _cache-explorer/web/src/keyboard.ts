@@ -58,14 +58,18 @@ function escape(context: Context): boolean {
 /**
  * A key pressed inside the tool. It is ignored with Ctrl, Meta or Alt held, and in a control the
  * student types in, except for Enter in the address and value boxes, which issues, and Escape,
- * which closes an open sheet or editor from anywhere. `preventDefault` is called only when a
+ * which closes an open sheet or editor unless the student is typing outside it. `preventDefault` is called only when a
  * shortcut fires.
  */
 export function onKeydown(context: Context, event: KeyboardEvent, action: Action | null): void {
   if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
   const typing = isTyping(event.target);
   if (event.key === 'Escape') {
-    if (escape(context)) event.preventDefault();
+    // A box the student is typing in keeps its focus, unless it is inside the sheet or an editor.
+    const inside =
+      event.target instanceof Element &&
+      event.target.closest('.cache-explorer__sheet, [role="dialog"]') !== null;
+    if ((!typing || inside) && escape(context)) event.preventDefault();
     return;
   }
   if (typing) {
