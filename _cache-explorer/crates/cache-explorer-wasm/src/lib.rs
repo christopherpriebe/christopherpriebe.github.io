@@ -266,8 +266,8 @@ impl Session {
 
     /// Moves the cursor to the state after step `step` of the displayed run,
     /// as the scrubber and the ticks name it: 0 is the run's origin, and a
-    /// step past the run's last is its last. A program load is no step. As
-    /// far as the log and a module's unanswered prediction allow.
+    /// step past the run's last is its last. A program load is no step. It
+    /// moves as far as the log and a module's unanswered prediction allow.
     #[wasm_bindgen(js_name = seekStep)]
     pub fn seek_step(&mut self, step: u32) {
         self.inner.seek_step(step);

@@ -128,7 +128,7 @@ describe('the entries', () => {
       const cause = link.dataset.group;
       expect(cause).toBeDefined();
       expect(link.textContent).toBe(
-        `${copy.log.why} ${copy.log.causes[cause as keyof typeof copy.log.causes]}`,
+        `${copy.log.why} ${copy.config.groups[cause as keyof typeof copy.config.groups]}`,
       );
     }
     expect(links.map((link) => link.textContent)).toContain('why: Associativity');
@@ -244,6 +244,43 @@ describe('the ticks and the scrubber', () => {
     expect(lent.timeline().step).toBe(7);
     expect(scrubber().value).toBe('7');
     expect(scrubber()).toBe(range);
+  });
+
+  it('redraws while the scrubber is held down, not once it is let go', () => {
+    open();
+    const range = scrubber();
+    range.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+    range.value = '5';
+    range.dispatchEvent(new Event('input', { bubbles: true }));
+    runFrames();
+    expect(query('.cache-explorer__log-head').textContent).toContain('step 5 of 14');
+    expect(query('.cache-explorer__entry--current').dataset.entry).toBe(
+      String(lent.timeline().current?.index),
+    );
+    expect(scrubber()).toBe(range);
+  });
+
+  it('puts the thumb where the core put the cursor, even with the scrubber focused', () => {
+    open();
+    const range = scrubber();
+    range.focus();
+    const seek = lent.seekStep.bind(lent);
+    vi.spyOn(lent, 'seekStep').mockImplementation(() => {
+      seek(4);
+    });
+    range.value = '9';
+    range.dispatchEvent(new Event('input', { bubbles: true }));
+    runFrames();
+    expect(document.activeElement).toBe(range);
+    expect(scrubber().value).toBe('4');
+  });
+
+  it('gives the ticks’ box a class of its own and sets it 9px under the header', () => {
+    open();
+    const box = query('.cache-explorer__ticks').parentElement;
+    expect(box?.className).toBe('cache-explorer__scrub');
+    expect(box?.previousElementSibling?.className).toBe('cache-explorer__log-head');
+    expect(query('.cache-explorer__log').querySelector('.cache-explorer__strip')).toBeNull();
   });
 
   it('stops the waiting seek when the controller is disposed', () => {
@@ -371,31 +408,51 @@ describe('the window of entries', () => {
     expect(all('.cache-explorer__entry')[0]?.dataset.entry).toBe(String(40 - LOG_MARGIN));
   });
 
-  it('never starts past the last entry after the run has been undone', () => {
+  it('never starts past the last entry after the run has been shortened', () => {
     open('long-log');
     const scroller = query('.cache-explorer__log-scroller');
     scroller.scrollTop = 80 * LOG_ROW_PX;
     scroller.dispatchEvent(new Event('scroll'));
+    expect(all('.cache-explorer__entry')[0]?.dataset.entry).toBe(String(80 - LOG_MARGIN));
+    // A new run drops the undone ops after the cursor, and the entries with them.
     lent.seek(0);
+    lent.applyOp({
+      op: 'config',
+      config: { ...lent.state().config, cache: { ...lent.state().config.cache, associativity: 2 } },
+    });
+    lent.stepAccess({ source: 'ld r1, [0x0A4]', format: 'asm' });
     controller.refresh();
-    expect(all('.cache-explorer__entry').length).toBeGreaterThan(0);
+    const { entryCount } = lent.timeline();
+    expect(entryCount).toBeLessThan(80 - LOG_MARGIN);
+    const built = all('.cache-explorer__entry');
+    expect(built.length).toBeGreaterThan(0);
+    expect(Number(built[0]?.dataset.entry)).toBeLessThanOrEqual(entryCount - 1);
+    expect(query('.cache-explorer__entry--current')).toBeTruthy();
   });
 
   it('brings the current event into view when the cursor moves, and the page stays', () => {
     open();
     const scroller = query('.cache-explorer__log-scroller');
-    const rows = (): HTMLElement[] => all('.cache-explorer__event');
     Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 100 });
+    const top = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('cache-explorer__event--current') ? 500 : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('cache-explorer__event--current') ? 29 : 0;
+    });
+    const page = vi.fn();
+    vi.stubGlobal('scrollTo', page);
+    scroller.scrollTop = 0;
     lent.seek(lent.timeline().cursor - 2);
     controller.refresh();
-    const current = query('.cache-explorer__event--current');
-    Object.defineProperty(current, 'offsetTop', { configurable: true, value: 500 });
-    Object.defineProperty(current, 'offsetHeight', { configurable: true, value: 29 });
-    expect(rows().length).toBeGreaterThan(0);
-    scroller.scrollTop = 0;
-    lent.stepEvent({ source: '', format: 'asm' });
-    controller.refresh();
-    // The rows were rebuilt, so the stubs went with them; the scroll position is what stayed.
-    expect(scroller.scrollTop).toBeGreaterThanOrEqual(0);
+    expect(top).toHaveBeenCalled();
+    expect(scroller.scrollTop).toBe(500 + 29 - 100);
+    expect(page).not.toHaveBeenCalled();
+    expect(window.scrollY).toBe(0);
+    vi.restoreAllMocks();
   });
 });

@@ -120,10 +120,11 @@ function shellOf(root: HTMLElement): Shell {
 }
 
 /**
- * The cache box or the strip of ticks changed size. If the ways or the ticks now fit differently from
- * how they were drawn, the caller is asked, a frame later, to draw again: it asks the core again and draws from what the core
- * says and what the student has typed by then, which a resize changes none of. The frame keeps
- * the request out of the observer's own notification, which the new drawing would resize a box in.
+ * The cache box or the strip of ticks changed size. If the ways or the ticks now fit differently
+ * from how they were drawn, the caller is asked, a frame later, to draw again: it asks the core
+ * again and draws from what the core says and what the student has typed by then, which a resize
+ * changes none of. The frame keeps the request out of the observer's own notification, which the
+ * new drawing would resize a box in.
  */
 function redrawIfRefit(root: HTMLElement): void {
   const shell = shells.get(root);

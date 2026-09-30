@@ -165,6 +165,9 @@ function scrubber(root: HTMLElement, snap: Snapshot): HTMLInputElement {
     }),
   );
   input.max = String(timeline.stepCount);
+  // A range has no caret to keep, and the core may have clamped the step the student asked for, so
+  // the thumb goes where the core put the cursor even while it has focus.
+  input.value = String(timeline.step);
   input.setAttribute('aria-valuetext', timeline.headerText);
   return input;
 }
@@ -195,7 +198,7 @@ function whyLink(cause: Cause, pos: number): HTMLElement {
       'data-group': cause,
       'data-pos': pos,
     },
-    `${copy.log.why} ${copy.log.causes[cause]}`,
+    `${copy.log.why} ${copy.config.groups[cause]}`,
   );
 }
 
@@ -363,9 +366,9 @@ export function renderLog(
     // and a control that is a child of the region itself would be swept away with the old content.
     h(
       'div',
-      { class: 'cache-explorer__strip' },
+      { class: 'cache-explorer__scrub' },
       box.bucket === 1 ? stepTicks(snap) : bucketTicks(snap, box.bucket),
-      put(scrubber(root, snap), String(timeline.step)),
+      put(scrubber(root, snap)),
     ),
   ]);
 

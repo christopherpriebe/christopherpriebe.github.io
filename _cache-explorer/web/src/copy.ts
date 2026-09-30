@@ -111,17 +111,6 @@ export const copy = {
     },
     changed: 'changed',
     why: 'why:',
-    /** The name of the group a `why:` link points at, by the cause the core gives. */
-    causes: {
-      lineSize: 'Line size',
-      associativity: 'Associativity',
-      replacement: 'Replacement',
-      writePolicy: 'Write policy',
-      allocatePolicy: 'On a store miss',
-      timing: 'Timing',
-    },
-    /** What an entry's header says of an entry the core marks as an error. */
-    error: 'error',
   },
   stats: {
     title: 'Stats',

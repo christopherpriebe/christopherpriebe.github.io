@@ -1385,6 +1385,10 @@
   justify-content: space-between;
 }
 
+.cache-explorer__scrub {
+  min-width: 0;
+}
+
 .cache-explorer__ticks {
   display: flex;
   gap: 2px;

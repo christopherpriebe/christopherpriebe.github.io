@@ -8,6 +8,9 @@
 /** The elements a press has to leave in place: the ones a click on would do something. */
 const CONTROLS = '[data-action], button, input, textarea, label, a, summary';
 
+/** Controls that act on `input` and are never rebuilt, so a redraw cannot drop a click on them. */
+const LIVE = 'input[type="range"]';
+
 /**
  * How long a press may be held back from redrawing before it is taken to be over. A release that
  * never reaches the page would otherwise leave the tool as it was drawn; no click takes this long.
@@ -24,8 +27,8 @@ export interface Press {
 /**
  * Watches the primary button, which is the only one that clicks. `released` is called once the
  * press is over, after the click it makes, if it makes one; it is not called for a press on
- * anything but a control. A list (`<select>`) is not one: it hands the press to a native popup,
- * which may keep the release from the page, and it acts on `change`, not on a click. A release
+ * anything but a control. A list (`<select>`) and a slider (`<input type=range>`) are not: the first it hands the press to a native popup,
+ * which may keep the release from the page, and it acts on `change`, not on a click; the slider is drawn again as it is dragged. A release
  * outside the root, or a press that never sees one, ends it too.
  */
 export function watchPress(root: HTMLElement, released: () => void): Press {
@@ -49,7 +52,7 @@ export function watchPress(root: HTMLElement, released: () => void): Press {
     (event) => {
       if (event.button !== 0 || !(event.target instanceof Element)) return;
       const control = event.target.closest(CONTROLS);
-      if (!control || control instanceof HTMLSelectElement) return;
+      if (!control || control instanceof HTMLSelectElement || control.matches(LIVE)) return;
       clearTimeout(timer);
       clearTimeout(limit);
       down = true;
