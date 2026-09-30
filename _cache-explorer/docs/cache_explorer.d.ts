@@ -2995,6 +2995,13 @@ export class Session {
      */
     scrubTo(opIndex: number): void;
     /**
+     * Moves the cursor to the state after step `step` of the displayed run,
+     * as the scrubber and the ticks name it: 0 is the run's origin, and a
+     * step past the run's last is its last. A program load is no step. As
+     * far as the log and a module's unanswered prediction allow.
+     */
+    seekStep(step: number): void;
+    /**
      * Moves the cursor to the position `pos`, as far as the log and a
      * module's unanswered prediction allow.
      *
@@ -3244,6 +3251,7 @@ export interface InitOutput {
     readonly session_redo: (a: number) => number;
     readonly session_scrubTo: (a: number, b: number) => void;
     readonly session_seek: (a: number, b: any) => [number, number];
+    readonly session_seekStep: (a: number, b: number) => void;
     readonly session_setAdvanced: (a: number, b: number) => [number, number, number];
     readonly session_setMemoryWatch: (a: number, b: any) => [number, number];
     readonly session_shareSummary: (a: number) => [number, number, number];

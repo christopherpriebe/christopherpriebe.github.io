@@ -1250,3 +1250,57 @@ fn the_boundarys_lists_serialize_as_bare_arrays() {
         .as_array()
         .is_some_and(Vec::is_empty));
 }
+
+#[test]
+fn the_scrubber_names_a_position_by_its_step_and_a_program_load_is_none() {
+    // Two instructions, a second program, and one more: the second program's
+    // load takes a position and counts no step.
+    let mut session = session(
+        Config::first_visit(),
+        [
+            program("ld r1, [0x0A4]\nld r2, [0x0A8]"),
+            Op::Run { n: 2 },
+            program("ld r3, [0x1A4]"),
+            Op::Run { n: 1 },
+        ],
+    );
+    let count = session.timeline().step_count;
+    assert!(count > 0);
+    session.seek_step(0);
+    assert_eq!(session.timeline().cursor, pos(0));
+    for step in 1..=count {
+        session.seek_step(step);
+        let at = session.timeline().cursor;
+        assert_eq!(session.timeline().step, step);
+        // The first position with that many steps: the one before has one fewer.
+        session.seek(pos(at.get() - 1));
+        assert_eq!(session.timeline().step, step - 1);
+    }
+    session.seek_step(count.saturating_add(9));
+    assert_eq!(session.timeline().cursor, session.timeline().end);
+    assert_eq!(session.timeline().step, count);
+}
+
+#[test]
+fn the_scrubber_counts_a_later_runs_steps_from_its_setup_event() {
+    let mut session = session(
+        Config::first_visit(),
+        [
+            program("ld r1, [0x0A4]"),
+            Op::Run { n: 1 },
+            Op::Config {
+                config: Config::first_visit(),
+            },
+            program("ld r1, [0x0A4]\nld r2, [0x0A8]"),
+            Op::Run { n: 2 },
+        ],
+    );
+    let timeline = session.timeline();
+    assert_eq!(timeline.run, 2);
+    session.seek_step(0);
+    assert_eq!(session.timeline().cursor, timeline.origin);
+    session.seek_step(timeline.step_count);
+    assert_eq!(session.timeline().cursor, timeline.end);
+    session.seek_step(1);
+    assert_eq!((session.timeline().run, session.timeline().step), (2, 1));
+}

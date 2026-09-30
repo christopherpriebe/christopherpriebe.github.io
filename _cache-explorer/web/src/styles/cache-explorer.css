@@ -1367,6 +1367,406 @@
   }
 }
 
+/*
+ * The event log: the step the cursor is on, a tick for each step and a scrubber over the same, then
+ * the entries, ruled apart, in a scroller that keeps its height. The current entry shows its
+ * events; an entry the cursor has not reached is faded.
+ */
+
+.cache-explorer__log {
+  margin-top: 36px;
+  min-width: 0;
+}
+
+.cache-explorer__log-head {
+  display: flex;
+  gap: 9px 18px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.cache-explorer__ticks {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 18px;
+  margin-top: 9px;
+}
+
+.cache-explorer__ticks svg {
+  display: block;
+  overflow: hidden;
+}
+
+/* A tick is a box the cursor has reached (filled) or not (empty), tall on an entry's first step. */
+.cache-explorer__tick {
+  flex: 1 1 0;
+  min-width: 2px;
+  max-width: 14px;
+  height: 9px;
+  border: 1px solid var(--cache-explorer-rule);
+  background: transparent;
+  cursor: pointer;
+}
+
+.cache-explorer__tick--tall {
+  height: 18px;
+}
+
+.cache-explorer__tick--on {
+  border-color: var(--cache-explorer-strong);
+  background: var(--cache-explorer-strong);
+}
+
+.cache-explorer__tick--open {
+  border-color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__tick--ahead {
+  background: var(--cache-explorer-rule);
+}
+
+/* In the SVG of buckets the same states are strokes and fills on a rect, which has no border. */
+rect.cache-explorer__tick {
+  stroke: var(--cache-explorer-rule);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  fill: none;
+}
+
+rect.cache-explorer__tick--on {
+  stroke: var(--cache-explorer-strong);
+  fill: var(--cache-explorer-strong);
+}
+
+.cache-explorer__tick-target {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.cache-explorer__scrubber {
+  display: block;
+  width: 100%;
+  margin: 6px 0 0;
+  accent-color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__log-scroller {
+  position: relative;
+  max-height: 360px;
+  margin-top: 9px;
+  padding-right: 15px;
+  overflow: auto;
+  border-bottom: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__log-empty {
+  padding: 18px 0;
+  border-top: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__log-lead,
+.cache-explorer__log-note {
+  margin: 0;
+  font: var(--cache-explorer-font-body);
+  color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__log-lead {
+  font-size: 17px;
+  line-height: 27px;
+}
+
+.cache-explorer__log-note {
+  margin-top: 6px;
+  line-height: 24px;
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__entry {
+  padding: 10px 0;
+  border-top: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__entry--future {
+  opacity: 0.45;
+}
+
+.cache-explorer__entry-head,
+.cache-explorer__divider {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.cache-explorer__entry-label {
+  font: var(--cache-explorer-font-label);
+  color: var(--cache-explorer-ink);
+  white-space: pre;
+}
+
+.cache-explorer__entry-outcome {
+  margin-left: auto;
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  text-align: right;
+}
+
+/* An error entry's square is turned to a diamond and filled in the error colour. */
+.cache-explorer__marker--error {
+  border-color: var(--cache-explorer-incorrect);
+  background: var(--cache-explorer-incorrect);
+  transform: rotate(45deg) scale(0.8);
+}
+
+.cache-explorer__events {
+  margin-top: 6px;
+}
+
+.cache-explorer__event {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 9px;
+  padding: 3px 6px 3px 9px;
+  border-left: 2px solid transparent;
+  font: var(--cache-explorer-font-body);
+  line-height: 23px;
+  color: var(--cache-explorer-strong);
+  cursor: pointer;
+}
+
+.cache-explorer__event--current {
+  border-left-color: var(--cache-explorer-strong);
+  background: var(--cache-explorer-surface);
+}
+
+.cache-explorer__event--future {
+  opacity: 0.5;
+}
+
+.cache-explorer__event-number {
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 23px;
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__event-text {
+  text-wrap: pretty;
+}
+
+.cache-explorer__why {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  color: var(--cache-explorer-text);
+  text-decoration: underline;
+  text-decoration-color: var(--cache-explorer-rule);
+  text-underline-offset: 0.22em;
+  cursor: pointer;
+}
+
+.cache-explorer__why:hover {
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__changed-line {
+  display: flex;
+  gap: 9px;
+  align-items: baseline;
+  margin-top: 6px;
+  padding-left: 9px;
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.cache-explorer__changed-chip {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  background: var(--cache-explorer-changed);
+  color: var(--cache-explorer-ink);
+}
+
+.cache-explorer__changed-text {
+  text-wrap: pretty;
+}
+
+/*
+ * A program load is a divider, not an entry: its words sit on the ruled line between the entries
+ * before it and the ones after, which carry on from it without a number of their own.
+ */
+.cache-explorer__entry--divider {
+  padding: 10px 0;
+  border-top: 0;
+}
+
+.cache-explorer__divider::before,
+.cache-explorer__divider::after {
+  content: '';
+  flex: 1 1 0;
+  border-top: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__divider-text {
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  color: var(--cache-explorer-text);
+}
+
+.cache-explorer__divider:hover .cache-explorer__divider-text {
+  color: var(--cache-explorer-ink);
+}
+
+/* Stats and key, side by side while each has 320px, then one above the other. */
+
+.cache-explorer__lower {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 36px 54px;
+  align-items: start;
+  margin-top: 36px;
+  min-width: 0;
+}
+
+.cache-explorer__stat-grid,
+.cache-explorer__key {
+  margin-top: 9px;
+  padding-top: 13px;
+  border-top: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px 18px;
+}
+
+.cache-explorer__stat-label {
+  display: block;
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.cache-explorer__stat-value {
+  display: inline-block;
+  margin-left: -3px;
+  padding: 0 3px;
+  font: var(--cache-explorer-font-figure);
+  color: var(--cache-explorer-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.cache-explorer__stat-value--changed {
+  background: var(--cache-explorer-changed);
+}
+
+/* The two lines under the counters in timed mode: what the miss rate predicts, and what the run spent. */
+.cache-explorer__amat {
+  margin: 9px 0 0;
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.cache-explorer__amat + .cache-explorer__amat {
+  margin-top: 0;
+}
+
+.cache-explorer__spark {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+  margin-top: 13px;
+}
+
+.cache-explorer__marker--small {
+  width: 9px;
+  height: 9px;
+}
+
+.cache-explorer__spark-text {
+  margin-left: 6px;
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.cache-explorer__key {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 18px;
+  font: var(--cache-explorer-font-body);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.cache-explorer__key-item {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+
+.cache-explorer__swatch {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+}
+
+.cache-explorer__swatch--tag {
+  background: var(--cache-explorer-tag);
+}
+
+.cache-explorer__swatch--hit {
+  background: var(--cache-explorer-hit);
+}
+
+.cache-explorer__swatch--index {
+  background: var(--cache-explorer-index);
+}
+
+.cache-explorer__swatch--miss {
+  border: 1px solid var(--cache-explorer-miss);
+}
+
+.cache-explorer__swatch--offset {
+  background: var(--cache-explorer-offset);
+}
+
+.cache-explorer__swatch--changed {
+  width: 18px;
+  background: var(--cache-explorer-changed);
+}
+
+.cache-explorer__swatch--invalid {
+  border: 1px solid var(--cache-explorer-rule);
+  background: var(--cache-explorer-empty);
+}
+
+.cache-explorer__swatch--victim {
+  border: 2px dashed var(--cache-explorer-evict);
+}
+
+.cache-explorer__swatch--dirty {
+  background: var(--cache-explorer-hatch);
+}
+
+.cache-explorer__key-line {
+  flex: 0 0 auto;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cache-explorer *,
   .cache-explorer *::before,

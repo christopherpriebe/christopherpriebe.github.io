@@ -3,19 +3,19 @@
 // delegated listeners read them, and focus is kept across a render by them.
 
 /** The attributes that parameterise an action, without their `data-` prefix. */
-export const PARAMS = ['set', 'way', 'pos', 'group', 'option', 'addr'] as const;
+export const PARAMS = ['set', 'way', 'pos', 'step', 'group', 'option', 'addr'] as const;
 export type Param = (typeof PARAMS)[number];
 
 export interface Action {
   readonly name: string;
   /** The parameters the element carries, as the text render wrote. */
   readonly params: Readonly<Partial<Record<Param, string>>>;
-  readonly element: HTMLElement;
+  readonly element: HTMLElement | SVGElement;
 }
 
 /** The action an element is, or null when it carries no `data-action`. */
 export function readAction(element: Element): Action | null {
-  if (!(element instanceof HTMLElement)) return null;
+  if (!(element instanceof HTMLElement || element instanceof SVGElement)) return null;
   const name = element.dataset.action;
   if (name === undefined) return null;
   const params: Partial<Record<Param, string>> = {};

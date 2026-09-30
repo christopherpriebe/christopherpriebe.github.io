@@ -24,7 +24,10 @@ import { narrowState } from '../page-states';
 import type { UiState } from '../ui-state';
 import { refits } from './cache';
 import { createConfigBar, renderConfigBar, type ConfigBar } from './config-bar';
+import { renderKey } from './key';
+import { createLog, refitsTicks, renderLog, stopLog, type LogBox } from './log';
 import { createMachine, renderMachine, stopMachine, type Machine } from './machine';
+import { renderStats } from './stats';
 
 /** Everything one render draws from the session, asked of the facade again after each change. */
 export interface Snapshot {
@@ -61,6 +64,9 @@ interface Shell {
   head: HTMLElement;
   config: ConfigBar;
   machine: Machine;
+  log: LogBox;
+  stats: HTMLElement;
+  key: HTMLElement;
   live: HTMLElement;
   /**
    * What the last render of the workbench drew from and who to ask for another when the cache
@@ -88,6 +94,11 @@ function shellOf(root: HTMLElement): Shell {
     const machine = createMachine(() => {
       redrawIfRefit(root);
     });
+    const log = createLog(() => {
+      redrawIfRefit(root);
+    });
+    const stats = h('div', { class: 'cache-explorer__stats' });
+    const key = h('div', { class: 'cache-explorer__key-box' });
     const plane = h(
       'section',
       {
@@ -98,19 +109,21 @@ function shellOf(root: HTMLElement): Shell {
       head,
       config.element,
       machine.element,
+      log.element,
+      h('div', { class: 'cache-explorer__lower' }, stats, key),
       live,
     );
-    shell = { plane, head, config, machine, live, last: null, refit: null };
+    shell = { plane, head, config, machine, log, stats, key, live, last: null, refit: null };
     shells.set(root, shell);
   }
   return shell;
 }
 
 /**
- * The cache box changed size. If its ways now fit differently from how they were drawn, the caller
- * is asked, a frame later, to draw again: it asks the core again and draws from what the core
+ * The cache box or the strip of ticks changed size. If the ways or the ticks now fit differently from
+ * how they were drawn, the caller is asked, a frame later, to draw again: it asks the core again and draws from what the core
  * says and what the student has typed by then, which a resize changes none of. The frame keeps
- * the request out of the observer's own notification, which the new drawing would resize the box in.
+ * the request out of the observer's own notification, which the new drawing would resize a box in.
  */
 function redrawIfRefit(root: HTMLElement): void {
   const shell = shells.get(root);
@@ -119,7 +132,12 @@ function redrawIfRefit(root: HTMLElement): void {
   shell.refit = requestAnimationFrame(() => {
     shell.refit = null;
     const { last } = shell;
-    if (last?.redraw && refits(shell.machine.cache, last.snap)) last.redraw();
+    if (
+      last?.redraw &&
+      (refits(shell.machine.cache, last.snap) || refitsTicks(shell.log, last.snap))
+    ) {
+      last.redraw();
+    }
   });
 }
 
@@ -147,7 +165,7 @@ export function render(
     return;
   }
   const shell = shellOf(root);
-  const { plane, head, config, machine, live } = shell;
+  const { plane, head, config, machine, log: logBox, stats, key, live } = shell;
   // The plane is on the page before the machine is drawn: the cache table is drawn to the width
   // of its box, which a box that is not on the page does not have.
   mount(root, plane);
@@ -158,6 +176,9 @@ export function render(
   );
   renderConfigBar(root, config, snap, ui);
   renderMachine(root, machine, snap, ui);
+  renderLog(root, logBox, snap, log, ui);
+  renderStats(stats, snap);
+  renderKey(key, snap);
   if (live.textContent !== snap.timeline.liveText) live.textContent = snap.timeline.liveText;
 }
 
@@ -167,5 +188,6 @@ export function detach(root: HTMLElement): void {
   if (!shell) return;
   if (shell.refit !== null) cancelAnimationFrame(shell.refit);
   stopMachine(shell.machine);
+  stopLog(shell.log);
   shells.delete(root);
 }

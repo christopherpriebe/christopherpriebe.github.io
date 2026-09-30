@@ -3,7 +3,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { FLASH_MS, PACKET_MS, PACKET_TRAVEL_PX, PULSE_MS } from '../../src/motion';
-import { MEMORY_ROW_PX } from '../../src/metrics';
+import {
+  LOG_ROW_PX,
+  MEMORY_ROW_PX,
+  TICK_GAP_PX,
+  TICK_PX,
+  TICK_SHORT_PX,
+  TICKS_HEIGHT_PX,
+} from '../../src/metrics';
 
 const read = (name: string): string =>
   readFileSync(fileURLToPath(new URL(`../../src/styles/${name}`, import.meta.url)), 'utf8');
@@ -242,6 +249,31 @@ describe('cache-explorer.css', () => {
     const px = (property: string): number =>
       Number(new RegExp(`${property}: (\\d+)px`).exec(row)?.[1] ?? Number.NaN);
     expect(px('line-height') + px('margin-top')).toBe(MEMORY_ROW_PX);
+  });
+
+  it('draws the ticks to the sizes the script counts them in', () => {
+    const px = (block: string, property: string): number =>
+      Number(new RegExp(`${property}: (\\d+)px`).exec(block)?.[1] ?? Number.NaN);
+    const strip = rule('.cache-explorer__ticks');
+    expect(px(strip, 'gap')).toBe(TICK_GAP_PX);
+    expect(px(strip, 'height')).toBe(TICKS_HEIGHT_PX);
+    const tick = rule('.cache-explorer__tick');
+    expect(px(tick, 'min-width')).toBe(TICK_PX);
+    expect(px(tick, 'height')).toBe(TICK_SHORT_PX);
+    expect(px(rule('.cache-explorer__tick--tall'), 'height')).toBe(TICKS_HEIGHT_PX);
+  });
+
+  it('counts a blank row of the log as a past entry: a header, a changed line and the rules', () => {
+    const px = (block: string, property: string): number =>
+      Number(new RegExp(`${property}: (\\d+)px`).exec(block)?.[1] ?? Number.NaN);
+    const entry = rule('.cache-explorer__entry');
+    const head = rule('.cache-explorer__entry-label');
+    const changed = rule('.cache-explorer__changed-line');
+    expect(head).toContain('var(--cache-explorer-font-label)');
+    // The entry's own padding twice and its rule, the 21px label line, and the changed line's margin and 19px.
+    expect(
+      2 * px(entry, 'padding') + 1 + 21 + px(changed, 'margin-top') + px(changed, 'line-height'),
+    ).toBe(LOG_ROW_PX);
   });
 
   it('draws the CPU box’s square open unless it is a hit, a step with neither included, as the design does', () => {

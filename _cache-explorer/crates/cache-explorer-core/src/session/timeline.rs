@@ -649,6 +649,33 @@ impl Session {
             .collect()
     }
 
+    /// Moves the cursor to the state after step `step` of the displayed run,
+    /// as the scrubber and the ticks name it: 0 is the run's origin and
+    /// `step_count` its last step, and a step past that is the last. A
+    /// program load is not a step, so the cursor rests before one that
+    /// follows the step. While a gate is set, a target beyond its limit is
+    /// the limit, as for [`Session::seek`].
+    pub fn seek_step(&mut self, step: u32) {
+        let (origin, end) = self.log.run_bounds(self.cursor.machine().run);
+        let wanted = self
+            .log
+            .steps_through(origin)
+            .saturating_add(step)
+            .min(self.log.steps_through(end));
+        // The first position at which that many steps of the log have been
+        // taken: the steps never decrease along the positions.
+        let (mut low, mut high) = (origin.get(), end.get());
+        while low < high {
+            let middle = low.saturating_add(high.saturating_sub(low) / 2);
+            if self.log.steps_through(EventPos::new_unchecked(middle)) < wanted {
+                low = middle.saturating_add(1);
+            } else {
+                high = middle;
+            }
+        }
+        self.seek(EventPos::new_unchecked(low));
+    }
+
     /// The view of `record`, the run's entry `index`, as the cursor now
     /// finds it.
     fn entry_view(&self, index: usize, record: &EntryRecord) -> EntryView {

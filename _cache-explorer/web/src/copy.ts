@@ -100,6 +100,63 @@ export const copy = {
     /** What the square before the status says, for a screen reader and the pointer. */
     marker: { hit: 'Hit', miss: 'Miss' },
   },
+  log: {
+    title: 'Event log',
+    /** The scrubber's name for a screen reader. */
+    timeline: 'Timeline',
+    /** Before the run's first entry; the lead is the larger line. */
+    empty: {
+      lead: 'Type an address or press Space.',
+      text: 'Every access you issue is written here step by step, in plain English, with what changed.',
+    },
+    changed: 'changed',
+    why: 'why:',
+    /** The name of the group a `why:` link points at, by the cause the core gives. */
+    causes: {
+      lineSize: 'Line size',
+      associativity: 'Associativity',
+      replacement: 'Replacement',
+      writePolicy: 'Write policy',
+      allocatePolicy: 'On a store miss',
+      timing: 'Timing',
+    },
+    /** What an entry's header says of an entry the core marks as an error. */
+    error: 'error',
+  },
+  stats: {
+    title: 'Stats',
+    labels: {
+      accesses: 'Accesses',
+      hits: 'Hits',
+      misses: 'Misses',
+      hitRate: 'Hit rate',
+      evictions: 'Evictions',
+      memoryWrites: 'Writes to memory',
+      writebacks: 'Write-backs',
+      writethroughs: 'Write-throughs',
+      writearounds: 'Write-arounds',
+      cycles: 'Cycles',
+      compulsory: 'Compulsory misses',
+      capacity: 'Capacity misses',
+      conflict: 'Conflict misses',
+    },
+  },
+  key: {
+    title: 'Key',
+    tag: 'Tag bits',
+    hit: 'Hit, filled',
+    index: 'Index bits',
+    miss: 'Miss, open',
+    offset: 'Offset bits',
+    changed: 'Changed',
+    invalid: 'Invalid way',
+    victim: 'Victim',
+    dirty: 'Dirty · D',
+    stale: 'Stale in memory',
+    fill: 'Fill',
+    writeThrough: 'Write-through',
+    writeBack: 'Write-back',
+  },
   notices: {
     noWebAssembly: {
       lead: 'The Interactive Cache Explorer needs WebAssembly, which this browser does not provide.',

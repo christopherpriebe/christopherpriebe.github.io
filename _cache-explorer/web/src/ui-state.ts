@@ -81,6 +81,11 @@ export interface UiState {
   shareFallback: string | null;
   /** The first log entry in view. */
   logFirst: number;
+  /**
+   * The scrubber's latest step and the animation frame that will seek to it, or null when none
+   * is waiting: a drag moves the cursor at most once a frame.
+   */
+  scrub: { step: number; frame: number | null };
   /** The first memory row built: the rows around the ones in view. */
   memoryFirst: number;
   /** A memory row to bring into view in the next render, and then not again; null for none. */
@@ -112,6 +117,7 @@ export function initialUiState(layout: Layout): UiState {
     status: '',
     shareFallback: null,
     logFirst: 0,
+    scrub: { step: 0, frame: null },
     memoryFirst: 0,
     memoryReveal: null,
     lastPos: 0,

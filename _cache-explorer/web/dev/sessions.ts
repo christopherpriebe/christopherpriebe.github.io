@@ -107,4 +107,11 @@ export const SCENARIOS: Record<string, () => Session> = {
       Session.withConfig(config(512, 16, 1)),
       Array.from({ length: 40 }, (_, i) => i * 16),
     ),
+
+  /** Ninety accesses, hundreds of steps: more ticks than the strip has room for, and a log to scroll. */
+  'long-log': () =>
+    loads(
+      Session.withConfig(config(512, 16, 1)),
+      Array.from({ length: 90 }, (_, i) => (i * 48) % 4096),
+    ),
 };

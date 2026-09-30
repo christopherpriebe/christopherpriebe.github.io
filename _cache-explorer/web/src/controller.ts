@@ -2,10 +2,11 @@
 // else touches the DOM. It never works out what the machine does: after every change it asks the
 // core again and draws the answer.
 
-import type { State } from '../pkg/cache_explorer';
+import type { State, Timeline } from '../pkg/cache_explorer';
 import { configActions } from './config-actions';
 import type { ActionHandler, Context } from './context';
 import { delegate } from './delegate';
+import { logActions, LOG_MARGIN, scrollLog, stopScrub } from './log-actions';
 import { captureFocus, restoreFocus } from './focus';
 import type { Layout } from './layout';
 import { machineActions, MEMORY_MARGIN, scrollMemory } from './machine-actions';
@@ -29,11 +30,13 @@ export function buildSnapshot(
   now: number = performance.now(),
 ): { snapshot: Snapshot; log: LogWindow } {
   const state = session.state();
+  const timeline = session.timeline();
   placeMemoryWindow(ui, state);
+  placeLogWindow(ui, state, timeline);
   const { draft, program, editor, modules } = ui;
   const snapshot: Snapshot = {
     state,
-    timeline: session.timeline(),
+    timeline,
     ticks: session.ticks(),
     memoryRows: session.memoryLines(ui.memoryFirst, MEMORY_WINDOW),
     config: session.configControls(ui.pending ?? state.config),
@@ -70,10 +73,28 @@ function placeMemoryWindow(ui: UiState, state: State): void {
   ui.memoryFirst = Math.min(ui.memoryFirst, Math.max(0, lineCount - 1));
 }
 
+/**
+ * Keeps the window of log entries on the entries that matter: when the cursor has moved to an
+ * entry that is not built, the window is moved to it, and it never starts past the last entry,
+ * which an Undo or a new run may have moved back.
+ */
+function placeLogWindow(ui: UiState, state: State, timeline: Timeline): void {
+  const entry = timeline.current?.index;
+  const moved = state.position.pos !== ui.lastPos;
+  if (moved && entry !== undefined && (entry < ui.logFirst || entry >= ui.logFirst + LOG_WINDOW)) {
+    ui.logFirst = Math.max(0, entry - LOG_MARGIN);
+  }
+  ui.logFirst = Math.min(ui.logFirst, Math.max(0, timeline.entryCount - 1));
+}
+
 /** What an event on an element with a `data-action` does; each region contributes its own. */
-const CLICKS: ReadonlyMap<string, ActionHandler> = new Map(configActions.clicks);
+const CLICKS: ReadonlyMap<string, ActionHandler> = new Map([
+  ...configActions.clicks,
+  ...logActions.clicks,
+]);
 const INPUTS: ReadonlyMap<string, ActionHandler> = new Map([
   ...configActions.inputs,
+  ...logActions.inputs,
   ...machineActions.inputs,
 ]);
 const CHANGES: ReadonlyMap<string, ActionHandler> = new Map([
@@ -100,6 +121,9 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
   // A session that opens part way through a run, as a link or a file does, is not a step: its
   // first draw plays nothing.
   ui.lastPos = session.position().pos;
+  // Nor does it start the log at the top: the entry the cursor is in is the one to build around.
+  const entry = session.timeline().current?.index;
+  if (entry !== undefined) ui.logFirst = Math.max(0, entry - LOG_MARGIN);
 
   function current(): Session {
     if (!owned) throw new Error('the controller has been disposed');
@@ -169,14 +193,15 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
     },
     scroll(event) {
       const { target } = event;
-      if (target instanceof HTMLElement && target.dataset.scroll === 'memory') {
-        scrollMemory(context, target);
-      }
+      if (!(target instanceof HTMLElement)) return;
+      if (target.dataset.scroll === 'memory') scrollMemory(context, target);
+      else if (target.dataset.scroll === 'log') scrollLog(context, target);
     },
   });
 
   function dispose(): void {
     clearTimeout(flashTimer);
+    stopScrub(ui);
     press.stop();
     stopListening();
     detach(root);
