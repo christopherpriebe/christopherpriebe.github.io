@@ -223,6 +223,36 @@ export const copy = {
       trace: ['One access per line:', 'R 0x0A4   load', 'W 0x0A4 7 store 7'],
     },
   },
+  modules: {
+    /** The drawer's name, and the panel's accessible name. */
+    title: 'Guided modules',
+    panel: 'Guided module',
+    module: 'Module',
+    exit: 'Exit',
+    hint: 'Hint',
+    /** The words on the panel's buttons, by what the core lists. */
+    actions: { check: 'Check', next: 'Next', showMe: 'Show me', restart: 'Restart' },
+    /** After an option's mark, for a reader who does not see the mark. */
+    optionStates: {
+      idle: '',
+      selected: 'selected',
+      wrong: 'not the answer',
+      correct: 'the answer',
+      shown: 'the answer',
+    },
+    list: 'Modules',
+    start: 'Start',
+    startAgain: 'Restart',
+    starting: 'Starting…',
+    running: 'Running',
+    advanced: 'Advanced',
+    failed: 'could not be loaded',
+    failedText: 'The list of guided modules could not be loaded.',
+    retry: 'Try again',
+    /** The status line when a run replaces the one a module was running on. */
+    ended: 'The module ended because another run was opened.',
+    startFailed: 'The module could not be loaded.',
+  },
   sheet: {
     title: 'Keyboard',
     close: 'Close',

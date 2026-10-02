@@ -7,6 +7,8 @@ import { configActions } from './config-actions';
 import type { ActionHandler, Context } from './context';
 import { delegate } from './delegate';
 import { editActions } from './edit-actions';
+import { moduleActions, loadModules, releaseModule } from './module-actions';
+import type { ModuleSource } from './modules';
 import { logActions, LOG_MARGIN, scrollLog, stopScrub } from './log-actions';
 import { captureFocus, restoreFocus } from './focus';
 import type { Layout } from './layout';
@@ -33,6 +35,9 @@ export function buildSnapshot(
   ui: UiState,
   now: number = performance.now(),
 ): { snapshot: Snapshot; log: LogWindow } {
+  // The run looks at the session first: a step it completes, or a gate it sets or lifts, is part of
+  // what this render draws.
+  const view = ui.modules.run?.sync(session);
   const state = session.state();
   const timeline = session.timeline();
   keepEditor(ui, state);
@@ -57,7 +62,7 @@ export function buildSnapshot(
   } else if (editor?.kind === 'memory') {
     snapshot.editor = session.draftMemoryEdit(editor.addr, editor.typed ? editor.valueText : '');
   }
-  if (modules.run) snapshot.module = modules.run.view(session);
+  if (view) snapshot.module = view;
   if (modules.index) snapshot.modules = modules.index;
   return { snapshot, log: session.entries(ui.logFirst, LOG_WINDOW) };
 }
@@ -136,6 +141,7 @@ const CLICKS: ReadonlyMap<string, ActionHandler> = new Map([
   ...configActions.clicks,
   ...editActions.clicks,
   ...logActions.clicks,
+  ...moduleActions.clicks,
   ...programActions.clicks,
   ...transportActions.clicks,
 ]);
@@ -166,7 +172,12 @@ export interface Controller {
  * Takes over `session` and draws it into `root`. The controller is its one owner: it lets go of
  * it in `dispose`, or here when the first draw fails.
  */
-export function start(root: HTMLElement, session: Session, layout: Layout): Controller {
+export function start(
+  root: HTMLElement,
+  session: Session,
+  layout: Layout,
+  modules: ModuleSource | null = null,
+): Controller {
   let owned: Session | null = session;
   const ui = initialUiState(layout);
   // A session that opens part way through a run, as a link or a file does, is not a step: its
@@ -220,6 +231,10 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
       return current();
     },
     ui,
+    modules,
+    get disposed() {
+      return owned === null;
+    },
     refresh,
     flash(cause) {
       // Pointing at a group again, or at another, starts a flash from the beginning, and its time
@@ -278,6 +293,7 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
     press.stop();
     stopListening();
     detach(root);
+    releaseModule(ui);
     const session = owned;
     owned = null;
     session?.free();
@@ -293,6 +309,7 @@ export function start(root: HTMLElement, session: Session, layout: Layout): Cont
     dispose();
     throw error;
   }
+  void loadModules(context);
 
   return {
     refresh,

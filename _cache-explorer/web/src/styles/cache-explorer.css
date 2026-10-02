@@ -2324,6 +2324,288 @@ rect.cache-explorer__tick--on {
   font-size: 13px;
 }
 
+/* The module panel: under the configuration bar, a navy rule on top, the text and its buttons side by side */
+
+.cache-explorer__module-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px 27px;
+  align-items: start;
+  margin-top: 27px;
+  padding: 18px 27px;
+  border-top: 2px solid var(--cache-explorer-strong);
+  background: var(--cache-explorer-surface);
+}
+
+.cache-explorer__module-panel:empty {
+  display: none;
+}
+
+.cache-explorer__module-main {
+  min-width: 0;
+}
+
+.cache-explorer__module-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 18px;
+  align-items: center;
+}
+
+/* A square for each step: done ones filled, the step in hand larger, the rest hollow. */
+.cache-explorer__module-dots {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.cache-explorer__module-dot {
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__module-dot--done,
+.cache-explorer__module-dot--here {
+  border-color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__module-dot--done {
+  background: var(--cache-explorer-strong);
+}
+
+.cache-explorer__module-dot--here {
+  width: 13px;
+  height: 13px;
+  background: var(--cache-explorer-strong);
+}
+
+.cache-explorer__module-text {
+  margin: 9px 0 0;
+  font-size: 17px;
+  line-height: 27px;
+  color: var(--cache-explorer-strong);
+  text-wrap: pretty;
+}
+
+/* Backtick spans are set in the mono face a size smaller than the text round them. */
+.cache-explorer__code {
+  font: var(--cache-explorer-font-label);
+  font-size: 15px;
+}
+
+.cache-explorer__module-hint {
+  margin: 9px 0 0;
+  text-wrap: pretty;
+}
+
+.cache-explorer__module-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.cache-explorer__module-option {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 8px 13px;
+  border: 1px solid var(--cache-explorer-rule);
+  border-radius: 0;
+  background: var(--cache-explorer-surface);
+  color: var(--cache-explorer-ink);
+  font: var(--cache-explorer-font-body);
+  line-height: 24px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cache-explorer__module-option:disabled {
+  cursor: default;
+}
+
+/* The mark: a hollow square, filled once the option is the chosen or the right one. */
+.cache-explorer__module-mark {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--cache-explorer-strong);
+}
+
+.cache-explorer__module-option--selected,
+.cache-explorer__module-option--wrong,
+.cache-explorer__module-option--correct,
+.cache-explorer__module-option--shown {
+  padding: 7px 12px;
+  border-width: 2px;
+}
+
+.cache-explorer__module-option--selected {
+  border-color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__module-option--selected .cache-explorer__module-mark {
+  background: var(--cache-explorer-strong);
+}
+
+.cache-explorer__module-option--wrong {
+  border-color: var(--cache-explorer-incorrect);
+}
+
+.cache-explorer__module-option--wrong .cache-explorer__module-mark {
+  border-color: var(--cache-explorer-incorrect);
+}
+
+.cache-explorer__module-option--correct,
+.cache-explorer__module-option--shown {
+  border-color: var(--cache-explorer-correct);
+  background: color-mix(in srgb, var(--cache-explorer-correct) 8%, var(--cache-explorer-surface));
+}
+
+.cache-explorer__module-option--correct .cache-explorer__module-mark,
+.cache-explorer__module-option--shown .cache-explorer__module-mark {
+  border-color: var(--cache-explorer-correct);
+  background: var(--cache-explorer-correct);
+}
+
+/* What the core said of an answer, or of a move it refused: a bar whose colour is the verdict. */
+.cache-explorer__module-note {
+  margin-top: 12px;
+  padding: 6px 0 6px 13px;
+  border-left: 3px solid var(--cache-explorer-strong);
+  color: var(--cache-explorer-ink);
+  text-wrap: pretty;
+}
+
+.cache-explorer__module-note b {
+  font-weight: 500;
+}
+
+.cache-explorer__module-note--correct {
+  border-left-color: var(--cache-explorer-correct);
+}
+
+.cache-explorer__module-note--incorrect,
+.cache-explorer__module-note--refused {
+  border-left-color: var(--cache-explorer-incorrect);
+}
+
+.cache-explorer__module-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  justify-content: flex-end;
+}
+
+.cache-explorer__module-exit {
+  padding: 9px 0 9px 9px;
+  border: 0;
+  background: none;
+  color: var(--cache-explorer-text);
+  font: var(--cache-explorer-font-label);
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.cache-explorer__module-exit:hover {
+  color: var(--cache-explorer-ink);
+}
+
+/* The region a step points at: a 2px navy outline 6px off it, or 4px off a set or a way. */
+.cache-explorer__spot {
+  outline: 2px solid var(--cache-explorer-strong);
+  outline-offset: 6px;
+}
+
+.cache-explorer__spot--cell {
+  outline-offset: 4px;
+}
+
+/* The guided modules drawer: the program drawer's line, then the modules as ruled rows */
+
+.cache-explorer__modules {
+  margin-top: 22px;
+}
+
+.cache-explorer__modules:empty,
+.cache-explorer__modules > :empty {
+  display: none;
+}
+
+.cache-explorer__modules-body {
+  margin-top: 13px;
+  border-top: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__modules-body > .cache-explorer__module-note {
+  margin-top: 18px;
+}
+
+.cache-explorer__modules-failed {
+  padding: 18px 0;
+}
+
+.cache-explorer__module-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A row: its number in the mono face, the title over what it teaches, the button to start it. */
+.cache-explorer__module-row {
+  display: grid;
+  grid-template-columns: 27px minmax(0, 1fr) auto;
+  gap: 0 18px;
+  align-items: start;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--cache-explorer-rule);
+}
+
+.cache-explorer__module-row:last-child {
+  border-bottom: 0;
+}
+
+.cache-explorer__module-number {
+  font: var(--cache-explorer-font-label);
+  line-height: 26px;
+}
+
+.cache-explorer__module-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 9px;
+  align-items: baseline;
+}
+
+.cache-explorer__module-name {
+  color: var(--cache-explorer-strong);
+  font-weight: 500;
+}
+
+/* A badge is text: a hairline box round a word in the label type. */
+.cache-explorer__module-badge {
+  padding: 0 6px;
+  border: 1px solid var(--cache-explorer-rule);
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.cache-explorer__module-row--running .cache-explorer__module-badge:last-child {
+  border-color: var(--cache-explorer-strong);
+  color: var(--cache-explorer-strong);
+}
+
+.cache-explorer__module-about {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.cache-explorer__module-start {
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cache-explorer *,
   .cache-explorer *::before,

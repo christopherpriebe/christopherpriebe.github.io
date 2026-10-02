@@ -9,6 +9,7 @@ import '../src/styles/cache-explorer.css';
 import { start } from '../src/controller';
 import { measureLayout, watchLayout } from '../src/layout';
 import { init } from '../src/wasm';
+import { fixtureSource } from './modules';
 import { SCENARIOS } from './sessions';
 
 const root = document.getElementById('cache-explorer');
@@ -23,7 +24,7 @@ await init();
 const session = build();
 const pos = params.get('pos');
 if (pos !== null) session.seek(Number(pos));
-const controller = start(root, session, measureLayout(root));
+const controller = start(root, session, measureLayout(root), fixtureSource());
 watchLayout(root, (layout) => {
   controller.setLayout(layout);
 });
@@ -36,7 +37,13 @@ if (jump !== null && box) {
   box.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+// The fixture modules arrive on a promise, and so does a module that is started: each step waits for
+// what the one before it asked for.
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 50));
+await settle();
+
 for (const step of params.getAll('do')) {
+  await settle();
   const verb = step.slice(0, step.indexOf(':'));
   const rest = step.slice(step.indexOf(':') + 1);
   if (verb === 'click') {

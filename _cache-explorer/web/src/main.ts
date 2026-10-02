@@ -2,6 +2,7 @@ import './styles/tokens.css';
 import './styles/cache-explorer.css';
 import { start, type Controller } from './controller';
 import { h } from './dom';
+import { fetchModules } from './modules';
 import { measureLayout, watchLayout, type Layout } from './layout';
 import { couldNotStartState, loadingState, narrowState, noWebAssemblyState } from './page-states';
 import { init, Session } from './wasm';
@@ -90,7 +91,12 @@ export async function boot(root: HTMLElement, reload: () => void = reloadPage): 
     await init(
       import.meta.env.PROD ? { module_or_path: assetUrl('cache_explorer_bg.wasm') } : undefined,
     );
-    const controller = start(root, Session.firstVisit(), layout);
+    const controller = start(
+      root,
+      Session.firstVisit(),
+      layout,
+      root.dataset.modules === undefined ? null : fetchModules(root.dataset.modules),
+    );
     clearTimeout(loading);
     phase = { name: 'running', controller };
   } catch (error) {

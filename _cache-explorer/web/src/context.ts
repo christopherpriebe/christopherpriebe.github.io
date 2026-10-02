@@ -4,6 +4,7 @@
 
 import type { Cause } from '../pkg/cache_explorer';
 import type { Action } from './actions';
+import type { ModuleSource } from './modules';
 import type { UiState } from './ui-state';
 import type { Session } from './wasm';
 
@@ -12,6 +13,10 @@ export interface Context {
   readonly root: HTMLElement;
   readonly session: Session;
   readonly ui: UiState;
+  /** Where the guided modules are fetched from, or null when the page offers none. */
+  readonly modules: ModuleSource | null;
+  /** The controller has been disposed: what was waited for is of no use. */
+  readonly disposed: boolean;
   /** Asks the session again and draws what it says. */
   refresh(): void;
   /** Opens the configuration bar and flashes the group `cause` names. */

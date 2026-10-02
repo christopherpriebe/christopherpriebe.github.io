@@ -1,0 +1,86 @@
+{
+  "id": "03-fixture-stale-memory",
+  "title": "Fixture: stale memory",
+  "description": "A store under *write-back* leaves memory stale until the line is written back.",
+  "advanced": true,
+  "preset": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 256,
+      "lineBytes": 16,
+      "associativity": 4,
+      "replacement": "lru",
+      "writePolicy": "writeBack",
+      "allocatePolicy": "writeAllocate"
+    },
+    "timing": { "hitCycles": 1, "missCycles": 20 },
+    "seed": 12345,
+    "advanced": true,
+    "memoryInit": "pattern"
+  },
+  "steps": [
+    {
+      "kind": "instruct",
+      "text": "Store 7 to `0x0A4`.",
+      "expect": {
+        "all": [
+          { "line": { "addr": "0x0A4" }, "dirty": true },
+          { "not": { "memory": { "addr": "0x0A4" }, "equals": 7 } },
+          { "counter": "cycles", "op": ">=", "value": 21 },
+          { "lastAccess": { "kind": "write", "outcome": "miss" } }
+        ]
+      },
+      "showMe": [{ "op": "issue", "kind": "write", "addr": "0x0A4", "value": 7 }],
+      "callout": "cache"
+    },
+    {
+      "kind": "instruct",
+      "text": "Edit the stale word in memory to 9.",
+      "expect": {
+        "all": [
+          { "memory": { "addr": "0x0A4" }, "equals": 9 },
+          { "way": { "set": 2, "way": 0 }, "dirty": true, "tag": 2 }
+        ]
+      },
+      "showMe": [
+        {
+          "op": "edit",
+          "target": { "kind": "memory", "addr": "0x0A4" },
+          "patch": { "kind": "memory", "value": 9 }
+        }
+      ],
+      "callout": "memory"
+    },
+    {
+      "kind": "predict",
+      "text": "Four more lines of set 2 evict this one. What does memory hold at `0x0A4` then?",
+      "options": ["7", "9"],
+      "answer": 0,
+      "explain": "The dirty line is written back, and its 7 replaces the edited 9.",
+      "then": [
+        { "op": "issue", "kind": "read", "addr": "0x1A4" },
+        { "op": "issue", "kind": "read", "addr": "0x2A4" },
+        { "op": "issue", "kind": "read", "addr": "0x3A4" },
+        { "op": "issue", "kind": "read", "addr": "0x4A4" }
+      ],
+      "callout": { "set": 2, "way": 0 }
+    },
+    {
+      "kind": "observe",
+      "text": "Find the write-back.",
+      "until": {
+        "all": [
+          { "event": { "kind": "writeBack" } },
+          { "memory": { "addr": "0x0A4" }, "equals": 7 }
+        ]
+      },
+      "callout": "log"
+    },
+    {
+      "kind": "explain",
+      "text": "Memory matches the line it wrote back.",
+      "callout": "memory"
+    }
+  ]
+}

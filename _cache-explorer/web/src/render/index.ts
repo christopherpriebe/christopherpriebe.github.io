@@ -27,7 +27,10 @@ import { createConfigBar, renderConfigBar, type ConfigBar } from './config-bar';
 import { renderKey } from './key';
 import { createLog, refitsTicks, renderLog, stopLog, type LogBox } from './log';
 import { createMachine, renderMachine, stopMachine, type Machine } from './machine';
+import { createModulePicker, renderModulePicker, type ModulePicker } from './module-picker';
+import { renderModulePanel } from './module-panel';
 import { createProgramDrawer, renderProgram, type ProgramDrawer } from './program';
+import { spotlight } from './spotlight';
 import { renderStats } from './stats';
 import { createTransport, renderTransport, type Transport } from './transport';
 
@@ -65,12 +68,15 @@ interface Shell {
   plane: HTMLElement;
   head: HTMLElement;
   config: ConfigBar;
+  /** The module panel, empty while no module runs. */
+  panel: HTMLElement;
   machine: Machine;
   log: LogBox;
   stats: HTMLElement;
   key: HTMLElement;
   transport: Transport;
   program: ProgramDrawer;
+  modules: ModulePicker;
   live: HTMLElement;
   /**
    * What the last render of the workbench drew from and who to ask for another when the cache
@@ -95,6 +101,7 @@ function shellOf(root: HTMLElement): Shell {
       'aria-atomic': 'true',
     });
     const config = createConfigBar();
+    const panel = h('section', { class: 'cache-explorer__module-panel' });
     const machine = createMachine(() => {
       redrawIfRefit(root);
     });
@@ -105,6 +112,7 @@ function shellOf(root: HTMLElement): Shell {
     const key = h('div', { class: 'cache-explorer__key-box' });
     const transport = createTransport();
     const program = createProgramDrawer();
+    const modules = createModulePicker();
     const plane = h(
       'section',
       {
@@ -114,23 +122,27 @@ function shellOf(root: HTMLElement): Shell {
       },
       head,
       config.element,
+      panel,
       machine.element,
       log.element,
       h('div', { class: 'cache-explorer__lower' }, stats, key),
       transport.element,
       program.element,
+      modules.element,
       live,
     );
     shell = {
       plane,
       head,
       config,
+      panel,
       machine,
       log,
       stats,
       key,
       transport,
       program,
+      modules,
       live,
       last: null,
       refit: null,
@@ -187,7 +199,20 @@ export function render(
     return;
   }
   const shell = shellOf(root);
-  const { plane, head, config, machine, log: logBox, stats, key, transport, program, live } = shell;
+  const {
+    plane,
+    head,
+    config,
+    panel,
+    machine,
+    log: logBox,
+    stats,
+    key,
+    transport,
+    program,
+    modules,
+    live,
+  } = shell;
   // The plane is on the page before the machine is drawn: the cache table is drawn to the width
   // of its box, which a box that is not on the page does not have.
   mount(root, plane);
@@ -197,12 +222,27 @@ export function render(
     h('span', { class: 'cache-explorer__label' }, snap.state.labels.statusText),
   );
   renderConfigBar(root, config, snap, ui);
+  renderModulePanel(panel, snap.module);
   renderMachine(root, machine, snap, ui);
   renderLog(root, logBox, snap, log, ui);
   renderStats(stats, snap);
   renderKey(key, snap);
   renderTransport(root, transport, snap, ui);
   renderProgram(root, program, snap, ui);
+  renderModulePicker(modules, snap, ui);
+  spotlight(
+    plane,
+    {
+      cache: machine.cache.element,
+      memory: machine.memory.element,
+      log: logBox.element,
+      stats,
+      config: config.element,
+      cpu: machine.cpu,
+      transport: transport.element,
+    },
+    snap.module?.callout,
+  );
   if (live.textContent !== snap.timeline.liveText) live.textContent = snap.timeline.liveText;
 }
 

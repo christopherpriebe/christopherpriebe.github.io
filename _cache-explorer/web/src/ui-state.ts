@@ -80,7 +80,19 @@ export interface UiState {
   /** Why the core does not read the jump box's text as an address; null when it does. */
   jumpError: string | null;
   program: { open: boolean; editing: boolean; format: ProgramFormat; text: string };
-  modules: { open: boolean; index: ModuleIndexView | null; run: ModuleRun | null };
+  /**
+   * The guided modules: the drawer, the list the core read from the index (null until it has, and
+   * `load` says how that went), the run in progress, the module being fetched to start, and why the
+   * last start did not happen.
+   */
+  modules: {
+    open: boolean;
+    load: 'none' | 'loading' | 'ready' | 'failed';
+    index: ModuleIndexView | null;
+    run: ModuleRun | null;
+    starting: string | null;
+    error: string | null;
+  };
   /** The Run timer is stepping. */
   running: boolean;
   sheetOpen: boolean;
@@ -122,7 +134,7 @@ export function initialUiState(layout: Layout): UiState {
     jumpText: '',
     jumpError: null,
     program: { open: true, editing: false, format: 'asm', text: SAMPLE_PROGRAM },
-    modules: { open: false, index: null, run: null },
+    modules: { open: false, load: 'none', index: null, run: null, starting: null, error: null },
     running: false,
     sheetOpen: false,
     spaceHeld: false,

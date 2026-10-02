@@ -10,6 +10,7 @@ export const PARAMS = [
   'step',
   'group',
   'option',
+  'module',
   'addr',
   'line',
   'column',

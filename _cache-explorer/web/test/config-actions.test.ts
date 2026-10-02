@@ -800,6 +800,8 @@ describe('what the handlers say to the status line', () => {
       root: document.body,
       session,
       ui,
+      modules: null,
+      disposed: false,
       refresh,
       flash: vi.fn<(cause: Cause) => void>(),
       setRunning: vi.fn<(on: boolean) => void>(),
