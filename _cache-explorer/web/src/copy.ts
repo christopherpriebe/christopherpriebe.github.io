@@ -211,9 +211,7 @@ export const copy = {
     },
     /** In the drawer's line, when there is nothing to parse. */
     none: 'nothing written yet',
-    /** Under the listing's side notes, when the text is not the program the run holds. */
-    pending: 'Not loaded yet. The next Step, Step access or Run loads it and logs the load.',
-    /** The one-line syntax reminder, as the design words it. */
+    /** The one-line syntax reminder. */
     help: {
       asm: [
         'ld r1, [0x40]',
@@ -222,7 +220,7 @@ export const copy = {
         'bnez r1, loop',
         'loop:   labels end in a colon',
       ],
-      trace: ['One access per line:', 'R 0x0A4   load', 'W 0x0A4 7   store 7'],
+      trace: ['One access per line:', 'R 0x0A4   load', 'W 0x0A4 7 store 7'],
     },
   },
   sheet: {

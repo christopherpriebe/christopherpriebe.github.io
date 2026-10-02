@@ -73,6 +73,8 @@ function press(
 const summary = (): string => query('.cache-explorer__program-summary').textContent;
 const dividers = (): string[] =>
   all('.cache-explorer__entry--divider').map((row) => row.textContent);
+const errorLines = (): string[] =>
+  all('.cache-explorer__program-error').map((row) => row.dataset.line ?? '');
 const rowsOf = (): string[] => all('.cache-explorer__listing-text').map((row) => row.textContent);
 
 describe('the program drawer', () => {
@@ -81,7 +83,6 @@ describe('the program drawer', () => {
     expect(query('.cache-explorer__program-title').textContent).toBe('Program');
     expect(summary()).toBe('5 instructions · next: ld r1, [0x0A4]');
     expect(rowsOf()).toEqual(SAMPLE_PROGRAM.split('\n'));
-    expect(query('.cache-explorer__program-pending').textContent).toBe(copy.program.pending);
     expect(query('.cache-explorer__listing').getAttribute('role')).toBe('list');
     expect(all('.cache-explorer__listing-row--current')).toHaveLength(0);
     expect(lent.opCount()).toBe(0);
@@ -106,9 +107,15 @@ describe('the program drawer', () => {
       all('.cache-explorer__listing-row--current').map((row) => row.dataset.line ?? '');
     expect(current()).toEqual(['2']);
     expect(query('.cache-explorer__listing-row--current').textContent).toContain('▸');
-    press(' ');
-    press(' ');
-    expect(current().length).toBe(1);
+    const before = current();
+    // An instruction's line stays current until its last event retires it.
+    for (let presses = 0; presses < 12 && current().join() === before.join(); presses += 1) {
+      press(' ');
+    }
+    const line = lent.state().program?.currentLine;
+    expect(line).toBeDefined();
+    expect(current()).toEqual([String(line)]);
+    expect(current()).not.toEqual(before);
   });
 
   it('gives the loaded program’s own summary once it is loaded', () => {
@@ -117,7 +124,6 @@ describe('the program drawer', () => {
     controller?.refresh();
     expect(summary()).toBe(lent.state().program?.summary);
     expect(summary()).toContain('next: ld r2, [0x0A8]');
-    expect(root.querySelector('.cache-explorer__program-pending')).toBeNull();
   });
 
   it('opens on the program a run already holds, so the next step does not replace it', () => {
@@ -174,7 +180,7 @@ describe('editing the text', () => {
     expect(summary()).toBe('2 errors · first on line 2');
     expect(box().getAttribute('aria-invalid')).toBe('true');
     write('lw r2, [0x1]');
-    expect(summary()).toBe('1 error · on line 1');
+    expect(summary()).toBe('1 error on line 1');
     write('ld r1, [0x0A4]');
     expect(box().hasAttribute('aria-invalid')).toBe(false);
   });
@@ -233,7 +239,6 @@ describe('the program reaching the run', () => {
       'future',
     ]);
     expect(summary()).toBe('5 instructions · next: ld r1, [0x0A4]');
-    expect(query('.cache-explorer__program-pending').textContent).toBe(copy.program.pending);
   });
 
   it('loads a changed text with the next Shift+Space, and only then', () => {
@@ -242,7 +247,6 @@ describe('the program reaching the run', () => {
     click('[data-action="program-edit"]');
     write('add r1, r0, #1\nadd r1, r1, #1');
     expect(dividers()).toHaveLength(1);
-    expect(query('.cache-explorer__program-pending').textContent).toBe(copy.program.pending);
     click('button[data-action="program-edit"]');
     press(' ', { shiftKey: true });
     expect(dividers()).toEqual([
@@ -250,7 +254,6 @@ describe('the program reaching the run', () => {
       'Loaded a program of 2 instructions',
     ]);
     expect(lent.state().program?.source).toBe('add r1, r0, #1\nadd r1, r1, #1');
-    expect(root.querySelector('.cache-explorer__program-pending')).toBeNull();
   });
 
   it('loads on a Run tick as it does on Space', () => {
@@ -279,15 +282,52 @@ describe('the program reaching the run', () => {
     expect(dividers()).toEqual([]);
   });
 
+  it('keeps the plain name of its button, and does not call it a toggle', () => {
+    open();
+    const edit = query('button[data-action="program-edit"]');
+    expect(edit.textContent).toBe(copy.program.edit);
+    expect(edit.hasAttribute('aria-pressed')).toBe(false);
+    edit.click();
+    expect(query('button[data-action="program-edit"]').textContent).toBe(copy.program.done);
+    expect(query('button[data-action="program-edit"]').hasAttribute('aria-pressed')).toBe(false);
+  });
+
+  it('shows the program the run holds when the cursor is inside the log, whatever the text', () => {
+    open('frame-3a');
+    click('[data-action="program-edit"]');
+    write('add r1, r0, #1');
+    click('button[data-action="program-edit"]');
+    press('z');
+    // The edit loads nothing at the cursor: the listing, the current line and the summary stay
+    // the run's own, and Space only moves on.
+    expect(lent.state().program?.currentLine).toBeDefined();
+    expect(rowsOf()).toEqual(SAMPLE_PROGRAM.split('\n'));
+    expect(all('.cache-explorer__listing-row--current').map((row) => row.dataset.line)).toEqual([
+      String(lent.state().program?.currentLine),
+    ]);
+    expect(summary()).toBe(lent.state().program?.summary);
+    const ops = lent.opCount();
+    const before = dividers();
+    press(' ');
+    expect(lent.opCount()).toBe(ops);
+    expect(dividers()).toEqual(before);
+  });
+
   it('reports the core’s no-program message when the drawer is empty', () => {
     open();
     click('[data-action="program-edit"]');
     write('');
     click('button[data-action="program-edit"]');
+    const twin = SCENARIOS['first-visit']?.();
+    if (!twin) throw new Error('no first-visit scenario');
+    const outcome = twin.stepEvent(null);
+    twin.free();
+    if (outcome.status !== 'idle') throw new Error('an empty run moved');
+    const none = outcome.message;
     expect(query('.cache-explorer__listing-empty').textContent).toBe(copy.program.empty.asm);
     expect(summary()).toBe(copy.program.none);
     press(' ');
-    expect(query('.cache-explorer__status').textContent).not.toBe('');
+    expect(query('.cache-explorer__status').textContent).toBe(none);
     expect(lent.opCount()).toBe(0);
   });
 });
@@ -302,7 +342,11 @@ describe('the input type', () => {
       query('[data-action="program-format"][data-option="trace"]').getAttribute('aria-pressed'),
     ).toBe('true');
     expect(lent.state().program?.format).toBe('asm');
-    expect(all('.cache-explorer__listing-row--wrong').length).toBeGreaterThan(0);
+    // The run's program stays on show, whatever the format of the text.
+    expect(all('.cache-explorer__listing-row--wrong')).toHaveLength(0);
+    click('[data-action="program-edit"]');
+    expect(errorLines()).not.toHaveLength(0);
+    click('button[data-action="program-edit"]');
     expect(query('.cache-explorer__program-help').textContent).toContain('One access per line');
     click('[data-action="program-format"][data-option="asm"]');
     expect(all('.cache-explorer__listing-row--wrong')).toHaveLength(0);

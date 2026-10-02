@@ -2305,24 +2305,17 @@ rect.cache-explorer__tick--on {
 }
 
 .cache-explorer__program-side {
-  font: var(--cache-explorer-font-label);
+  font: var(--cache-explorer-font-body);
+  font-size: 13px;
   line-height: 21px;
 }
 
 .cache-explorer__program-help {
   margin: 13px 0 0;
+  font: var(--cache-explorer-font-label);
   font-size: 12px;
   line-height: 20px;
   white-space: pre-line;
-}
-
-.cache-explorer__program-pending {
-  margin: 9px 0 0;
-  font: var(--cache-explorer-font-body);
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--cache-explorer-text);
-  text-wrap: pretty;
 }
 
 .cache-explorer__link.cache-explorer__program-edit {

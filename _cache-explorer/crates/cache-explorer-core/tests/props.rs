@@ -3369,7 +3369,7 @@ proptest! {
             prop_assert_eq!(&session.parse_program(&text, format), &result);
             match result {
                 ParseResult::Ok { instructions, .. } => prop_assert!(instructions >= 1),
-                ParseResult::Invalid { errors } => {
+                ParseResult::Invalid { errors, .. } => {
                     prop_assert!(!errors.is_empty());
                     prop_assert!(errors.len() <= MAX_PARSE_ERRORS as usize);
                     for error in &errors {

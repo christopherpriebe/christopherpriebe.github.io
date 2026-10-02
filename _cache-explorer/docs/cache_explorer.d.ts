@@ -1911,7 +1911,7 @@ export interface RequestView {
 /**
  * The result of parsing a program or trace, as the program drawer shows it.
  */
-export type ParseResult = { status: "ok"; instructions: number; summary: string } | { status: "invalid"; errors: ParseError[] };
+export type ParseResult = { status: "ok"; instructions: number; summary: string } | { status: "invalid"; errors: ParseError[]; summary: string };
 
 /**
  * The shape of a valid configuration, as `Config::validate` computes it.

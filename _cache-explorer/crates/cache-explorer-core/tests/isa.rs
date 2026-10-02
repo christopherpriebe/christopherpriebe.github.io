@@ -72,7 +72,7 @@ fn errors_under(
 ) -> Result<Vec<ParseError>, String> {
     Ok(match parse_under(config, source, format)? {
         ParseResult::Ok { .. } => Vec::new(),
-        ParseResult::Invalid { errors } => errors,
+        ParseResult::Invalid { errors, .. } => errors,
     })
 }
 
@@ -174,6 +174,7 @@ fn a_parse_result_serializes_tagged_by_status() {
         invalid,
         serde_json::json!({
             "status": "invalid",
+            "summary": "1 error on line 2",
             "errors": [{
                 "line": 2,
                 "column": 1,
@@ -754,6 +755,26 @@ fn a_result_lists_at_most_the_limit_of_errors() {
                 if *errors == MAX_PARSE_ERRORS + 1
         ),
         "{refused:?}"
+    );
+}
+
+#[test]
+fn an_invalid_result_words_its_own_summary() {
+    let summary = |source: &str, format| match parse(source, format).unwrap() {
+        ParseResult::Invalid { summary, .. } => summary,
+        ParseResult::Ok { .. } => String::from("ok"),
+    };
+    assert_eq!(summary("lw", Asm), "1 error on line 1");
+    assert_eq!(
+        summary("ld r1, [0x40]\nlw\nlw", Asm),
+        "2 errors · first on line 2"
+    );
+    assert_eq!(summary("X 0x40", Trace), "1 error on line 1");
+    // The count is every error, not only the listed ones.
+    let many = vec!["lw"; count(MAX_PARSE_ERRORS) + 5].join("\n");
+    assert_eq!(
+        summary(&many, Asm),
+        format!("{} errors · first on line 1", MAX_PARSE_ERRORS + 5)
     );
 }
 

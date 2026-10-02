@@ -1,8 +1,8 @@
 // The program drawer: a line that opens and closes it, and under it the listing or the text box on
 // the left, and on the right the input type, a reminder of the syntax, and the button that swaps
 // the listing for the box. The listing is the loaded program with its current line marked, or,
-// when the text is not what the run holds, the text as written, with the lines the core found
-// wrong marked. The core reads the text on every change; nothing here parses it.
+// while the text is edited or no program is loaded, the text as written, with the lines the core
+// found wrong marked. The core reads the text on every change; nothing here parses it.
 
 import type { ParseError, ParseResult, ProgramFormat } from '../../pkg/cache_explorer';
 import { commit, control, type Put } from '../controls';
@@ -46,46 +46,29 @@ interface Shown {
   currentLine: number | null;
   /** The drawer's line, next to its name. */
   summary: string;
-  /** Written text that parses and is not the program the run holds. */
-  pending: boolean;
 }
 
-/** `2 errors · first on line 3`, for the drawer's line. */
-function errorSummary(errors: readonly ParseError[]): string {
-  const first = errors[0];
-  const count = `${String(errors.length)} error${errors.length === 1 ? '' : 's'}`;
-  if (!first) return count;
-  return `${count} · ${errors.length === 1 ? '' : 'first '}on line ${String(first.line)}`;
-}
-
+/** The run's program whenever it holds one and the text is not being edited; else the text. */
 function shown(snap: Snapshot, ui: UiState): Shown {
-  const { text, format } = ui.program;
+  const { text, editing } = ui.program;
   const loaded = snap.state.program;
-  if (loaded?.source === text && loaded.format === format) {
+  if (loaded && !editing) {
     return {
       kind: 'loaded',
       lines: loaded.lines.map((line) => line.text),
       currentLine: loaded.currentLine ?? null,
       summary: loaded.summary,
-      pending: false,
     };
   }
   const draft: ParseResult | undefined = snap.programDraft;
   if (text === '' || !draft) {
-    return {
-      kind: 'empty',
-      lines: [],
-      currentLine: null,
-      summary: copy.program.none,
-      pending: false,
-    };
+    return { kind: 'empty', lines: [], currentLine: null, summary: copy.program.none };
   }
   return {
     kind: 'written',
     lines: text.split('\n'),
     currentLine: null,
-    summary: draft.status === 'ok' ? draft.summary : errorSummary(draft.errors),
-    pending: draft.status === 'ok',
+    summary: draft.summary,
   };
 }
 
@@ -178,7 +161,7 @@ function errorList(errors: readonly ParseError[], format: ProgramFormat): HTMLEl
   );
 }
 
-function side(ui: UiState, editing: boolean, pending: boolean): HTMLElement {
+function side(ui: UiState, editing: boolean): HTMLElement {
   const { format } = ui.program;
   const option = (each: ProgramFormat): HTMLElement =>
     h(
@@ -212,14 +195,12 @@ function side(ui: UiState, editing: boolean, pending: boolean): HTMLElement {
         index === 0 ? [line] : [h('br'), line],
       ),
     ),
-    pending && h('p', { class: 'cache-explorer__program-pending' }, copy.program.pending),
     h(
       'button',
       {
         type: 'button',
         class: 'cache-explorer__link cache-explorer__program-edit',
         'data-action': 'program-edit',
-        'aria-pressed': String(editing),
       },
       editing ? copy.program.done : copy.program.edit,
     ),
@@ -275,7 +256,7 @@ export function renderProgram(
       editing ? put(textBox(root, format, errors.length > 0), text) : put(drawer.listing),
       errors.length > 0 && errorList(errors, format),
     ),
-    side(ui, editing, view.pending),
+    side(ui, editing),
   ]);
   if (!editing && moved) reveal(drawer.listing);
 }

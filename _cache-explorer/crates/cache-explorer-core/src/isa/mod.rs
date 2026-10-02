@@ -146,6 +146,9 @@ pub enum ParseResult {
         /// The errors in source order, at most [`MAX_PARSE_ERRORS`]; never
         /// empty.
         errors: Vec<ParseError>,
+        /// The drawer's line: `2 errors · first on line 3`, or
+        /// `1 error on line 3`. It counts every error, not only the listed.
+        summary: String,
     },
 }
 
@@ -203,6 +206,7 @@ impl Geometry {
                 summary: program.summary(0),
             },
             Err(failure) => ParseResult::Invalid {
+                summary: failure.summary(),
                 errors: failure.listed(),
             },
         }
@@ -307,6 +311,15 @@ impl ParseFailure {
     /// The first error in source order.
     pub(crate) fn first(&self) -> &ParseError {
         &self.first
+    }
+
+    /// The drawer's line for these errors: how many, and where the first is.
+    pub(crate) fn summary(&self) -> String {
+        let line = self.first.line;
+        match self.rest.len() {
+            0 => format!("1 error on line {line}"),
+            more => format!("{} errors · first on line {line}", more.saturating_add(1)),
+        }
     }
 
     /// The errors the drawer lists: the first [`MAX_PARSE_ERRORS`].
