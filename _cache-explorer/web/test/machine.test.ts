@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ChangeRef, State } from '../pkg/cache_explorer';
-import { config, loads, SCENARIOS } from '../dev/sessions';
+import { config, FRAME_3B, loads, SCENARIOS } from '../dev/sessions';
 import { buildSnapshot } from '../src/controller';
 import { h } from '../src/dom';
 import { render } from '../src/render';
@@ -645,6 +645,28 @@ describe('the CPU box', () => {
     expect(texts('.cache-explorer__register-name')).toEqual(cpu.registers.map((r) => r.register));
     expect(texts('.cache-explorer__register-value')).toEqual(cpu.registers.map((r) => r.text));
     expect(query('.cache-explorer__registers').getAttribute('aria-label')).toBe('Registers');
+  });
+
+  it('counts the stall down in a timed run, through the write-back, until the fill', () => {
+    open(SCENARIOS['frame-3b']?.() ?? Session.firstVisit());
+    draw();
+    const status = (): string | undefined =>
+      query('.cache-explorer__cpu-status .cache-explorer__label').textContent;
+    expect(status()).toBe('Stalled: 20 cycles');
+    const session = current();
+    const seen = [status()];
+    for (let i = 0; i < 4; i++) {
+      session.stepEvent(FRAME_3B);
+      draw();
+      seen.push(status());
+    }
+    expect(seen).toEqual([
+      'Stalled: 20 cycles',
+      'Stalled: 20 cycles',
+      'Access #5 · step 7 of 9',
+      'Access #5 · step 8 of 9',
+      'Access #5 · step 9 of 9',
+    ]);
   });
 
   it('marks a miss with an open square, a hit with a filled one, and neither with none', () => {

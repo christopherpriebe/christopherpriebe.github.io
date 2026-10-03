@@ -1538,7 +1538,7 @@ rect.cache-explorer__tick--on {
 
 .cache-explorer__event {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   gap: 9px;
   padding: 3px 6px 3px 9px;
   border-left: 2px solid transparent;
@@ -1566,6 +1566,16 @@ rect.cache-explorer__tick--on {
 
 .cache-explorer__event-text {
   text-wrap: pretty;
+}
+
+/* A timed run's stamp: quiet, on the right, in the figures' tabular digits. */
+.cache-explorer__event-cycle {
+  font: var(--cache-explorer-font-label);
+  font-size: 12px;
+  line-height: 23px;
+  color: var(--cache-explorer-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .cache-explorer__why {
@@ -1687,6 +1697,12 @@ rect.cache-explorer__tick--on {
 
 .cache-explorer__amat + .cache-explorer__amat {
   margin-top: 0;
+}
+
+/* What the run spent is the second, quieter line, and breaks evenly where the column is narrow. */
+.cache-explorer__measured {
+  color: var(--cache-explorer-text);
+  text-wrap: balance;
 }
 
 .cache-explorer__spark {

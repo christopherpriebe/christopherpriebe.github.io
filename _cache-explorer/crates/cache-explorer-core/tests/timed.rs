@@ -526,6 +526,33 @@ fn the_cpu_counts_the_stall_down_until_the_last_transfer() -> Result<(), String>
 }
 
 #[test]
+fn the_log_rows_carry_the_stamps_of_their_events() -> Result<(), String> {
+    let mut timed_session = session(&timed(Preset::TwoWayLru.config(), 1, 20), &FRAME_3B)?;
+    timed_session.seek(position_of(&timed_session, 5, Stall)?);
+    let entries = timed_session.entries(4, 1);
+    let rows = &entries[0].events;
+    let stamps: Vec<Option<u64>> = rows
+        .iter()
+        .map(|row| {
+            row.cycle
+                .map(|cycle| cycle.to_string().parse().unwrap_or(0))
+        })
+        .collect();
+    assert_eq!(rows.len(), 9);
+    assert_eq!(
+        stamps,
+        [64, 65, 65, 65, 85, 85, 105, 105, 105].map(Some).to_vec()
+    );
+    let mut untimed_session = session(&Preset::TwoWayLru.config(), &FRAME_3B)?;
+    untimed_session.seek(position_of(&untimed_session, 5, Victim)?);
+    assert!(untimed_session.entries(4, 1)[0]
+        .events
+        .iter()
+        .all(|row| row.cycle.is_none()));
+    Ok(())
+}
+
+#[test]
 fn a_write_around_stalls_for_the_store_alone() -> Result<(), String> {
     let config = timed(
         direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteNoAllocate),

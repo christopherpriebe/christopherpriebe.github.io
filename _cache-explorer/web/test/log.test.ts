@@ -102,6 +102,29 @@ describe('the entries', () => {
     expect(query('.cache-explorer__event--current').dataset.pos).toBe(String(lent.position().pos));
   });
 
+  it('stamps each event of a timed run with the cycle it completes at, and an untimed run with none', () => {
+    open('frame-3b');
+    const rows = all('.cache-explorer__event');
+    const stamps = rows.map(
+      (row) => row.querySelector('.cache-explorer__event-cycle')?.textContent,
+    );
+    const events = lent.entries(0, 100).flatMap((entry) => entry.events);
+    expect(stamps).toEqual(events.map((event) => copy.log.cycle(event.cycle ?? -1)));
+    expect(stamps).toEqual([64, 65, 65, 65, 85, 85, 105, 105, 105].map(copy.log.cycle));
+    expect(stamps[0]).toBe('cycle 64');
+  });
+
+  it('stamps nothing in an untimed run', () => {
+    open('frame-3a');
+    expect(all('.cache-explorer__event').length).toBeGreaterThan(0);
+    expect(all('.cache-explorer__event-cycle')).toHaveLength(0);
+  });
+
+  it('groups a stamp from a thousand, like every other figure in a sentence', () => {
+    expect(copy.log.cycle(1)).toBe('cycle 1');
+    expect(copy.log.cycle(2041)).toBe('cycle 2,041');
+  });
+
   it('fades the entries the cursor has not reached, and gives them no changed line', () => {
     open();
     lent.seek(Number(all('.cache-explorer__entry-head')[0]?.dataset.pos));

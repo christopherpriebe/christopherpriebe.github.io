@@ -993,6 +993,11 @@ export interface EventRow {
      */
     text: string;
     /**
+     * The run's cycle count once the event's effect is complete; present in
+     * timed mode only.
+     */
+    cycle?: Cycle;
+    /**
      * The configuration group responsible, for the row's "why:" link.
      */
     cause?: Cause;

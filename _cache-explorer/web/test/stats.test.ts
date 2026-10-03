@@ -100,6 +100,29 @@ describe('the stats', () => {
     expect(query('.cache-explorer__measured')).toBe(all('.cache-explorer__amat')[1]);
   });
 
+  it('keeps both lines at the last completed access while a dirty victim is written back', () => {
+    open('frame-3b');
+    expect(lent.state().event?.kind).toBe('writeBack');
+    const lines = all('.cache-explorer__amat').map((line) => line.textContent);
+    expect(lines).toEqual([
+      'AMAT = 1 + 0.75 × 20 = 16.0 cycles',
+      'Measured: 16.0 cycles per access (AMAT plus 0.0 for 0 write-backs).',
+    ]);
+    expect(rows()).toContainEqual(['Cycles', '85']);
+    expect(rows()).toContainEqual(['Write-backs', '1']);
+  });
+
+  it('moves the lines to the new access once its last event is reached', () => {
+    open('frame-3b');
+    lent.seekStep(lent.timeline().stepCount);
+    controller.refresh();
+    expect(all('.cache-explorer__amat').map((line) => line.textContent)).toEqual([
+      'AMAT = 1 + 0.80 × 20 = 17.0 cycles',
+      'Measured: 21.0 cycles per access (AMAT plus 4.0 for 1 write-back).',
+    ]);
+    expect(rows()).toContainEqual(['Cycles', '105']);
+  });
+
   it('shows neither line untimed', () => {
     open('frame-3a');
     expect(all('.cache-explorer__amat')).toHaveLength(0);

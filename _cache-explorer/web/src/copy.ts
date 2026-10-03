@@ -135,6 +135,8 @@ export const copy = {
     },
     changed: 'changed',
     why: 'why:',
+    /** The stamp on an event of a timed run: the run's cycle count once the event is complete. */
+    cycle: (cycles: number): string => `cycle ${cycles.toLocaleString('en-US')}`,
   },
   stats: {
     title: 'Stats',
