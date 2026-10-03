@@ -140,16 +140,16 @@ fn the_measured_cost_names_the_write_backs() {
     let measured = counters.measured(timing(1, 20)).unwrap();
     assert_eq!(
         measured.text,
-        "Measured: 11.0 cycles per access (AMAT plus 2.0 for 1 write-back)."
+        "Measured after access #10: 11.0 cycles per access, 2.0 of them for write-backs."
     );
     assert!((measured.value - 11.0).abs() < 1e-12);
     assert_eq!(
         text(run(5, 4, 2, 125).measured(timing(1, 20))).as_deref(),
-        Some("Measured: 25.0 cycles per access (AMAT plus 8.0 for 2 write-backs).")
+        Some("Measured after access #5: 25.0 cycles per access, 8.0 of them for write-backs.")
     );
     assert_eq!(
         text(run(2, 1, 0, 22).measured(timing(1, 20))).as_deref(),
-        Some("Measured: 11.0 cycles per access (AMAT plus 0.0 for 0 write-backs).")
+        Some("Measured after access #2: 11.0 cycles per access, 0.0 of them for write-backs.")
     );
 }
 
@@ -159,18 +159,18 @@ fn the_measured_numbers_round_half_up_on_their_own() {
     // 43 cycles: 14.33 rounds down to 14.3, and 20 / 3 = 6.67 up to 6.7.
     assert_eq!(
         text(run(3, 1, 1, 43).measured(timing(1, 20))).as_deref(),
-        Some("Measured: 14.3 cycles per access (AMAT plus 6.7 for 1 write-back).")
+        Some("Measured after access #3: 14.3 cycles per access, 6.7 of them for write-backs.")
     );
     // At 1/5: 4 + 3 × 5 + 2 × 5 = 29 cycles in 4 accesses, 7.25, rounds
     // up to 7.3; 4 + 5 + 5 = 14 leaves 5 / 4 = 1.25, which rounds up to
     // 1.3.
     assert_eq!(
         text(run(4, 3, 2, 29).measured(timing(1, 5))).as_deref(),
-        Some("Measured: 7.3 cycles per access (AMAT plus 2.5 for 2 write-backs).")
+        Some("Measured after access #4: 7.3 cycles per access, 2.5 of them for write-backs.")
     );
     assert_eq!(
         text(run(4, 1, 1, 14).measured(timing(1, 5))).as_deref(),
-        Some("Measured: 3.5 cycles per access (AMAT plus 1.3 for 1 write-back).")
+        Some("Measured after access #4: 3.5 cycles per access, 1.3 of them for write-backs.")
     );
     let measured = run(3, 1, 1, 43).measured(timing(1, 20)).unwrap();
     assert!((measured.value - 43.0 / 3.0).abs() < 1e-12);
@@ -192,7 +192,12 @@ fn the_printed_rate_can_move_amat_by_half_a_hundredth_of_the_miss_penalty() {
         assert_eq!(text(counters.amat(slow)).as_deref(), Some(amat));
         assert_eq!(
             text(counters.measured(slow)).as_deref(),
-            Some("Measured: 6.0 cycles per access (AMAT plus 0.0 for 0 write-backs).")
+            Some(
+                format!(
+                    "Measured after access #{accesses}: 6.0 cycles per access, 0.0 of them for write-backs."
+                )
+                .as_str()
+            )
         );
     }
 }

@@ -526,33 +526,6 @@ fn the_cpu_counts_the_stall_down_until_the_last_transfer() -> Result<(), String>
 }
 
 #[test]
-fn the_log_rows_carry_the_stamps_of_their_events() -> Result<(), String> {
-    let mut timed_session = session(&timed(Preset::TwoWayLru.config(), 1, 20), &FRAME_3B)?;
-    timed_session.seek(position_of(&timed_session, 5, Stall)?);
-    let entries = timed_session.entries(4, 1);
-    let rows = &entries[0].events;
-    let stamps: Vec<Option<u64>> = rows
-        .iter()
-        .map(|row| {
-            row.cycle
-                .map(|cycle| cycle.to_string().parse().unwrap_or(0))
-        })
-        .collect();
-    assert_eq!(rows.len(), 9);
-    assert_eq!(
-        stamps,
-        [64, 65, 65, 65, 85, 85, 105, 105, 105].map(Some).to_vec()
-    );
-    let mut untimed_session = session(&Preset::TwoWayLru.config(), &FRAME_3B)?;
-    untimed_session.seek(position_of(&untimed_session, 5, Victim)?);
-    assert!(untimed_session.entries(4, 1)[0]
-        .events
-        .iter()
-        .all(|row| row.cycle.is_none()));
-    Ok(())
-}
-
-#[test]
 fn a_write_around_stalls_for_the_store_alone() -> Result<(), String> {
     let config = timed(
         direct_mapped(WritePolicy::WriteBack, AllocatePolicy::WriteNoAllocate),
@@ -603,7 +576,10 @@ fn amat_and_the_measured_cost_follow_the_cursor() -> Result<(), String> {
         figures(&session),
         (
             Some("AMAT = 1 + 0.80 \u{d7} 20 = 17.0 cycles".to_owned()),
-            Some("Measured: 21.0 cycles per access (AMAT plus 4.0 for 1 write-back).".to_owned())
+            Some(
+                "Measured after access #5: 21.0 cycles per access, 4.0 of them for write-backs."
+                    .to_owned()
+            )
         )
     );
     // After access #4: 64 cycles for 4 accesses, 3 misses and no write-back.
@@ -617,7 +593,10 @@ fn amat_and_the_measured_cost_follow_the_cursor() -> Result<(), String> {
         figures(&session),
         (
             Some("AMAT = 1 + 0.75 \u{d7} 20 = 16.0 cycles".to_owned()),
-            Some("Measured: 16.0 cycles per access (AMAT plus 0.0 for 0 write-backs).".to_owned())
+            Some(
+                "Measured after access #4: 16.0 cycles per access, 0.0 of them for write-backs."
+                    .to_owned()
+            )
         )
     );
     // The rate is rounded before AMAT is computed from it.
@@ -629,7 +608,10 @@ fn amat_and_the_measured_cost_follow_the_cursor() -> Result<(), String> {
         figures(&rounded),
         (
             Some("AMAT = 1 + 0.33 \u{d7} 20 = 7.6 cycles".to_owned()),
-            Some("Measured: 7.7 cycles per access (AMAT plus 0.0 for 0 write-backs).".to_owned())
+            Some(
+                "Measured after access #3: 7.7 cycles per access, 0.0 of them for write-backs."
+                    .to_owned()
+            )
         )
     );
     // Neither exists before the first access, nor untimed.
@@ -649,7 +631,10 @@ fn amat_and_the_measured_cost_wait_for_an_access_in_flight_to_complete() -> Resu
     let mut session = session(&timed(Preset::TwoWayLru.config(), 1, 20), &FRAME_3B)?;
     let after_fourth = (
         Some("AMAT = 1 + 0.75 \u{d7} 20 = 16.0 cycles".to_owned()),
-        Some("Measured: 16.0 cycles per access (AMAT plus 0.0 for 0 write-backs).".to_owned()),
+        Some(
+            "Measured after access #4: 16.0 cycles per access, 0.0 of them for write-backs."
+                .to_owned(),
+        ),
     );
     let fourth = session
         .entries(0, u32::MAX)
@@ -707,7 +692,10 @@ fn amat_and_the_measured_cost_wait_for_an_access_in_flight_to_complete() -> Resu
         figures(&session),
         (
             Some("AMAT = 1 + 0.80 \u{d7} 20 = 17.0 cycles".to_owned()),
-            Some("Measured: 21.0 cycles per access (AMAT plus 4.0 for 1 write-back).".to_owned())
+            Some(
+                "Measured after access #5: 21.0 cycles per access, 4.0 of them for write-backs."
+                    .to_owned()
+            )
         )
     );
 

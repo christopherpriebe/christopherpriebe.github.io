@@ -993,11 +993,6 @@ export interface EventRow {
      */
     text: string;
     /**
-     * The run's cycle count once the event's effect is complete; present in
-     * timed mode only.
-     */
-    cycle?: Cycle;
-    /**
      * The configuration group responsible, for the row's "why:" link.
      */
     cause?: Cause;
@@ -2360,10 +2355,10 @@ export interface Stats {
      */
     amat?: Figure;
     /**
-     * In timed mode, what the run actually spent per access: "Measured:
-     * 11.0 cycles per access (AMAT plus 2.0 for 1 write-back)." As of the
-     * run's last completed access, like `amat`. Absent untimed, and until
-     * the run's first access has completed.
+     * In timed mode, what the run actually spent per access: "Measured
+     * after access #4: 11.0 cycles per access, 2.0 of them for
+     * write-backs." As of the run's last completed access, like `amat`.
+     * Absent untimed, and until the run's first access has completed.
      */
     measured?: Figure;
     /**

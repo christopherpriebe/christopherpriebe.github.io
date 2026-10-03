@@ -96,7 +96,7 @@ describe('the stats', () => {
     const lines = all('.cache-explorer__amat').map((line) => line.textContent);
     expect(lines).toEqual([amat?.text, measured?.text]);
     expect(lines[0]).toMatch(/^AMAT = /);
-    expect(lines[1]).toMatch(/^Measured: /);
+    expect(lines[1]).toMatch(/^Measured after access #/);
     expect(query('.cache-explorer__measured')).toBe(all('.cache-explorer__amat')[1]);
   });
 
@@ -106,7 +106,7 @@ describe('the stats', () => {
     const lines = all('.cache-explorer__amat').map((line) => line.textContent);
     expect(lines).toEqual([
       'AMAT = 1 + 0.75 × 20 = 16.0 cycles',
-      'Measured: 16.0 cycles per access (AMAT plus 0.0 for 0 write-backs).',
+      'Measured after access #4: 16.0 cycles per access, 0.0 of them for write-backs.',
     ]);
     expect(rows()).toContainEqual(['Cycles', '85']);
     expect(rows()).toContainEqual(['Write-backs', '1']);
@@ -118,7 +118,7 @@ describe('the stats', () => {
     controller.refresh();
     expect(all('.cache-explorer__amat').map((line) => line.textContent)).toEqual([
       'AMAT = 1 + 0.80 × 20 = 17.0 cycles',
-      'Measured: 21.0 cycles per access (AMAT plus 4.0 for 1 write-back).',
+      'Measured after access #5: 21.0 cycles per access, 4.0 of them for write-backs.',
     ]);
     expect(rows()).toContainEqual(['Cycles', '105']);
   });

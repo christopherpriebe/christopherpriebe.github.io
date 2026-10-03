@@ -47,17 +47,17 @@ pub(crate) fn amat(hit: u32, rate: u64, miss: u32, amat: u64) -> String {
     )
 }
 
-/// The measured line under AMAT: the cycles the run spent per access, and
-/// what its write-backs, which AMAT leaves out, added. "Measured: 11.0
-/// cycles per access (AMAT plus 2.0 for 1 write-back)." `measured` and
-/// `plus` are in tenths of a cycle, already rounded.
-pub(crate) fn measured(measured: u64, plus: u64, writebacks: u32) -> String {
+/// The measured line under AMAT: the cycles the run spent per access as of
+/// its `accesses`th access, and how many of those went to write-backs, which
+/// AMAT leaves out. "Measured after access #4: 11.0 cycles per access, 2.0 of
+/// them for write-backs." `measured` and `write_backs` are in tenths of a
+/// cycle, already rounded.
+pub(crate) fn measured(accesses: u32, measured: u64, write_backs: u64) -> String {
     format!(
-        "Measured: {} cycles per access (AMAT plus {} for {} {}).",
+        "Measured after access #{}: {} cycles per access, {} of them for write-backs.",
+        format::data(accesses),
         format::decimal(measured, 1),
-        format::decimal(plus, 1),
-        format::data(writebacks),
-        format::plural(writebacks, "write-back", "write-backs")
+        format::decimal(write_backs, 1)
     )
 }
 
@@ -613,18 +613,18 @@ mod tests {
     }
 
     #[test]
-    fn the_measured_line_names_the_write_backs_amat_leaves_out() {
+    fn the_measured_line_says_when_it_was_taken_and_what_write_backs_cost() {
         assert_eq!(
-            measured(110, 20, 1),
-            "Measured: 11.0 cycles per access (AMAT plus 2.0 for 1 write-back)."
+            measured(4, 110, 20),
+            "Measured after access #4: 11.0 cycles per access, 2.0 of them for write-backs."
         );
         assert_eq!(
-            measured(77, 0, 0),
-            "Measured: 7.7 cycles per access (AMAT plus 0.0 for 0 write-backs)."
+            measured(3, 77, 0),
+            "Measured after access #3: 7.7 cycles per access, 0.0 of them for write-backs."
         );
         assert_eq!(
-            measured(12_345, 10_005, 12_000),
-            "Measured: 1,234.5 cycles per access (AMAT plus 1,000.5 for 12,000 write-backs)."
+            measured(12_000, 12_345, 10_005),
+            "Measured after access #12,000: 1,234.5 cycles per access, 1,000.5 of them for write-backs."
         );
     }
 

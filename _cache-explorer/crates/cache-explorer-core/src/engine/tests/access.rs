@@ -2549,7 +2549,8 @@ fn amat_and_the_measured_cost_of_fixed_traces() {
         figures(&run),
         (
             "AMAT = 1 + 0.80 \u{d7} 20 = 17.0 cycles".to_owned(),
-            "Measured: 21.0 cycles per access (AMAT plus 4.0 for 1 write-back).".to_owned()
+            "Measured after access #5: 21.0 cycles per access, 4.0 of them for write-backs."
+                .to_owned()
         )
     );
 
@@ -2572,7 +2573,8 @@ fn amat_and_the_measured_cost_of_fixed_traces() {
         figures(&run),
         (
             "AMAT = 1 + 0.40 \u{d7} 20 = 9.0 cycles".to_owned(),
-            "Measured: 11.0 cycles per access (AMAT plus 2.0 for 1 write-back).".to_owned()
+            "Measured after access #10: 11.0 cycles per access, 2.0 of them for write-backs."
+                .to_owned()
         )
     );
 
@@ -2587,7 +2589,8 @@ fn amat_and_the_measured_cost_of_fixed_traces() {
         figures(&run),
         (
             "AMAT = 1 + 0.33 \u{d7} 20 = 7.6 cycles".to_owned(),
-            "Measured: 7.7 cycles per access (AMAT plus 0.0 for 0 write-backs).".to_owned()
+            "Measured after access #3: 7.7 cycles per access, 0.0 of them for write-backs."
+                .to_owned()
         )
     );
     let amat = run

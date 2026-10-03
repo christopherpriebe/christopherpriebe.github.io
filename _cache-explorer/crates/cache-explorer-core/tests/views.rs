@@ -220,7 +220,7 @@ fn frame_3b_paused_on_its_write_back_shows_a_stalled_cpu_and_a_dirty_victim() {
     );
     assert_eq!(
         state.stats.measured.map(|figure| figure.text).as_deref(),
-        Some("Measured: 16.0 cycles per access (AMAT plus 0.0 for 0 write-backs).")
+        Some("Measured after access #4: 16.0 cycles per access, 0.0 of them for write-backs.")
     );
 }
 

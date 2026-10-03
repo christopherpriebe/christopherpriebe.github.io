@@ -456,7 +456,7 @@ state = {
     },
     "measured": {
       "value": 16.0,
-      "text": "Measured: 16.0 cycles per access (AMAT plus 0.0 for 0 write-backs)."
+      "text": "Measured after access #4: 16.0 cycles per access, 0.0 of them for write-backs."
     },
     "recent": [
       "miss",
@@ -546,7 +546,6 @@ timeline = {
         "label": "5.1",
         "kind": "decode",
         "text": "Load 0x2A4: tag 0x0A, set 2, offset 4 (word 1).",
-        "cycle": 64,
         "cause": "lineSize",
         "tense": "past"
       },
@@ -555,7 +554,6 @@ timeline = {
         "label": "5.2",
         "kind": "miss",
         "text": "Set 2: no valid way holds tag 0x0A. Miss.",
-        "cycle": 65,
         "cause": "associativity",
         "tense": "past"
       },
@@ -564,7 +562,6 @@ timeline = {
         "label": "5.3",
         "kind": "victim",
         "text": "Way 1 chosen: least recently used (rank 1).",
-        "cycle": 65,
         "cause": "replacement",
         "tense": "past"
       },
@@ -573,7 +570,6 @@ timeline = {
         "label": "5.4",
         "kind": "stall",
         "text": "The CPU stalls for 40 cycles: 20 to write line 0x1A0 back, then 20 to fetch line 0x2A0.",
-        "cycle": 65,
         "cause": "timing",
         "tense": "past"
       },
@@ -582,7 +578,6 @@ timeline = {
         "label": "5.5",
         "kind": "writeBack",
         "text": "Way 1 is dirty: write line 0x1A0 back to memory first.",
-        "cycle": 85,
         "cause": "writePolicy",
         "tense": "current"
       },
@@ -591,7 +586,6 @@ timeline = {
         "label": "5.6",
         "kind": "evict",
         "text": "Evict line 0x1A0 (tag 0x06) from way 1.",
-        "cycle": 85,
         "cause": "replacement",
         "tense": "future"
       },
@@ -600,7 +594,6 @@ timeline = {
         "label": "5.7",
         "kind": "fill",
         "text": "Fill way 1 with line 0x2A0–0x2AF from memory.",
-        "cycle": 105,
         "cause": "lineSize",
         "tense": "future"
       },
@@ -609,7 +602,6 @@ timeline = {
         "label": "5.8",
         "kind": "complete",
         "text": "Read word 1 of way 1 (68) into r1.",
-        "cycle": 105,
         "tense": "future"
       },
       {
@@ -617,7 +609,6 @@ timeline = {
         "label": "5.9",
         "kind": "rank",
         "text": "LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.",
-        "cycle": 105,
         "cause": "replacement",
         "tense": "future"
       }
@@ -694,7 +685,6 @@ entries = [
         "label": "5.1",
         "kind": "decode",
         "text": "Load 0x2A4: tag 0x0A, set 2, offset 4 (word 1).",
-        "cycle": 64,
         "cause": "lineSize",
         "tense": "past"
       },
@@ -703,7 +693,6 @@ entries = [
         "label": "5.2",
         "kind": "miss",
         "text": "Set 2: no valid way holds tag 0x0A. Miss.",
-        "cycle": 65,
         "cause": "associativity",
         "tense": "past"
       },
@@ -712,7 +701,6 @@ entries = [
         "label": "5.3",
         "kind": "victim",
         "text": "Way 1 chosen: least recently used (rank 1).",
-        "cycle": 65,
         "cause": "replacement",
         "tense": "past"
       },
@@ -721,7 +709,6 @@ entries = [
         "label": "5.4",
         "kind": "stall",
         "text": "The CPU stalls for 40 cycles: 20 to write line 0x1A0 back, then 20 to fetch line 0x2A0.",
-        "cycle": 65,
         "cause": "timing",
         "tense": "past"
       },
@@ -730,7 +717,6 @@ entries = [
         "label": "5.5",
         "kind": "writeBack",
         "text": "Way 1 is dirty: write line 0x1A0 back to memory first.",
-        "cycle": 85,
         "cause": "writePolicy",
         "tense": "current"
       },
@@ -739,7 +725,6 @@ entries = [
         "label": "5.6",
         "kind": "evict",
         "text": "Evict line 0x1A0 (tag 0x06) from way 1.",
-        "cycle": 85,
         "cause": "replacement",
         "tense": "future"
       },
@@ -748,7 +733,6 @@ entries = [
         "label": "5.7",
         "kind": "fill",
         "text": "Fill way 1 with line 0x2A0–0x2AF from memory.",
-        "cycle": 105,
         "cause": "lineSize",
         "tense": "future"
       },
@@ -757,7 +741,6 @@ entries = [
         "label": "5.8",
         "kind": "complete",
         "text": "Read word 1 of way 1 (68) into r1.",
-        "cycle": 105,
         "tense": "future"
       },
       {
@@ -765,7 +748,6 @@ entries = [
         "label": "5.9",
         "kind": "rank",
         "text": "LRU ranks in set 2: way 1 becomes 0 (most recent); way 0 is 1.",
-        "cycle": 105,
         "cause": "replacement",
         "tense": "future"
       }

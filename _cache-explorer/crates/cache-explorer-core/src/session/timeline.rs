@@ -31,7 +31,7 @@ use crate::explain;
 use crate::machine::Machine;
 use crate::op::{AccessKind, ProgramFormat};
 use crate::request::{Origin, Request};
-use crate::units::{Addr, Cycle, EventPos, Register, SetIndex, WayIndex};
+use crate::units::{Addr, EventPos, Register, SetIndex, WayIndex};
 
 /// The bit of a tick set on an entry's first step. A tick is the byte the
 /// scrubber draws for one step of a run; the ticks of the displayed run and
@@ -188,10 +188,6 @@ pub struct EventRow {
     pub kind: EventKind,
     /// Its log line.
     pub text: String,
-    /// The run's cycle count once the event's effect is complete; present in
-    /// timed mode only.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cycle: Option<Cycle>,
     /// The configuration group responsible, for the row's "why:" link.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cause: Option<Cause>,
@@ -704,7 +700,6 @@ impl Session {
                         label: event.label.clone(),
                         kind: event.kind,
                         text: event.explain.clone(),
-                        cycle: event.cycle,
                         cause: event.cause,
                         tense: tense_of(pos, cursor),
                     }

@@ -219,8 +219,6 @@ function eventRow(row: EventRow): HTMLElement {
       row.cause && ' ',
       row.cause && whyLink(row.cause, row.pos),
     ),
-    row.cycle !== undefined &&
-      h('span', { class: 'cache-explorer__event-cycle' }, copy.log.cycle(row.cycle)),
   );
 }
 

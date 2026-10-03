@@ -214,10 +214,10 @@ pub struct Stats {
     /// first access has completed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub amat: Option<Figure>,
-    /// In timed mode, what the run actually spent per access: "Measured:
-    /// 11.0 cycles per access (AMAT plus 2.0 for 1 write-back)." As of the
-    /// run's last completed access, like `amat`. Absent untimed, and until
-    /// the run's first access has completed.
+    /// In timed mode, what the run actually spent per access: "Measured
+    /// after access #4: 11.0 cycles per access, 2.0 of them for
+    /// write-backs." As of the run's last completed access, like `amat`.
+    /// Absent untimed, and until the run's first access has completed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub measured: Option<Figure>,
     /// The sparkline: the outcomes of the run's latest accesses, oldest
@@ -336,11 +336,11 @@ impl Counters {
 
     /// What the run actually spent per access, `cycles / accesses`, and how
     /// much of it the write-backs, which AMAT leaves out, account for:
-    /// `writebacks × miss / accesses`. "Measured: 11.0 cycles per access
-    /// (AMAT plus 2.0 for 1 write-back)." Each number is rounded half up to
-    /// one decimal on its own. Between accesses the cycles are exactly the
-    /// hit time per access and the miss penalty per miss and per write-back,
-    /// so the measured cost is the exact AMAT plus the write-backs' part.
+    /// `writebacks × miss / accesses`. "Measured after access #4: 11.0
+    /// cycles per access, 2.0 of them for write-backs." Each number is
+    /// rounded half up to one decimal on its own. Between accesses the cycles
+    /// are exactly the hit time per access and the miss penalty per miss and
+    /// per write-back, so the measured cost is the exact AMAT plus the write-backs' part.
     /// The printed AMAT is not the exact one: it is computed from the miss
     /// rate rounded to two places, which moves it by up to half a hundredth
     /// of the miss penalty (5 cycles at 1,000 cycles), either way, so it can
@@ -362,7 +362,7 @@ impl Counters {
         let plus = format::half_up(write_backs, accesses, 1)?;
         Some(Figure {
             value: cycles as f64 / f64::from(self.accesses),
-            text: explain::measured(measured, plus, self.writebacks),
+            text: explain::measured(self.accesses, measured, plus),
         })
     }
 }
