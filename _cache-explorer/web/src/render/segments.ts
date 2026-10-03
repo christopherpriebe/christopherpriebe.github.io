@@ -17,3 +17,8 @@ export function segments(list: readonly TextSegment[]): Node[] {
     }
   });
 }
+
+/** The segments as plain text, for a live region that says what the page shows. */
+export function plainText(list: readonly TextSegment[]): string {
+  return list.map((segment) => segment.text).join('');
+}

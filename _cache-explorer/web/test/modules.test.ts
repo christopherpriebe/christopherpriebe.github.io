@@ -65,10 +65,24 @@ const text = (selector: string): string => q(selector)?.textContent ?? '';
 
 beforeAll(loadWasm);
 
+/** What the browser has and the test document does not: the scroll to the panel, and the motion query. */
+const scrolled = vi.fn<(options?: ScrollIntoViewOptions) => void>();
+let reduced = false;
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = scrolled;
+  window.matchMedia = ((query: string) => ({
+    matches: reduced,
+    media: query,
+  })) as typeof window.matchMedia;
+});
+
 beforeEach(() => {
   root = h('div', { class: 'cache-explorer' });
   document.body.replaceChildren(root);
   controller = null;
+  reduced = false;
+  scrolled.mockClear();
 });
 
 afterEach(() => {
@@ -170,7 +184,7 @@ describe('starting a module', () => {
     expect(text('.cache-explorer__module-text')).toContain('The low 4 bits of an address');
     expect(root.querySelectorAll('.cache-explorer__module-dot')).toHaveLength(6);
     expect(root.querySelectorAll('.cache-explorer__module-dot--here')).toHaveLength(1);
-    expect(q('.cache-explorer__module-dots')?.getAttribute('aria-label')).toBe('Step 1 of 6');
+    expect(q('.cache-explorer__module-dots')?.getAttribute('aria-hidden')).toBe('true');
     expect(lent.state().config.cache.associativity).toBe(1);
   });
 
@@ -199,15 +213,41 @@ describe('starting a module', () => {
     expect(text('.cache-explorer__modules-head')).toContain('Running 02');
   });
 
+  it('brings the panel into view and says which module began', async () => {
+    await open();
+    await begin('01-fixture-miss-then-hit');
+    expect(scrolled).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(text('.cache-explorer__status')).toContain('Started the module Fixture: miss then hit');
+    expect(text('.cache-explorer__status')).toContain('Step 1 of 6');
+  });
+
+  it('scrolls without a glide when the student asked for less motion', async () => {
+    reduced = true;
+    await open();
+    await begin('01-fixture-miss-then-hit');
+    expect(scrolled).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+  });
+
+  it('keeps the live regions across renders, so a repeated message is not announced again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await open(source({ module: () => Promise.reject(new Error('offline')) }));
+    click('modules-toggle');
+    click('module-start', '[data-module="01-fixture-miss-then-hit"]');
+    await settle();
+    const alert = q('.cache-explorer__modules [role="alert"]');
+    expect(alert?.textContent).toBe('The module could not be loaded.');
+    click('modules-toggle');
+    click('modules-toggle');
+    expect(q('.cache-explorer__modules [role="alert"]')).toBe(alert);
+  });
+
   it('says why a module that cannot be fetched did not start', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await open(source({ module: () => Promise.reject(new Error('offline')) }));
     click('modules-toggle');
     click('module-start', '[data-module="01-fixture-miss-then-hit"]');
     await settle();
-    expect(text('.cache-explorer__modules-body [role="alert"]')).toBe(
-      'The module could not be loaded.',
-    );
+    expect(text('.cache-explorer__modules [role="alert"]')).toBe('The module could not be loaded.');
     expect(q('.cache-explorer__module-panel')?.childElementCount).toBe(0);
     expect(action('module-start')?.disabled).toBe(false);
   });
@@ -217,7 +257,7 @@ describe('starting a module', () => {
     click('modules-toggle');
     click('module-start', '[data-module="01-fixture-miss-then-hit"]');
     await settle();
-    expect(text('.cache-explorer__modules-body [role="alert"]')).not.toBe('');
+    expect(text('.cache-explorer__modules [role="alert"]')).not.toBe('');
     expect(q('.cache-explorer__module-panel')?.childElementCount).toBe(0);
   });
 
@@ -230,7 +270,7 @@ describe('starting a module', () => {
     });
     click('module-start', '[data-module="02-fixture-switch-config"]');
     await settle();
-    expect(text('.cache-explorer__modules-body [role="alert"]')).toBe('The session is full.');
+    expect(text('.cache-explorer__modules [role="alert"]')).toBe('The session is full.');
     expect(text('.cache-explorer__module-meta')).toContain('Fixture: miss then hit');
     expect(lent.opCount()).toBe(before);
   });
@@ -326,6 +366,22 @@ describe('the steps', () => {
     expect(option(1)?.textContent).toContain('(selected)');
   });
 
+  it('keeps the panel status element while the feedback on it stays the same', async () => {
+    await atPrediction();
+    const live = q('.cache-explorer__module-panel + [role="status"]');
+    click('module-select', '[data-option="1"]');
+    click('module-check');
+    expect(live?.textContent).toContain('Not quite.');
+    const seen = vi.fn();
+    const watch = new MutationObserver(seen);
+    watch.observe(live as Node, { childList: true, characterData: true, subtree: true });
+    click('modules-toggle');
+    await settle();
+    watch.disconnect();
+    expect(q('.cache-explorer__module-panel + [role="status"]')).toBe(live);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
   it('locks what the core locks while the prediction is open', async () => {
     await atPrediction();
     const enabled = lent.state().controls.enabled;
@@ -341,20 +397,23 @@ describe('the steps', () => {
     click('module-select', '[data-option="1"]');
     click('module-check');
     const note = q('.cache-explorer__module-note--incorrect');
-    expect(note?.getAttribute('role')).toBe('status');
+    expect(note?.hasAttribute('role')).toBe(false);
     expect(note?.textContent).toContain('Not quite.');
+    expect(text('.cache-explorer__module-panel + [role="status"]')).toContain('Not quite.');
     expect(option(1)?.textContent).toContain('(not the answer)');
     expect(action('module-show-me')).not.toBeNull();
     expect(action('issue')?.disabled).toBe(true);
 
     click('module-select', '[data-option="0"]');
-    expect(q('.cache-explorer__module-note')).toBeNull();
+    expect(q('.cache-explorer__module-panel .cache-explorer__module-note')).toBeNull();
     click('module-check');
     expect(q('.cache-explorer__module-note--correct')?.textContent).toContain('Correct.');
     expect(option(0)?.textContent).toContain('(the answer)');
     expect(action('module-next')).not.toBeNull();
     expect(action('module-check')).toBeNull();
-    expect(option(2)?.hasAttribute('disabled')).toBe(true);
+    click('module-select', '[data-option="2"]');
+    expect(option(2)?.classList.contains('cache-explorer__module-option--idle')).toBe(true);
+    expect(option(0)?.classList.contains('cache-explorer__module-option--correct')).toBe(true);
     expect(action('issue')?.disabled).toBe(false);
   });
 
@@ -366,6 +425,10 @@ describe('the steps', () => {
     expect(q('.cache-explorer__module-note--shown')?.textContent).toContain('Shown.');
     expect(option(0)?.classList.contains('cache-explorer__module-option--shown')).toBe(true);
     expect(option(2)?.classList.contains('cache-explorer__module-option--wrong')).toBe(false);
+    // The answer shown was never the student's choice: only the choice is pressed.
+    expect(option(0)?.getAttribute('aria-pressed')).toBe('false');
+    expect(option(2)?.getAttribute('aria-pressed')).toBe('true');
+    expect(q('.cache-explorer__module-dots')?.getAttribute('aria-hidden')).toBe('true');
     expect(action('module-next')).not.toBeNull();
   });
 
@@ -375,17 +438,23 @@ describe('the steps', () => {
     try {
       const view = run.view(session);
       const panel = h('section');
-      renderModulePanel(panel, {
-        ...view,
-        notice: 'The run is at its limit.',
-        actions: [{ action: 'next', enabled: false }],
-      });
+      const live = h('div');
+      renderModulePanel(
+        panel,
+        {
+          ...view,
+          notice: 'The run is at its limit.',
+          actions: [{ action: 'next', enabled: false }],
+        },
+        live,
+      );
+      expect(live.textContent).toBe('The run is at its limit.');
       const note = panel.querySelector('.cache-explorer__module-note--refused');
       expect(note?.textContent).toBe('The run is at its limit.');
       expect(panel.querySelector<HTMLButtonElement>('[data-action="module-next"]')?.disabled).toBe(
         true,
       );
-      renderModulePanel(panel, undefined);
+      renderModulePanel(panel, undefined, live);
       expect(panel.childElementCount).toBe(0);
     } finally {
       run.free();

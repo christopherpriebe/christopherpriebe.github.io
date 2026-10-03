@@ -2421,8 +2421,13 @@ rect.cache-explorer__tick--on {
   cursor: pointer;
 }
 
-.cache-explorer__module-option:disabled {
+.cache-explorer__module-option--correct,
+.cache-explorer__module-option--shown {
   cursor: default;
+}
+
+.cache-explorer__module-option-text {
+  min-width: 0;
 }
 
 /* The mark: a hollow square, filled once the option is the chosen or the right one. */
@@ -2538,8 +2543,12 @@ rect.cache-explorer__tick--on {
   border-top: 1px solid var(--cache-explorer-rule);
 }
 
-.cache-explorer__modules-body > .cache-explorer__module-note {
+.cache-explorer__modules > .cache-explorer__module-note {
   margin-top: 18px;
+}
+
+.cache-explorer__modules > .cache-explorer__module-note:empty {
+  display: none;
 }
 
 .cache-explorer__modules-failed {

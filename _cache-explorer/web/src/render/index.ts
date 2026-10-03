@@ -70,6 +70,8 @@ interface Shell {
   config: ConfigBar;
   /** The module panel, empty while no module runs. */
   panel: HTMLElement;
+  /** The panel's live region: kept, so the feedback is announced once. */
+  panelLive: HTMLElement;
   machine: Machine;
   log: LogBox;
   stats: HTMLElement;
@@ -102,6 +104,10 @@ function shellOf(root: HTMLElement): Shell {
     });
     const config = createConfigBar();
     const panel = h('section', { class: 'cache-explorer__module-panel' });
+    const panelLive = h('div', {
+      class: 'cache-explorer__visually-hidden',
+      role: 'status',
+    });
     const machine = createMachine(() => {
       redrawIfRefit(root);
     });
@@ -123,6 +129,7 @@ function shellOf(root: HTMLElement): Shell {
       head,
       config.element,
       panel,
+      panelLive,
       machine.element,
       log.element,
       h('div', { class: 'cache-explorer__lower' }, stats, key),
@@ -136,6 +143,7 @@ function shellOf(root: HTMLElement): Shell {
       head,
       config,
       panel,
+      panelLive,
       machine,
       log,
       stats,
@@ -204,6 +212,7 @@ export function render(
     head,
     config,
     panel,
+    panelLive,
     machine,
     log: logBox,
     stats,
@@ -222,7 +231,7 @@ export function render(
     h('span', { class: 'cache-explorer__label' }, snap.state.labels.statusText),
   );
   renderConfigBar(root, config, snap, ui);
-  renderModulePanel(panel, snap.module);
+  renderModulePanel(panel, snap.module, panelLive);
   renderMachine(root, machine, snap, ui);
   renderLog(root, logBox, snap, log, ui);
   renderStats(stats, snap);

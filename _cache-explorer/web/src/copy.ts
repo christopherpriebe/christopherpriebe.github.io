@@ -251,6 +251,8 @@ export const copy = {
     retry: 'Try again',
     /** The status line when a run replaces the one a module was running on. */
     ended: 'The module ended because another run was opened.',
+    /** The status line when a module begins: its title and the step it is on. */
+    started: (title: string, progress: string) => `Started the module ${title}. ${progress}.`,
     startFailed: 'The module could not be loaded.',
   },
   sheet: {

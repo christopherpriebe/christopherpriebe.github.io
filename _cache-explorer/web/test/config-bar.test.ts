@@ -393,13 +393,13 @@ describe('"Reset to apply?"', () => {
 
   it('is not there when nothing is pending', () => {
     draw();
-    expect(root.querySelector('[role="alert"]')).toBeNull();
+    expect(root.querySelector('.cache-explorer__pending[role="alert"]')).toBeNull();
   });
 
   it('is an alert with the core’s question and the two ways to answer it', () => {
     ask();
     draw();
-    const prompt = query('[role="alert"]');
+    const prompt = query('.cache-explorer__pending[role="alert"]');
     expect(prompt.querySelector('.cache-explorer__pending-title')?.textContent).toBe(
       'Reset to apply?',
     );
@@ -428,7 +428,7 @@ describe('"Reset to apply?"', () => {
   it('stays the same element while its question does, so it is not announced again', () => {
     ask();
     draw();
-    const prompt = query('[role="alert"]');
+    const prompt = query('.cache-explorer__pending[role="alert"]');
     const apply = query('[data-action="apply-pending"]');
     const watch = new MutationObserver(() => undefined);
     watch.observe(prompt, {
@@ -441,23 +441,23 @@ describe('"Reset to apply?"', () => {
     draw();
     expect(watch.takeRecords()).toEqual([]);
     watch.disconnect();
-    expect(query('[role="alert"]')).toBe(prompt);
+    expect(query('.cache-explorer__pending[role="alert"]')).toBe(prompt);
     expect(query('[data-action="apply-pending"]')).toBe(apply);
   });
 
   it('is rewritten when the question changes, and goes when it is answered', () => {
     ask();
     draw();
-    const prompt = query('[role="alert"]');
+    const prompt = query('.cache-explorer__pending[role="alert"]');
     ui.pendingMessage = 'Another question.';
     draw();
-    expect(query('[role="alert"]')).toBe(prompt);
+    expect(query('.cache-explorer__pending[role="alert"]')).toBe(prompt);
     expect(query('.cache-explorer__pending-text').textContent).toBe('Another question.');
 
     ui.pending = null;
     ui.pendingMessage = null;
     draw();
-    expect(root.querySelector('[role="alert"]')).toBeNull();
+    expect(root.querySelector('.cache-explorer__pending[role="alert"]')).toBeNull();
     expect(prompt.isConnected).toBe(false);
   });
 });

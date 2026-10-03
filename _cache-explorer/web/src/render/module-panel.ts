@@ -6,7 +6,7 @@
 import type { ModuleAction, ModuleView, OptionView } from '../../pkg/cache_explorer';
 import { copy } from '../copy';
 import { cls, h } from '../dom';
-import { segments } from './segments';
+import { plainText, segments } from './segments';
 
 /** The kind of a button decides whether it is the filled one. */
 const PRIMARY = new Set(['check', 'next', 'restart']);
@@ -22,7 +22,7 @@ const ACTION_NAMES = {
 function dots(view: ModuleView): HTMLElement {
   return h(
     'span',
-    { class: 'cache-explorer__module-dots', role: 'img', 'aria-label': view.progressText },
+    { class: 'cache-explorer__module-dots', 'aria-hidden': 'true' },
     ...Array.from({ length: view.stepCount }, (_, index) =>
       h('span', {
         class: cls(
@@ -35,12 +35,10 @@ function dots(view: ModuleView): HTMLElement {
   );
 }
 
-/** Whether an option's answer has been given, which locks the choice. */
-function answered(options: readonly OptionView[]): boolean {
-  return options.some((option) => option.state === 'correct' || option.state === 'shown');
-}
+/** Chosen, or marked by the answer to the choice; the answer shown is not the student's. */
+const PRESSED = new Set<OptionView['state']>(['selected', 'wrong', 'correct']);
 
-function option(view: OptionView, index: number, locked: boolean): HTMLElement {
+function option(view: OptionView, index: number): HTMLElement {
   const note = copy.modules.optionStates[view.state];
   return h(
     'button',
@@ -49,11 +47,10 @@ function option(view: OptionView, index: number, locked: boolean): HTMLElement {
       class: cls('cache-explorer__module-option', `cache-explorer__module-option--${view.state}`),
       'data-action': 'module-select',
       'data-option': index,
-      'aria-pressed': String(view.state !== 'idle'),
-      disabled: locked,
+      'aria-pressed': String(PRESSED.has(view.state)),
     },
     h('span', { class: 'cache-explorer__module-mark', 'aria-hidden': 'true' }),
-    ...segments(view.text),
+    h('span', { class: 'cache-explorer__module-option-text' }, ...segments(view.text)),
     note !== '' && h('span', { class: 'cache-explorer__visually-hidden' }, ` (${note})`),
   );
 }
@@ -74,13 +71,32 @@ function button(action: ModuleAction): HTMLElement {
   );
 }
 
-/** Draws the panel into `panel`, or empties it when no module is running. */
-export function renderModulePanel(panel: HTMLElement, view: ModuleView | undefined): void {
+/** What the live region says: the feedback, or the notice of a refused move, or nothing. */
+function announcement(view: ModuleView): string {
+  const parts: string[] = [];
+  if (view.feedback) parts.push(`${view.feedback.head} ${plainText(view.feedback.text)}`);
+  if (view.notice !== undefined) parts.push(view.notice);
+  return parts.join(' ');
+}
+
+/** Writes the live region's words only when they differ, so nothing is announced twice. */
+function say(live: HTMLElement, message: string): void {
+  if (live.textContent !== message) live.textContent = message;
+}
+
+/** Draws the panel into `panel`, or empties it when no module is running; `live` is kept across renders. */
+export function renderModulePanel(
+  panel: HTMLElement,
+  view: ModuleView | undefined,
+  live: HTMLElement,
+): void {
   if (!view) {
     panel.replaceChildren();
     panel.removeAttribute('aria-label');
+    say(live, '');
     return;
   }
+  say(live, announcement(view));
   panel.setAttribute('aria-label', copy.modules.panel);
   const { options, feedback } = view;
   panel.replaceChildren(
@@ -107,7 +123,7 @@ export function renderModulePanel(panel: HTMLElement, view: ModuleView | undefin
         h(
           'div',
           { class: 'cache-explorer__module-options', role: 'group', 'aria-label': view.kindLabel },
-          ...options.map((each, index) => option(each, index, answered(options))),
+          ...options.map(option),
         ),
       feedback &&
         h(
@@ -117,7 +133,6 @@ export function renderModulePanel(panel: HTMLElement, view: ModuleView | undefin
               'cache-explorer__module-note',
               `cache-explorer__module-note--${feedback.tone}`,
             ),
-            role: 'status',
           },
           h('b', null, feedback.head),
           ' ',
@@ -128,7 +143,6 @@ export function renderModulePanel(panel: HTMLElement, view: ModuleView | undefin
           'div',
           {
             class: 'cache-explorer__module-note cache-explorer__module-note--refused',
-            role: 'status',
           },
           view.notice,
         ),

@@ -94,6 +94,7 @@ async function begin(context: Context, id: string): Promise<void> {
   ui.modules.error = null;
   context.refresh();
   let error: string | null = null;
+  let started = false;
   try {
     let text: string | null = null;
     try {
@@ -108,6 +109,7 @@ async function begin(context: Context, id: string): Promise<void> {
       const next = ModuleRun.fromJson(text);
       try {
         adopt(context, next);
+        started = true;
       } catch (failure) {
         // The run was not adopted, so nothing else owns it.
         if (ui.modules.run !== next) next.free();
@@ -119,7 +121,22 @@ async function begin(context: Context, id: string): Promise<void> {
   }
   ui.modules.starting = null;
   ui.modules.error = error;
+  if (started) announceStart(context);
   context.refresh();
+  if (started) showPanel(context);
+}
+
+/** Says, on the status line, which module began and where it is: the drawer is far from the panel. */
+function announceStart(context: Context): void {
+  const view = context.ui.modules.run?.view(context.session);
+  if (view) context.ui.status = copy.modules.started(view.title, view.progressText);
+}
+
+/** Brings the panel into view, without the glide for a student who asked for less motion. */
+function showPanel(context: Context): void {
+  const panel = context.root.querySelector('.cache-explorer__module-panel');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  panel?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 }
 
 function start(context: Context, action: Action): void {

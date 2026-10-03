@@ -40,7 +40,8 @@ const option = (group: string, index: number): HTMLButtonElement =>
 const detail = (which: 'basics' | 'advanced'): HTMLButtonElement =>
   buttonAt(`[data-action='detail'][data-option='${which}']`);
 
-const prompt = (): HTMLElement | null => root.querySelector('[role="alert"]');
+const prompt = (): HTMLElement | null =>
+  root.querySelector('.cache-explorer__pending[role="alert"]');
 
 /** Types into one of the timing fields, as the student does. */
 function type(action: string, text: string): HTMLInputElement {

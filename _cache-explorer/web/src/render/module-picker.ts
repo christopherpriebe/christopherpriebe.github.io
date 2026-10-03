@@ -14,13 +14,29 @@ import { segments } from './segments';
 export interface ModulePicker {
   element: HTMLElement;
   head: HTMLElement;
+  /** The core's refusal or the failed start: kept, and only rewritten when its words change. */
+  alert: HTMLElement;
   body: HTMLElement;
 }
 
 export function createModulePicker(): ModulePicker {
   const head = h('div', { class: 'cache-explorer__modules-head' });
   const body = h('div', { class: 'cache-explorer__modules-body' });
-  return { element: h('div', { class: 'cache-explorer__modules' }, head, body), head, body };
+  const alert = h('div', {
+    class: 'cache-explorer__module-note cache-explorer__module-note--refused',
+    role: 'alert',
+  });
+  return {
+    element: h('div', { class: 'cache-explorer__modules' }, head, alert, body),
+    head,
+    alert,
+    body,
+  };
+}
+
+/** Writes the alert's words only when they differ, so an unchanged error is never announced again. */
+function say(alert: HTMLElement, message: string): void {
+  if (alert.textContent !== message) alert.textContent = message;
 }
 
 /** The line next to the drawer's name: the run's, the list's, or that the list could not be had. */
@@ -71,6 +87,7 @@ export function renderModulePicker(picker: ModulePicker, snap: Snapshot, ui: UiS
   // Nothing is drawn until the list has come or has failed, so a page that has it at once never shows the wait.
   if (load === 'none' || load === 'loading') {
     picker.head.replaceChildren();
+    say(picker.alert, '');
     picker.body.replaceChildren();
     return;
   }
@@ -92,23 +109,12 @@ export function renderModulePicker(picker: ModulePicker, snap: Snapshot, ui: UiS
       h('span', { class: 'cache-explorer__program-summary' }, summaryOf(snap)),
     ),
   );
+  say(picker.alert, open && error !== null ? error : '');
   if (!open) {
     picker.body.replaceChildren();
     return;
   }
   picker.body.replaceChildren(
-    ...(error === null
-      ? []
-      : [
-          h(
-            'div',
-            {
-              class: 'cache-explorer__module-note cache-explorer__module-note--refused',
-              role: 'alert',
-            },
-            error,
-          ),
-        ]),
     load === 'failed'
       ? h(
           'div',
