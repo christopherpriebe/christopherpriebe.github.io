@@ -1659,18 +1659,32 @@ mod tests {
 
     #[test]
     fn a_file_is_refused_by_its_size_before_it_is_read() {
-        assert_eq!(run_file_too_large(1_048_576), None);
+        let over = MAX_SHARE_JSON_BYTES + 1;
+        assert_eq!(run_file_too_large(MAX_SHARE_JSON_BYTES), None);
         assert_eq!(
-            run_file_too_large(1_048_577).as_deref(),
+            run_file_too_large(over).as_deref(),
             Some(
-                "The saved run is 1,048,577 bytes of JSON; at most 1,048,576 bytes can be opened."
+                format!(
+                    "The saved run is {} bytes of JSON; at most {} bytes can be opened.",
+                    format::setting(over),
+                    format::setting(MAX_SHARE_JSON_BYTES)
+                )
+                .as_str()
             )
         );
         assert!(run_file_too_large(u32::MAX).is_some());
-        assert_eq!(trace_file_too_large(16_384), None);
+        let over = MAX_PROGRAM_BYTES + 1;
+        assert_eq!(trace_file_too_large(MAX_PROGRAM_BYTES), None);
         assert_eq!(
-            trace_file_too_large(16_385).as_deref(),
-            Some("The trace is 16,385 bytes; traces of at most 16,384 bytes can be opened.")
+            trace_file_too_large(over).as_deref(),
+            Some(
+                format!(
+                    "The trace is {} bytes; traces of at most {} bytes can be opened.",
+                    format::setting(over),
+                    format::setting(MAX_PROGRAM_BYTES)
+                )
+                .as_str()
+            )
         );
     }
 }

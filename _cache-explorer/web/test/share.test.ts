@@ -4,7 +4,7 @@ import { start, type Controller } from '../src/controller';
 import { copy } from '../src/copy';
 import { h } from '../src/dom';
 import { HASH_DEBOUNCE_MS, linkTo, readHash, type HashStore } from '../src/hash';
-import { Session } from '../src/wasm';
+import { Session, ShareLoad } from '../src/wasm';
 import { loadWasm } from './support/wasm';
 
 /** The core's words for a run that outgrew a link, as the facade throws them. */
@@ -175,6 +175,20 @@ describe('the address', () => {
     expect(status()).toBe(TOO_LONG);
   });
 
+  it('still draws when the browser refuses to change the address', () => {
+    const store = fakeStore();
+    store.replace = () => {
+      throw new DOMException('Too many calls to history.replaceState()', 'SecurityError');
+    };
+    open(store);
+    const before = steps();
+    click('step-access');
+    click('step-access');
+    expect(steps()).toBeGreaterThan(before);
+    expect(status()).toBe('');
+    expect(q('.cache-explorer__plane--workbench')).not.toBeNull();
+  });
+
   it('reads what an address asks for', () => {
     expect(readHash('#s=abc_-')).toEqual({ kind: 'share', text: 'abc_-' });
     expect(readHash('#m=01-a')).toEqual({ kind: 'module', id: '01-a' });
@@ -245,7 +259,8 @@ describe('Save', () => {
       blobs.push(blob);
       return 'blob:run';
     });
-    URL.revokeObjectURL = vi.fn();
+    const revoke = vi.fn();
+    URL.revokeObjectURL = revoke;
     const names: string[] = [];
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
       this: HTMLAnchorElement,
@@ -259,6 +274,9 @@ describe('Save', () => {
     expect(names[0]).toMatch(/^run-\d{4}-\d{2}-\d{2}\.cache-explorer\.json$/);
     expect(status()).toBe(`Saved ${names[0] ?? ''}.`);
     expect(await blobs[0]?.text()).toBe(lent.toJson());
+    // The address of the blob is kept a while: a browser may not have begun the download yet.
+    await settle();
+    expect(revoke).not.toHaveBeenCalled();
   });
 });
 
@@ -277,20 +295,20 @@ describe('Load', () => {
 
   it('frees the old session before the core replays the new one', async () => {
     open(fakeStore());
-    const order: string[] = [];
     const free = lent.free.bind(lent);
-    vi.spyOn(lent, 'free').mockImplementation(() => {
-      order.push('free');
+    const freed = vi.spyOn(lent, 'free').mockImplementation(() => {
       free();
     });
     const toJson = vi.spyOn(lent, 'toJson');
-    toJson.mockImplementation(() => {
-      order.push('toJson');
-      return Session.prototype.toJson.call(lent);
-    });
+    const replay = vi.spyOn(ShareLoad, 'fromJson');
     const { json } = run(1);
     await choose(new File([json], 'a.cache-explorer.json'));
-    expect(order).toEqual(['toJson', 'free']);
+    const [taken] = toJson.mock.invocationCallOrder;
+    const [letGo] = freed.mock.invocationCallOrder;
+    const [began] = replay.mock.invocationCallOrder;
+    expect(taken).toBeDefined();
+    expect(taken).toBeLessThan(letGo ?? 0);
+    expect(letGo).toBeLessThan(began ?? 0);
   });
 
   it('reads a .txt file as a trace into the run', async () => {
@@ -302,11 +320,28 @@ describe('Load', () => {
     expect(lent.state().program?.format).toBe('trace');
   });
 
-  it('puts a trace the core cannot read in the status line and leaves the run', async () => {
+  it('puts a trace the core cannot read in the drawer, to fix in place, and leaves the run', async () => {
     open(fakeStore());
-    await choose(new File(['this is not a trace'], 'bad.txt'));
+    const bad = 'R 0x0A4\nthis is not a trace\n';
+    await choose(new File([bad], 'bad.txt'));
     expect(lent.opCount()).toBe(0);
     expect(status()).not.toBe('');
+    const drawer = q('textarea');
+    expect(drawer).toBeInstanceOf(HTMLTextAreaElement);
+    expect((drawer as HTMLTextAreaElement).value).toBe(bad);
+  });
+
+  it('builds the run again from where the load began when the core faults while replaying', async () => {
+    open(fakeStore());
+    click('issue');
+    const head = text('.cache-explorer__head');
+    vi.spyOn(ShareLoad.prototype, 'advance').mockImplementation(() => {
+      throw new WebAssembly.RuntimeError('unreachable');
+    });
+    await choose(new File([run(2).json], 'a.cache-explorer.json'));
+    expect(status()).toBe(copy.recovered);
+    expect(text('.cache-explorer__head')).toBe(head);
+    expect(q('.cache-explorer__plane--workbench')).not.toBeNull();
   });
 
   it('refuses a file larger than the core can open without reading it', async () => {
@@ -348,8 +383,27 @@ describe('Load', () => {
         'Start fresh',
         'Open with 2-way instead',
         copy.opening.keepRun,
-        copy.opening.showContents,
+        copy.opening.showFileContents,
       ]);
+    });
+
+    it('names the contents as a file, not a link', async () => {
+      await fail();
+      expect(text('[data-action="load-contents"]')).toBe(copy.opening.showFileContents);
+      click('load-contents');
+      expect(text('[data-action="load-contents"]')).toBe(copy.opening.hideFileContents);
+    });
+
+    it('keeps what the student typed when the run comes back', async () => {
+      open(fakeStore());
+      const box = q('input[data-action="addr"]');
+      if (!(box instanceof HTMLInputElement)) throw new Error('no address box');
+      box.value = '0x0F0';
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      await choose(new File([brokenRun()], 'broken.cache-explorer.json'));
+      click('load-keep');
+      const back = q('input[data-action="addr"]');
+      expect((back as HTMLInputElement).value).toBe('0x0F0');
     });
 
     it('goes back to the run it had when asked to keep it', async () => {
@@ -429,16 +483,26 @@ describe('opening the page with a link', () => {
     vi.useFakeTimers();
     const store = fakeStore();
     const { share } = run(900);
+    // The core's replay is held at a slice that is not the last for a few frames, so that the
+    // state is on screen when it is due, whatever the machine's speed.
+    const summary = Session.fromJson(run(900).json);
+    toFree.push(summary);
+    let slices = 0;
+    const held = vi.spyOn(ShareLoad.prototype, 'advance').mockImplementation(function (
+      this: ShareLoad,
+    ) {
+      slices += 1;
+      if (slices <= 20) return { status: 'replaying', summary: summary.shareSummary() };
+      held.mockRestore();
+      return this.advance();
+    });
     open(store, { open: { source: { kind: 'share', text: share }, since: performance.now() } });
     // The first slice is replayed; no one has waited yet, so nothing of the state is drawn.
     expect(q('.cache-explorer__plane--loading')).toBeNull();
     vi.advanceTimersByTime(250);
-    // Late slices follow a frame apart; by now the state shows or the run has opened.
-    const shown = q('.cache-explorer__plane--loading');
-    if (shown) {
-      expect(text('.cache-explorer__lead')).toBe(copy.opening.lead);
-      expect(root.querySelectorAll('.cache-explorer__tick').length).toBeGreaterThan(0);
-    }
+    expect(q('.cache-explorer__plane--loading')).not.toBeNull();
+    expect(text('.cache-explorer__lead')).toBe(copy.opening.lead);
+    expect(root.querySelectorAll('.cache-explorer__tick').length).toBeGreaterThan(0);
     vi.advanceTimersByTime(5000);
     expect(q('.cache-explorer__plane--workbench')).not.toBeNull();
   });

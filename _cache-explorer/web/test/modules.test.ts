@@ -401,6 +401,31 @@ describe('the steps', () => {
     expect(guard).toBe('Answer the prediction in the module panel first.');
   });
 
+  it('disables Load under an unanswered prediction, and a chosen saved run does not replace the run', async () => {
+    await atPrediction();
+    const guard = lent.state().controls.guard;
+    expect(lent.state().controls.enabled).not.toContain('load');
+    expect(action('load')?.disabled).toBe(true);
+    expect(action('load')?.title).toBe(guard);
+    // The page can change while the picker is open: a file chosen now is refused as well.
+    const saved = Session.firstVisit();
+    const json = saved.toJson();
+    saved.free();
+    const file = new File([json], 'a.cache-explorer.json');
+    const pick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (
+      this: HTMLInputElement,
+    ) {
+      Object.defineProperty(this, 'files', { value: [file], configurable: true });
+      this.dispatchEvent(new Event('change'));
+    });
+    action('load')?.removeAttribute('disabled');
+    click('load');
+    await settle();
+    pick.mockRestore();
+    expect(root.querySelector('.cache-explorer__module-panel')).not.toBeNull();
+    expect(text('.cache-explorer__status')).toBe(guard);
+  });
+
   it('marks a wrong answer in words and offers "Show me", then takes the right one', async () => {
     await atPrediction();
     click('module-select', '[data-option="1"]');

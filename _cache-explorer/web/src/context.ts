@@ -30,7 +30,13 @@ export interface Context {
    */
   takeSession(): Session;
   /** Takes `next` as the run, with the page's input reset as a new run's is; the old session, if any, is freed. */
-  adoptSession(next: Session): void;
+  adoptSession(next: Session, carry?: Partial<UiState>): void;
+  /**
+   * Runs `go`, which a timer or a promise calls, as a click is run: a fault that leaves the
+   * session unusable is answered by rebuilding the run from `restoreFrom`, or from the last good
+   * copy when none is given (11.6).
+   */
+  guard(go: () => void, restoreFrom?: string): void;
   /** Opens the configuration bar and flashes the group `cause` names. */
   flash(cause: Cause): void;
   /** Starts or stops the Run timer, and says so in the UI state; it does not draw. */

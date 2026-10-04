@@ -1722,7 +1722,7 @@ mod module_run {
 /// The free functions.
 #[cfg(test)]
 mod functions {
-    use cache_explorer_core::limits::MAX_ADDRESS_BITS;
+    use cache_explorer_core::limits::{MAX_ADDRESS_BITS, MAX_PROGRAM_BYTES, MAX_SHARE_JSON_BYTES};
     use cache_explorer_core::{self as model, Config, Module, Predicate, SCHEMA_VERSION};
     use cache_explorer_wasm::{
         build_info, eval_predicate, parse_module, parse_module_index, run_file_too_large,
@@ -1847,17 +1847,19 @@ mod functions {
 
     #[wasm_bindgen_test]
     fn a_file_too_large_to_open_is_refused_in_the_cores_words() {
-        assert_eq!(run_file_too_large(1_048_576), None);
+        let run_over = MAX_SHARE_JSON_BYTES + 1;
+        assert_eq!(run_file_too_large(MAX_SHARE_JSON_BYTES), None);
         assert_eq!(
-            run_file_too_large(1_048_577),
-            model::run_file_too_large(1_048_577)
+            run_file_too_large(run_over),
+            model::run_file_too_large(run_over)
         );
-        assert!(run_file_too_large(1_048_577).is_some());
-        assert_eq!(trace_file_too_large(16_384), None);
+        assert!(run_file_too_large(run_over).is_some());
+        let trace_over = MAX_PROGRAM_BYTES + 1;
+        assert_eq!(trace_file_too_large(MAX_PROGRAM_BYTES), None);
         assert_eq!(
-            trace_file_too_large(16_385),
-            model::trace_file_too_large(16_385)
+            trace_file_too_large(trace_over),
+            model::trace_file_too_large(trace_over)
         );
-        assert!(trace_file_too_large(16_385).is_some());
+        assert!(trace_file_too_large(trace_over).is_some());
     }
 }

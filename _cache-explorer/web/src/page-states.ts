@@ -7,6 +7,7 @@ import { copy } from './copy';
 import { h, type Child } from './dom';
 import { replayedTicks } from './render/log';
 import { segments } from './render/segments';
+import type { SourceKind } from './ui-state';
 
 const SKELETON_ROWS = 4;
 
@@ -80,12 +81,16 @@ export function couldNotStartState(reload: () => void): HTMLElement {
 }
 
 /** A shared run being replayed: the core's line about it, and a tick for each step replayed so far. */
-export function replayingState(summary: ShareSummary | null): HTMLElement {
+export function replayingState(summary: ShareSummary | null, from: SourceKind): HTMLElement {
   return plane(
     'loading',
     true,
     head(copy.loading),
-    h('p', { class: 'cache-explorer__lead' }, copy.opening.lead),
+    h(
+      'p',
+      { class: 'cache-explorer__lead' },
+      from === 'json' ? copy.opening.fileLead : copy.opening.lead,
+    ),
     summary && h('p', { class: 'cache-explorer__text' }, summary.text),
     summary && replayedTicks(summary.ticks),
     h(
@@ -116,6 +121,7 @@ function action(name: string, label: string, primary = false): HTMLElement {
  */
 export function failedLoadState(
   failure: LoadFailure,
+  from: SourceKind,
   keep: boolean,
   contentsShown: boolean,
 ): HTMLElement {
@@ -141,7 +147,13 @@ export function failedLoadState(
             'data-action': 'load-contents',
             'aria-expanded': String(contentsShown),
           },
-          contentsShown ? copy.opening.hideContents : copy.opening.showContents,
+          contentsShown
+            ? from === 'json'
+              ? copy.opening.hideFileContents
+              : copy.opening.hideContents
+            : from === 'json'
+              ? copy.opening.showFileContents
+              : copy.opening.showContents,
         ),
     ),
     contentsShown &&

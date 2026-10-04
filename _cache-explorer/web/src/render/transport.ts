@@ -106,10 +106,16 @@ function tool(
 }
 
 /** Share, Save and Load: the design's three words at the right of the bar, plain text until pointed at. */
-function linkButton(label: string, action: string): HTMLElement {
+function linkButton(label: string, action: string, enabled = true, guard?: string): HTMLElement {
   return h(
     'button',
-    { type: 'button', class: 'cache-explorer__link-button', 'data-action': action },
+    {
+      type: 'button',
+      class: 'cache-explorer__link-button',
+      'data-action': action,
+      disabled: !enabled,
+      title: !enabled && guard ? guard : null,
+    },
     label,
   );
 }
@@ -212,7 +218,7 @@ export function renderTransport(
         { class: 'cache-explorer__transport-end' },
         linkButton(copy.transport.share, 'share'),
         linkButton(copy.transport.save, 'save'),
-        linkButton(copy.transport.openFile, 'load'),
+        linkButton(copy.transport.openFile, 'load', on('load'), guard),
         h(
           'button',
           {

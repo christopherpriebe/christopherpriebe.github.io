@@ -21,6 +21,9 @@ import type { Layout } from './layout';
 export const FIRST_VISIT_ADDRESS = '0x0A4';
 /** The value a store would write, until the student types another. */
 export const FIRST_VISIT_VALUE = '7';
+/** What a run is opened from: a link, or a saved file. */
+export type SourceKind = 'share' | 'json';
+
 /** The program the first visit's drawer holds, not yet loaded: five instructions on set 2. */
 export const SAMPLE_PROGRAM = [
   'start:',
@@ -110,12 +113,18 @@ export interface UiState {
    * slice), and the call that stops it and lets its objects go. The workbench is not drawn from
    * the session meanwhile, which has been given up (9.4).
    */
-  loading: { since: number; summary: ShareSummary | null; cancel: () => void } | null;
+  loading: {
+    since: number;
+    /** What it is opened from: the chrome says "link" or "file" by it. */
+    from: SourceKind;
+    summary: ShareSummary | null;
+    cancel: () => void;
+  } | null;
   /**
    * What the core said about a link or a file it could not open, with whether a run was kept to go
    * back to and whether the contents are shown; null when nothing failed.
    */
-  failure: { failure: LoadFailure; keep: boolean; contents: boolean } | null;
+  failure: { failure: LoadFailure; from: SourceKind; keep: boolean; contents: boolean } | null;
   /** The first log entry in view. */
   logFirst: number;
   /**

@@ -6,17 +6,17 @@
 // the old one again from the JSON and shows the core's account of why.
 
 import type { ActionHandler, Context } from './context';
-import { refusal } from './context';
+import { isFatal, refusal } from './context';
 import { copy } from './copy';
 import { isTrace, sizeForCore } from './files';
 import { LOADING_DELAY_MS } from './motion';
 import { releaseModule } from './module-actions';
-import type { UiState } from './ui-state';
+import type { SourceKind, UiState } from './ui-state';
 import { Session, ShareLoad, runFileTooLarge, traceFileTooLarge } from './wasm';
 
 /** What a run is opened from: the text after `#s=`, or a saved file's JSON. */
 export interface Source {
-  kind: 'share' | 'json';
+  kind: SourceKind;
   text: string;
 }
 
@@ -40,7 +40,12 @@ export function loadingDue(since: number, now: number = performance.now()): bool
 export function cancelLoading(context: Pick<Context, 'ui'>): void {
   const loading = context.ui.loading;
   context.ui.loading = null;
-  loading?.cancel();
+  try {
+    loading?.cancel();
+  } catch (error) {
+    // A fault can leave the load borrowed: it is let go of, and not freed again.
+    if (!isFatal(error)) throw error;
+  }
 }
 
 /**
@@ -54,6 +59,13 @@ export function openSource(context: Context, source: Source, options: OpenOption
   cancelLoading(context);
   // The run as it is, before anything is let go: what the page goes back to if this one fails.
   const backup = context.session.toJson();
+  // What the student typed, which a run cannot rebuild: it goes back if this one fails.
+  const carried = {
+    program: { ...ui.program },
+    draft: { ...ui.draft },
+    configOpen: ui.configOpen,
+    addressOpen: ui.addressOpen,
+  };
   releaseModule(ui);
   context.takeSession().free();
   const load =
@@ -70,7 +82,12 @@ export function openSource(context: Context, source: Source, options: OpenOption
     owned = false;
     load.free();
   };
-  const loading: NonNullable<UiState['loading']> = { since, summary: null, cancel: release };
+  const loading: NonNullable<UiState['loading']> = {
+    since,
+    from: source.kind,
+    summary: null,
+    cancel: release,
+  };
   ui.loading = loading;
   ui.failure = null;
   ui.status = '';
@@ -80,8 +97,13 @@ export function openSource(context: Context, source: Source, options: OpenOption
     ui.loading = null;
   }
 
+  /** One slice, run as a click is: a fault in the core goes back to the run this began from. */
   function step(): void {
     frame = undefined;
+    context.guard(slice, backup);
+  }
+
+  function slice(): void {
     if (context.disposed || ui.loading !== loading) return;
     const progress = load.advance();
     if (progress.status === 'replaying') {
@@ -103,9 +125,9 @@ export function openSource(context: Context, source: Source, options: OpenOption
     const { failure } = progress;
     finish();
     const restored = Session.fromJson(backup);
-    context.adoptSession(restored);
+    context.adoptSession(restored, carried);
     context.persist.baseline(restored);
-    ui.failure = { failure, keep, contents: false };
+    ui.failure = { failure, from: source.kind, keep, contents: false };
     context.refresh();
   }
 
@@ -150,13 +172,32 @@ function loadTrace(context: Context, text: string, name: string): void {
   const { ui } = context;
   context.setRunning(false);
   try {
-    context.session.applyOp({ op: 'program', source: text, format: 'trace' });
-    ui.program = { ...ui.program, format: 'trace', text, editing: false, open: true };
-    ui.status = copy.transport.traceLoaded(name);
+    const parsed = context.session.parseProgram(text, 'trace');
+    if (parsed.status === 'invalid') {
+      // The drawer shows the core's own line-marked account of the text, to fix in place.
+      ui.program = { ...ui.program, format: 'trace', text, editing: true, open: true };
+      ui.status = parsed.summary;
+    } else {
+      context.session.applyOp({ op: 'program', source: text, format: 'trace' });
+      ui.program = { ...ui.program, format: 'trace', text, editing: false, open: true };
+      ui.status = copy.transport.traceLoaded(name);
+    }
   } catch (error) {
     ui.status = refusal(error);
   }
   context.refresh();
+}
+
+/**
+ * Whether the core has Load switched off, as it does under an unanswered prediction: the guard
+ * goes to the status line and nothing is opened (10.4).
+ */
+export function loadBlocked(context: Context): boolean {
+  const { controls } = context.session.state();
+  if (controls.enabled.includes('load')) return false;
+  context.ui.status = controls.guard ?? '';
+  context.refresh();
+  return true;
 }
 
 /**
@@ -176,8 +217,12 @@ export async function openFile(context: Context, file: File): Promise<void> {
   const since = performance.now();
   const text = await file.text();
   if (context.disposed || ui.loading) return;
-  if (trace) loadTrace(context, text, file.name);
-  else openSource(context, { kind: 'json', text }, { since, name: file.name });
+  // The page can have changed while the file was read.
+  if (loadBlocked(context)) return;
+  context.guard(() => {
+    if (trace) loadTrace(context, text, file.name);
+    else openSource(context, { kind: 'json', text }, { since, name: file.name });
+  });
 }
 
 /** The handlers of the failure state's actions, by `data-action`. */

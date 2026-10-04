@@ -6,7 +6,7 @@
 
 import type { Action } from './actions';
 import type { ActionHandler, Context } from './context';
-import { refusal } from './context';
+import { isFatal, refusal } from './context';
 import { copy } from './copy';
 import type { UiState } from './ui-state';
 import { ModuleRun, parseModuleIndex } from './wasm';
@@ -15,7 +15,12 @@ import { ModuleRun, parseModuleIndex } from './wasm';
 export function releaseModule(ui: UiState): void {
   const run = ui.modules.run;
   ui.modules.run = null;
-  run?.free();
+  try {
+    run?.free();
+  } catch (error) {
+    // A fault can leave the run borrowed: it is let go of, and not freed again.
+    if (!isFatal(error)) throw error;
+  }
 }
 
 /**

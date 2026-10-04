@@ -19,6 +19,9 @@ export function sizeForCore(size: number): number {
   return Math.min(size, 0xffffffff);
 }
 
+/** How long a download's address is kept before it is revoked. */
+const REVOKE_AFTER_MS = 60_000;
+
 /** Offers `text` to the browser as a download called `name`. */
 export function download(name: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
@@ -29,10 +32,10 @@ export function download(name: string, text: string): void {
   document.body.append(link);
   link.click();
   link.remove();
-  // The download has started by the time the click returns; the address can go.
+  // Some browsers fail a download whose address is revoked at once; the file is at most 1 MiB.
   setTimeout(() => {
     URL.revokeObjectURL(url);
-  }, 0);
+  }, REVOKE_AFTER_MS);
 }
 
 /** Asks the student for a file, and resolves with it, or with null when they close the dialog without one. */

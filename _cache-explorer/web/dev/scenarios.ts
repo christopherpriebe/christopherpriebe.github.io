@@ -25,7 +25,7 @@ await init();
 const session = build();
 // `&state=loading` draws the state of a run being replayed, from this scenario's own summary.
 if (params.get('state') === 'loading') {
-  root.replaceChildren(replayingState(session.shareSummary()));
+  root.replaceChildren(replayingState(session.shareSummary(), 'share'));
   await new Promise<never>(() => undefined);
 }
 const pos = params.get('pos');

@@ -802,6 +802,9 @@ describe('what the handlers say to the status line', () => {
       refresh,
       takeSession: () => session,
       adoptSession: vi.fn<(next: Session) => void>(),
+      guard: (go) => {
+        go();
+      },
       flash: vi.fn<(cause: Cause) => void>(),
       setRunning: vi.fn<(on: boolean) => void>(),
     };

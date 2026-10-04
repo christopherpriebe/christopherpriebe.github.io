@@ -38,7 +38,12 @@ export function browserStore(): HashStore {
     page,
     replace(hash) {
       const url = location.pathname + location.search + (hash ?? '');
-      history.replaceState(history.state as unknown, '', url);
+      try {
+        history.replaceState(history.state as unknown, '', url);
+      } catch {
+        // A browser limits how often the address may change. The address is a convenience: a
+        // recovery reads the kept copy of the run, not the hash.
+      }
     },
   };
 }
@@ -95,15 +100,26 @@ export function createPersistence(
     cancel();
     // The saved file first: it always exists, and it is what a recovery opens.
     kept = session.toJson();
+    let hash: string | null;
+    let note: string | null = null;
     try {
-      store.replace(`#s=${session.toShareString()}`);
-      return null;
+      hash = `#s=${session.toShareString()}`;
     } catch (error) {
       // The run has outgrown a link. The address must not keep an older one, which would open a
       // run the student has left behind.
-      const note = refusal(error);
-      store.replace(null);
-      return note;
+      note = refusal(error);
+      hash = null;
+    }
+    put(hash);
+    return note;
+  }
+
+  /** Writes the address; a store that refuses leaves it as it was, and the page goes on. */
+  function put(hash: string | null): void {
+    try {
+      store.replace(hash);
+    } catch {
+      // The address is a convenience, and the kept copy is what a recovery opens.
     }
   }
 
@@ -137,7 +153,7 @@ export function createPersistence(
     },
     clear() {
       cancel();
-      store.replace(null);
+      put(null);
     },
     flush() {
       if (timer === undefined) return;

@@ -7,7 +7,7 @@ import { refusal } from './context';
 import { copy } from './copy';
 import { download, pickFile, runFileName } from './files';
 import { linkTo } from './hash';
-import { openFile } from './load-actions';
+import { loadBlocked, openFile } from './load-actions';
 
 /** Puts focus in the field that shows the link, with the link selected, for the student to copy. */
 function selectLink(context: Context): void {
@@ -22,18 +22,22 @@ function selectLink(context: Context): void {
  * which point to Save.
  */
 export async function share(context: Context): Promise<void> {
-  const { session, ui } = context;
-  let link: string;
-  let said: string;
-  try {
-    link = linkTo(context.page(), session.toShareString());
-    said = session.shareSummary().copiedText;
-  } catch (error) {
-    ui.status = refusal(error);
-    ui.shareFallback = null;
-    context.refresh();
-    return;
-  }
+  const { ui } = context;
+  let link: string | undefined;
+  let said = '';
+  // Run as a click is: this is called from a handler that does not wait for it.
+  context.guard(() => {
+    try {
+      link = linkTo(context.page(), context.session.toShareString());
+      said = context.session.shareSummary().copiedText;
+    } catch (error) {
+      link = undefined;
+      ui.status = refusal(error);
+      ui.shareFallback = null;
+      context.refresh();
+    }
+  });
+  if (link === undefined) return;
   let copied = false;
   // `navigator.clipboard` is missing on a page served over plain HTTP, and a browser may refuse.
   const clipboard = navigator.clipboard as Clipboard | undefined;
@@ -67,6 +71,7 @@ export function save(context: Context): void {
 
 /** Asks for a file: a saved run, or a `.txt` trace. */
 async function load(context: Context): Promise<void> {
+  if (loadBlocked(context)) return;
   const file = await pickFile('.json,.txt,application/json,text/plain');
   if (file && !context.disposed) await openFile(context, file);
 }

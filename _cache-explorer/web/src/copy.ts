@@ -16,9 +16,12 @@ export const copy = {
   /** The plane that stands in for the workbench while a link or a file is replayed (5b), and the one for one that cannot be opened (5c). */
   opening: {
     lead: 'Replaying a shared run',
+    fileLead: 'Replaying a saved run',
     startFresh: 'Start fresh',
     showContents: 'Show link contents',
     hideContents: 'Hide link contents',
+    showFileContents: 'Show file contents',
+    hideFileContents: 'Hide file contents',
     keepRun: 'Keep the current run',
   },
   config: {

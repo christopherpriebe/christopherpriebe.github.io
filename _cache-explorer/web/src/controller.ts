@@ -241,10 +241,11 @@ export function start(
       root.replaceChildren(narrowState());
     } else if (ui.loading) {
       // Most links replay before anyone could read the state: it shows once 200 ms have passed.
-      if (loadingDue(ui.loading.since)) root.replaceChildren(replayingState(ui.loading.summary));
+      if (loadingDue(ui.loading.since))
+        root.replaceChildren(replayingState(ui.loading.summary, ui.loading.from));
     } else if (ui.failure) {
-      const { failure, keep, contents } = ui.failure;
-      root.replaceChildren(failedLoadState(failure, keep, contents));
+      const { failure, from, keep, contents } = ui.failure;
+      root.replaceChildren(failedLoadState(failure, from, keep, contents));
     }
   }
 
@@ -275,26 +276,34 @@ export function start(
    * Runs `go`; a fault that leaves the session unusable (11.6) is answered by building the run
    * again from the last good copy of it, and a fault with nothing to restore from is thrown on.
    */
-  function guarded(go: () => void): void {
+  function guarded(go: () => void, restoreFrom?: string): void {
     try {
       go();
     } catch (error) {
-      if (!isFatal(error) || !recover()) throw error;
+      if (!isFatal(error) || !recover(restoreFrom)) throw error;
     }
   }
 
   /**
    * Drops the session that faulted without calling it again or freeing it, and opens the run the
-   * page last kept in its place. A second fault, from the new session, is the module's as a
-   * whole, and is thrown.
+   * page last kept in its place, or `from` when a load was under way: the run it began from. A
+   * second fault, from the new session, is the module's as a whole: the page loads again (11.6).
    */
-  function recover(): boolean {
-    const json = persist.lastGood();
+  function recover(from?: string): boolean {
+    const json = from ?? persist.lastGood();
     if (json === null) return false;
     context.setRunning(false);
     cancelLoading(context);
     owned = null;
-    const next = Session.fromJson(json);
+    let next: Session;
+    try {
+      next = Session.fromJson(json);
+    } catch (error) {
+      if (!isFatal(error)) throw error;
+      persist.stop();
+      location.reload();
+      return true;
+    }
     adoptSession(next);
     persist.baseline(next);
     ui.status = copy.recovered;
@@ -302,7 +311,7 @@ export function start(
     return true;
   }
 
-  function adoptSession(next: Session): void {
+  function adoptSession(next: Session, carry?: Partial<UiState>): void {
     context.setRunning(false);
     stopScrub(ui);
     releaseModule(ui);
@@ -313,6 +322,7 @@ export function start(
       modules: { ...listed, run: null, starting: null, error: null },
     });
     place(next);
+    if (carry) Object.assign(ui, carry);
     old?.free();
   }
 
@@ -357,6 +367,7 @@ export function start(
       return taken;
     },
     adoptSession,
+    guard: guarded,
     flash(cause) {
       // Pointing at a group again, or at another, starts a flash from the beginning, and its time
       // from the same moment.
