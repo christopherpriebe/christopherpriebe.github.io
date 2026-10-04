@@ -55,6 +55,16 @@ The `instruments` layout holds the interactive instruments and a list of planned
 | `planned`      | Groups of planned work, each with a `group` name and `items` (`title`, `status`, `description`). | No | List |
 | `planned_note` | A closing line under the last group.                                          | No                   | String |
 
+### Tool
+
+The `tool` layout is for a page that is one working instrument: the page head, then the page's own markup with no prose wrapper, so a script-built tool sets its own type and spacing. The Interactive Cache Explorer (`_pages/cache-explorer.md`) is its one use; see `_cache-explorer/README.md` for how to embed it.
+
+| Variable      | Description                                                                    | Required             | Type   |
+|---------------|--------------------------------------------------------------------------------|----------------------|--------|
+| `title`       | The title of the page.                                                         | Yes                  | String |
+| `lede`        | The sentence under the title.                                                  | No                   | String |
+| `description` | The meta description.                                                          | No                   | String |
+
 ### Resume
 
 The `resume` layout is specifically for a resume/CV page, built from the `resume` collection and the `resume_*` settings in `_config.yml`.
@@ -62,6 +72,10 @@ The `resume` layout is specifically for a resume/CV page, built from the `resume
 ### Caveats
 
 - All pages created under the `projects` collection (i.e., in the `_projects` folder) are defaulted to have `layout: single_column_page` and `show_title: true`.
+
+## Interactive Cache Explorer
+
+The tool at `/cache-explorer/` is built from `_cache-explorer/` (Rust compiled to WebAssembly, and TypeScript); its built files are committed in `assets/cache-explorer/`. Setup, building and testing are in `_cache-explorer/README.md`, and the format of its guided modules in `_cache-explorer/docs/AUTHORING.md`.
 
 ## Design Notes
 
