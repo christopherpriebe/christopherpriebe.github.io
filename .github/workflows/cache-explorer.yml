@@ -9,6 +9,11 @@ on:
       - "_pages/cache-explorer.md"
       - "_layouts/tool.liquid"
       - ".github/workflows/cache-explorer.yml"
+  # Runs on every pull request, with no path filter: the `changes` job skips the real
+  # work when the tool's paths are untouched, so `status` can be a required check on
+  # master without hanging as pending on unrelated pull requests. `status` is the one
+  # check to mark required. If the first run shows a macOS/Linux difference in the
+  # built assets, the fallback is a CI job on master that commits assets/cache-explorer/.
   pull_request:
 
 permissions:
