@@ -57,7 +57,7 @@ describe('the could-not-start state', () => {
     );
     const problem = plane.querySelector('.cache-explorer__problem');
     expect(problem?.textContent).toBe(
-      "The page's files are out of step, usually after an update. Reload to fix it.",
+      'The Interactive Cache Explorer could not start. Reload to try again.',
     );
     expect(problem?.getAttribute('role')).toBe('alert');
     expect(plane.querySelector('button')?.textContent).toBe('Reload');

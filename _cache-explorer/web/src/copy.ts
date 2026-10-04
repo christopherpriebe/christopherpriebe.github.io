@@ -8,8 +8,7 @@ export const copy = {
   loading: 'Loading',
   /** The status at the right of the head when the page could not start. */
   couldNotStart: 'Could not start',
-  couldNotStartMessage:
-    "The page's files are out of step, usually after an update. Reload to fix it.",
+  couldNotStartMessage: 'The Interactive Cache Explorer could not start. Reload to try again.',
   reload: 'Reload',
   config: {
     title: 'Configuration',

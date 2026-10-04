@@ -349,7 +349,7 @@ fn example_address(geometry: &Geometry) -> format::Hex {
 
 /// A program's size as the drawer and the log count it: "5 instructions",
 /// "1 access".
-fn count_of(format: ProgramFormat, instructions: u32) -> String {
+pub(super) fn count_of(format: ProgramFormat, instructions: u32) -> String {
     let (one, many) = match format {
         ProgramFormat::Asm => ("instruction", "instructions"),
         ProgramFormat::Trace => ("access", "accesses"),

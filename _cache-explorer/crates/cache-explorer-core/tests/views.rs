@@ -950,7 +950,10 @@ fn a_program_load_is_a_divider_without_a_step() {
         (divider.kind, divider.outcome, divider.number),
         (EntryKind::Program, EntryOutcome::Program, None)
     );
-    assert_eq!(divider.label, "Loaded a program of 6 instructions");
+    assert_eq!(
+        divider.label,
+        "Loaded an assembly program of 6 instructions"
+    );
     assert_eq!(divider.outcome_text, "program");
     assert_eq!(divider.changed_summary, None);
     assert_eq!(entries[1].label, "st [0x0B0], #5");

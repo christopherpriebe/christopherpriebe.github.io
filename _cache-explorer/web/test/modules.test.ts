@@ -125,6 +125,15 @@ describe('the Guided modules drawer', () => {
     expect(q('.cache-explorer__modules-head')?.childElementCount).toBe(0);
   });
 
+  it('puts the drawer first inside the plane, above the configuration bar, closed', async () => {
+    await open();
+    const plane = q('.cache-explorer__plane');
+    const order = [...(plane?.children ?? [])].map((child) => child.className);
+    expect(order.findIndex((name) => name.includes('cache-explorer__modules'))).toBe(1);
+    expect(order[2]).toContain('cache-explorer__config');
+    expect(q('.cache-explorer__module-list')).toBeNull();
+  });
+
   it("shows the core's summary and, opened, a row for each module", async () => {
     await open();
     expect(text('.cache-explorer__modules-head')).toContain('Guided modules');

@@ -144,7 +144,7 @@ describe('the entries', () => {
   it('draws a program load as a divider carrying the core’s words and no number', () => {
     open();
     const divider = query('.cache-explorer__entry--divider');
-    expect(divider.textContent).toBe('Loaded a program of 5 instructions');
+    expect(divider.textContent).toBe('Loaded an assembly program of 5 instructions');
     expect(divider.querySelector('.cache-explorer__marker')).toBeNull();
     expect(divider.querySelector('.cache-explorer__entry-outcome')).toBeNull();
   });

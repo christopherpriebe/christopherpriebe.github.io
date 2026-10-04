@@ -2533,10 +2533,18 @@ rect.cache-explorer__tick--on {
   outline-offset: 4px;
 }
 
-/* The guided modules drawer: the program drawer's line, then the modules as ruled rows */
+/* The guided modules drawer, first inside the plane: the program drawer's line, then the modules as ruled rows */
 
 .cache-explorer__modules {
-  margin-top: 22px;
+  margin-top: 27px;
+}
+
+.cache-explorer__modules:has(> .cache-explorer__modules-head:empty) {
+  display: none;
+}
+
+.cache-explorer__modules + .cache-explorer__config {
+  margin-top: 18px;
 }
 
 .cache-explorer__modules:empty,

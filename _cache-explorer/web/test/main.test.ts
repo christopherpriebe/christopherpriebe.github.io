@@ -155,7 +155,7 @@ describe('a start that fails', () => {
 
     expect(root.querySelector('.cache-explorer__head')?.textContent).toContain('Could not start');
     expect(root.querySelector('.cache-explorer__problem')?.textContent).toBe(
-      "The page's files are out of step, usually after an update. Reload to fix it.",
+      'The Interactive Cache Explorer could not start. Reload to try again.',
     );
     expect(console.error).toHaveBeenCalledWith(expect.any(String), failure);
 

@@ -127,6 +127,7 @@ function shellOf(root: HTMLElement): Shell {
         tabindex: -1,
       },
       head,
+      modules.element,
       config.element,
       panel,
       panelLive,
@@ -135,7 +136,6 @@ function shellOf(root: HTMLElement): Shell {
       h('div', { class: 'cache-explorer__lower' }, stats, key),
       transport.element,
       program.element,
-      modules.element,
       live,
     );
     shell = {

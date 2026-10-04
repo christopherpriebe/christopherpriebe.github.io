@@ -767,7 +767,6 @@ describe('the machine’s parts', () => {
       'cache-explorer__lower',
       'cache-explorer__transport',
       'cache-explorer__program',
-      'cache-explorer__modules',
       'cache-explorer__live',
     ]);
   });

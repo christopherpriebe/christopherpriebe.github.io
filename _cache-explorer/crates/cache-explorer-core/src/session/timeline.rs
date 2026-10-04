@@ -143,7 +143,7 @@ pub struct EntryView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub number: Option<u32>,
     /// What it is, in a few words: the instruction, as in `ld r3, [0x2A4]`;
-    /// "edit set 2 way 0"; "Loaded a program of 5 instructions" for a load;
+    /// "edit set 2 way 0"; "Loaded an assembly program of 5 instructions" for a load;
     /// for an error, the instruction the program stopped at, or "—".
     pub label: String,
     /// What it is.

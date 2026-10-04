@@ -230,7 +230,7 @@ describe('the program reaching the run', () => {
     open();
     expect(dividers()).toEqual([]);
     press(' ');
-    expect(dividers()).toEqual(['Loaded a program of 5 instructions']);
+    expect(dividers()).toEqual(['Loaded an assembly program of 5 instructions']);
     expect(lent.opCount()).toBe(2);
     press('z');
     expect(lent.state().position.pos).toBe(0);
@@ -250,8 +250,8 @@ describe('the program reaching the run', () => {
     click('button[data-action="program-edit"]');
     press(' ', { shiftKey: true });
     expect(dividers()).toEqual([
-      'Loaded a program of 5 instructions',
-      'Loaded a program of 2 instructions',
+      'Loaded an assembly program of 5 instructions',
+      'Loaded an assembly program of 2 instructions',
     ]);
     expect(lent.state().program?.source).toBe('add r1, r0, #1\nadd r1, r1, #1');
   });

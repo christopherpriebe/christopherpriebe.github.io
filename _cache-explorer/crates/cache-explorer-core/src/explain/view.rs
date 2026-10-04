@@ -287,14 +287,18 @@ pub(crate) fn edit_memory(geometry: &Geometry, addr: Addr) -> String {
     format!("edit memory {}", super::address(geometry, addr.get()))
 }
 
-/// A program load, as the log's divider row names it: "Loaded a program of
-/// 5 instructions", or for a trace "Loaded a trace of 5 accesses".
+/// A program load, as the log's divider row names it, with the format:
+/// "Loaded an assembly program of 5 instructions", or for a trace "Loaded a
+/// trace of 5 accesses".
 pub(crate) fn program_divider(format: ProgramFormat, instructions: u32) -> String {
-    let text = super::program_loaded(format, instructions);
-    let first = text
-        .split_once(". ")
-        .map_or(text.as_str(), |(first, _)| first);
-    first.to_owned()
+    format!(
+        "Loaded {} {}",
+        match format {
+            ProgramFormat::Asm => "an assembly program of",
+            ProgramFormat::Trace => "a trace of",
+        },
+        super::program::count_of(format, instructions)
+    )
 }
 
 /// What an entry did, as its header in the log names it: an access's "hit"
@@ -766,7 +770,7 @@ mod tests {
         assert_eq!(edit_memory(&geometry, addr(0x0A4)), "edit memory 0x0A4");
         assert_eq!(
             program_divider(ProgramFormat::Asm, 5),
-            "Loaded a program of 5 instructions"
+            "Loaded an assembly program of 5 instructions"
         );
         assert_eq!(
             program_divider(ProgramFormat::Trace, 1),
