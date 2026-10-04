@@ -216,7 +216,7 @@ impl Geometry {
 }
 
 impl Program {
-    /// Parses `source` as `format` under `geometry`.
+    /// Parses `source` as `format` under `space`.
     ///
     /// # Errors
     ///

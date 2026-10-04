@@ -88,9 +88,9 @@ struct Branch<'s> {
 }
 
 /// What the assembler has read so far.
-struct Assembler<'g, 's, S> {
+struct Assembler<'sp, 's, S> {
     /// The address space, which literals must fit.
-    space: &'g S,
+    space: &'sp S,
     /// The instructions, with the branches' targets still to resolve.
     instructions: Vec<Placed>,
     /// Each label, with the index of the instruction it marks and its line.
@@ -253,9 +253,9 @@ impl<'s, S: AddressSpace> Assembler<'_, 's, S> {
 }
 
 /// The operands of one instruction, read in order.
-struct Operands<'a, 'g, 's, S> {
+struct Operands<'a, 'sp, 's, S> {
     /// The assembler, for the address space and the messages.
-    assembler: &'a Assembler<'g, 's, S>,
+    assembler: &'a Assembler<'sp, 's, S>,
     /// The instruction.
     mnemonic: Mnemonic,
     /// The mnemonic's token, where an error goes when an operand is missing.

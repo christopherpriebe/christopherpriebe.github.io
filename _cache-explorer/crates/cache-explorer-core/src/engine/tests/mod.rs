@@ -7,7 +7,7 @@
 
 use super::access::access;
 use super::exec::{load_program, ready, step, Until};
-use super::port::{CacheMemory, MemoryPort};
+use super::port::MemoryPort;
 use super::*;
 use crate::cache::{Cache, Dirtiness, Slot};
 use crate::config::{
@@ -556,6 +556,96 @@ macro_rules! cases {
             }
         )*
     };
+}
+
+/// A run driven like a program: each load and each step is an op of its
+/// own, and every event is recorded with the machine after it.
+struct Driven {
+    run: Run,
+}
+
+impl Driven {
+    fn new(config: Config) -> Self {
+        Self {
+            run: Run::new(config),
+        }
+    }
+
+    /// Applies `op` as the next op and returns its flow and its events with
+    /// the machine after each. After every event the invariants that hold
+    /// mid-access hold, the counters add up, and the pc is never past the
+    /// program's end.
+    #[track_caller]
+    fn apply(
+        &mut self,
+        op: impl FnOnce(&mut Machine, &mut Emitter<'_>) -> Flow,
+    ) -> (Flow, Vec<(MicroEvent, Machine)>) {
+        let run = &mut self.run;
+        let mut recorder = Recorder::default();
+        let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(run.ops), run.next_id);
+        let flow = op(&mut run.machine, &mut out);
+        run.ops += 1;
+        run.next_id += recorder.events.len() as u64;
+        for (event, after) in recorder.events.iter().zip(&recorder.after) {
+            assert_eq!(after.check_invariants(), Ok(()), "after {}", event.label);
+            let counters = after.counters;
+            assert_eq!(
+                counters.hits + counters.misses,
+                counters.accesses,
+                "after {}",
+                event.label
+            );
+            let length = after.program.as_deref().map_or(0, Program::len);
+            assert!(after.cpu.pc <= length, "after {}", event.label);
+        }
+        (
+            flow,
+            recorder.events.into_iter().zip(recorder.after).collect(),
+        )
+    }
+
+    /// Loads the assembly program `source`, which parses.
+    fn load(&mut self, source: &str) -> Vec<(MicroEvent, Machine)> {
+        self.load_as(source, ProgramFormat::Asm)
+    }
+
+    /// Loads `source` as `format`.
+    #[track_caller]
+    fn load_as(&mut self, source: &str, format: ProgramFormat) -> Vec<(MicroEvent, Machine)> {
+        let program = Program::parse(&self.run.machine.geometry, source, format).unwrap();
+        let (flow, trace) = self.apply(|machine, out| load_program(machine, program, out));
+        assert_eq!(flow, Flow::Continue);
+        trace
+    }
+
+    /// Executes the next instruction, which there is.
+    #[track_caller]
+    fn step(&mut self) -> Vec<(MicroEvent, Machine)> {
+        assert_eq!(ready(&self.run.machine), Ok(()));
+        self.apply(step).1
+    }
+
+    /// Steps until the program cannot go on, and returns every event.
+    #[track_caller]
+    fn finish(&mut self) -> Vec<(MicroEvent, Machine)> {
+        let mut trace = Vec::new();
+        while ready(&self.run.machine).is_ok() {
+            trace.extend(self.step());
+        }
+        trace
+    }
+
+    /// A load or store issued by hand.
+    #[track_caller]
+    fn issue(&mut self, request: Request) -> Vec<(MicroEvent, Machine)> {
+        let (flow, trace) = self.apply(|machine, out| access(machine, request, out));
+        assert_eq!(flow, Flow::Continue);
+        trace
+    }
+
+    fn machine(&self) -> &Machine {
+        &self.run.machine
+    }
 }
 
 mod access;

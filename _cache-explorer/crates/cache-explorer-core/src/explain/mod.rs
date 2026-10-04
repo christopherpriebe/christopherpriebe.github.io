@@ -73,6 +73,7 @@ pub(crate) use view::{
 
 use crate::format;
 use crate::geometry::Geometry;
+use crate::isa::AddressSpace;
 use crate::op::ProgramFormat;
 use crate::units::Tag;
 
@@ -103,8 +104,8 @@ fn source_noun(format: ProgramFormat) -> &'static str {
 /// adapter, like [`format::Hex`] itself, so a per-event line can interpolate
 /// it without allocating a `String` first. The tables' [`format::address`]
 /// writes the same text.
-fn address(geometry: &Geometry, value: u32) -> format::Hex {
-    format::Hex::address(value, geometry.address_bits())
+fn address(space: &impl AddressSpace, value: u32) -> format::Hex {
+    format::Hex::address(value, space.address_bits())
 }
 
 /// A tag, padded to the tag width. A `Display` adapter, for the same reason

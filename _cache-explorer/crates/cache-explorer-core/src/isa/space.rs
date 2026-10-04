@@ -1,12 +1,13 @@
 //! The address space a program is checked against.
 
-use crate::geometry::Geometry;
+use crate::geometry::{highest_word, Geometry};
 use crate::units::{Addr, Word};
 
 /// What the assembler and the trace parser ask of the machine they parse
-/// for: how wide an address is, how big a word, and which literal addresses
-/// and values fit. The parsers know nothing else of the machine, so any
-/// memory system that answers these can have programs parsed for it.
+/// for: how wide an address is and how big a word. From those two the
+/// parsers know which literal addresses and values fit, and nothing else of
+/// the machine, so any memory system that answers them can have programs
+/// parsed for it.
 pub(crate) trait AddressSpace {
     /// Width of a byte address.
     fn address_bits(&self) -> u8;
@@ -15,10 +16,14 @@ pub(crate) trait AddressSpace {
     fn word_bytes(&self) -> u32;
 
     /// `value` as an address, if it fits the address width.
-    fn addr(&self, value: u32) -> Option<Addr>;
+    fn addr(&self, value: u32) -> Option<Addr> {
+        (u64::from(value) < 1_u64 << self.address_bits()).then(|| Addr::new_unchecked(value))
+    }
 
     /// The word a store of `value` writes: its low `8 × word_bytes` bits.
-    fn fit_word(&self, value: u64) -> Word;
+    fn fit_word(&self, value: u64) -> Word {
+        Word::new_unchecked(value & highest_word(self.word_bytes()))
+    }
 }
 
 impl AddressSpace for Geometry {
@@ -29,19 +34,11 @@ impl AddressSpace for Geometry {
     fn word_bytes(&self) -> u32 {
         Geometry::word_bytes(self)
     }
-
-    fn addr(&self, value: u32) -> Option<Addr> {
-        Geometry::addr(self, value)
-    }
-
-    fn fit_word(&self, value: u64) -> Word {
-        Geometry::fit_word(self, value)
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+    #![expect(clippy::disallowed_macros, reason = "assertions are how tests fail")]
 
     use super::*;
     use crate::geometry::AccessError;
@@ -61,14 +58,6 @@ mod tests {
 
         fn word_bytes(&self) -> u32 {
             2
-        }
-
-        fn addr(&self, value: u32) -> Option<Addr> {
-            (value < 1 << 6).then(|| Addr::new_unchecked(value))
-        }
-
-        fn fit_word(&self, value: u64) -> Word {
-            Word::new_unchecked(value & 0xFFFF)
         }
     }
 

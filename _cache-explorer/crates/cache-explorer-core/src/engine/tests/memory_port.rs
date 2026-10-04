@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 
-use super::exec::Driven;
 use super::*;
 use crate::engine::exec::{execute_through, step_through};
 
@@ -96,23 +95,5 @@ fn a_run_goes_through_the_port_to_the_end_of_the_program() {
     assert_eq!(ready(driven.machine()), Err(OpError::Finished));
     assert_eq!(driven.machine().registers.get(Register::R2), 7);
     assert_eq!(flat.words.get(&0xA8), Some(&7));
-    assert_eq!(driven.machine().counters, Default::default());
-}
-
-#[test]
-fn the_cache_memory_is_the_port_the_ordinary_ops_use() {
-    // The same program, stepped the ordinary way and through the port that
-    // names the cache, gives the same events and the same machine.
-    let mut ordinary = Driven::new(preset(Preset::DirectMapped8));
-    ordinary.load(PROGRAM);
-    let mut through = Driven::new(preset(Preset::DirectMapped8));
-    through.load(PROGRAM);
-    let plain = ordinary.finish();
-    let mut cache = CacheMemory;
-    let mut ported = Vec::new();
-    while ready(through.machine()).is_ok() {
-        let (_, trace) = through.apply(|machine, out| step_through(&mut cache, machine, out));
-        ported.extend(trace);
-    }
-    assert_eq!(plain, ported);
+    assert_eq!(driven.machine().counters, crate::stats::Counters::default());
 }

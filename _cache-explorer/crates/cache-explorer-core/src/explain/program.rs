@@ -5,8 +5,7 @@
 use crate::config::Config;
 use crate::format;
 use crate::geometry::highest_word;
-use crate::isa::AddressSpace;
-use crate::isa::{Mnemonic, ParseError};
+use crate::isa::{AddressSpace, Mnemonic, ParseError};
 use crate::limits::{
     MAX_LABEL_CHARS, MAX_PROGRAM_BYTES, MAX_PROGRAM_INSTRUCTIONS, MAX_PROGRAM_LINES,
     SESSION_EVENT_LIMIT,

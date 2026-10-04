@@ -9,6 +9,7 @@ use crate::cache::Dirtiness;
 use crate::config::Replacement;
 use crate::format;
 use crate::geometry::{Geometry, Location, Placement};
+use crate::isa::AddressSpace;
 use crate::limits::INSTRUCTION_BUDGET;
 use crate::machine::InvariantViolation;
 use crate::op::AccessKind;
@@ -378,12 +379,12 @@ pub(crate) fn bnez(test: Register, value: u64, taken: Option<&str>) -> String {
 /// `register`, is `value` and does not fit the address width: "Line 4: r2
 /// holds 4096, which does not fit a 12-bit address. The program stopped."
 pub(crate) fn fault_out_of_range(
-    geometry: &Geometry,
+    space: &impl AddressSpace,
     line: u32,
     register: Register,
     value: u64,
 ) -> String {
-    let bits = geometry.address_bits();
+    let bits = space.address_bits();
     format!(
         "Line {}: {register} holds {}, which does not fit {} {}-bit address. The program stopped.",
         format::position(line),
@@ -398,18 +399,18 @@ pub(crate) fn fault_out_of_range(
 /// holds 166 (0x0A6), which is not aligned to a 4-byte word. The program
 /// stopped."
 pub(crate) fn fault_misaligned(
-    geometry: &Geometry,
+    space: &impl AddressSpace,
     line: u32,
     register: Register,
     addr: Addr,
 ) -> String {
-    let word_bytes = geometry.word_bytes();
+    let word_bytes = space.word_bytes();
     format!(
         "Line {}: {register} holds {} ({}), which is not aligned to {} {}-byte word. The program \
          stopped.",
         format::position(line),
         format::Data(u64::from(addr.get())),
-        super::address(geometry, addr.get()),
+        super::address(space, addr.get()),
         format::a_or_an(word_bytes),
         format::Setting(u64::from(word_bytes))
     )

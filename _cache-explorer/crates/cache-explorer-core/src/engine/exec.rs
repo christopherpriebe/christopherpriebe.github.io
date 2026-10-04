@@ -39,7 +39,7 @@ use crate::engine::port::{CacheMemory, MemoryPort};
 use crate::engine::{end_entry, Draft, Emitter, Flow, Halt, OpProgress};
 use crate::event::{ChangeRef, EventKind};
 use crate::explain;
-use crate::isa::{Address, Instruction, Operand, Program};
+use crate::isa::{Address, AddressSpace, Instruction, Operand, Program};
 use crate::limits::INSTRUCTION_BUDGET;
 use crate::machine::Machine;
 use crate::op::OpError;
@@ -162,17 +162,19 @@ pub(crate) fn step_through(
         );
     }
     let request = match instruction {
-        Instruction::Load { into, from } => address(machine, from).map(|addr| Request::Load {
-            addr,
-            into,
-            origin: Origin::Program,
-        }),
+        Instruction::Load { into, from } => {
+            address(machine, &machine.geometry, from).map(|addr| Request::Load {
+                addr,
+                into,
+                origin: Origin::Program,
+            })
+        }
         Instruction::Store { to, value } => {
             let (value, from) = match value {
                 Operand::Register(register) => (machine.registers.get(register), Some(register)),
                 Operand::Immediate(value) => (value, None),
             };
-            address(machine, to).map(|addr| Request::Store {
+            address(machine, &machine.geometry, to).map(|addr| Request::Store {
                 addr,
                 value,
                 from,
@@ -296,7 +298,7 @@ pub(crate) fn execute_through(
 
 /// The address `from` names: a literal as parsed, or a register's value,
 /// which must fit the address width and be a multiple of the word size.
-fn address(machine: &Machine, from: Address) -> Result<Addr, Fault> {
+fn address(machine: &Machine, space: &impl AddressSpace, from: Address) -> Result<Addr, Fault> {
     let register = match from {
         Address::Literal(addr) => return Ok(addr),
         Address::Register(register) => register,
@@ -304,11 +306,11 @@ fn address(machine: &Machine, from: Address) -> Result<Addr, Fault> {
     let value = machine.registers.get(register);
     let Some(addr) = u32::try_from(value)
         .ok()
-        .and_then(|value| machine.geometry.addr(value))
+        .and_then(|value| space.addr(value))
     else {
         return Err(Fault::OutOfRange { register, value });
     };
-    if addr.get() % machine.geometry.word_bytes() != 0 {
+    if addr.get() % space.word_bytes() != 0 {
         return Err(Fault::Misaligned { register, addr });
     }
     Ok(addr)
