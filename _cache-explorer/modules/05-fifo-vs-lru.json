@@ -24,13 +24,8 @@
   },
   "steps": [
     {
-      "kind": "explain",
-      "text": "This cache replaces with *FIFO*: first in, first out. It evicts the line that arrived earliest, and a hit does not change that order. The trace loads `0x000`, `0x040`, `0x000`, `0x080` and `0x000`; all five map to set 0, which has two ways.",
-      "callout": "config"
-    },
-    {
       "kind": "predict",
-      "text": "Under FIFO, how many of the five loads will hit?",
+      "text": "This cache replaces with *FIFO*: first in, first out. It evicts the line that arrived earliest, and a hit does not change that order. The trace loads `0x000`, `0x040`, `0x000`, `0x080` and `0x000`; all five map to set 0, which has two ways. Under FIFO, how many of the five loads will hit?",
       "options": [
         "Two",
         "One",
@@ -39,9 +34,7 @@
       "answer": 1,
       "explain": "One. The third load hits, but it does not make `0x000` any newer. When `0x080` arrives, `0x000` is still the first in, so it is evicted, and the last load misses.",
       "hint": "A hit does not change the order of arrival. Which line arrived first?",
-      "callout": {
-        "set": 0
-      }
+      "callout": "config"
     },
     {
       "kind": "instruct",
@@ -65,7 +58,7 @@
           }
         ]
       },
-      "hint": "Press Run in the transport bar. If the trace has already run, press Undo, then Run.",
+      "hint": "Press Run in the transport bar. If the trace has already run, press Reset, then Run.",
       "showMe": [
         {
           "op": "run",

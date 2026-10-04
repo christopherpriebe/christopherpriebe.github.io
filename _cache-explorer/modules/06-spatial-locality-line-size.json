@@ -24,13 +24,8 @@
   },
   "steps": [
     {
-      "kind": "explain",
-      "text": "The trace loads sixteen consecutive words, `0x000` to `0x03C`, as a loop over an array would. Words are 4 bytes, and the lines of this cache are 8 bytes, so each line holds two words. A miss brings in the whole line.",
-      "callout": "cache"
-    },
-    {
       "kind": "predict",
-      "text": "With two words per line, how many of the sixteen loads will miss?",
+      "text": "The trace loads sixteen consecutive words, `0x000` to `0x03C`, as a loop over an array would. Words are 4 bytes, and the lines of this cache are 8 bytes, so each line holds two words. A miss brings in the whole line. With two words per line, how many of the sixteen loads will miss?",
       "options": [
         "Sixteen",
         "Eight",
@@ -39,7 +34,7 @@
       "answer": 1,
       "explain": "Eight. The first word of each line misses and brings in its neighbour, so the second word hits: one miss for every two loads.",
       "hint": "A miss loads a whole line. How many words does a line hold?",
-      "callout": "config"
+      "callout": "cache"
     },
     {
       "kind": "instruct",
@@ -63,7 +58,7 @@
           }
         ]
       },
-      "hint": "Press Run in the transport bar. If the trace has already run, press Undo, then Run.",
+      "hint": "Press Run in the transport bar. If the trace has already run, press Reset, then Run.",
       "showMe": [
         {
           "op": "run",
@@ -154,7 +149,7 @@
     },
     {
       "kind": "explain",
-      "text": "Two misses, fourteen hits: 87.5%. Longer lines gave more neighbours per miss. The price is that the same 128 bytes now hold only 4 lines instead of 16, so a program that jumps around would find fewer different lines in the cache.",
+      "text": "Two misses, fourteen hits: 14 of 16, which the stats round to 88%. Longer lines gave more neighbours per miss. The price is that the same 128 bytes now hold only 4 lines instead of 16, so a program that jumps around would find fewer different lines in the cache.",
       "callout": "stats"
     }
   ]

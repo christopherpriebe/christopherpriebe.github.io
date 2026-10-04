@@ -2257,28 +2257,49 @@ fn module_04_evicts_way_1_then_way_0() {
 
 #[test]
 fn module_04_predicts_name_the_victim_the_session_chooses() {
-    // The right option of each predict names the way the session evicts:
-    // way 1 for `0x080`, then way 0 for `0x0C0`.
-    let module: Value = serde_json::from_str(MODULE_04).unwrap();
-    let right: Vec<&str> = module["steps"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|step| step["kind"] == "predict")
-        .map(|step| {
-            let answer = usize::try_from(step["answer"].as_u64().unwrap()).unwrap();
-            step["options"][answer].as_str().unwrap()
-        })
-        .collect();
-    assert!(right[0].starts_with("Way 1"), "{right:?}");
-    assert!(right[1].starts_with("Way 0"), "{right:?}");
+    // Each predict's right option names the way the session then evicts:
+    // way 1 (0x040) for `0x080`, then way 0 (0x000) for `0x0C0`.
+    let (mut run, mut session) = started(MODULE_04);
+    let steps = run.module().steps().to_vec();
+    let mut evictions = [(1_u32, 0x040_u32), (0, 0x000)].into_iter();
+    let mut view = run.sync(&mut session);
+    for _ in 0..50 {
+        view = match view.kind {
+            ModuleStepKind::Done => break,
+            ModuleStepKind::Explain => run.next(&mut session),
+            ModuleStepKind::Instruct | ModuleStepKind::Observe => run.show_me(&mut session),
+            ModuleStepKind::Predict => {
+                let Some(Step::Predict {
+                    answer, options, ..
+                }) = steps.get(view.step_index as usize).cloned()
+                else {
+                    panic!("a predict step");
+                };
+                let named: u32 = options[usize::try_from(answer).unwrap()]
+                    .strip_prefix("Way ")
+                    .and_then(|rest| rest[..1].parse().ok())
+                    .expect("the right option names a way");
+                let (way, evicted) = evictions.next().expect("two predicts");
+                assert_eq!(named, way, "{options:?}");
+                run.select(answer);
+                run.check(&mut session);
+                // The way the answer names was refilled; the line it held is gone.
+                let filled = json!({"way": {"set": 0, "way": way}, "rank": 0});
+                assert!(session.eval_predicate(&predicate(filled)));
+                let gone = json!({"line": {"addr": evicted}, "present": false});
+                assert!(session.eval_predicate(&predicate(gone)));
+                run.next(&mut session)
+            }
+        };
+    }
+    assert!(evictions.next().is_none(), "both predicts were met");
 }
 
 #[test]
 fn module_05_misses_four_times_under_fifo_and_hits_twice_under_lru() {
     let (mut run, mut session) = started(MODULE_05);
     let views = show_me_path(&mut run, &mut session);
-    assert_eq!(views.len(), 8);
+    assert_eq!(views.len(), 7);
     // The final state is the LRU run: 0x000 and 0x080 stay, 0x040 went.
     for (json, expected) in [
         (json!({"config": {"replacement": "lru"}}), true),
@@ -2305,7 +2326,7 @@ fn module_05_under_fifo_the_last_load_misses() {
     // Stop after the first run: the line just reused was evicted.
     let fifo = edited(MODULE_05, |module| {
         let steps = module["steps"].as_array_mut().unwrap();
-        steps.truncate(4);
+        steps.truncate(3);
     });
     let (mut run, mut session) = started(&fifo);
     show_me_path(&mut run, &mut session);
@@ -2328,6 +2349,24 @@ fn module_05_under_fifo_the_last_load_misses() {
 
 #[test]
 fn module_06_hit_rate_is_50_percent_then_87_and_a_half() {
+    // The first run, at 8-byte lines: eight misses and eight hits.
+    let first = edited(MODULE_06, |module| {
+        let steps = module["steps"].as_array_mut().unwrap();
+        steps.truncate(3);
+    });
+    let (mut run, mut session) = started(&first);
+    show_me_path(&mut run, &mut session);
+    for (json, expected) in [
+        (json!({"config": {"lineBytes": 8}}), true),
+        (json!({"counter": "hits", "op": "==", "value": 8}), true),
+        (json!({"counter": "misses", "op": "==", "value": 8}), true),
+    ] {
+        assert_eq!(
+            session.eval_predicate(&predicate(json.clone())),
+            expected,
+            "{json}"
+        );
+    }
     let (mut run, mut session) = started(MODULE_06);
     show_me_path(&mut run, &mut session);
     for (json, expected) in [
@@ -2339,6 +2378,10 @@ fn module_06_hit_rate_is_50_percent_then_87_and_a_half() {
         (json!({"counter": "hits", "op": "==", "value": 14}), true),
         (json!({"counter": "misses", "op": "==", "value": 2}), true),
         (json!({"counter": "conflict", "op": "==", "value": 0}), true),
+        (
+            json!({"counter": "evictions", "op": "==", "value": 0}),
+            true,
+        ),
     ] {
         assert_eq!(
             session.eval_predicate(&predicate(json.clone())),
@@ -2346,9 +2389,59 @@ fn module_06_hit_rate_is_50_percent_then_87_and_a_half() {
             "{json}"
         );
     }
-    // The first run, at 8-byte lines, is pinned by its step's `expect`
-    // (eight hits and eight misses); the program is sixteen words.
-    let module: Value = serde_json::from_str(MODULE_06).unwrap();
-    let source = module["program"]["source"].as_str().unwrap();
-    assert_eq!(source.lines().count(), 16);
+}
+
+#[test]
+fn modules_open_with_their_prediction_so_the_gate_blocks_running_the_trace() {
+    for json in [MODULE_03, MODULE_05, MODULE_06] {
+        let (run, mut session) = started(json);
+        assert!(matches!(run.module().steps()[0], Step::Predict { .. }));
+        assert!(session.gate().is_some());
+        assert_eq!(session.apply(Op::Run { n: 1 }), Err(OpError::Gated));
+    }
+}
+
+#[test]
+fn a_trace_run_before_its_step_began_completes_after_reset_then_run() {
+    // The hint's recovery: the trace ran before the "Run the trace" step,
+    // so nothing counts yet; Reset, then Run, does.
+    let module = edited(MODULE_05, |module| {
+        let steps = module["steps"].as_array_mut().unwrap();
+        steps.remove(0);
+        steps.insert(0, json!({"kind": "explain", "text": "Before."}));
+        steps.truncate(3);
+    });
+    let (mut run, mut session) = started(&module);
+    session.apply(Op::Run { n: 5 }).unwrap();
+    let instruct = run.next(&mut session);
+    assert_eq!(instruct.kind, ModuleStepKind::Instruct);
+    assert_eq!(run.sync(&mut session).kind, ModuleStepKind::Instruct);
+    let preset: Value = serde_json::from_str(MODULE_05).unwrap();
+    let reset: Op =
+        serde_json::from_value(json!({"op": "config", "config": preset["preset"]})).unwrap();
+    session.apply(reset).unwrap();
+    assert_eq!(run.sync(&mut session).kind, ModuleStepKind::Instruct);
+    session.apply(Op::Run { n: 5 }).unwrap();
+    assert_eq!(run.sync(&mut session).kind, ModuleStepKind::Explain);
+}
+
+#[test]
+fn module_04_waits_for_the_set_its_prediction_describes() {
+    // Step 3 completes on a hit of `0x000` only with `0x000` and `0x040`
+    // in set 0: a detour through `0x080` does not count.
+    let (mut run, mut session) = started(MODULE_04);
+    run.next(&mut session);
+    for addr in [0x080, 0x000, 0x000] {
+        session.apply(load(addr)).unwrap();
+    }
+    assert_eq!(run.sync(&mut session).step_index, 1);
+    // Undone back to the described set, the hit completes the step.
+    for _ in 0..3 {
+        assert!(session.undo());
+    }
+    session.apply(load(0x000)).unwrap();
+    session.apply(load(0x040)).unwrap();
+    assert_eq!(run.sync(&mut session).step_index, 2);
+    session.apply(load(0x000)).unwrap();
+    assert_eq!(run.sync(&mut session).step_index, 3);
 }

@@ -40,7 +40,7 @@
           { "counter": "conflict", "op": "==", "value": 2 }
         ]
       },
-      "hint": "Press Run in the transport bar. If the trace has already run, press Undo, then Run.",
+      "hint": "Press Run in the transport bar. If the trace has already run, press Reset, then Run.",
       "showMe": [{ "op": "run", "n": 4 }],
       "callout": "transport"
     },

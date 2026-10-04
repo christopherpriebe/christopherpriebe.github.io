@@ -1,7 +1,7 @@
 {
   "id": "04-tracking-lru",
   "title": "Tracking LRU",
-  "description": "In a full set, the *least recently used* way is the victim. Read the rank column to name it before it happens.",
+  "description": "In a full set, the *least recently used* way is the victim. Read the LRU column to name it before it happens.",
   "advanced": false,
   "preset": {
     "addressBits": 12,
@@ -21,7 +21,7 @@
   "steps": [
     {
       "kind": "explain",
-      "text": "This cache has 2 ways per set and 4 sets, so the set comes from 2 *index* bits. The addresses `0x000`, `0x040`, `0x080` and `0x0C0` all have index `00`: they all compete for the two ways of set 0. The *rank* column says how recently each way was used: 0 is the most recent.",
+      "text": "This cache has 2 ways per set and 4 sets, so the set comes from 2 *index* bits. The addresses `0x000`, `0x040`, `0x080` and `0x0C0` all have index `00`: they all compete for the two ways of set 0. The *LRU* column ranks each way by how recently it was used: 0 (MRU) is the most recent, 1 (LRU) the least.",
       "callout": {
         "set": 0
       }
@@ -66,15 +66,37 @@
     },
     {
       "kind": "instruct",
-      "text": "Load `0x000` again. Watch the rank column when it hits.",
+      "text": "Load `0x000` again. Watch the LRU column when it hits.",
       "expect": {
-        "lastAccess": {
-          "kind": "read",
-          "addr": "0x000",
-          "outcome": "hit"
-        }
+        "all": [
+          {
+            "lastAccess": {
+              "kind": "read",
+              "addr": "0x000",
+              "outcome": "hit"
+            }
+          },
+          {
+            "way": {
+              "set": 0,
+              "way": 0
+            },
+            "valid": true,
+            "tag": 0,
+            "rank": 0
+          },
+          {
+            "way": {
+              "set": 0,
+              "way": 1
+            },
+            "valid": true,
+            "tag": 1,
+            "rank": 1
+          }
+        ]
       },
-      "hint": "Type `0x000` in the address box and press Issue.",
+      "hint": "Type `0x000` in the address box and press Issue. If the set holds other lines, press Undo until it holds `0x000` and `0x040`.",
       "showMe": [
         {
           "op": "issue",
@@ -93,7 +115,7 @@
       ],
       "answer": 1,
       "explain": "Way 1. `0x000` was used again a moment ago, so its rank is 0 (most recent) and way 1 has the highest rank, 1. LRU replaces the highest rank, whatever the order of arrival.",
-      "hint": "Look at the rank column of set 0. Which way reads 1, the least recent?",
+      "hint": "Look at the LRU column of set 0. Which way reads 1, the least recently used?",
       "then": [
         {
           "op": "issue",
@@ -104,6 +126,17 @@
       "callout": {
         "set": 0
       }
+    },
+    {
+      "kind": "observe",
+      "text": "That load replaced a line. Drag the timeline back to step 4.3, the *victim*, and read in the log why that way was chosen.",
+      "until": {
+        "event": {
+          "kind": "victim",
+          "entry": 4
+        }
+      },
+      "callout": "log"
     },
     {
       "kind": "explain",
@@ -122,7 +155,7 @@
       ],
       "answer": 1,
       "explain": "Way 0. Way 1 was filled by the last load, so it has rank 0, and way 0 has rank 1. `0x000` is evicted: the last time it was used is further back than that of `0x080`.",
-      "hint": "Which way has the higher number in the rank column now?",
+      "hint": "Which way has the higher number in the LRU column now?",
       "then": [
         {
           "op": "issue",
