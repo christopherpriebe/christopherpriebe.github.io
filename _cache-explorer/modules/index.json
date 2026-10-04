@@ -34,5 +34,23 @@
     "title": "Spatial locality and line size",
     "description": "A loop over consecutive words, with short lines and with long lines.",
     "advanced": false
+  },
+  {
+    "id": "07-write-back-stale-memory",
+    "title": "Write-back and stale memory",
+    "description": "A store under *write-back* changes only the cache. Memory stays stale until the dirty line leaves.",
+    "advanced": true
+  },
+  {
+    "id": "08-write-through-and-allocate",
+    "title": "Write-through and allocate",
+    "description": "Where a store goes under *write-through*, and what changes when a store miss does not allocate.",
+    "advanced": true
+  },
+  {
+    "id": "09-amat",
+    "title": "AMAT and measured cost",
+    "description": "Hit time, miss penalty and the stall in *timed mode*: predict AMAT, then compare it with what was measured.",
+    "advanced": true
   }
 ]

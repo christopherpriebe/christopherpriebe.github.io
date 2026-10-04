@@ -1,0 +1,113 @@
+{
+  "id": "09-amat",
+  "title": "AMAT and measured cost",
+  "description": "Hit time, miss penalty and the stall in *timed mode*: predict AMAT, then compare it with what was measured.",
+  "advanced": true,
+  "preset": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 128,
+      "lineBytes": 16,
+      "associativity": 1,
+      "replacement": "lru",
+      "writePolicy": "writeBack",
+      "allocatePolicy": "writeAllocate"
+    },
+    "timing": {
+      "hitCycles": 1,
+      "missCycles": 20
+    },
+    "seed": 12345,
+    "advanced": true,
+    "memoryInit": "pattern"
+  },
+  "program": {
+    "source": "W 0x000 5\nR 0x004\nR 0x010\nR 0x014\nR 0x018\nR 0x020\nR 0x024\nR 0x080\nR 0x084\nR 0x088",
+    "format": "trace"
+  },
+  "steps": [
+    {
+      "kind": "explain",
+      "text": "Timed mode charges fixed costs: a hit takes 1 cycle, and a miss takes that 1 cycle plus a miss penalty of 20 cycles, during which the CPU stalls waiting for memory. The *average memory access time*, AMAT, is the hit time plus the miss rate times the miss penalty. The trace has ten accesses.",
+      "callout": "config"
+    },
+    {
+      "kind": "predict",
+      "text": "Four of the ten accesses will miss, so the miss rate is 0.40. What is the AMAT?",
+      "options": [
+        "8.0 cycles",
+        "9.0 cycles",
+        "21.0 cycles"
+      ],
+      "answer": 1,
+      "explain": "9.0 cycles: 1 + 0.40 \u00d7 20.",
+      "hint": "AMAT = hit time + miss rate \u00d7 miss penalty. The hit time is 1 and the penalty is 20.",
+      "callout": "stats"
+    },
+    {
+      "kind": "instruct",
+      "text": "Run the trace: press Run.",
+      "expect": {
+        "all": [
+          {
+            "counter": "accesses",
+            "op": "==",
+            "value": 10
+          },
+          {
+            "counter": "misses",
+            "op": "==",
+            "value": 4
+          },
+          {
+            "counter": "writebacks",
+            "op": "==",
+            "value": 1
+          },
+          {
+            "counter": "cycles",
+            "op": "==",
+            "value": 110
+          }
+        ]
+      },
+      "hint": "Press Run in the transport bar. If the trace has already run, press Reset, then Run.",
+      "showMe": [
+        {
+          "op": "run",
+          "n": 10
+        }
+      ],
+      "callout": "transport"
+    },
+    {
+      "kind": "observe",
+      "text": "Find a Stall in the log: drag the timeline to it and look at the CPU. While memory answers a miss, the CPU waits.",
+      "until": {
+        "event": {
+          "kind": "stall"
+        }
+      },
+      "callout": "cpu"
+    },
+    {
+      "kind": "predict",
+      "text": "The Stats show AMAT of 9.0 cycles, but the measured cost is higher: 110 cycles over 10 accesses. Why does the measurement differ from AMAT?",
+      "options": [
+        "Hits cost more than 1 cycle",
+        "AMAT leaves out the write-back of the dirty line",
+        "AMAT is rounded down"
+      ],
+      "answer": 1,
+      "explain": "The last miss evicted a dirty line, and writing it back costs another miss penalty. AMAT counts only the misses, not the write-backs they cause.",
+      "hint": "The first access was a store. What happens to its line when `0x080` takes its place?",
+      "callout": "stats"
+    },
+    {
+      "kind": "explain",
+      "text": "Cycles: 10 accesses at 1, plus 4 misses at 20, plus 1 write-back at 20, is 110, or 11.0 per access. AMAT gives 9.0; the write-back adds 20 over 10 accesses, which is the extra 2.0 in the Measured line. AMAT is the rule of thumb, and a write-back is a cost it does not see.",
+      "callout": "stats"
+    }
+  ]
+}

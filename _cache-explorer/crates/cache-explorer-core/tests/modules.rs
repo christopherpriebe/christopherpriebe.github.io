@@ -57,11 +57,15 @@ const MODULE_03: &str = include_str!("../../../modules/03-conflict-misses.json")
 const MODULE_04: &str = include_str!("../../../modules/04-tracking-lru.json");
 const MODULE_05: &str = include_str!("../../../modules/05-fifo-vs-lru.json");
 const MODULE_06: &str = include_str!("../../../modules/06-spatial-locality-line-size.json");
+const MODULE_07: &str = include_str!("../../../modules/07-write-back-stale-memory.json");
+const MODULE_08: &str = include_str!("../../../modules/08-write-through-and-allocate.json");
+const MODULE_09: &str = include_str!("../../../modules/09-amat.json");
 const MODULE_INDEX: &str = include_str!("../../../modules/index.json");
 
 /// Every shipped module that has a test here, in index order.
-const SHIPPED: [&str; 6] = [
-    MODULE_01, MODULE_02, MODULE_03, MODULE_04, MODULE_05, MODULE_06,
+const SHIPPED: [&str; 9] = [
+    MODULE_01, MODULE_02, MODULE_03, MODULE_04, MODULE_05, MODULE_06, MODULE_07, MODULE_08,
+    MODULE_09,
 ];
 
 /// Every fixture module.
@@ -2095,6 +2099,9 @@ cases! {
     shipped_module_04_completes_through_its_show_me_path => (MODULE_04),
     shipped_module_05_completes_through_its_show_me_path => (MODULE_05),
     shipped_module_06_completes_through_its_show_me_path => (MODULE_06),
+    shipped_module_07_completes_through_its_show_me_path => (MODULE_07),
+    shipped_module_08_completes_through_its_show_me_path => (MODULE_08),
+    shipped_module_09_completes_through_its_show_me_path => (MODULE_09),
 }
 
 #[test]
@@ -2444,4 +2451,198 @@ fn module_04_waits_for_the_set_its_prediction_describes() {
     assert_eq!(run.sync(&mut session).step_index, 2);
     session.apply(load(0x000)).unwrap();
     assert_eq!(run.sync(&mut session).step_index, 3);
+}
+
+/// Whether each predicate in `cases` holds in `session`, as expected.
+#[track_caller]
+fn assert_predicates(session: &Session, cases: &[(Value, bool)]) {
+    for (json, expected) in cases {
+        assert_eq!(
+            session.eval_predicate(&predicate(json.clone())),
+            *expected,
+            "{json}"
+        );
+    }
+}
+
+#[test]
+fn the_advanced_modules_are_marked_advanced_and_the_others_are_not() {
+    for (i, json) in SHIPPED.iter().enumerate() {
+        let module = Module::parse(json).unwrap();
+        assert_eq!(module.advanced(), i >= 6, "{}", module.id());
+    }
+}
+
+#[test]
+fn module_07_ends_with_the_dirty_line_written_back_over_the_edit() {
+    let (mut run, mut session) = started(MODULE_07);
+    let views = show_me_path(&mut run, &mut session);
+    assert_eq!(views.len(), 9);
+    // The observe step leaves the cursor on the WriteBack, mid-access, so
+    // the end state is read from a copy that stops after the loads.
+    let ended = edited(MODULE_07, |module| {
+        module["steps"].as_array_mut().unwrap().truncate(6);
+    });
+    let (mut run, mut session) = started(&ended);
+    show_me_path(&mut run, &mut session);
+    assert_predicates(
+        &session,
+        &[
+            // The line left set 2 and memory holds the stored 7, not the edited 9.
+            (json!({"line": {"addr": 0x0A4}}), false),
+            (json!({"memory": {"addr": 0x0A4}, "equals": 7}), true),
+            (json!({"memory": {"addr": 0x0A4}, "equals": 9}), false),
+            (
+                json!({"counter": "writebacks", "op": "==", "value": 1}),
+                true,
+            ),
+            (
+                json!({"counter": "evictions", "op": "==", "value": 1}),
+                true,
+            ),
+            (json!({"way": {"set": 2, "way": 0}, "dirty": false}), true),
+        ],
+    );
+}
+
+#[test]
+fn module_07_leaves_memory_stale_until_the_write_back() {
+    // After the first two instruct steps: dirty line holding 7, memory holding
+    // the edited 9, the way still dirty.
+    let first = edited(MODULE_07, |module| {
+        module["steps"].as_array_mut().unwrap().truncate(5);
+    });
+    let (mut run, mut session) = started(&first);
+    show_me_path(&mut run, &mut session);
+    assert_predicates(
+        &session,
+        &[
+            (json!({"line": {"addr": 0x0A4}, "dirty": true}), true),
+            (json!({"memory": {"addr": 0x0A4}, "equals": 9}), true),
+            (
+                json!({"way": {"set": 2, "way": 0}, "dirty": true, "tag": 2}),
+                true,
+            ),
+            (
+                json!({"counter": "writebacks", "op": "==", "value": 0}),
+                true,
+            ),
+        ],
+    );
+    // The four loads fit set 2's other three ways and then evict way 0.
+    for addr in [0x1A4, 0x2A4, 0x3A4] {
+        session.apply(load(addr)).unwrap();
+    }
+    assert_predicates(
+        &session,
+        &[
+            (json!({"line": {"addr": 0x0A4}, "dirty": true}), true),
+            (json!({"memory": {"addr": 0x0A4}, "equals": 9}), true),
+        ],
+    );
+    session.apply(load(0x4A4)).unwrap();
+    assert_predicates(
+        &session,
+        &[
+            (json!({"line": {"addr": 0x0A4}}), false),
+            (json!({"memory": {"addr": 0x0A4}, "equals": 7}), true),
+        ],
+    );
+}
+
+#[test]
+fn module_08_writes_every_store_to_memory_then_sends_misses_around() {
+    // The write-through run, with allocate: two stores reach memory.
+    let first = edited(MODULE_08, |module| {
+        module["steps"].as_array_mut().unwrap().truncate(4);
+    });
+    let (mut run, mut session) = started(&first);
+    show_me_path(&mut run, &mut session);
+    assert_predicates(
+        &session,
+        &[
+            (json!({"counter": "hits", "op": "==", "value": 2}), true),
+            (json!({"counter": "misses", "op": "==", "value": 1}), true),
+            (
+                json!({"counter": "writethroughs", "op": "==", "value": 2}),
+                true,
+            ),
+            (
+                json!({"counter": "writearounds", "op": "==", "value": 0}),
+                true,
+            ),
+            (
+                json!({"counter": "writebacks", "op": "==", "value": 0}),
+                true,
+            ),
+            (json!({"line": {"addr": 0x0A4}, "dirty": true}), false),
+            (json!({"line": {"addr": 0x0A4}}), true),
+            (json!({"memory": {"addr": 0x0A4}, "equals": 8}), true),
+        ],
+    );
+    // The whole module ends under no-allocate: the stores went around.
+    let (mut run, mut session) = started(MODULE_08);
+    let views = show_me_path(&mut run, &mut session);
+    assert_eq!(views.len(), 9);
+    assert_predicates(
+        &session,
+        &[
+            (
+                json!({"config": {"allocatePolicy": "writeNoAllocate", "writePolicy": "writeThrough"}}),
+                true,
+            ),
+            (json!({"counter": "hits", "op": "==", "value": 0}), true),
+            (json!({"counter": "misses", "op": "==", "value": 3}), true),
+            (
+                json!({"counter": "writearounds", "op": "==", "value": 2}),
+                true,
+            ),
+            (
+                json!({"counter": "writethroughs", "op": "==", "value": 0}),
+                true,
+            ),
+            (json!({"memory": {"addr": 0x0A4}, "equals": 8}), true),
+            // Only the load brought the line in.
+            (json!({"line": {"addr": 0x0A4}}), true),
+        ],
+    );
+}
+
+#[test]
+fn module_09_measures_more_than_amat_by_the_write_back() {
+    let (mut run, mut session) = started(MODULE_09);
+    let views = show_me_path(&mut run, &mut session);
+    assert_eq!(views.len(), 7);
+    // The observe step leaves the cursor on a Stall, so check the totals at
+    // the end of a copy that stops after the run.
+    let ran = edited(MODULE_09, |module| {
+        module["steps"].as_array_mut().unwrap().truncate(3);
+    });
+    let (mut run, mut session) = started(&ran);
+    show_me_path(&mut run, &mut session);
+    assert_predicates(
+        &session,
+        &[
+            (json!({"config": {"timed": true}}), true),
+            (
+                json!({"counter": "accesses", "op": "==", "value": 10}),
+                true,
+            ),
+            (json!({"counter": "misses", "op": "==", "value": 4}), true),
+            (
+                json!({"counter": "writebacks", "op": "==", "value": 1}),
+                true,
+            ),
+            (json!({"counter": "cycles", "op": "==", "value": 110}), true),
+        ],
+    );
+    let stats = session.stats();
+    assert_eq!(
+        stats.amat.map(|figure| figure.text).as_deref(),
+        Some("AMAT = 1 + 0.40 \u{d7} 20 = 9.0 cycles")
+    );
+    assert_eq!(
+        stats.measured.map(|figure| figure.text).as_deref(),
+        Some("Measured after access #10: 11.0 cycles per access, 2.0 of them for write-backs.")
+    );
 }
