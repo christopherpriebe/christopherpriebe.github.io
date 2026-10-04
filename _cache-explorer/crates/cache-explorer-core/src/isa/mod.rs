@@ -20,6 +20,7 @@
 
 mod asm;
 mod lexer;
+mod space;
 mod trace;
 
 use std::sync::Arc;
@@ -35,6 +36,7 @@ use crate::units::{Addr, Register};
 use lexer::{NumberWord, Token};
 
 pub(crate) use asm::Mnemonic;
+pub(crate) use space::AddressSpace;
 
 /// A program or trace that parsed under a run's geometry: its source, kept
 /// so a new run can parse it again under its own configuration, and its
@@ -223,14 +225,14 @@ impl Program {
     /// with neither errors nor instructions, that it is empty. A source
     /// larger than [`MAX_PROGRAM_BYTES`] has that error alone.
     pub(crate) fn parse(
-        geometry: &Geometry,
+        space: &impl AddressSpace,
         source: &str,
         format: ProgramFormat,
     ) -> Result<Program, ParseFailure> {
-        let fail = |errors: Vec<ParseError>| ParseFailure::new(format, errors, geometry);
+        let fail = |errors: Vec<ParseError>| ParseFailure::new(format, errors, space);
         if u64::try_from(source.len()).unwrap_or(u64::MAX) > u64::from(MAX_PROGRAM_BYTES) {
             let (line, column) = place_of_byte(source, MAX_PROGRAM_BYTES);
-            let message = explain::parse_problem(geometry, ParseProblem::TooLarge { format });
+            let message = explain::parse_problem(space, ParseProblem::TooLarge { format });
             return Err(fail(vec![error(line, column, 1, message)]));
         }
         let mut lines = (1_u32..).zip(source.lines());
@@ -239,11 +241,11 @@ impl Program {
             .take(usize::try_from(MAX_PROGRAM_LINES).unwrap_or(usize::MAX))
             .collect();
         let (instructions, mut errors) = match format {
-            ProgramFormat::Asm => asm::parse(geometry, &read),
-            ProgramFormat::Trace => trace::parse(geometry, &read),
+            ProgramFormat::Asm => asm::parse(space, &read),
+            ProgramFormat::Trace => trace::parse(space, &read),
         };
         if let Some((line, text)) = lines.next() {
-            let message = explain::parse_problem(geometry, ParseProblem::TooManyLines { format });
+            let message = explain::parse_problem(space, ParseProblem::TooManyLines { format });
             errors.push(error(line, 1, chars(text), message));
         }
         if !errors.is_empty() || instructions.is_empty() {
@@ -289,11 +291,11 @@ impl Program {
 impl ParseFailure {
     /// The failure of a source read as `format` with `errors`, sorted into
     /// source order here; with no errors, the source is empty.
-    fn new(format: ProgramFormat, mut errors: Vec<ParseError>, geometry: &Geometry) -> Self {
+    fn new(format: ProgramFormat, mut errors: Vec<ParseError>, space: &impl AddressSpace) -> Self {
         errors.sort_by_key(|error| (error.line, error.column));
         let mut errors = errors.into_iter();
         let first = errors.next().unwrap_or_else(|| {
-            let message = explain::parse_problem(geometry, ParseProblem::Empty { format });
+            let message = explain::parse_problem(space, ParseProblem::Empty { format });
             error(1, 1, 0, message)
         });
         Self {
@@ -373,45 +375,45 @@ fn error(line: u32, column: u32, length: u32, message: String) -> ParseError {
 /// `token` read as a literal address: hex, within the address width, and a
 /// multiple of the word size. `None` if the token is not a number at all,
 /// which each parser reports in its own words.
-fn literal_address(geometry: &Geometry, token: &Token<'_>) -> Option<Result<Addr, Problem>> {
+fn literal_address(space: &impl AddressSpace, token: &Token<'_>) -> Option<Result<Addr, Problem>> {
     let problem = |message: String| Some(Err(Problem::at(token, message)));
     match token.number() {
         NumberWord::Hex(Some(value)) => {
             let Some(addr) = u32::try_from(value)
                 .ok()
-                .and_then(|value| geometry.addr(value))
+                .and_then(|value| space.addr(value))
             else {
                 let error = AccessError::OutOfRange {
                     addr: value,
-                    address_bits: geometry.address_bits(),
+                    address_bits: space.address_bits(),
                 };
                 return problem(error.to_string());
             };
-            if addr.get() % geometry.word_bytes() != 0 {
+            if addr.get() % space.word_bytes() != 0 {
                 let error = AccessError::Misaligned {
                     addr,
-                    address_bits: geometry.address_bits(),
-                    word_bytes: geometry.word_bytes(),
+                    address_bits: space.address_bits(),
+                    word_bytes: space.word_bytes(),
                 };
                 return problem(error.to_string());
             }
             Some(Ok(addr))
         }
         NumberWord::Decimal(Some(value)) => problem(explain::parse_problem(
-            geometry,
+            space,
             ParseProblem::DecimalAddress {
                 text: token.text,
                 value,
             },
         )),
-        NumberWord::Hex(None) | NumberWord::Decimal(None) => problem(too_long(geometry, token)),
+        NumberWord::Hex(None) | NumberWord::Decimal(None) => problem(too_long(space, token)),
         NumberWord::Other => None,
     }
 }
 
 /// The message for a number in `token` that does not fit 64 bits.
-fn too_long(geometry: &Geometry, token: &Token<'_>) -> String {
-    explain::parse_problem(geometry, ParseProblem::TooLong { text: token.text })
+fn too_long(space: &impl AddressSpace, token: &Token<'_>) -> String {
+    explain::parse_problem(space, ParseProblem::TooLong { text: token.text })
 }
 
 /// The number of characters in `text`, as a column count.

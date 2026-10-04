@@ -10,23 +10,26 @@
 //! word as an unsigned number.
 
 use crate::explain::{self, ParseProblem};
-use crate::geometry::Geometry;
 use crate::op::AccessKind;
 use crate::units::Register;
 
 use super::lexer::{self, NumberWord, Token};
 use super::{
-    literal_address, too_long, Address, Instruction, Operand, ParseError, Placed, Problem,
+    literal_address, too_long, Address, AddressSpace, Instruction, Operand, ParseError, Placed,
+    Problem,
 };
 
 /// Reads the trace in `lines`, each with its number: the accesses, and the
 /// errors.
-pub(super) fn parse(geometry: &Geometry, lines: &[(u32, &str)]) -> (Vec<Placed>, Vec<ParseError>) {
+pub(super) fn parse(
+    space: &impl AddressSpace,
+    lines: &[(u32, &str)],
+) -> (Vec<Placed>, Vec<ParseError>) {
     let mut placed = Vec::new();
     let mut errors = Vec::new();
     for &(number, line) in lines {
         let tokens = lexer::tokens(line);
-        match access(geometry, &tokens) {
+        match access(space, &tokens) {
             Ok(Some(instruction)) => {
                 let (start, end) = match (tokens.first(), tokens.last()) {
                     (Some(first), Some(last)) => (first.start, last.end),
@@ -46,7 +49,7 @@ pub(super) fn parse(geometry: &Geometry, lines: &[(u32, &str)]) -> (Vec<Placed>,
 }
 
 /// The access a line's `tokens` stand for; `None` for a line with none.
-fn access(geometry: &Geometry, tokens: &[Token<'_>]) -> Result<Option<Instruction>, Problem> {
+fn access(space: &impl AddressSpace, tokens: &[Token<'_>]) -> Result<Option<Instruction>, Problem> {
     let [first, operands @ ..] = tokens else {
         return Ok(None);
     };
@@ -56,17 +59,17 @@ fn access(geometry: &Geometry, tokens: &[Token<'_>]) -> Result<Option<Instructio
         AccessKind::Write
     } else {
         let message =
-            explain::parse_problem(geometry, ParseProblem::UnknownAccess { name: first.text });
+            explain::parse_problem(space, ParseProblem::UnknownAccess { name: first.text });
         return Err(Problem::at(first, message));
     };
     let shape = |token: &Token<'_>| {
-        let message = explain::parse_problem(geometry, ParseProblem::TraceOperands { kind });
+        let message = explain::parse_problem(space, ParseProblem::TraceOperands { kind });
         Problem::at(token, message)
     };
     let [at, rest @ ..] = operands else {
         return Err(shape(first));
     };
-    let addr = match literal_address(geometry, at) {
+    let addr = match literal_address(space, at) {
         Some(addr) => addr?,
         None => return Err(shape(at)),
     };
@@ -77,8 +80,7 @@ fn access(geometry: &Geometry, tokens: &[Token<'_>]) -> Result<Option<Instructio
             from,
         })),
         (AccessKind::Write, []) => {
-            let message =
-                explain::parse_problem(geometry, ParseProblem::StoreWithoutValue { addr });
+            let message = explain::parse_problem(space, ParseProblem::StoreWithoutValue { addr });
             Err(Problem::at(first, message))
         }
         // The value comes first: a line reports its first problem, so a word
@@ -87,14 +89,14 @@ fn access(geometry: &Geometry, tokens: &[Token<'_>]) -> Result<Option<Instructio
             let written = match value.number() {
                 NumberWord::Hex(Some(written)) | NumberWord::Decimal(Some(written)) => written,
                 NumberWord::Hex(None) | NumberWord::Decimal(None) => {
-                    return Err(Problem::at(value, too_long(geometry, value)));
+                    return Err(Problem::at(value, too_long(space, value)));
                 }
                 NumberWord::Other => return Err(shape(value)),
             };
-            let word = geometry.fit_word(written);
+            let word = space.fit_word(written);
             if word.get() != written {
                 let message =
-                    explain::parse_problem(geometry, ParseProblem::ValueTooWide { value: written });
+                    explain::parse_problem(space, ParseProblem::ValueTooWide { value: written });
                 return Err(Problem::at(value, message));
             }
             if let Some(extra) = after.first() {

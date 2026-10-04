@@ -29,14 +29,14 @@
 use std::collections::BTreeMap;
 
 use crate::explain::{self, ParseProblem};
-use crate::geometry::Geometry;
 use crate::input::fit_word;
 use crate::limits::{MAX_LABEL_CHARS, MAX_PROGRAM_INSTRUCTIONS};
 use crate::units::Register;
 
 use super::lexer::{self, NumberWord, RegisterWord, Token, TokenKind};
 use super::{
-    error, literal_address, too_long, Address, Instruction, Operand, ParseError, Placed, Problem,
+    error, literal_address, too_long, Address, AddressSpace, Instruction, Operand, ParseError,
+    Placed, Problem,
 };
 
 /// Bytes in a register, the width of an `add` immediate.
@@ -88,9 +88,9 @@ struct Branch<'s> {
 }
 
 /// What the assembler has read so far.
-struct Assembler<'g, 's> {
-    /// The run's geometry, which literals must fit.
-    geometry: &'g Geometry,
+struct Assembler<'g, 's, S> {
+    /// The address space, which literals must fit.
+    space: &'g S,
     /// The instructions, with the branches' targets still to resolve.
     instructions: Vec<Placed>,
     /// Each label, with the index of the instruction it marks and its line.
@@ -105,9 +105,12 @@ struct Assembler<'g, 's> {
 
 /// Assembles `lines`, each with its number: the instructions, and the
 /// errors.
-pub(super) fn parse(geometry: &Geometry, lines: &[(u32, &str)]) -> (Vec<Placed>, Vec<ParseError>) {
+pub(super) fn parse<S: AddressSpace>(
+    space: &S,
+    lines: &[(u32, &str)],
+) -> (Vec<Placed>, Vec<ParseError>) {
     let mut assembler = Assembler {
-        geometry,
+        space,
         instructions: Vec::new(),
         labels: BTreeMap::new(),
         branches: Vec::new(),
@@ -123,7 +126,7 @@ pub(super) fn parse(geometry: &Geometry, lines: &[(u32, &str)]) -> (Vec<Placed>,
     (assembler.instructions, assembler.errors)
 }
 
-impl<'s> Assembler<'_, 's> {
+impl<'s, S: AddressSpace> Assembler<'_, 's, S> {
     /// Reads line `number`, `line`.
     fn line(&mut self, number: u32, line: &'s str) -> Result<(), Problem> {
         let tokens = lexer::tokens(line);
@@ -221,7 +224,7 @@ impl<'s> Assembler<'_, 's> {
         for branch in &self.branches {
             let Some(&(index, _)) = self.labels.get(branch.label.text) else {
                 let message = explain::parse_problem(
-                    self.geometry,
+                    self.space,
                     ParseProblem::UndefinedLabel {
                         name: branch.label.text,
                     },
@@ -245,14 +248,14 @@ impl<'s> Assembler<'_, 's> {
 
     /// `problem` at `token`.
     fn problem(&self, token: &Token<'_>, problem: ParseProblem<'_>) -> Problem {
-        Problem::at(token, explain::parse_problem(self.geometry, problem))
+        Problem::at(token, explain::parse_problem(self.space, problem))
     }
 }
 
 /// The operands of one instruction, read in order.
-struct Operands<'a, 'g, 's> {
-    /// The assembler, for the geometry and the messages.
-    assembler: &'a Assembler<'g, 's>,
+struct Operands<'a, 'g, 's, S> {
+    /// The assembler, for the address space and the messages.
+    assembler: &'a Assembler<'g, 's, S>,
     /// The instruction.
     mnemonic: Mnemonic,
     /// The mnemonic's token, where an error goes when an operand is missing.
@@ -261,7 +264,7 @@ struct Operands<'a, 'g, 's> {
     tokens: &'a [Token<'s>],
 }
 
-impl<'s> Operands<'_, '_, 's> {
+impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
     /// The instruction, with its label token if it is a branch.
     fn read(mut self) -> Result<(Instruction, Option<Token<'s>>), Problem> {
         if self.tokens.is_empty() {
@@ -277,7 +280,7 @@ impl<'s> Operands<'_, '_, 's> {
             Mnemonic::St => {
                 let to = self.memory()?;
                 self.comma()?;
-                let value = self.operand(self.assembler.geometry.word_bytes())?;
+                let value = self.operand(self.assembler.space.word_bytes())?;
                 (Instruction::Store { to, value }, None)
             }
             Mnemonic::Add => {
@@ -346,7 +349,7 @@ impl<'s> Operands<'_, '_, 's> {
         let address = match inner.register() {
             RegisterWord::Register(register) => Address::Register(register),
             RegisterWord::NotARegister => return Err(self.not_a_register(&inner)),
-            RegisterWord::Other => match literal_address(self.assembler.geometry, &inner) {
+            RegisterWord::Other => match literal_address(self.assembler.space, &inner) {
                 Some(addr) => Address::Literal(addr?),
                 None => return Err(self.shape(Some(&inner))),
             },
@@ -378,10 +381,7 @@ impl<'s> Operands<'_, '_, 's> {
         let magnitude = match lexer::number(digits) {
             NumberWord::Hex(Some(value)) | NumberWord::Decimal(Some(value)) => value,
             NumberWord::Hex(None) | NumberWord::Decimal(None) => {
-                return Err(Problem::at(
-                    &token,
-                    too_long(self.assembler.geometry, &token),
-                ));
+                return Err(Problem::at(&token, too_long(self.assembler.space, &token)));
             }
             NumberWord::Other => return Err(self.shape(Some(&token))),
         };

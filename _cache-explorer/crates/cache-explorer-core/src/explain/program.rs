@@ -4,7 +4,8 @@
 
 use crate::config::Config;
 use crate::format;
-use crate::geometry::{highest_word, Geometry};
+use crate::geometry::highest_word;
+use crate::isa::AddressSpace;
 use crate::isa::{Mnemonic, ParseError};
 use crate::limits::{
     MAX_LABEL_CHARS, MAX_PROGRAM_BYTES, MAX_PROGRAM_INSTRUCTIONS, MAX_PROGRAM_LINES,
@@ -241,9 +242,9 @@ pub(crate) fn parse_error(line: u32, column: u32, message: &str) -> String {
 }
 
 /// The message of `problem`, a reason a line does not parse under
-/// `geometry`. The examples it gives are written for the geometry: an
-/// address at its width and aligned to its word.
-pub(crate) fn parse_problem(geometry: &Geometry, problem: ParseProblem<'_>) -> String {
+/// `space`. The examples it gives are written for the space: an address at
+/// its width and aligned to its word.
+pub(crate) fn parse_problem(space: &impl AddressSpace, problem: ParseProblem<'_>) -> String {
     match problem {
         ParseProblem::UnknownInstruction { name } => {
             format!("unknown instruction `{name}`; use ld, st, add or bnez.")
@@ -256,12 +257,12 @@ pub(crate) fn parse_problem(geometry: &Geometry, problem: ParseProblem<'_>) -> S
         }
         ParseProblem::DecimalAddress { text, value } => format!(
             "addresses are hex: write {}, not {text}.",
-            format::address(value, geometry.address_bits())
+            format::address(value, space.address_bits())
         ),
         ParseProblem::TooLong { text } => format!("`{text}` does not fit 64 bits."),
-        ParseProblem::Operands { mnemonic } => operands(geometry, mnemonic),
+        ParseProblem::Operands { mnemonic } => operands(space, mnemonic),
         ParseProblem::TraceOperands { kind } => {
-            let example = example_address(geometry);
+            let example = example_address(space);
             match kind {
                 AccessKind::Read => format!("`R` needs an address, like `R {example}`."),
                 AccessKind::Write => {
@@ -271,14 +272,14 @@ pub(crate) fn parse_problem(geometry: &Geometry, problem: ParseProblem<'_>) -> S
         }
         ParseProblem::StoreWithoutValue { addr } => format!(
             "a store needs a value: W {} 7.",
-            super::address(geometry, addr.get())
+            format::Hex::address(addr.get(), space.address_bits())
         ),
         ParseProblem::ValueTooWide { value } => format!(
             "{} does not fit {} {}-byte word (0\u{2013}{}).",
             format::data(value),
-            format::a_or_an(geometry.word_bytes()),
-            format::setting(geometry.word_bytes()),
-            format::setting(highest_word(geometry.word_bytes()))
+            format::a_or_an(space.word_bytes()),
+            format::setting(space.word_bytes()),
+            format::setting(highest_word(space.word_bytes()))
         ),
         ParseProblem::NotALabel { text } => format!(
             "`{text}` cannot be a label; start it with a letter or `_`, and use only letters, \
@@ -326,8 +327,8 @@ pub(crate) fn parse_problem(geometry: &Geometry, problem: ParseProblem<'_>) -> S
 /// The message of an instruction whose operands do not fit its shape, with
 /// an example of the shape: "`ld` needs a register and an address, like `ld
 /// r1, [0x0A4]`."
-fn operands(geometry: &Geometry, mnemonic: Mnemonic) -> String {
-    let example = example_address(geometry);
+fn operands(space: &impl AddressSpace, mnemonic: Mnemonic) -> String {
+    let example = example_address(space);
     let needs = match mnemonic {
         Mnemonic::Ld => format!("a register and an address, like `ld r1, [{example}]`"),
         Mnemonic::St => format!("an address and a register or a value, like `st [{example}], #7`"),
@@ -341,10 +342,10 @@ fn operands(geometry: &Geometry, mnemonic: Mnemonic) -> String {
 
 /// The address the parse messages give as an example: 0x0A4, aligned down to
 /// the word and written at the address width. It fits the narrowest width.
-fn example_address(geometry: &Geometry) -> format::Hex {
+fn example_address(space: &impl AddressSpace) -> format::Hex {
     const EXAMPLE: u32 = 0x0A4;
-    let word_bytes = geometry.word_bytes().max(1);
-    super::address(geometry, EXAMPLE - EXAMPLE % word_bytes)
+    let word_bytes = space.word_bytes().max(1);
+    format::Hex::address(EXAMPLE - EXAMPLE % word_bytes, space.address_bits())
 }
 
 /// A program's size as the drawer and the log count it: "5 instructions",
