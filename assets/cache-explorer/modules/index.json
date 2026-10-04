@@ -1,0 +1,56 @@
+[
+  {
+    "id": "01-direct-mapped-miss-then-hit",
+    "title": "Direct-mapped: miss then hit",
+    "description": "See how an address is split into *tag*, *index* and *offset*, why the first load of a line *misses*, and why its neighbour then *hits*.",
+    "advanced": false
+  },
+  {
+    "id": "02-index-not-sequential",
+    "title": "The index is not sequential",
+    "description": "The *index* comes from the middle bits of an address, so addresses far apart can land in the *same set*.",
+    "advanced": false
+  },
+  {
+    "id": "03-conflict-misses",
+    "title": "Conflict misses",
+    "description": "Two lines that share a set push each other out of a *direct-mapped* cache. A second way fixes it.",
+    "advanced": false
+  },
+  {
+    "id": "04-tracking-lru",
+    "title": "Tracking LRU",
+    "description": "In a full set, the *least recently used* way is the victim. Read the LRU column to name it before it happens.",
+    "advanced": false
+  },
+  {
+    "id": "05-fifo-vs-lru",
+    "title": "FIFO versus LRU",
+    "description": "The same five loads under *FIFO* and under *LRU*, and where they differ.",
+    "advanced": false
+  },
+  {
+    "id": "06-spatial-locality-line-size",
+    "title": "Spatial locality and line size",
+    "description": "A loop over consecutive words, with short lines and with long lines.",
+    "advanced": false
+  },
+  {
+    "id": "07-write-back-stale-memory",
+    "title": "Write-back and stale memory",
+    "description": "A store under *write-back* changes only the cache. Memory stays stale until the dirty line leaves.",
+    "advanced": true
+  },
+  {
+    "id": "08-write-through-and-allocate",
+    "title": "Write-through and allocate",
+    "description": "Where a store goes under *write-through*, and what changes when a store miss does not allocate.",
+    "advanced": true
+  },
+  {
+    "id": "09-amat",
+    "title": "AMAT and measured cost",
+    "description": "Hit time, miss penalty and the stall in *timed mode*: predict AMAT, then compare it with what was measured.",
+    "advanced": true
+  }
+]

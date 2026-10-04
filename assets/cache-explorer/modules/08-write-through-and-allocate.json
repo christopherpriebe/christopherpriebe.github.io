@@ -1,0 +1,183 @@
+{
+  "id": "08-write-through-and-allocate",
+  "title": "Write-through and allocate",
+  "description": "Where a store goes under *write-through*, and what changes when a store miss does not allocate.",
+  "advanced": true,
+  "preset": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 128,
+      "lineBytes": 16,
+      "associativity": 2,
+      "replacement": "lru",
+      "writePolicy": "writeThrough",
+      "allocatePolicy": "writeAllocate"
+    },
+    "seed": 12345,
+    "advanced": true,
+    "memoryInit": "pattern"
+  },
+  "program": {
+    "source": "W 0x0A4 7\nW 0x0A4 8\nR 0x0A4",
+    "format": "trace"
+  },
+  "steps": [
+    {
+      "kind": "explain",
+      "text": "This cache is *write-through*: every store updates the line and memory together, so the two always agree and no line is ever dirty. On a store miss it also *allocates*: the line is brought into the cache first. The trace stores 7, then 8, to `0x0A4`, then loads it.",
+      "callout": "config"
+    },
+    {
+      "kind": "predict",
+      "text": "How many times will this trace write to memory?",
+      "options": [
+        "Once, when the line leaves the cache",
+        "Twice, once for each store",
+        "Not at all"
+      ],
+      "answer": 1,
+      "explain": "Twice. Under write-through each store goes to memory when it happens. The load writes nothing.",
+      "hint": "Under write-through, when does a store reach memory?",
+      "callout": "stats"
+    },
+    {
+      "kind": "instruct",
+      "text": "Run the trace: press Run.",
+      "expect": {
+        "all": [
+          {
+            "counter": "accesses",
+            "op": "==",
+            "value": 3
+          },
+          {
+            "counter": "misses",
+            "op": "==",
+            "value": 1
+          },
+          {
+            "counter": "hits",
+            "op": "==",
+            "value": 2
+          },
+          {
+            "counter": "writethroughs",
+            "op": "==",
+            "value": 2
+          },
+          {
+            "memory": {
+              "addr": "0x0A4"
+            },
+            "equals": 8
+          }
+        ]
+      },
+      "hint": "Press Run in the transport bar. If the trace has already run, press Reset, then Run.",
+      "showMe": [
+        {
+          "op": "run",
+          "n": 3
+        }
+      ],
+      "callout": "transport"
+    },
+    {
+      "kind": "explain",
+      "text": "One miss, which allocated the line, then two hits. Write-throughs: 2, and memory holds 8. The cache never holds a value memory lacks, so a line can be dropped at any time without a write-back.",
+      "callout": "stats"
+    },
+    {
+      "kind": "instruct",
+      "text": "Set On a store miss to No allocate. The cache will ask to reset; choose Reset and apply.",
+      "expect": {
+        "config": {
+          "allocatePolicy": "writeNoAllocate"
+        }
+      },
+      "hint": "On a store miss is in the bar above the cache. Pick No allocate.",
+      "showMe": [
+        {
+          "op": "config",
+          "config": {
+            "addressBits": 12,
+            "wordBytes": 4,
+            "cache": {
+              "sizeBytes": 128,
+              "lineBytes": 16,
+              "associativity": 2,
+              "replacement": "lru",
+              "writePolicy": "writeThrough",
+              "allocatePolicy": "writeNoAllocate"
+            },
+            "seed": 12345,
+            "advanced": true,
+            "memoryInit": "pattern"
+          }
+        }
+      ],
+      "callout": "config"
+    },
+    {
+      "kind": "predict",
+      "text": "Under no-allocate, a store that misses writes memory and does not bring the line into the cache. If you run the same trace again, how many of the three accesses will hit?",
+      "options": [
+        "Two, as before",
+        "One",
+        "None"
+      ],
+      "answer": 2,
+      "explain": "None. Neither store allocates a line, so the second store misses too. The load then misses and is the first access to bring the line in.",
+      "hint": "Does the first store leave the line in the cache?",
+      "callout": "cache"
+    },
+    {
+      "kind": "instruct",
+      "text": "Run the same trace again.",
+      "expect": {
+        "all": [
+          {
+            "counter": "accesses",
+            "op": "==",
+            "value": 3
+          },
+          {
+            "counter": "hits",
+            "op": "==",
+            "value": 0
+          },
+          {
+            "counter": "misses",
+            "op": "==",
+            "value": 3
+          },
+          {
+            "counter": "writearounds",
+            "op": "==",
+            "value": 2
+          },
+          {
+            "memory": {
+              "addr": "0x0A4"
+            },
+            "equals": 8
+          }
+        ]
+      },
+      "hint": "Press Run in the transport bar.",
+      "showMe": [
+        {
+          "op": "run",
+          "n": 3
+        }
+      ],
+      "callout": "transport"
+    },
+    {
+      "kind": "explain",
+      "text": "Three misses and no hits. Write-arounds: 2, the stores that went around the cache straight to memory. Memory still ends at 8, and memory sees the same traffic: one line read and two word writes. What changed is that stores no longer fill the cache. No allocate pays off when a program writes data it will not read again soon.",
+      "callout": "stats"
+    }
+  ]
+}

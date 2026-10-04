@@ -1,0 +1,180 @@
+{
+  "id": "07-write-back-stale-memory",
+  "title": "Write-back and stale memory",
+  "description": "A store under *write-back* changes only the cache. Memory stays stale until the dirty line leaves.",
+  "advanced": true,
+  "preset": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 256,
+      "lineBytes": 16,
+      "associativity": 4,
+      "replacement": "lru",
+      "writePolicy": "writeBack",
+      "allocatePolicy": "writeAllocate"
+    },
+    "seed": 12345,
+    "advanced": true,
+    "memoryInit": "pattern"
+  },
+  "steps": [
+    {
+      "kind": "explain",
+      "text": "This cache is *write-back*: a store changes the line in the cache and sets its dirty bit (D), and memory is not touched. Memory is *stale* for that word until the dirty line is written back. Each set has four ways, so a set holds four lines before it must evict one.",
+      "callout": "cache"
+    },
+    {
+      "kind": "instruct",
+      "text": "Store 7 to `0x0A4`. Choose Store, type `0x0A4` as the address and 7 as the value, then press Issue.",
+      "expect": {
+        "all": [
+          {
+            "line": {
+              "addr": "0x0A4"
+            },
+            "dirty": true
+          },
+          {
+            "not": {
+              "memory": {
+                "addr": "0x0A4"
+              },
+              "equals": 7
+            }
+          },
+          {
+            "lastAccess": {
+              "kind": "write",
+              "addr": "0x0A4",
+              "outcome": "miss"
+            }
+          }
+        ]
+      },
+      "hint": "Switch the operation from Load to Store first; the value box appears next to the address.",
+      "showMe": [
+        {
+          "op": "issue",
+          "kind": "write",
+          "addr": "0x0A4",
+          "value": 7
+        }
+      ],
+      "callout": "transport"
+    },
+    {
+      "kind": "explain",
+      "text": "The line in set 2 is dirty and holds 7. Memory still holds its old value for `0x0A4`, and the memory view marks that word as stale: the cache has a newer value than memory does.",
+      "callout": "memory"
+    },
+    {
+      "kind": "instruct",
+      "text": "Now change memory directly: edit the word at `0x0A4` in Main memory to 9.",
+      "expect": {
+        "all": [
+          {
+            "memory": {
+              "addr": "0x0A4"
+            },
+            "equals": 9
+          },
+          {
+            "way": {
+              "set": 2,
+              "way": 0
+            },
+            "dirty": true,
+            "tag": 2
+          }
+        ]
+      },
+      "hint": "Click the word at `0x0A4` in the memory view, type 9, and press Apply to memory. The editor warns you first.",
+      "showMe": [
+        {
+          "op": "edit",
+          "target": {
+            "kind": "memory",
+            "addr": "0x0A4"
+          },
+          "patch": {
+            "kind": "memory",
+            "value": 9
+          }
+        }
+      ],
+      "callout": "memory"
+    },
+    {
+      "kind": "explain",
+      "text": "The edit changed memory, but the dirty line still holds 7, so the word is still stale: the cache's copy is the one the program sees. Editing the stale word does not clean the line.",
+      "callout": {
+        "set": 2,
+        "way": 0
+      }
+    },
+    {
+      "kind": "predict",
+      "text": "Four more lines map to set 2: `0x1A4`, `0x2A4`, `0x3A4` and `0x4A4`. The set has four ways, so loading all four evicts the dirty line. Once it has left, what does memory hold at `0x0A4`?",
+      "options": [
+        "9, the value you edited",
+        "7, the value the dirty line held",
+        "The value memory started with"
+      ],
+      "answer": 1,
+      "explain": "It holds 7. A dirty line is written back to memory when it leaves, and that overwrites whatever memory held, including your edit.",
+      "hint": "What happens to a dirty line when it is evicted? Memory must receive its value.",
+      "then": [
+        {
+          "op": "issue",
+          "kind": "read",
+          "addr": "0x1A4"
+        },
+        {
+          "op": "issue",
+          "kind": "read",
+          "addr": "0x2A4"
+        },
+        {
+          "op": "issue",
+          "kind": "read",
+          "addr": "0x3A4"
+        },
+        {
+          "op": "issue",
+          "kind": "read",
+          "addr": "0x4A4"
+        }
+      ],
+      "callout": {
+        "set": 2,
+        "way": 0
+      }
+    },
+    {
+      "kind": "observe",
+      "text": "Find the write-back: drag the timeline back to step 6.4, the *write-back*, and read memory at `0x0A4`.",
+      "until": {
+        "all": [
+          {
+            "event": {
+              "kind": "writeBack"
+            }
+          },
+          {
+            "memory": {
+              "addr": "0x0A4"
+            },
+            "equals": 7
+          }
+        ]
+      },
+      "callout": "log"
+    },
+    {
+      "kind": "explain",
+      "text": "The dirty line was written back and memory now holds 7. The stale mark is gone because memory and cache agree again. Only dirty lines cost a write-back; the three clean lines that stayed would have left silently.",
+      "callout": "memory"
+    }
+  ]
+}

@@ -1,0 +1,156 @@
+{
+  "id": "06-spatial-locality-line-size",
+  "title": "Spatial locality and line size",
+  "description": "A loop over consecutive words, with short lines and with long lines.",
+  "advanced": false,
+  "preset": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 128,
+      "lineBytes": 8,
+      "associativity": 1,
+      "replacement": "lru",
+      "writePolicy": "writeBack",
+      "allocatePolicy": "writeAllocate"
+    },
+    "seed": 12345,
+    "advanced": false,
+    "memoryInit": "pattern"
+  },
+  "program": {
+    "source": "R 0x000\nR 0x004\nR 0x008\nR 0x00C\nR 0x010\nR 0x014\nR 0x018\nR 0x01C\nR 0x020\nR 0x024\nR 0x028\nR 0x02C\nR 0x030\nR 0x034\nR 0x038\nR 0x03C",
+    "format": "trace"
+  },
+  "steps": [
+    {
+      "kind": "predict",
+      "text": "The trace loads sixteen consecutive words, `0x000` to `0x03C`, as a loop over an array would. Words are 4 bytes, and the lines of this cache are 8 bytes, so each line holds two words. A miss brings in the whole line. With two words per line, how many of the sixteen loads will miss?",
+      "options": [
+        "Sixteen",
+        "Eight",
+        "Two"
+      ],
+      "answer": 1,
+      "explain": "Eight. The first word of each line misses and brings in its neighbour, so the second word hits: one miss for every two loads.",
+      "hint": "A miss loads a whole line. How many words does a line hold?",
+      "callout": "cache"
+    },
+    {
+      "kind": "instruct",
+      "text": "Run the trace: press Run.",
+      "expect": {
+        "all": [
+          {
+            "counter": "accesses",
+            "op": "==",
+            "value": 16
+          },
+          {
+            "counter": "misses",
+            "op": "==",
+            "value": 8
+          },
+          {
+            "counter": "hits",
+            "op": "==",
+            "value": 8
+          }
+        ]
+      },
+      "hint": "Press Run in the transport bar. If the trace has already run, press Reset, then Run.",
+      "showMe": [
+        {
+          "op": "run",
+          "n": 16
+        }
+      ],
+      "callout": "transport"
+    },
+    {
+      "kind": "explain",
+      "text": "Eight misses and eight hits: a hit rate of 50%. Every hit used a neighbour that a miss had already brought in. That is *spatial locality*: after a word, the next one is likely to be wanted.",
+      "callout": "stats"
+    },
+    {
+      "kind": "instruct",
+      "text": "Set Line size to 32 B. The cache will ask to reset; choose Reset and apply.",
+      "expect": {
+        "config": {
+          "lineBytes": 32
+        }
+      },
+      "hint": "Line size is in the bar above the cache. Pick 32 B.",
+      "showMe": [
+        {
+          "op": "config",
+          "config": {
+            "addressBits": 12,
+            "wordBytes": 4,
+            "cache": {
+              "sizeBytes": 128,
+              "lineBytes": 32,
+              "associativity": 1,
+              "replacement": "lru",
+              "writePolicy": "writeBack",
+              "allocatePolicy": "writeAllocate"
+            },
+            "seed": 12345,
+            "advanced": false,
+            "memoryInit": "pattern"
+          }
+        }
+      ],
+      "callout": "config"
+    },
+    {
+      "kind": "predict",
+      "text": "With 32-byte lines, each line holds eight words. How many of the sixteen loads will miss now?",
+      "options": [
+        "Eight",
+        "Four",
+        "Two"
+      ],
+      "answer": 2,
+      "explain": "Two. The first load of each 32-byte line misses and the other seven words hit: the sixteen words fill two lines.",
+      "hint": "Sixteen words, eight to a line.",
+      "callout": "config"
+    },
+    {
+      "kind": "instruct",
+      "text": "Run the same trace again.",
+      "expect": {
+        "all": [
+          {
+            "counter": "accesses",
+            "op": "==",
+            "value": 16
+          },
+          {
+            "counter": "misses",
+            "op": "==",
+            "value": 2
+          },
+          {
+            "counter": "hits",
+            "op": "==",
+            "value": 14
+          }
+        ]
+      },
+      "hint": "Press Run in the transport bar.",
+      "showMe": [
+        {
+          "op": "run",
+          "n": 16
+        }
+      ],
+      "callout": "transport"
+    },
+    {
+      "kind": "explain",
+      "text": "Two misses, fourteen hits: 14 of 16, which the stats round to 88%. Longer lines gave more neighbours per miss. The price is that the same 128 bytes now hold only 4 lines instead of 16, so a program that jumps around would find fewer different lines in the cache.",
+      "callout": "stats"
+    }
+  ]
+}
