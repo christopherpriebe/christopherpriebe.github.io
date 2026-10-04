@@ -3194,6 +3194,18 @@ export function parseModule(json: string): Module;
 export function parseModuleIndex(json: string): ModuleIndexView;
 
 /**
+ * Why a saved run of `bytes` bytes is too large to open, or nothing when it
+ * is not. The page asks with a file's size before it reads the file.
+ */
+export function runFileTooLarge(bytes: number): string | undefined;
+
+/**
+ * Why a trace file of `bytes` bytes is too large to open, or nothing when it
+ * is not.
+ */
+export function traceFileTooLarge(bytes: number): string | undefined;
+
+/**
  * `config` checked on its own: its summary and geometry, or the first rule
  * it breaks with its repair.
  *
@@ -3224,6 +3236,7 @@ export interface InitOutput {
     readonly modulerun_view: (a: number, b: number) => [number, number, number];
     readonly parseModule: (a: number, b: number) => [number, number, number];
     readonly parseModuleIndex: (a: number, b: number) => [number, number, number];
+    readonly runFileTooLarge: (a: number) => [number, number];
     readonly session_applyOp: (a: number, b: any) => [number, number, number];
     readonly session_configControls: (a: number, b: any) => [number, number, number];
     readonly session_cursor: (a: number) => number;
@@ -3269,6 +3282,7 @@ export interface InitOutput {
     readonly shareload_fromJson: (a: number, b: number) => number;
     readonly shareload_fromShareString: (a: number, b: number) => number;
     readonly shareload_takeSession: (a: number) => [number, number, number];
+    readonly traceFileTooLarge: (a: number) => [number, number];
     readonly validateConfig: (a: any) => [number, number, number];
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

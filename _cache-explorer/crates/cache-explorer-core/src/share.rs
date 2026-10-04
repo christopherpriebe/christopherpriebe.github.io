@@ -1419,6 +1419,29 @@ fn json_too_large(bytes: Option<u32>) -> String {
     }
 }
 
+/// Why a saved run of `bytes` bytes (a file's size, which the page clamps to
+/// `u32::MAX`) cannot be opened, when it is larger than
+/// [`MAX_SHARE_JSON_BYTES`]; none when it fits. The page asks before it reads
+/// a file, since the limits are otherwise applied only after the whole text
+/// has been copied into memory that is never given back (9.4).
+#[must_use]
+pub fn run_file_too_large(bytes: u32) -> Option<String> {
+    (bytes > MAX_SHARE_JSON_BYTES).then(|| TooLarge::Json { bytes: Some(bytes) }.to_string())
+}
+
+/// Why a trace file of `bytes` bytes cannot be opened, when it is larger than
+/// [`MAX_PROGRAM_BYTES`]; none when it fits.
+#[must_use]
+pub fn trace_file_too_large(bytes: u32) -> Option<String> {
+    (bytes > MAX_PROGRAM_BYTES).then(|| {
+        format!(
+            "The trace is {} bytes; traces of at most {} bytes can be opened.",
+            format::setting(bytes),
+            format::setting(MAX_PROGRAM_BYTES)
+        )
+    })
+}
+
 /// The position `event` events into the op being replayed, the one after
 /// the ops that end at `op_ends`, once the `events` replayed so far reach
 /// it; none before.
@@ -1631,6 +1654,23 @@ mod tests {
                 op: 1,
                 bytes: u32::try_from(long.len()).unwrap()
             })
+        );
+    }
+
+    #[test]
+    fn a_file_is_refused_by_its_size_before_it_is_read() {
+        assert_eq!(run_file_too_large(1_048_576), None);
+        assert_eq!(
+            run_file_too_large(1_048_577).as_deref(),
+            Some(
+                "The saved run is 1,048,577 bytes of JSON; at most 1,048,576 bytes can be opened."
+            )
+        );
+        assert!(run_file_too_large(u32::MAX).is_some());
+        assert_eq!(trace_file_too_large(16_384), None);
+        assert_eq!(
+            trace_file_too_large(16_385).as_deref(),
+            Some("The trace is 16,385 bytes; traces of at most 16,384 bytes can be opened.")
         );
     }
 }

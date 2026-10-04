@@ -834,6 +834,22 @@ pub fn validate_config(config: &Ts<Config>) -> Result<Ts<ConfigCheck>, JsError> 
     Ok(model::validate_config(&arg(config)?).into_ts()?)
 }
 
+/// Why a saved run of `bytes` bytes is too large to open, or nothing when it
+/// is not. The page asks with a file's size before it reads the file.
+#[wasm_bindgen(js_name = runFileTooLarge)]
+#[must_use]
+pub fn run_file_too_large(bytes: u32) -> Option<String> {
+    model::run_file_too_large(bytes)
+}
+
+/// Why a trace file of `bytes` bytes is too large to open, or nothing when it
+/// is not.
+#[wasm_bindgen(js_name = traceFileTooLarge)]
+#[must_use]
+pub fn trace_file_too_large(bytes: u32) -> Option<String> {
+    model::trace_file_too_large(bytes)
+}
+
 /// The build: the crates' version and the share format.
 ///
 /// # Errors

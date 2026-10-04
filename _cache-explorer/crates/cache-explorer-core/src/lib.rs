@@ -121,8 +121,8 @@ pub use session::{
     Position, Replay, ReplayError, Session, StepOutcome, Tense, Timeline,
 };
 pub use share::{
-    EncodingError, LinkTooLong, LoadError, LoadFailure, LoadOption, LoadProgress, ShareAt,
-    ShareDoc, ShareLoad, ShareSummary, TooLarge, SCHEMA_VERSION,
+    run_file_too_large, trace_file_too_large, EncodingError, LinkTooLong, LoadError, LoadFailure,
+    LoadOption, LoadProgress, ShareAt, ShareDoc, ShareLoad, ShareSummary, TooLarge, SCHEMA_VERSION,
 };
 pub use snapshot::{
     BusView, CacheView, ControlAction, Controls, CpuStatus, CpuView, HitMarker, Labels,
