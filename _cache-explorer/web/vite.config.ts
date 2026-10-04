@@ -12,9 +12,11 @@ function buildHash(): string {
   return h.digest('hex').slice(0, 12);
 }
 
-/** Copies modules/*.json into the output as modules/*.json; serves them at /modules/ in dev. */
+/**
+ * The build copies the shipped modules/*.json beside the bundle as modules/*.json; the dev server
+ * serves them at /modules/. A build without the folder or its index is an error.
+ */
 function modules(): Plugin {
-  // The folder appears with the guided modules; until then there is nothing to copy or serve.
   const files = () =>
     existsSync(MODULES)
       ? readdirSync(MODULES)
@@ -24,6 +26,9 @@ function modules(): Plugin {
   return {
     name: 'cache-explorer-modules',
     generateBundle() {
+      if (!existsSync(join(MODULES, 'index.json'))) {
+        this.error(`the shipped modules are missing: ${join(MODULES, 'index.json')} not found`);
+      }
       for (const f of files()) {
         this.emitFile({
           type: 'asset',

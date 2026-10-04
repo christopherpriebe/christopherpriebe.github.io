@@ -622,13 +622,44 @@ describe('the controller', () => {
 });
 
 describe('the shipped modules', () => {
-  it('list nine, each of which opens as a run', async () => {
-    const shipped = shippedSource();
-    const index = parseModuleIndex(await shipped.index());
+  it('are all listed in order, with the Advanced badge on the last three', async () => {
+    const index = parseModuleIndex(await shippedSource().index());
     expect(index.modules).toHaveLength(9);
     expect(index.summary).toBe('9 modules · none running');
+    await open(shippedSource());
+    click('modules-toggle');
+    const rows = [...root.querySelectorAll('.cache-explorer__module-row')];
+    expect(rows).toHaveLength(9);
+    expect(rows.map((r) => r.querySelector('.cache-explorer__module-name')?.textContent)).toEqual(
+      index.modules.map((card) => card.title),
+    );
+    const badges = rows.map(
+      (r) => r.querySelector('.cache-explorer__module-badge')?.textContent ?? 'none',
+    );
+    expect(badges).toEqual([
+      ...Array<string>(6).fill('none'),
+      ...Array<string>(3).fill('Advanced'),
+    ]);
+    expect(index.modules.map((card) => card.advanced)).toEqual(badges.map((b) => b === 'Advanced'));
+  });
+
+  it('each load and start through the controller', async () => {
+    const index = parseModuleIndex(await shippedSource().index());
     for (const card of index.modules) {
+      await open(shippedSource());
+      await begin(card.id);
+      expect(text('.cache-explorer__module-meta')).toContain(card.title);
+      expect(text('.cache-explorer__module-meta')).toContain('Step 1 of');
+      controller?.dispose();
+      controller = null;
+    }
+  });
+
+  it('each open as a run', async () => {
+    const shipped = shippedSource();
+    for (const card of parseModuleIndex(await shipped.index()).modules) {
       const run = ModuleRun.fromJson(await shipped.module(card.id));
+      expect(run).toBeInstanceOf(ModuleRun);
       run.free();
     }
   });

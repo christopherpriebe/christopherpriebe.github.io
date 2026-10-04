@@ -2154,6 +2154,7 @@ fn the_shipped_modules_parse_and_match_their_index() {
         assert_eq!(row["id"], module.id());
         assert_eq!(row["title"], module.title());
         assert_eq!(row["advanced"], module.advanced(), "{}", module.id());
+        assert_eq!(row["description"], module.description(), "{}", module.id());
         assert!(ids.contains(&module.id()));
     }
     assert_eq!(SHIPPED_SHOW_ME.len(), SHIPPED.len());
