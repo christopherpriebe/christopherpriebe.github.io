@@ -320,6 +320,14 @@ mod tests {
             "the fallback timing, module 09 and the timed golden fixture charge 20-cycle misses"
         );
         assert!(
+            MAX_PROGRAM_INSTRUCTIONS >= 16 && MAX_PROGRAM_LINES >= 16,
+            "module 06's trace loads sixteen words; module 09's has ten"
+        );
+        assert!(
+            MAX_RUN_STEPS >= 16,
+            "modules 06 and 09 run their traces with a Run of 16 and 10"
+        );
+        assert!(
             MAX_PROGRAM_INSTRUCTIONS >= 6,
             "frame 3b's program and the count-down-loop golden fixture have six instructions"
         );

@@ -121,7 +121,7 @@
     },
     {
       "kind": "predict",
-      "text": "Under no-allocate, a store that misses writes memory and does not bring the line into the cache. Run the same trace. How many of the three accesses will hit?",
+      "text": "Under no-allocate, a store that misses writes memory and does not bring the line into the cache. If you run the same trace again, how many of the three accesses will hit?",
       "options": [
         "Two, as before",
         "One",
@@ -176,7 +176,7 @@
     },
     {
       "kind": "explain",
-      "text": "Three misses and no hits. Write-arounds: 2, the stores that went around the cache straight to memory. Memory still ends at 8, so memory traffic is the same; what changed is that stores no longer fill the cache. No allocate pays off when a program writes data it will not read again soon.",
+      "text": "Three misses and no hits. Write-arounds: 2, the stores that went around the cache straight to memory. Memory still ends at 8, and memory sees the same traffic: one line read and two word writes. What changed is that stores no longer fill the cache. No allocate pays off when a program writes data it will not read again soon.",
       "callout": "stats"
     }
   ]

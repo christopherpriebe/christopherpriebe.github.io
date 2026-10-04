@@ -70,7 +70,7 @@
     },
     {
       "kind": "instruct",
-      "text": "Try to fix it from memory: edit the word at `0x0A4` in Main memory to 9 and apply.",
+      "text": "Now change memory directly: edit the word at `0x0A4` in Main memory to 9.",
       "expect": {
         "all": [
           {
@@ -89,7 +89,7 @@
           }
         ]
       },
-      "hint": "Click the word at `0x0A4` in the memory view, type 9, and press Apply. The editor warns you before you do.",
+      "hint": "Click the word at `0x0A4` in the memory view, type 9, and press Apply to memory. The editor warns you first.",
       "showMe": [
         {
           "op": "edit",
@@ -153,7 +153,7 @@
     },
     {
       "kind": "observe",
-      "text": "Find the write-back: drag the timeline to the Write-back entry in the log, and read memory at `0x0A4`.",
+      "text": "Find the write-back: drag the timeline back to step 6.4, the *write-back*, and read memory at `0x0A4`.",
       "until": {
         "all": [
           {

@@ -31,7 +31,7 @@ use serde_json::{json, Value};
 use common::{load, pos};
 use support::{
     actions, check_show_me_completion, edited, fill, predicate, refused_with, session,
-    shape_refused, show_me_path, started, text, walk, with,
+    shape_refused, show_me_path, started, text, walk, walk_to_step, with,
 };
 
 #[cfg(test)]
@@ -144,6 +144,38 @@ mod support {
         while session.op_count() < count {
             session.apply(load(addr)).unwrap();
         }
+    }
+
+    /// Plays a module the way `show_me_path` does, but stops on the step at
+    /// `index` instead of answering it, so a test reads what the student reads.
+    #[track_caller]
+    pub(crate) fn walk_to_step(
+        run: &mut ModuleRun,
+        session: &mut Session,
+        index: u32,
+    ) -> ModuleView {
+        let mut view = run.sync(session);
+        for _ in 0..50 {
+            if view.step_index == index {
+                return view;
+            }
+            view = match view.kind {
+                ModuleStepKind::Done => panic!("the module ended before step {index}"),
+                ModuleStepKind::Explain => run.next(session),
+                ModuleStepKind::Instruct | ModuleStepKind::Observe => run.show_me(session),
+                ModuleStepKind::Predict => {
+                    let Some(Step::Predict { answer, .. }) =
+                        run.module().steps().get(view.step_index as usize).cloned()
+                    else {
+                        panic!("a predict step");
+                    };
+                    run.select(answer);
+                    run.check(session);
+                    run.next(session)
+                }
+            };
+        }
+        panic!("step {index} was not reached");
     }
 
     /// Takes `run` through every step by its "Show me" path: Next on an
@@ -2473,6 +2505,16 @@ fn the_advanced_modules_are_marked_advanced_and_the_others_are_not() {
     }
 }
 
+/// The stale mark of memory's word at `addr`, as the memory view shows it.
+fn stale_text(session: &Session, addr: u32) -> Option<String> {
+    session
+        .memory_lines(0, u32::MAX)
+        .iter()
+        .flat_map(|row| &row.words)
+        .find(|word| word.addr.get() == addr)
+        .and_then(|word| word.stale.as_ref().map(|stale| stale.text.clone()))
+}
+
 #[test]
 fn module_07_ends_with_the_dirty_line_written_back_over_the_edit() {
     let (mut run, mut session) = started(MODULE_07);
@@ -2483,6 +2525,19 @@ fn module_07_ends_with_the_dirty_line_written_back_over_the_edit() {
     let ended = edited(MODULE_07, |module| {
         module["steps"].as_array_mut().unwrap().truncate(6);
     });
+    // Where step 8's text is read, on the write-back itself (6.4): memory
+    // holds the 7, the mark is gone, and the way is still dirty.
+    let (mut run, mut session) = started(MODULE_07);
+    walk_to_step(&mut run, &mut session, 7);
+    assert_eq!(session.position().label, "6.4");
+    assert_eq!(stale_text(&session, 0x0A4), None);
+    assert_predicates(
+        &session,
+        &[
+            (json!({"memory": {"addr": 0x0A4}, "equals": 7}), true),
+            (json!({"way": {"set": 2, "way": 0}, "dirty": true}), true),
+        ],
+    );
     let (mut run, mut session) = started(&ended);
     show_me_path(&mut run, &mut session);
     assert_predicates(
@@ -2512,8 +2567,17 @@ fn module_07_leaves_memory_stale_until_the_write_back() {
     let first = edited(MODULE_07, |module| {
         module["steps"].as_array_mut().unwrap().truncate(5);
     });
+    let stored = edited(MODULE_07, |module| {
+        module["steps"].as_array_mut().unwrap().truncate(3);
+    });
+    let (mut run, mut session) = started(&stored);
+    show_me_path(&mut run, &mut session);
+    // Step 3's text: the memory view marks the word as stale.
+    assert!(stale_text(&session, 0x0A4).is_some());
     let (mut run, mut session) = started(&first);
     show_me_path(&mut run, &mut session);
+    // Step 5's text: still stale, now against the edited 9.
+    assert!(stale_text(&session, 0x0A4).is_some());
     assert_predicates(
         &session,
         &[
@@ -2540,7 +2604,9 @@ fn module_07_leaves_memory_stale_until_the_write_back() {
             (json!({"memory": {"addr": 0x0A4}, "equals": 9}), true),
         ],
     );
+    assert!(stale_text(&session, 0x0A4).is_some());
     session.apply(load(0x4A4)).unwrap();
+    assert_eq!(stale_text(&session, 0x0A4), None);
     assert_predicates(
         &session,
         &[
@@ -2612,14 +2678,16 @@ fn module_08_writes_every_store_to_memory_then_sends_misses_around() {
 fn module_09_measures_more_than_amat_by_the_write_back() {
     let (mut run, mut session) = started(MODULE_09);
     let views = show_me_path(&mut run, &mut session);
-    assert_eq!(views.len(), 7);
-    // The observe step leaves the cursor on a Stall, so check the totals at
-    // the end of a copy that stops after the run.
-    let ran = edited(MODULE_09, |module| {
-        module["steps"].as_array_mut().unwrap().truncate(3);
-    });
-    let (mut run, mut session) = started(&ran);
-    show_me_path(&mut run, &mut session);
+    assert_eq!(views.len(), 8);
+    // The student reads the Stats at the start of the second prediction
+    // (step 5), where the cursor is the gate's seek limit: the observe step
+    // before it must have taken them to the end of the run.
+    let (mut run, mut session) = started(MODULE_09);
+    let view = walk_to_step(&mut run, &mut session, 5);
+    assert_eq!(view.kind, ModuleStepKind::Predict);
+    assert!(session.gate().is_some());
+    assert_eq!(session.position().entry, Some(10));
+    assert_eq!(session.position().pos, session.gate().unwrap().seek_limit());
     assert_predicates(
         &session,
         &[

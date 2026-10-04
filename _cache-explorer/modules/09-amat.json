@@ -83,13 +83,24 @@
     },
     {
       "kind": "observe",
-      "text": "Find a Stall in the log: drag the timeline to it and look at the CPU. While memory answers a miss, the CPU waits.",
+      "text": "Find a step where the CPU stalls: drag the timeline to it and look at the CPU. While memory answers a miss, the CPU waits.",
       "until": {
         "event": {
           "kind": "stall"
         }
       },
       "callout": "cpu"
+    },
+    {
+      "kind": "observe",
+      "text": "Drag the timeline to the end of the run and read AMAT and the Measured line in the Stats.",
+      "until": {
+        "event": {
+          "kind": "complete",
+          "entry": 10
+        }
+      },
+      "callout": "stats"
     },
     {
       "kind": "predict",
