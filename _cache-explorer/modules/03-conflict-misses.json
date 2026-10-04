@@ -1,0 +1,102 @@
+{
+  "id": "03-conflict-misses",
+  "title": "Conflict misses",
+  "description": "Two lines that share a set push each other out of a *direct-mapped* cache. A second way fixes it.",
+  "advanced": false,
+  "preset": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 128,
+      "lineBytes": 16,
+      "associativity": 1,
+      "replacement": "lru",
+      "writePolicy": "writeBack",
+      "allocatePolicy": "writeAllocate"
+    },
+    "seed": 12345,
+    "advanced": false,
+    "memoryInit": "pattern"
+  },
+  "program": { "source": "R 0x000\nR 0x080\nR 0x000\nR 0x080", "format": "trace" },
+  "steps": [
+    {
+      "kind": "explain",
+      "text": "The trace loads `0x000`, then `0x080`, then `0x000` and `0x080` again. Both addresses have index `000`, so both use set 0, which has room for one line.",
+      "callout": { "set": 0 }
+    },
+    {
+      "kind": "predict",
+      "text": "How many of the four loads will hit?",
+      "options": ["None", "Two", "All four"],
+      "answer": 0,
+      "explain": "None. Each load removes the line the next one needs.",
+      "hint": "Set 0 holds one line. What happens to `0x000` when `0x080` arrives?",
+      "callout": { "set": 0 }
+    },
+    {
+      "kind": "instruct",
+      "text": "Run the trace: press Run, or press Space four times.",
+      "expect": {
+        "all": [
+          { "counter": "accesses", "op": "==", "value": 4 },
+          { "counter": "misses", "op": "==", "value": 4 }
+        ]
+      },
+      "hint": "Press Run in the transport bar.",
+      "showMe": [{ "op": "run", "n": 4 }],
+      "callout": "transport"
+    },
+    {
+      "kind": "explain",
+      "text": "Four misses. The first two are *compulsory*: those lines had never been loaded. The other two are *conflict* misses: the line had been there, but another line in the same set pushed it out.",
+      "callout": "stats"
+    },
+    {
+      "kind": "instruct",
+      "text": "Give the cache two ways: set Associativity to 2-way. The cache will ask to reset; choose Reset and apply.",
+      "expect": { "config": { "associativity": 2 } },
+      "hint": "Associativity is in the bar above the cache. Pick the 2-way option.",
+      "showMe": [
+        {
+          "op": "config",
+          "config": {
+            "addressBits": 12,
+            "wordBytes": 4,
+            "cache": {
+              "sizeBytes": 128,
+              "lineBytes": 16,
+              "associativity": 2,
+              "replacement": "lru",
+              "writePolicy": "writeBack",
+              "allocatePolicy": "writeAllocate"
+            },
+            "seed": 12345,
+            "advanced": false,
+            "memoryInit": "pattern"
+          }
+        }
+      ],
+      "callout": "config"
+    },
+    {
+      "kind": "instruct",
+      "text": "Run the same trace again.",
+      "expect": {
+        "all": [
+          { "counter": "accesses", "op": "==", "value": 4 },
+          { "counter": "hits", "op": "==", "value": 2 },
+          { "counter": "conflict", "op": "==", "value": 0 }
+        ]
+      },
+      "hint": "Press Run in the transport bar.",
+      "showMe": [{ "op": "run", "n": 4 }],
+      "callout": "transport"
+    },
+    {
+      "kind": "explain",
+      "text": "Two misses, both compulsory, and two hits. With two ways, set 0 holds `0x000` and `0x080` together, so neither pushes the other out.",
+      "callout": { "set": 0 }
+    }
+  ]
+}

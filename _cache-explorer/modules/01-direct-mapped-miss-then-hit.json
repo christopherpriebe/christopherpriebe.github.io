@@ -1,0 +1,73 @@
+{
+  "id": "01-direct-mapped-miss-then-hit",
+  "title": "Direct-mapped: miss then hit",
+  "description": "See how an address is split into *tag*, *index* and *offset*, why the first load of a line *misses*, and why its neighbour then *hits*.",
+  "advanced": false,
+  "preset": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 128,
+      "lineBytes": 16,
+      "associativity": 1,
+      "replacement": "lru",
+      "writePolicy": "writeBack",
+      "allocatePolicy": "writeAllocate"
+    },
+    "seed": 12345,
+    "advanced": false,
+    "memoryInit": "pattern"
+  },
+  "steps": [
+    {
+      "kind": "explain",
+      "text": "This cache has 8 sets and 16-byte lines. So every address is cut in three: the low 4 bits are the *offset* (which byte of the line), the next 3 are the *index* (which set), and the other 5 are the *tag*.",
+      "callout": "addressStrip"
+    },
+    {
+      "kind": "instruct",
+      "text": "Load from `0x0A4`. Type it in the address box and press Issue.",
+      "expect": { "lastAccess": { "kind": "read", "addr": "0x0A4" } },
+      "hint": "The address box is next to the Issue button. Type `0x0A4` there.",
+      "showMe": [{ "op": "issue", "kind": "read", "addr": "0x0A4" }],
+      "callout": "transport"
+    },
+    {
+      "kind": "observe",
+      "text": "That load missed: the cache had nothing yet. Drag the timeline back to step 1.2, the *tag compare*, to see it happen.",
+      "until": { "event": { "kind": "miss", "entry": 1 } },
+      "callout": "log"
+    },
+    {
+      "kind": "explain",
+      "text": "Now type `0x0A8` in the address box, but do not issue it. The strip shows the same tag and the same index as `0x0A4`. Only the offset is different.",
+      "callout": "addressStrip"
+    },
+    {
+      "kind": "predict",
+      "text": "You are about to load `0x0A8`. Will it hit or miss?",
+      "options": [
+        "Hit: it is in the same line as `0x0A4`",
+        "Miss: it is a different address",
+        "Miss: set 2 is already full"
+      ],
+      "answer": 0,
+      "explain": "A hit. A miss brings in the whole 16-byte line, `0x0A0` to `0x0AF`, and `0x0A8` is in it. Only the *offset* differs.",
+      "hint": "Compare the tag and the index of `0x0A8` with those of `0x0A4` in the strip.",
+      "callout": "addressStrip"
+    },
+    {
+      "kind": "instruct",
+      "text": "Load from `0x0A8`.",
+      "expect": { "lastAccess": { "kind": "read", "addr": "0x0A8", "outcome": "hit" } },
+      "hint": "Type `0x0A8` in the address box and press Issue.",
+      "showMe": [{ "op": "issue", "kind": "read", "addr": "0x0A8" }],
+      "callout": "transport"
+    },
+    {
+      "kind": "explain",
+      "text": "A hit. The line was already in set 2, so the table did not change. Only the hit count and `r1` did.",
+      "callout": { "set": 2, "way": 0 }
+    }
+  ]
+}

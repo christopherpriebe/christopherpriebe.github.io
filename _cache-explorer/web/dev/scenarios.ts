@@ -1,6 +1,7 @@
 // Opens the tool in one of the states of sessions.ts, on the development page: the page picks one
 // with `?scenario=<name>`, may move the cursor with `&pos=<n>`, and may type an address into the
-// memory table's jump box with `&jump=<address>`. `&do=click:<selector>` and
+// memory table's jump box with `&jump=<address>`, and `&modules=shipped` serves the modules folder in
+// place of the fixtures. `&do=click:<selector>` and
 // `&do=type:<selector>=<text>`, as many as wanted, then press a control and type into a field, in
 // order, to reach a state of the editors. Nothing here is in the build.
 
@@ -10,7 +11,7 @@ import { start } from '../src/controller';
 import { measureLayout, watchLayout } from '../src/layout';
 import { replayingState } from '../src/page-states';
 import { init } from '../src/wasm';
-import { fixtureSource } from './modules';
+import { fixtureSource, shippedSource } from './modules';
 import { SCENARIOS } from './sessions';
 
 const root = document.getElementById('cache-explorer');
@@ -30,7 +31,12 @@ if (params.get('state') === 'loading') {
 }
 const pos = params.get('pos');
 if (pos !== null) session.seek(Number(pos));
-const controller = start(root, session, measureLayout(root), fixtureSource());
+const controller = start(
+  root,
+  session,
+  measureLayout(root),
+  params.get('modules') === 'shipped' ? shippedSource() : fixtureSource(),
+);
 watchLayout(root, (layout) => {
   controller.setLayout(layout);
 });
@@ -45,7 +51,7 @@ if (jump !== null && box) {
 
 // The fixture modules arrive on a promise, and so does a module that is started: each step waits for
 // what the one before it asked for.
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 50));
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 200));
 await settle();
 
 for (const step of params.getAll('do')) {

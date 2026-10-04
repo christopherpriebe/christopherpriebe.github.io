@@ -50,6 +50,15 @@ const SWITCH_CONFIG: &str = include_str!("fixtures/modules/02-fixture-switch-con
 /// the write-back.
 const STALE_MEMORY: &str = include_str!("fixtures/modules/03-fixture-stale-memory.json");
 
+/// The guided modules that ship, `_cache-explorer/modules/`, and their index.
+const MODULE_01: &str = include_str!("../../../modules/01-direct-mapped-miss-then-hit.json");
+const MODULE_02: &str = include_str!("../../../modules/02-index-not-sequential.json");
+const MODULE_03: &str = include_str!("../../../modules/03-conflict-misses.json");
+const MODULE_INDEX: &str = include_str!("../../../modules/index.json");
+
+/// Every shipped module that has a test here, in index order.
+const SHIPPED: [&str; 3] = [MODULE_01, MODULE_02, MODULE_03];
+
 /// Every fixture module.
 const FIXTURES: [&str; 3] = [MISS_THEN_HIT, SWITCH_CONFIG, STALE_MEMORY];
 
@@ -2071,4 +2080,124 @@ fn a_wrong_answer_without_a_hint_reads_the_explanation() {
         ModuleRun::from_json("{}"),
         Err(ModuleError::Json { .. })
     ));
+}
+
+cases! {
+    check_show_me_completion, SHIPPED_SHOW_ME: &str;
+    shipped_module_01_completes_through_its_show_me_path => (MODULE_01),
+    shipped_module_02_completes_through_its_show_me_path => (MODULE_02),
+    shipped_module_03_completes_through_its_show_me_path => (MODULE_03),
+}
+
+#[test]
+fn the_shipped_modules_parse_and_match_their_index() {
+    let index = parse_module_index(MODULE_INDEX).unwrap();
+    let rows: Value = serde_json::from_str(MODULE_INDEX).unwrap();
+    let ids: Vec<&str> = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(index.modules.len(), SHIPPED.len());
+    for (json, row) in SHIPPED.iter().zip(rows.as_array().unwrap()) {
+        let module = Module::parse(json).unwrap();
+        let written = serde_json::to_string(&module).unwrap();
+        assert_eq!(Module::parse(&written).unwrap(), module, "{}", module.id());
+        assert_eq!(row["id"], module.id());
+        assert_eq!(row["title"], module.title());
+        assert!(!module.advanced(), "{}", module.id());
+        assert!(ids.contains(&module.id()));
+    }
+    assert_eq!(SHIPPED_SHOW_ME.len(), SHIPPED.len());
+}
+
+#[test]
+fn a_shipped_module_waits_when_a_step_s_predicate_cannot_be_met() {
+    // Module 03's first instruct step, with an impossible count: "Show me"
+    // makes the run, the check fails, and the step does not complete.
+    let impossible = edited(MODULE_03, |module| {
+        let steps = module["steps"].as_array_mut().unwrap();
+        steps.drain(0..2);
+        steps[0]["expect"] = json!({"counter": "misses", "op": "==", "value": 5});
+    });
+    let (mut run, mut session) = started(&impossible);
+    let view = run.sync(&mut session);
+    assert_eq!(view.step_index, 0);
+    let after = run.show_me(&mut session);
+    assert_eq!(after.step_index, 0);
+}
+
+#[test]
+fn module_02_puts_the_four_addresses_in_sets_0_1_0_1() {
+    let (mut run, mut session) = started(MODULE_02);
+    show_me_path(&mut run, &mut session);
+    // After the path, 0x110 holds set 1 (it replaced 0x010) and 0x080 holds
+    // set 0 (it replaced 0x100).
+    for (json, expected) in [
+        (json!({"line": {"addr": 0x110}}), true),
+        (json!({"line": {"addr": 0x010}}), false),
+        (json!({"line": {"addr": 0x080}}), true),
+        (json!({"line": {"addr": 0x100}}), false),
+        (json!({"line": {"addr": 0x000}}), false),
+        (json!({"way": {"set": 0, "way": 0}, "tag": 1}), true),
+        (json!({"way": {"set": 1, "way": 0}, "tag": 2}), true),
+    ] {
+        assert_eq!(
+            session.eval_predicate(&predicate(json.clone())),
+            expected,
+            "{json}"
+        );
+    }
+}
+
+#[test]
+fn module_03_misses_four_times_then_hits_twice_with_two_ways() {
+    let (mut run, mut session) = started(MODULE_03);
+    let views = show_me_path(&mut run, &mut session);
+    // The step after the first run ends with four misses, two of them
+    // conflicts; the final state is the second run's.
+    assert_eq!(views.len(), 8);
+    for (json, expected) in [
+        (json!({"counter": "accesses", "op": "==", "value": 4}), true),
+        (json!({"counter": "hits", "op": "==", "value": 2}), true),
+        (
+            json!({"counter": "compulsory", "op": "==", "value": 2}),
+            true,
+        ),
+        (json!({"counter": "conflict", "op": "==", "value": 0}), true),
+        (json!({"line": {"addr": 0x000}}), true),
+        (json!({"line": {"addr": 0x080}}), true),
+        (json!({"config": {"associativity": 2}}), true),
+    ] {
+        assert_eq!(
+            session.eval_predicate(&predicate(json.clone())),
+            expected,
+            "{json}"
+        );
+    }
+}
+
+#[test]
+fn module_01_ends_on_a_hit_in_set_2() {
+    let (mut run, mut session) = started(MODULE_01);
+    show_me_path(&mut run, &mut session);
+    for (json, expected) in [
+        (
+            json!({"lastAccess": {"addr": 0x0A8, "outcome": "hit"}}),
+            true,
+        ),
+        (
+            json!({"way": {"set": 2, "way": 0}, "valid": true, "tag": 1}),
+            true,
+        ),
+        (json!({"counter": "hits", "op": "==", "value": 1}), true),
+        (json!({"counter": "misses", "op": "==", "value": 1}), true),
+    ] {
+        assert_eq!(
+            session.eval_predicate(&predicate(json.clone())),
+            expected,
+            "{json}"
+        );
+    }
 }

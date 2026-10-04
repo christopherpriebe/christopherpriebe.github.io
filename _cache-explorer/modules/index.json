@@ -1,0 +1,20 @@
+[
+  {
+    "id": "01-direct-mapped-miss-then-hit",
+    "title": "Direct-mapped: miss then hit",
+    "description": "How an address is split, why the first load of a line misses and its neighbour hits.",
+    "advanced": false
+  },
+  {
+    "id": "02-index-not-sequential",
+    "title": "The index is not sequential",
+    "description": "Addresses far apart can land in the same set.",
+    "advanced": false
+  },
+  {
+    "id": "03-conflict-misses",
+    "title": "Conflict misses",
+    "description": "Two lines in one set push each other out until a second way is added.",
+    "advanced": false
+  }
+]

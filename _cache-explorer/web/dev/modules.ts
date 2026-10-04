@@ -34,3 +34,20 @@ export function fixtureSource(): ModuleSource {
     },
   };
 }
+
+const SHIPPED = import.meta.glob<string>('../../modules/*.json', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+
+/** A source that answers at once from the modules folder as it is, for checking the real modules. */
+export function shippedSource(): ModuleSource {
+  const file = (name: string): Promise<string> => {
+    const text = SHIPPED[`../../modules/${name}.json`];
+    return text === undefined
+      ? Promise.reject(new Error(`no module ${name}`))
+      : Promise.resolve(text);
+  };
+  return { index: () => file('index'), module: (id) => file(id) };
+}
