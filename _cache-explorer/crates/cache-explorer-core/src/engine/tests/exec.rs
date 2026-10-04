@@ -8,12 +8,12 @@ use super::*;
 
 /// A run driven like a program: each load and each step is an op of its
 /// own, and every event is recorded with the machine after it.
-struct Driven {
+pub(super) struct Driven {
     run: Run,
 }
 
 impl Driven {
-    fn new(config: Config) -> Self {
+    pub(super) fn new(config: Config) -> Self {
         Self {
             run: Run::new(config),
         }
@@ -24,7 +24,7 @@ impl Driven {
     /// mid-access hold, the counters add up, and the pc is never past the
     /// program's end.
     #[track_caller]
-    fn apply(
+    pub(super) fn apply(
         &mut self,
         op: impl FnOnce(&mut Machine, &mut Emitter<'_>) -> Flow,
     ) -> (Flow, Vec<(MicroEvent, Machine)>) {
@@ -53,7 +53,7 @@ impl Driven {
     }
 
     /// Loads the assembly program `source`, which parses.
-    fn load(&mut self, source: &str) -> Vec<(MicroEvent, Machine)> {
+    pub(super) fn load(&mut self, source: &str) -> Vec<(MicroEvent, Machine)> {
         self.load_as(source, ProgramFormat::Asm)
     }
 
@@ -68,14 +68,14 @@ impl Driven {
 
     /// Executes the next instruction, which there is.
     #[track_caller]
-    fn step(&mut self) -> Vec<(MicroEvent, Machine)> {
+    pub(super) fn step(&mut self) -> Vec<(MicroEvent, Machine)> {
         assert_eq!(ready(&self.run.machine), Ok(()));
         self.apply(step).1
     }
 
     /// Steps until the program cannot go on, and returns every event.
     #[track_caller]
-    fn finish(&mut self) -> Vec<(MicroEvent, Machine)> {
+    pub(super) fn finish(&mut self) -> Vec<(MicroEvent, Machine)> {
         let mut trace = Vec::new();
         while ready(&self.run.machine).is_ok() {
             trace.extend(self.step());
@@ -91,7 +91,7 @@ impl Driven {
         trace
     }
 
-    fn machine(&self) -> &Machine {
+    pub(super) fn machine(&self) -> &Machine {
         &self.run.machine
     }
 }

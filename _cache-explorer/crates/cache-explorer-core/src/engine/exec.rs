@@ -22,6 +22,10 @@
 //! stays at the instruction that did not execute. Literal addresses and
 //! immediates were checked when the program was parsed, so they never fault.
 //!
+//! An instruction's `ld` and `st` are performed by a [`MemoryPort`], which the
+//! executor is generic over: the cache machine's own memory in a run, and any
+//! other memory system that takes a request and emits its events in a test.
+//!
 //! `StepAccess` and `Run` execute one instruction after another, each its own
 //! entry, until an access has completed or until they have executed as many
 //! as asked; the program finishing or stopping ends them too. Between two
@@ -31,7 +35,7 @@
 use std::sync::Arc;
 
 use crate::cpu::{Cpu, Halted};
-use crate::engine::access::access;
+use crate::engine::port::{CacheMemory, MemoryPort};
 use crate::engine::{end_entry, Draft, Emitter, Flow, Halt, OpProgress};
 use crate::event::{ChangeRef, EventKind};
 use crate::explain;
@@ -122,6 +126,11 @@ pub(crate) fn ready(machine: &Machine) -> Result<(), OpError> {
     }
 }
 
+/// [`step_through`] on the cache machine's own memory.
+pub(crate) fn step(machine: &mut Machine, out: &mut Emitter<'_>) -> Flow {
+    step_through(&mut CacheMemory, machine, out)
+}
+
 /// Executes the instruction at the pc as the run's next entry: its access,
 /// or its `Complete` event; or, when the budget is spent or its address
 /// faults, an `Error` event that stops the program. The caller has checked
@@ -131,7 +140,14 @@ pub(crate) fn ready(machine: &Machine) -> Result<(), OpError> {
 /// Returns [`Flow::Continue`] when the instruction retired, and
 /// [`Flow::Stop`] when the op ends here: the sink stopped it, an `Error`
 /// event ended it, or an invariant no longer holds.
-pub(crate) fn step(machine: &mut Machine, out: &mut Emitter<'_>) -> Flow {
+///
+/// A `ld` or `st` is performed by `memory`; everything else is the
+/// executor's own.
+pub(crate) fn step_through(
+    memory: &mut impl MemoryPort,
+    machine: &mut Machine,
+    out: &mut Emitter<'_>,
+) -> Flow {
     let Some(placed) = machine.next_instruction() else {
         return Flow::Stop;
     };
@@ -193,7 +209,7 @@ pub(crate) fn step(machine: &mut Machine, out: &mut Emitter<'_>) -> Flow {
         }
     };
     match request {
-        Ok(request) => access(machine, request, out),
+        Ok(request) => memory.access(machine, request, out),
         Err(fault) => {
             let geometry = machine.geometry;
             let addr = match fault {
@@ -212,6 +228,16 @@ pub(crate) fn step(machine: &mut Machine, out: &mut Emitter<'_>) -> Flow {
     }
 }
 
+/// [`execute_through`] on the cache machine's own memory.
+pub(crate) fn execute(
+    machine: &mut Machine,
+    until: Until,
+    progress: OpProgress,
+    out: &mut Emitter<'_>,
+) {
+    execute_through(&mut CacheMemory, machine, until, progress, out);
+}
+
 /// Executes instructions as entries of one op until `until` says to stop,
 /// the program finishes, or an `Error` event ends the op, starting after the
 /// `progress` instructions the op has already executed. The caller has
@@ -225,7 +251,8 @@ pub(crate) fn step(machine: &mut Machine, out: &mut Emitter<'_>) -> Flow {
 /// its budget would, and the op ends.
 ///
 /// [`resume`]: crate::engine::resume
-pub(crate) fn execute(
+pub(crate) fn execute_through(
+    memory: &mut impl MemoryPort,
     machine: &mut Machine,
     until: Until,
     mut progress: OpProgress,
@@ -257,7 +284,7 @@ pub(crate) fn execute(
                 Instruction::Load { .. } | Instruction::Store { .. }
             )
         });
-        if step(machine, out) == Flow::Stop {
+        if step_through(memory, machine, out) == Flow::Stop {
             return;
         }
         progress = progress.next();

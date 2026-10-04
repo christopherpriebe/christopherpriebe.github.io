@@ -1,12 +1,13 @@
-//! The engine's unit tests, a file for each of its parts: `access`, `exec`
-//! and `edit`. Here are the helpers they share: the sinks that record the
-//! events of an op, a run of accesses on a machine, and builders of requests,
-//! configurations and changed cells.
+//! The engine's unit tests, a file for each of its parts: `access`, `exec`,
+//! `memory_port` and `edit`. Here are the helpers they share: the sinks that
+//! record the events of an op, a run of accesses on a machine, and builders of
+//! requests, configurations and changed cells.
 
 #![allow(clippy::disallowed_macros)] // assertions are how tests fail
 
 use super::access::access;
-use super::exec::{load_program, ready, step};
+use super::exec::{load_program, ready, step, Until};
+use super::port::{CacheMemory, MemoryPort};
 use super::*;
 use crate::cache::{Cache, Dirtiness, Slot};
 use crate::config::{
@@ -560,3 +561,4 @@ macro_rules! cases {
 mod access;
 mod edit;
 mod exec;
+mod memory_port;
