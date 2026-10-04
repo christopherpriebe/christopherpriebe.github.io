@@ -2,7 +2,7 @@
 
 A teaching tool for one L1 cache. You are the CPU: issue loads and stores by hand, or run a program, and watch each access resolve, step by step. It is published at `/cache-explorer/`.
 
-The cache logic is a Rust crate compiled to WebAssembly, and the page is plain TypeScript on top of it, with no UI framework. The page holds no cache logic: everything it shows, wording included, comes from the core.
+The cache logic is a Rust crate compiled to WebAssembly, and the page is plain TypeScript on top of it, with no UI framework. The page holds no cache logic: everything it shows comes from the core, apart from its fixed labels (`web/src/copy.ts`).
 
 ```text
 crates/cache-explorer-core   the cache, the access engine, sessions, modules, share links (no JS or OS dependencies)
@@ -53,6 +53,10 @@ cargo fmt --all --check
 sh scripts/check-core-deps.sh
 cargo clippy -p cache-explorer-core --all-targets --locked -- -D warnings
 cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
+cargo clippy -p cache-explorer-core --lib --locked -- -D warnings
+cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --lib --locked -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc -p cache-explorer-core --no-deps --document-private-items --locked
+RUSTDOCFLAGS="-D warnings" cargo doc -p cache-explorer-wasm --target wasm32-unknown-unknown --no-deps --document-private-items --locked
 cargo test --workspace --locked
 ```
 
@@ -66,7 +70,7 @@ npm run test:wasm        # the same tests in headless Chrome (needs a ChromeDriv
 npm run size             # the wasm's gzipped size against its budget
 ```
 
-`.github/workflows/cache-explorer.yml` runs all of this on pushes that touch this folder or `assets/cache-explorer/` and on every pull request (it skips the work when neither is touched), and its `status` job is the one to require on `master`.
+`.github/workflows/cache-explorer.yml` runs all of this on pushes to `master` that touch the tool's paths (this folder, `assets/cache-explorer/`, the page, the `tool` layout, the workflow) and on every pull request (it skips the work when none is touched), and its `status` job is the one to require on `master`.
 
 The core's tests include every guided module: each file in `modules/` is parsed and then run to its end through its own Show me path. See [docs/AUTHORING.md](docs/AUTHORING.md) for the module format and how to add one.
 
@@ -89,7 +93,7 @@ The page is `_pages/cache-explorer.md`, which uses the `tool` layout. To put the
 
 - `relative_url` keeps both paths right under a `baseurl`. The script resolves each module's file relative to the index's address.
 - The script adds its own stylesheet, so the page links none.
-- The tool reads these custom properties from the page, all named `--site-*`, and falls back to its own values for any that are missing: the fonts, colours and spacing of the site. Its own properties are all `--cache-explorer-*`.
+- The tool reads the site's `--site-*` custom properties (fonts, colours, spacing) and falls back to its own values for any that are missing: the fonts, colours and spacing of the site. Its own properties are all `--cache-explorer-*`.
 - The page needs JavaScript and WebAssembly. The `tool` layout shows a `<noscript>` line.
 
 ## Committed assets

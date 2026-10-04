@@ -22,7 +22,7 @@ The core reads and checks modules (`Module::parse`); the page only draws what it
 
 | Field         | Type    | Notes                                                                                           |
 |---------------|---------|-------------------------------------------------------------------------------------------------|
-| `id`          | string  | Two digits, a hyphen, then lower-case letters, digits and hyphens: `04-tracking-lru`. It is the file's name without `.json`. The number orders the picker. |
+| `id`          | string  | Two digits, a hyphen, then lower-case letters, digits and hyphens: `04-tracking-lru`. It is the file's name without `.json`. The picker lists modules in `index.json`'s order, which by convention follows the numbers. |
 | `title`       | string  | Plain text, not empty.                                                                          |
 | `description` | string  | One line under the title in the picker. Inline markdown (see [Text](#text)).                     |
 | `advanced`    | boolean | `true` if the module needs Advanced mode: a write policy or allocate policy other than write-back with write-allocate, or timed mode. |
@@ -111,7 +111,7 @@ A predicate is an object with exactly one of the keys below, plus that key's own
 | `lastAccess` | `{ "lastAccess": { "kind"?: "read" \| "write", "addr"?: a, "outcome"?: "hit" \| "miss" } }` | The latest completed access at or before the cursor, made since the step began, matches every given field. |
 | `config`     | `{ "config": { "sizeBytes"?, "lineBytes"?, "associativity"?, "replacement"?, "writePolicy"?, "allocatePolicy"?, "timed"? } }` | The configuration of the run at the cursor matches every given field. `timed` is a boolean. |
 
-`event`, `lastAccess` and `config` are the extensions to the original format, and the three that state alone cannot replace. `misses == 1` is true at the tag compare of the first access and at every micro-step after it; `{ "event": { "kind": "miss", "entry": 1 } }` is true only at the miss. `lastAccess` fires only for an access made after the step began, so a student who loaded the address before the step started does not complete it. `config` is how a step asks the student to change a setting.
+`event`, `lastAccess` and `config` test things the machine's state alone does not show: the micro-step at the cursor, what the student just did, and the configuration. `misses == 1` is true at the tag compare of the first access and at every micro-step after it; `{ "event": { "kind": "miss", "entry": 1 } }` is true only at the miss. `lastAccess` fires only for an access made after the step began, so a student who loaded the address before the step started does not complete it. `config` is how a step asks the student to change a setting.
 
 Event kinds: `decode`, `hit`, `miss`, `victim`, `writeBack`, `writeThrough`, `fill`, `write`, `rank`, `memWrite`, `stall`, `complete`, `edit`, `error`, `evict`, `setup`.
 
@@ -126,7 +126,7 @@ Counters: each counts what its name says, at the cursor.
 | `misses`        | Accesses that did not.                                                      | always                                 |
 | `evictions`     | Lines that left the cache to make room.                                     | always                                 |
 | `writebacks`    | Dirty lines written back to memory.                                         | write-back                             |
-| `writethroughs` | Stores written through to memory, and stores that missed under write-no-allocate. | write-through, or write-no-allocate |
+| `writethroughs` | Stores written through to memory under write-through. | write-through |
 | `writearounds`  | Stores that missed under write-no-allocate and went straight to memory.     | write-no-allocate                      |
 | `fills`         | Lines brought in from memory.                                               | always                                 |
 | `cycles`        | Cycles, in timed mode.                                                      | timed mode only                        |
@@ -140,7 +140,7 @@ Numbers and addresses:
 
 - An address is a JSON number or a string of `0x` and one to eight hex digits (`"0x0A4"`), which is easier to read. Everywhere an address appears in module JSON (`line.addr`, `memory.addr`, `lastAccess.addr`, an issue's `addr`, a memory edit's target, a way edit's `line`) either form is accepted; it must fit `addressBits`.
 - `equals` is a JSON number, read as a word, exact up to 2^64 - 1.
-- Predicates nest at most 128 deep.
+- The JSON reader limits nesting to 128 levels for the whole file, so a predicate nests about 120 deep (an `all` or `any` level counts twice). Going past it gives "recursion limit exceeded".
 
 ## Show me and then
 
@@ -194,7 +194,7 @@ What is checked:
 - callouts name a set and way the configuration in force has;
 - an instruct step's `showMe` that changes the configuration has the `config` predicate described above.
 
-`index.json` is checked as a whole: its ids are unique and of the form above.
+`index.json` is checked as a whole: its ids are unique and of the form above, titles are not empty, and descriptions use only the inline markdown subset.
 
 ## A worked example
 
@@ -305,7 +305,7 @@ This is `modules/03-conflict-misses.json`, as shipped. It has a program, a predi
 Reading it through:
 
 - **Preset.** A 128-byte cache of 16-byte lines, direct-mapped, with the memory pattern turned on so every word has a recognisable value. It is basic (write-back, write-allocate, untimed), so `advanced` is `false` in both places.
-- **Program.** Four loads that alternate between two addresses sharing set 0. Both are in the trace so "Run" and Shift+Space have something to do.
+- **Program.** Four loads that alternate between two addresses sharing set 0. The loads are a trace, so Run and Shift+Space can play them.
 - **Step 1 (predict).** The student commits to a count before seeing it. `callout: { "set": 0 }` outlines the set the answer depends on. There is no `then`, so the answer reveals nothing on the workbench; the next step runs the trace.
 - **Step 2 (instruct).** `expect` is an `all` of four counter checks: all four accesses missed, two compulsory and two conflict. `showMe` is `{ "op": "run", "n": 4 }`. The `hint` is shown under the text.
 - **Step 4 (instruct, config).** `expect` is a `config` predicate on `associativity`. Its `showMe` is a `config` op holding the whole new configuration, which differs from the preset in `associativity` alone. That difference is what the `config` predicate checks, so the validator accepts the step.
@@ -331,8 +331,10 @@ For the other kinds, read: `modules/07-write-back-stale-memory.json` for `observ
    The core's test reads both and fails if a row disagrees with its file, if an id is listed twice, or if a file has no row or a row no file.
 3. **Add it to the core's module tests**, `crates/cache-explorer-core/tests/modules.rs`:
    - an `include_str!` constant beside the others (`const MODULE_10: &str = include_str!("../../../modules/10-short-name.json");`);
-   - the constant in the `SHIPPED` array, and the array's length;
+   - the constant in the `SHIPPED` array at its index position (the test zips `SHIPPED` with the index rows), and the array's length;
    - a line in the `cases!` list that runs the module through its Show me path: `shipped_module_10_completes_through_its_show_me_path => (MODULE_10),`.
+
+   A shipped module therefore needs a `showMe` that completes every instruct step, and every observe `until` must be reachable in the run. (`showMe` is optional for the format, not for a shipped module.)
 
    The Show me path test starts the module, applies every step's Show me or answer, and fails unless the module reaches the done screen. It is what proves that every `expect` and `until` can be made true by its own ops. A module that cannot complete this way is broken for a student who gets stuck.
 4. **Run the tests** from `_cache-explorer/`:
