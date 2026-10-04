@@ -1,0 +1,154 @@
+{
+  "id": "05-fifo-vs-lru",
+  "title": "FIFO versus LRU",
+  "description": "The same five loads under *FIFO* and under *LRU*, and where they differ.",
+  "advanced": false,
+  "preset": {
+    "addressBits": 12,
+    "wordBytes": 4,
+    "cache": {
+      "sizeBytes": 128,
+      "lineBytes": 16,
+      "associativity": 2,
+      "replacement": "fifo",
+      "writePolicy": "writeBack",
+      "allocatePolicy": "writeAllocate"
+    },
+    "seed": 12345,
+    "advanced": false,
+    "memoryInit": "pattern"
+  },
+  "program": {
+    "source": "R 0x000\nR 0x040\nR 0x000\nR 0x080\nR 0x000",
+    "format": "trace"
+  },
+  "steps": [
+    {
+      "kind": "explain",
+      "text": "This cache replaces with *FIFO*: first in, first out. It evicts the line that arrived earliest, and a hit does not change that order. The trace loads `0x000`, `0x040`, `0x000`, `0x080` and `0x000`; all five map to set 0, which has two ways.",
+      "callout": "config"
+    },
+    {
+      "kind": "predict",
+      "text": "Under FIFO, how many of the five loads will hit?",
+      "options": [
+        "Two",
+        "One",
+        "None"
+      ],
+      "answer": 1,
+      "explain": "One. The third load hits, but it does not make `0x000` any newer. When `0x080` arrives, `0x000` is still the first in, so it is evicted, and the last load misses.",
+      "hint": "A hit does not change the order of arrival. Which line arrived first?",
+      "callout": {
+        "set": 0
+      }
+    },
+    {
+      "kind": "instruct",
+      "text": "Run the trace: press Run.",
+      "expect": {
+        "all": [
+          {
+            "counter": "accesses",
+            "op": "==",
+            "value": 5
+          },
+          {
+            "counter": "hits",
+            "op": "==",
+            "value": 1
+          },
+          {
+            "counter": "misses",
+            "op": "==",
+            "value": 4
+          }
+        ]
+      },
+      "hint": "Press Run in the transport bar. If the trace has already run, press Undo, then Run.",
+      "showMe": [
+        {
+          "op": "run",
+          "n": 5
+        }
+      ],
+      "callout": "transport"
+    },
+    {
+      "kind": "explain",
+      "text": "One hit, four misses. Loading `0x080` evicted `0x000`, the line the program had just used, and the last load had to bring it back in.",
+      "callout": {
+        "set": 0
+      }
+    },
+    {
+      "kind": "instruct",
+      "text": "Set Replacement to LRU. The cache will ask to reset; choose Reset and apply.",
+      "expect": {
+        "config": {
+          "replacement": "lru"
+        }
+      },
+      "hint": "Replacement is in the bar above the cache. Pick LRU.",
+      "showMe": [
+        {
+          "op": "config",
+          "config": {
+            "addressBits": 12,
+            "wordBytes": 4,
+            "cache": {
+              "sizeBytes": 128,
+              "lineBytes": 16,
+              "associativity": 2,
+              "replacement": "lru",
+              "writePolicy": "writeBack",
+              "allocatePolicy": "writeAllocate"
+            },
+            "seed": 12345,
+            "advanced": false,
+            "memoryInit": "pattern"
+          }
+        }
+      ],
+      "callout": "config"
+    },
+    {
+      "kind": "instruct",
+      "text": "Run the same trace again.",
+      "expect": {
+        "all": [
+          {
+            "counter": "accesses",
+            "op": "==",
+            "value": 5
+          },
+          {
+            "counter": "hits",
+            "op": "==",
+            "value": 2
+          },
+          {
+            "counter": "misses",
+            "op": "==",
+            "value": 3
+          }
+        ]
+      },
+      "hint": "Press Run in the transport bar.",
+      "showMe": [
+        {
+          "op": "run",
+          "n": 5
+        }
+      ],
+      "callout": "transport"
+    },
+    {
+      "kind": "explain",
+      "text": "Two hits. Under LRU the third load made `0x000` the most recent, so `0x080` evicted `0x040` instead and the last load hit. Replacement should follow how a line is used, not when it arrived.",
+      "callout": {
+        "set": 0
+      }
+    }
+  ]
+}

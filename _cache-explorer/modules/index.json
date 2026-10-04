@@ -16,5 +16,23 @@
     "title": "Conflict misses",
     "description": "Two lines in one set push each other out until a second way is added.",
     "advanced": false
+  },
+  {
+    "id": "04-tracking-lru",
+    "title": "Tracking LRU",
+    "description": "In a full set, the *least recently used* way is the victim. Read the rank column to name it before it happens.",
+    "advanced": false
+  },
+  {
+    "id": "05-fifo-vs-lru",
+    "title": "FIFO versus LRU",
+    "description": "The same five loads under *FIFO* and under *LRU*, and where they differ.",
+    "advanced": false
+  },
+  {
+    "id": "06-spatial-locality-line-size",
+    "title": "Spatial locality and line size",
+    "description": "A loop over consecutive words, with short lines and with long lines.",
+    "advanced": false
   }
 ]

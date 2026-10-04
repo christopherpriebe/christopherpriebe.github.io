@@ -54,10 +54,15 @@ const STALE_MEMORY: &str = include_str!("fixtures/modules/03-fixture-stale-memor
 const MODULE_01: &str = include_str!("../../../modules/01-direct-mapped-miss-then-hit.json");
 const MODULE_02: &str = include_str!("../../../modules/02-index-not-sequential.json");
 const MODULE_03: &str = include_str!("../../../modules/03-conflict-misses.json");
+const MODULE_04: &str = include_str!("../../../modules/04-tracking-lru.json");
+const MODULE_05: &str = include_str!("../../../modules/05-fifo-vs-lru.json");
+const MODULE_06: &str = include_str!("../../../modules/06-spatial-locality-line-size.json");
 const MODULE_INDEX: &str = include_str!("../../../modules/index.json");
 
 /// Every shipped module that has a test here, in index order.
-const SHIPPED: [&str; 3] = [MODULE_01, MODULE_02, MODULE_03];
+const SHIPPED: [&str; 6] = [
+    MODULE_01, MODULE_02, MODULE_03, MODULE_04, MODULE_05, MODULE_06,
+];
 
 /// Every fixture module.
 const FIXTURES: [&str; 3] = [MISS_THEN_HIT, SWITCH_CONFIG, STALE_MEMORY];
@@ -2087,6 +2092,9 @@ cases! {
     shipped_module_01_completes_through_its_show_me_path => (MODULE_01),
     shipped_module_02_completes_through_its_show_me_path => (MODULE_02),
     shipped_module_03_completes_through_its_show_me_path => (MODULE_03),
+    shipped_module_04_completes_through_its_show_me_path => (MODULE_04),
+    shipped_module_05_completes_through_its_show_me_path => (MODULE_05),
+    shipped_module_06_completes_through_its_show_me_path => (MODULE_06),
 }
 
 #[test]
@@ -2214,4 +2222,133 @@ fn module_01_ends_on_a_hit_in_set_2() {
             "{json}"
         );
     }
+}
+
+#[test]
+fn module_04_evicts_way_1_then_way_0() {
+    let (mut run, mut session) = started(MODULE_04);
+    show_me_path(&mut run, &mut session);
+    // 0x080 replaced way 1 (0x040), then 0x0C0 replaced way 0 (0x000).
+    for (json, expected) in [
+        (
+            json!({"way": {"set": 0, "way": 0}, "tag": 3, "rank": 0}),
+            true,
+        ),
+        (
+            json!({"way": {"set": 0, "way": 1}, "tag": 2, "rank": 1}),
+            true,
+        ),
+        (json!({"line": {"addr": 0x040}}), false),
+        (json!({"line": {"addr": 0x000}}), false),
+        (json!({"counter": "hits", "op": "==", "value": 1}), true),
+        (json!({"counter": "misses", "op": "==", "value": 4}), true),
+        (
+            json!({"counter": "evictions", "op": "==", "value": 2}),
+            true,
+        ),
+    ] {
+        assert_eq!(
+            session.eval_predicate(&predicate(json.clone())),
+            expected,
+            "{json}"
+        );
+    }
+}
+
+#[test]
+fn module_04_predicts_name_the_victim_the_session_chooses() {
+    // The right option of each predict names the way the session evicts:
+    // way 1 for `0x080`, then way 0 for `0x0C0`.
+    let module: Value = serde_json::from_str(MODULE_04).unwrap();
+    let right: Vec<&str> = module["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|step| step["kind"] == "predict")
+        .map(|step| {
+            let answer = usize::try_from(step["answer"].as_u64().unwrap()).unwrap();
+            step["options"][answer].as_str().unwrap()
+        })
+        .collect();
+    assert!(right[0].starts_with("Way 1"), "{right:?}");
+    assert!(right[1].starts_with("Way 0"), "{right:?}");
+}
+
+#[test]
+fn module_05_misses_four_times_under_fifo_and_hits_twice_under_lru() {
+    let (mut run, mut session) = started(MODULE_05);
+    let views = show_me_path(&mut run, &mut session);
+    assert_eq!(views.len(), 8);
+    // The final state is the LRU run: 0x000 and 0x080 stay, 0x040 went.
+    for (json, expected) in [
+        (json!({"config": {"replacement": "lru"}}), true),
+        (json!({"counter": "hits", "op": "==", "value": 2}), true),
+        (json!({"counter": "misses", "op": "==", "value": 3}), true),
+        (json!({"line": {"addr": 0x000}}), true),
+        (json!({"line": {"addr": 0x080}}), true),
+        (json!({"line": {"addr": 0x040}}), false),
+        (
+            json!({"lastAccess": {"addr": 0x000, "outcome": "hit"}}),
+            true,
+        ),
+    ] {
+        assert_eq!(
+            session.eval_predicate(&predicate(json.clone())),
+            expected,
+            "{json}"
+        );
+    }
+}
+
+#[test]
+fn module_05_under_fifo_the_last_load_misses() {
+    // Stop after the first run: the line just reused was evicted.
+    let fifo = edited(MODULE_05, |module| {
+        let steps = module["steps"].as_array_mut().unwrap();
+        steps.truncate(4);
+    });
+    let (mut run, mut session) = started(&fifo);
+    show_me_path(&mut run, &mut session);
+    for (json, expected) in [
+        (json!({"config": {"replacement": "fifo"}}), true),
+        (
+            json!({"lastAccess": {"addr": 0x000, "outcome": "miss"}}),
+            true,
+        ),
+        (json!({"line": {"addr": 0x040}}), false),
+        (json!({"line": {"addr": 0x080}}), true),
+    ] {
+        assert_eq!(
+            session.eval_predicate(&predicate(json.clone())),
+            expected,
+            "{json}"
+        );
+    }
+}
+
+#[test]
+fn module_06_hit_rate_is_50_percent_then_87_and_a_half() {
+    let (mut run, mut session) = started(MODULE_06);
+    show_me_path(&mut run, &mut session);
+    for (json, expected) in [
+        (json!({"config": {"lineBytes": 32}}), true),
+        (
+            json!({"counter": "accesses", "op": "==", "value": 16}),
+            true,
+        ),
+        (json!({"counter": "hits", "op": "==", "value": 14}), true),
+        (json!({"counter": "misses", "op": "==", "value": 2}), true),
+        (json!({"counter": "conflict", "op": "==", "value": 0}), true),
+    ] {
+        assert_eq!(
+            session.eval_predicate(&predicate(json.clone())),
+            expected,
+            "{json}"
+        );
+    }
+    // The first run, at 8-byte lines, is pinned by its step's `expect`
+    // (eight hits and eight misses); the program is sixteen words.
+    let module: Value = serde_json::from_str(MODULE_06).unwrap();
+    let source = module["program"]["source"].as_str().unwrap();
+    assert_eq!(source.lines().count(), 16);
 }
