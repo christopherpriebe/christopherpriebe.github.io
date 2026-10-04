@@ -7,11 +7,11 @@ layout: base
 {% include instruments/cache.liquid %}
 
 {%- if page.working %}
-<ul class="working">
+<div class="rows rows--links working">
     {%- for item in page.working %}
-    <li class="working__item"><a href="{{ item.url | relative_url }}">{{ item.title | escape }} &rarr;</a></li>
+    <a class="rows__row" href="{{ item.url | relative_url }}"><span class="rows__title">{{ item.title | escape }} &rarr;</span></a>
     {%- endfor %}
-</ul>
+</div>
 {%- endif %}
 
 {%- for group in page.planned %}
