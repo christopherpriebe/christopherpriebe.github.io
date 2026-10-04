@@ -77,3 +77,57 @@ jobs:
         env:
           RUSTDOCFLAGS: "-D warnings"
         run: cargo doc -p cache-explorer-wasm --target wasm32-unknown-unknown --no-deps --document-private-items --locked
+
+  web:
+    needs: rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install --no-self-update
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: _cache-explorer
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: _cache-explorer/web/.nvmrc
+          cache: npm
+          cache-dependency-path: _cache-explorer/web/package-lock.json
+      - run: npm ci
+        working-directory: _cache-explorer/web
+      - name: Facade tests in headless Chrome (fails if a suite was skipped or ran nothing)
+        run: npm run test:wasm
+        working-directory: _cache-explorer/web
+      - name: Build
+        run: npm run build
+        working-directory: _cache-explorer/web
+      - name: Release glue refuses hostile arguments and stays healthy
+        run: npm run test:glue
+        working-directory: _cache-explorer/web
+      - name: Generated declarations match docs/cache_explorer.d.ts
+        run: diff -u docs/cache_explorer.d.ts web/pkg/cache_explorer.d.ts
+      - name: Typecheck, lint, format, token and package checks, Vitest
+        run: npm run check
+        working-directory: _cache-explorer/web
+      - name: Committed build matches a fresh build
+        working-directory: .
+        run: |
+          git diff --exit-code -- assets/cache-explorer
+          test -z "$(git status --porcelain -- assets/cache-explorer)"
+      - name: wasm size
+        working-directory: .
+        shell: bash   # adds -o pipefail: without it the step takes tee's status and never fails
+        run: sh _cache-explorer/scripts/wasm-size.sh assets/cache-explorer/cache_explorer_bg.wasm | tee -a "$GITHUB_STEP_SUMMARY"
+
+  status:
+    if: always()
+    needs: [changes, rust, web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was not needed
+        working-directory: .
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a job ended with: $r" >&2; exit 1 ;; esac
+          done
