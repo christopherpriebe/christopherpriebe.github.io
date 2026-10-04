@@ -87,7 +87,7 @@ function adopt(context: Context, next: ModuleRun): void {
 }
 
 /** Fetches a module, reads it, and starts it; what goes wrong is said in the drawer. */
-async function begin(context: Context, id: string): Promise<void> {
+export async function startModule(context: Context, id: string): Promise<void> {
   const { modules, ui } = context;
   if (!modules || ui.modules.starting !== null) return;
   ui.modules.starting = id;
@@ -141,7 +141,7 @@ function showPanel(context: Context): void {
 
 function start(context: Context, action: Action): void {
   const id = action.params.module;
-  if (id !== undefined) void begin(context, id);
+  if (id !== undefined) void startModule(context, id);
 }
 
 /** Sends one move to the run in progress, then draws what the run says. */

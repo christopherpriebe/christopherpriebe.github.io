@@ -2,13 +2,12 @@ import './styles/tokens.css';
 import './styles/cache-explorer.css';
 import { start, type Controller } from './controller';
 import { h } from './dom';
+import { readHash } from './hash';
 import { fetchModules } from './modules';
+import { LOADING_DELAY_MS } from './motion';
 import { measureLayout, watchLayout, type Layout } from './layout';
 import { couldNotStartState, loadingState, narrowState, noWebAssemblyState } from './page-states';
 import { init, Session } from './wasm';
-
-/** How long the wasm may take before the loading state shows: most loads finish first. */
-const LOADING_DELAY_MS = 200;
 
 /** A URL beside this script, carrying the build's hash so a script, a stylesheet and a wasm from different builds never meet. */
 function assetUrl(name: string): URL {
@@ -44,7 +43,12 @@ function reloadPage(): void {
 }
 
 /** Exported for the tests; the page only ever runs it through the last two lines. */
-export async function boot(root: HTMLElement, reload: () => void = reloadPage): Promise<void> {
+export async function boot(
+  root: HTMLElement,
+  reload: () => void = reloadPage,
+  hash: string = location.hash,
+): Promise<void> {
+  const bootAt = performance.now();
   root.classList.add('cache-explorer');
   let phase: Phase = { name: 'starting' };
   let layout: Layout = measureLayout(root);
@@ -91,11 +95,20 @@ export async function boot(root: HTMLElement, reload: () => void = reloadPage): 
     await init(
       import.meta.env.PROD ? { module_or_path: assetUrl('cache_explorer_bg.wasm') } : undefined,
     );
+    // A link in the address is replayed in place of the first visit; a module link starts one.
+    const target = readHash(hash);
     const controller = start(
       root,
       Session.firstVisit(),
       layout,
       root.dataset.modules === undefined ? null : fetchModules(root.dataset.modules),
+      {
+        open:
+          target?.kind === 'share'
+            ? { source: { kind: 'share', text: target.text }, since: bootAt }
+            : undefined,
+        module: target?.kind === 'module' ? target.id : undefined,
+      },
     );
     clearTimeout(loading);
     phase = { name: 'running', controller };

@@ -1725,7 +1725,8 @@ mod functions {
     use cache_explorer_core::limits::MAX_ADDRESS_BITS;
     use cache_explorer_core::{self as model, Config, Module, Predicate, SCHEMA_VERSION};
     use cache_explorer_wasm::{
-        build_info, eval_predicate, parse_module, parse_module_index, validate_config,
+        build_info, eval_predicate, parse_module, parse_module_index, run_file_too_large,
+        trace_file_too_large, validate_config,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -1842,5 +1843,21 @@ mod functions {
             get(&info, "schemaVersion").as_f64(),
             Some(f64::from(SCHEMA_VERSION))
         );
+    }
+
+    #[wasm_bindgen_test]
+    fn a_file_too_large_to_open_is_refused_in_the_cores_words() {
+        assert_eq!(run_file_too_large(1_048_576), None);
+        assert_eq!(
+            run_file_too_large(1_048_577),
+            model::run_file_too_large(1_048_577)
+        );
+        assert!(run_file_too_large(1_048_577).is_some());
+        assert_eq!(trace_file_too_large(16_384), None);
+        assert_eq!(
+            trace_file_too_large(16_385),
+            model::trace_file_too_large(16_385)
+        );
+        assert!(trace_file_too_large(16_385).is_some());
     }
 }

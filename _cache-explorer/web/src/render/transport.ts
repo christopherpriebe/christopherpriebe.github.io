@@ -105,6 +105,42 @@ function tool(
   );
 }
 
+/** Share, Save and Load: the design's three words at the right of the bar, plain text until pointed at. */
+function linkButton(label: string, action: string): HTMLElement {
+  return h(
+    'button',
+    { type: 'button', class: 'cache-explorer__link-button', 'data-action': action },
+    label,
+  );
+}
+
+/** The link in a read-only field, for a page whose clipboard is not there; the page selects it. */
+function shareLink(root: HTMLElement, put: Put, link: string): HTMLElement {
+  return h(
+    'div',
+    { class: 'cache-explorer__share-link' },
+    h('span', { class: 'cache-explorer__label' }, copy.transport.copyThisLink),
+    put(
+      control(root, 'share-link', () =>
+        h('input', {
+          type: 'text',
+          class: 'cache-explorer__field',
+          'data-action': 'share-link',
+          'aria-label': copy.transport.linkLabel,
+          readonly: true,
+          spellcheck: 'false',
+        }),
+      ),
+      link,
+    ),
+    h(
+      'button',
+      { type: 'button', class: 'cache-explorer__link-button', 'data-action': 'share-close' },
+      copy.transport.closeLink,
+    ),
+  );
+}
+
 export function renderTransport(
   root: HTMLElement,
   transport: Transport,
@@ -174,6 +210,9 @@ export function renderTransport(
       h(
         'div',
         { class: 'cache-explorer__transport-end' },
+        linkButton(copy.transport.share, 'share'),
+        linkButton(copy.transport.save, 'save'),
+        linkButton(copy.transport.openFile, 'load'),
         h(
           'button',
           {
@@ -187,6 +226,7 @@ export function renderTransport(
         ),
       ),
     ),
+    ...(ui.shareFallback === null ? [] : [shareLink(root, put, ui.shareFallback)]),
     ...(ui.sheetOpen ? [renderSheet()] : []),
   ]);
   if (transport.status.textContent !== ui.status) transport.status.textContent = ui.status;

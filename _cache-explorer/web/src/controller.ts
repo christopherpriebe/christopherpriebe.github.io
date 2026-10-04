@@ -5,22 +5,28 @@
 import type { MemoryLines, State, Timeline } from '../pkg/cache_explorer';
 import { configActions } from './config-actions';
 import type { ActionHandler, Context } from './context';
+import { isFatal } from './context';
+import { copy } from './copy';
 import { delegate } from './delegate';
 import { editActions } from './edit-actions';
-import { moduleActions, loadModules, releaseModule } from './module-actions';
+import { browserStore, createPersistence, type HashStore } from './hash';
+import { cancelLoading, loadActions, loadingDue, openSource, type Source } from './load-actions';
+import { moduleActions, loadModules, releaseModule, startModule } from './module-actions';
 import type { ModuleSource } from './modules';
 import { logActions, LOG_MARGIN, scrollLog, stopScrub } from './log-actions';
 import { captureFocus, restoreFocus } from './focus';
 import type { Layout } from './layout';
 import { machineActions, MEMORY_MARGIN, scrollMemory } from './machine-actions';
 import { onKeydown, onKeyup } from './keyboard';
+import { failedLoadState, narrowState, replayingState } from './page-states';
 import { programActions } from './program-actions';
 import { FLASH_MS, RUN_MS } from './motion';
 import { watchPress } from './press';
 import { detach, render, type LogWindow, type Snapshot } from './render';
+import { shareActions } from './share-actions';
 import { transportActions, tick } from './transport-actions';
 import { initialUiState, type MemoryEditor, type UiState } from './ui-state';
-import type { Session } from './wasm';
+import { Session } from './wasm';
 
 /** The rows and entries fetched around the first one in view: more than the scrollers show. */
 const MEMORY_WINDOW = 24;
@@ -140,9 +146,11 @@ function placeLogWindow(ui: UiState, state: State, timeline: Timeline): void {
 const CLICKS: ReadonlyMap<string, ActionHandler> = new Map([
   ...configActions.clicks,
   ...editActions.clicks,
+  ...loadActions.clicks,
   ...logActions.clicks,
   ...moduleActions.clicks,
   ...programActions.clicks,
+  ...shareActions.clicks,
   ...transportActions.clicks,
 ]);
 const INPUTS: ReadonlyMap<string, ActionHandler> = new Map([
@@ -168,39 +176,144 @@ export interface Controller {
   dispose(): void;
 }
 
+/** What the page was opened with, besides the run it starts from. */
+export interface StartOptions {
+  /** Where the address is written; the browser's own by default. */
+  store?: HashStore | undefined;
+  /**
+   * A link the page was opened with, replayed in place of the run given: `since` is when the page
+   * began, which the loading state counts its 200 ms from.
+   */
+  open?: { source: Source; since: number } | undefined;
+  /** A guided module the page was opened with, started once the page has drawn. */
+  module?: string | undefined;
+}
+
 /**
  * Takes over `session` and draws it into `root`. The controller is its one owner: it lets go of
- * it in `dispose`, or here when the first draw fails.
+ * it in `dispose`, or here when the first draw fails. With `options.open` the session is only
+ * what the page shows if the link cannot be opened.
  */
 export function start(
   root: HTMLElement,
   session: Session,
   layout: Layout,
   modules: ModuleSource | null = null,
+  options: StartOptions = {},
 ): Controller {
   let owned: Session | null = session;
+  let disposed = false;
   const ui = initialUiState(layout);
-  // A session that opens part way through a run, as a link or a file does, is not a step: its
-  // first draw plays nothing.
-  ui.lastPos = session.position().pos;
-  // Nor does it start the log at the top: the entry the cursor is in is the one to build around.
-  const entry = session.timeline().current?.index;
-  if (entry !== undefined) ui.logFirst = Math.max(0, entry - LOG_MARGIN);
+  const store = options.store ?? browserStore();
 
   function current(): Session {
     if (!owned) throw new Error('the controller has been disposed');
     return owned;
   }
 
+  /**
+   * Sets what the page keeps beside the run for the run `next`. A session that opens part way
+   * through a run, as a link or a file does, is not a step: its first draw plays nothing, and it
+   * does not start the log at the top, but at the entry the cursor is in. A program it opens with
+   * is in the drawer, whose text is what the next step passes on and must not replace it.
+   */
+  function place(next: Session): void {
+    ui.lastPos = next.position().pos;
+    const entry = next.timeline().current?.index;
+    ui.logFirst = entry === undefined ? 0 : Math.max(0, entry - LOG_MARGIN);
+    const loaded = next.state().program;
+    if (loaded) ui.program = { ...ui.program, format: loaded.format, text: loaded.source };
+  }
+
+  const persist = createPersistence(
+    store,
+    () => owned,
+    (note) => {
+      if (!owned) return;
+      ui.status = note;
+      refresh();
+    },
+  );
+
+  /** Draws the page's own states, which stand in for the workbench: a replay, or a link that failed. */
+  function drawPage(): void {
+    if (ui.layout === 'narrow') {
+      root.replaceChildren(narrowState());
+    } else if (ui.loading) {
+      // Most links replay before anyone could read the state: it shows once 200 ms have passed.
+      if (loadingDue(ui.loading.since)) root.replaceChildren(replayingState(ui.loading.summary));
+    } else if (ui.failure) {
+      const { failure, keep, contents } = ui.failure;
+      root.replaceChildren(failedLoadState(failure, keep, contents));
+    }
+  }
+
   function draw(): void {
     const focus = captureFocus(root);
+    if (ui.loading !== null || ui.failure !== null) {
+      drawPage();
+      restoreFocus(root, focus);
+      return;
+    }
     // The strip follows what is typed only until the cursor next moves.
     if (current().position().pos !== ui.lastPos) ui.stripSource = 'cursor';
     const { snapshot, log } = buildSnapshot(current(), ui);
+    // The address follows the run before it is drawn, so a note that it no longer can is drawn.
+    const note = persist.sync(current(), {
+      ops: current().opCount(),
+      pos: snapshot.state.position.pos,
+      advanced: snapshot.state.advanced,
+    });
+    if (note !== null) ui.status = note;
     render(root, snapshot, log, ui, refresh);
     restoreFocus(root, focus);
     ui.lastPos = snapshot.state.position.pos;
     ui.memoryReveal = null;
+  }
+
+  /**
+   * Runs `go`; a fault that leaves the session unusable (11.6) is answered by building the run
+   * again from the last good copy of it, and a fault with nothing to restore from is thrown on.
+   */
+  function guarded(go: () => void): void {
+    try {
+      go();
+    } catch (error) {
+      if (!isFatal(error) || !recover()) throw error;
+    }
+  }
+
+  /**
+   * Drops the session that faulted without calling it again or freeing it, and opens the run the
+   * page last kept in its place. A second fault, from the new session, is the module's as a
+   * whole, and is thrown.
+   */
+  function recover(): boolean {
+    const json = persist.lastGood();
+    if (json === null) return false;
+    context.setRunning(false);
+    cancelLoading(context);
+    owned = null;
+    const next = Session.fromJson(json);
+    adoptSession(next);
+    persist.baseline(next);
+    ui.status = copy.recovered;
+    draw();
+    return true;
+  }
+
+  function adoptSession(next: Session): void {
+    context.setRunning(false);
+    stopScrub(ui);
+    releaseModule(ui);
+    const old = owned;
+    owned = next;
+    const { modules: listed } = ui;
+    Object.assign(ui, initialUiState(ui.layout), {
+      modules: { ...listed, run: null, starting: null, error: null },
+    });
+    place(next);
+    old?.free();
   }
 
   /** A redraw asked for while a press was down, which waits until the press and its click are over. */
@@ -212,7 +325,7 @@ export function start(
       return;
     }
     held = false;
-    draw();
+    guarded(draw);
   }
 
   /** Makes the redraw that was held back, if there is one and the press is over. */
@@ -232,10 +345,18 @@ export function start(
     },
     ui,
     modules,
+    persist,
     get disposed() {
-      return owned === null;
+      return disposed;
     },
+    page: () => store.page(),
     refresh,
+    takeSession() {
+      const taken = current();
+      owned = null;
+      return taken;
+    },
+    adoptSession,
     flash(cause) {
       // Pointing at a group again, or at another, starts a flash from the beginning, and its time
       // from the same moment.
@@ -256,40 +377,67 @@ export function start(
       if (!on || !owned) return;
       runTimer = setInterval(() => {
         if (!owned) return;
-        if (!tick(context)) context.setRunning(false);
-        refresh();
+        guarded(() => {
+          if (!tick(context)) context.setRunning(false);
+          refresh();
+        });
       }, RUN_MS);
     },
   };
 
+  /** Whether the workbench is what the student sees: while a run opens or a link has failed, it is not. */
+  const shown = (): boolean => !ui.loading && !ui.failure;
+
   const stopListening = delegate(root, {
     click(_, action) {
-      if (action) CLICKS.get(action.name)?.(context, action);
+      if (!action) return;
+      // The workbench is not on the page while a run opens or a link has failed; the failure's own
+      // actions are.
+      if (!shown() && !(ui.failure && action.name.startsWith('load-'))) return;
+      guarded(() => CLICKS.get(action.name)?.(context, action));
     },
     input(_, action) {
-      if (action) INPUTS.get(action.name)?.(context, action);
+      if (action && shown()) guarded(() => INPUTS.get(action.name)?.(context, action));
     },
     change(_, action) {
-      if (action) CHANGES.get(action.name)?.(context, action);
+      if (action && shown()) guarded(() => CHANGES.get(action.name)?.(context, action));
     },
     keydown(event, action) {
-      onKeydown(context, event, action);
+      if (shown()) {
+        guarded(() => {
+          onKeydown(context, event, action);
+        });
+      }
     },
     keyup(event) {
-      onKeyup(context, event);
+      if (shown()) {
+        guarded(() => {
+          onKeyup(context, event);
+        });
+      }
     },
     scroll(event) {
       const { target } = event;
-      if (!(target instanceof HTMLElement)) return;
+      if (!shown() || !(target instanceof HTMLElement)) return;
       if (target.dataset.scroll === 'memory') scrollMemory(context, target);
       else if (target.dataset.scroll === 'log') scrollLog(context, target);
     },
   });
 
+  // A page that is closed or hidden keeps the cursor's place in the address it leaves.
+  const leave = (): void => {
+    if (owned) persist.flush();
+  };
+  window.addEventListener('pagehide', leave);
+
   function dispose(): void {
+    disposed = true;
     clearTimeout(flashTimer);
     clearInterval(runTimer);
     stopScrub(ui);
+    window.removeEventListener('pagehide', leave);
+    persist.stop();
+    cancelLoading(context);
     press.stop();
     stopListening();
     detach(root);
@@ -300,16 +448,24 @@ export function start(
   }
 
   try {
-    // A run that opens with a program in it, as a link or a file does, has that program in the
-    // drawer: the drawer's text is what the next step passes on, and must not replace it.
-    const loaded = session.state().program;
-    if (loaded) ui.program = { ...ui.program, format: loaded.format, text: loaded.source };
-    draw();
+    place(session);
+    persist.baseline(session);
+    if (options.open) {
+      // The first draw waits for the link: a run that opens at once never shows the first visit.
+      openSource(context, options.open.source, {
+        since: options.open.since,
+        keep: false,
+        write: false,
+      });
+    } else {
+      draw();
+    }
   } catch (error) {
     dispose();
     throw error;
   }
   void loadModules(context);
+  if (options.module !== undefined) void startModule(context, options.module);
 
   return {
     refresh,

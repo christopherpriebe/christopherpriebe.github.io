@@ -146,6 +146,51 @@
   background: var(--cache-explorer-ink);
 }
 
+/* A run being replayed: its ticks fill as it replays, so they are not controls */
+
+.cache-explorer__ticks--replay {
+  margin-top: 22px;
+}
+
+.cache-explorer__ticks--replay .cache-explorer__tick {
+  cursor: default;
+}
+
+/* The way forward that is a line of text, not a button: "Show link contents" */
+.cache-explorer__text-button,
+.cache-explorer__link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cache-explorer-text);
+  font: var(--cache-explorer-font-body);
+  cursor: pointer;
+}
+
+.cache-explorer__text-button {
+  padding-block: 9px;
+}
+
+.cache-explorer__text-button:hover,
+.cache-explorer__link-button:hover {
+  color: var(--cache-explorer-ink);
+}
+
+/* What a link or a file held, shown as it came */
+.cache-explorer__contents {
+  max-height: 270px;
+  margin: 18px 0 0;
+  padding: 13px 18px;
+  overflow: auto;
+  background: var(--cache-explorer-empty);
+  color: var(--cache-explorer-ink);
+  font: var(--cache-explorer-font-label);
+  font-size: 13px;
+  line-height: 21px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* The configuration bar: ruled above and below, a summary line, then the groups of options */
 
 .cache-explorer__config {
@@ -1859,6 +1904,20 @@ rect.cache-explorer__tick--on {
 
 .cache-explorer__keys-button:hover {
   background: var(--cache-explorer-plane);
+}
+
+/* The link, for a page that cannot copy it: a read-only field to copy from by hand */
+.cache-explorer__share-link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 13px;
+  align-items: baseline;
+  margin-top: 13px;
+}
+
+.cache-explorer__share-link .cache-explorer__field {
+  flex: 1 1 270px;
+  min-width: 0;
 }
 
 /* Empty, the status line takes no room; the core's words about a refusal appear under the bar. */

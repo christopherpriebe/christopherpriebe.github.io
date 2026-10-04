@@ -70,6 +70,17 @@ function tickClass(kind: TickLook, tall: boolean): string {
   );
 }
 
+/** The ticks of a run being replayed: every step so far has been reached, so each is drawn on. */
+export function replayedTicks(ticks: readonly number[]): HTMLElement {
+  return h(
+    'div',
+    { class: 'cache-explorer__ticks cache-explorer__ticks--replay', 'aria-hidden': 'true' },
+    ...ticks.map((bits) =>
+      h('span', { class: tickClass(look(bits, true), (bits & FIRST_STEP) !== 0) }),
+    ),
+  );
+}
+
 /** One element for each step, as wide as the strip allows. */
 function stepTicks(snap: Snapshot): HTMLElement {
   const { ticks, timeline } = snap;

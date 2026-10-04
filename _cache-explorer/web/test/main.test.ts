@@ -91,6 +91,35 @@ describe('boot', () => {
     expect((added[0] as Element).matches(WORKBENCH)).toBe(true);
   });
 
+  it('opens the run a #s= link holds, straight to the workbench, with no flash of another state', async () => {
+    wasm.init.mockResolvedValue(undefined);
+    const shared = Session.firstVisit();
+    shared.applyOp({ op: 'issue', kind: 'read', addr: 164 });
+    const link = shared.toShareString();
+    const expected = shared.state().labels.statusText;
+    shared.free();
+    const seen: MutationRecord[] = [];
+    const watch = new MutationObserver((records) => seen.push(...records));
+    watch.observe(root, { childList: true });
+    await boot(root, undefined, `#s=${link}`);
+    await vi.advanceTimersByTimeAsync(1000);
+    seen.push(...watch.takeRecords());
+    watch.disconnect();
+    const added = seen.flatMap((record) => [...record.addedNodes]);
+    expect(added).toHaveLength(1);
+    expect((added[0] as Element).matches(WORKBENCH)).toBe(true);
+    expect(root.querySelector(WORKBENCH)?.textContent).toContain(expected);
+  });
+
+  it('shows the malformed-link state for a #s= link the core cannot read', async () => {
+    wasm.init.mockResolvedValue(undefined);
+    await boot(root, undefined, '#s=%%%');
+    expect(root.querySelector('.cache-explorer__plane--failed')?.textContent).toContain(
+      'Could not open link',
+    );
+    expect(root.querySelector('[data-action="load-fresh"]')).not.toBeNull();
+  });
+
   it('gives the root its block class and its layout', async () => {
     wasm.init.mockResolvedValue(undefined);
     await boot(root);

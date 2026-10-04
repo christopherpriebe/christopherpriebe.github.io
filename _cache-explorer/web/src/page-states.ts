@@ -2,8 +2,11 @@
 // container too narrow for the workbench, and a start that failed. Each is one plane, built here
 // and put into the root by whoever knows which state the page is in.
 
+import type { LoadFailure, ShareSummary } from '../pkg/cache_explorer';
 import { copy } from './copy';
-import { h } from './dom';
+import { h, type Child } from './dom';
+import { replayedTicks } from './render/log';
+import { segments } from './render/segments';
 
 const SKELETON_ROWS = 4;
 
@@ -17,7 +20,7 @@ function head(status?: string): HTMLElement {
   );
 }
 
-function plane(modifier: string, busy: boolean, ...content: Node[]): HTMLElement {
+function plane(modifier: string, busy: boolean, ...content: Child[]): HTMLElement {
   return h(
     'section',
     {
@@ -73,5 +76,76 @@ export function couldNotStartState(reload: () => void): HTMLElement {
     head(copy.couldNotStart),
     h('p', { class: 'cache-explorer__problem', role: 'alert' }, copy.couldNotStartMessage),
     h('div', { class: 'cache-explorer__actions' }, button),
+  );
+}
+
+/** A shared run being replayed: the core's line about it, and a tick for each step replayed so far. */
+export function replayingState(summary: ShareSummary | null): HTMLElement {
+  return plane(
+    'loading',
+    true,
+    head(copy.loading),
+    h('p', { class: 'cache-explorer__lead' }, copy.opening.lead),
+    summary && h('p', { class: 'cache-explorer__text' }, summary.text),
+    summary && replayedTicks(summary.ticks),
+    h(
+      'div',
+      { class: 'cache-explorer__skeleton', 'aria-hidden': 'true' },
+      ...Array.from({ length: SKELETON_ROWS }, () => h('div')),
+    ),
+  );
+}
+
+function action(name: string, label: string, primary = false): HTMLElement {
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: primary
+        ? 'cache-explorer__button cache-explorer__button--primary'
+        : 'cache-explorer__button',
+      'data-action': name,
+    },
+    label,
+  );
+}
+
+/**
+ * A link or a file that cannot be opened: the core's lead, its message with the field in mono, and
+ * the ways forward it found. `keep` adds the way back to the run the page was showing.
+ */
+export function failedLoadState(
+  failure: LoadFailure,
+  keep: boolean,
+  contentsShown: boolean,
+): HTMLElement {
+  return plane(
+    'failed',
+    false,
+    head(failure.title),
+    h('p', { class: 'cache-explorer__lead' }, failure.lead),
+    h('p', { class: 'cache-explorer__problem', role: 'alert' }, ...segments(failure.message)),
+    h(
+      'div',
+      { class: 'cache-explorer__actions' },
+      action('load-fresh', copy.opening.startFresh, true),
+      failure.repair && action('load-repair', failure.repair.label),
+      failure.prefix && action('load-prefix', failure.prefix.label),
+      keep && action('load-keep', copy.opening.keepRun),
+      failure.contents !== undefined &&
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'cache-explorer__text-button',
+            'data-action': 'load-contents',
+            'aria-expanded': String(contentsShown),
+          },
+          contentsShown ? copy.opening.hideContents : copy.opening.showContents,
+        ),
+    ),
+    contentsShown &&
+      failure.contents !== undefined &&
+      h('pre', { class: 'cache-explorer__contents', tabindex: 0 }, failure.contents),
   );
 }

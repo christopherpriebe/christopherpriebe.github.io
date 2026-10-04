@@ -9,8 +9,10 @@ import type {
   Config,
   ConfigNumberField,
   ModuleIndexView,
+  LoadFailure,
   ModuleRun,
   ProgramFormat,
+  ShareSummary,
   WayForm,
 } from '../pkg/cache_explorer';
 import type { Layout } from './layout';
@@ -102,6 +104,18 @@ export interface UiState {
   status: string;
   /** The link to show in a field when the clipboard is not available. */
   shareFallback: string | null;
+  /**
+   * A link or a file being replayed, while it is: when it began, in the milliseconds
+   * `performance.now` counts, the core's account of the replay so far (null before the first
+   * slice), and the call that stops it and lets its objects go. The workbench is not drawn from
+   * the session meanwhile, which has been given up (9.4).
+   */
+  loading: { since: number; summary: ShareSummary | null; cancel: () => void } | null;
+  /**
+   * What the core said about a link or a file it could not open, with whether a run was kept to go
+   * back to and whether the contents are shown; null when nothing failed.
+   */
+  failure: { failure: LoadFailure; keep: boolean; contents: boolean } | null;
   /** The first log entry in view. */
   logFirst: number;
   /**
@@ -140,6 +154,8 @@ export function initialUiState(layout: Layout): UiState {
     spaceHeld: false,
     status: '',
     shareFallback: null,
+    loading: null,
+    failure: null,
     logFirst: 0,
     scrub: { step: 0, frame: null },
     memoryFirst: 0,

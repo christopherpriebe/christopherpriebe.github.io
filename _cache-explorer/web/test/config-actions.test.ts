@@ -190,7 +190,7 @@ describe('a change on a run with entries', () => {
     expect(lent.opCount()).toBe(ops);
   });
 
-  it('puts a refusal aside without a question, and lets a trap through', () => {
+  it('puts a refusal aside without a question, and answers a trap by restoring the run', () => {
     open();
     step();
     vi.spyOn(lent, 'proposeConfig').mockImplementationOnce(() => {
@@ -200,19 +200,13 @@ describe('a change on a run with entries', () => {
     expect(prompt()).toBeNull();
     expect(lent.state().config.cache.associativity).toBe(1);
 
-    const errors: unknown[] = [];
-    const record = (event: ErrorEvent): void => {
-      event.preventDefault();
-      errors.push(event.error);
-    };
-    window.addEventListener('error', record);
+    // A trap is not a refusal: it is not shown as one. The controller builds the run again from
+    // the last good copy it kept (11.6).
     vi.spyOn(lent, 'proposeConfig').mockImplementationOnce(() => {
       throw new WebAssembly.RuntimeError('unreachable');
     });
     option('associativity', 1).click();
-    window.removeEventListener('error', record);
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toBeInstanceOf(WebAssembly.RuntimeError);
+    expect(root.querySelector('.cache-explorer__status')?.textContent).toBe(copy.recovered);
   });
 });
 
@@ -803,7 +797,11 @@ describe('what the handlers say to the status line', () => {
       ui,
       modules: null,
       disposed: false,
+      persist: {} as Context['persist'],
+      page: () => 'http://localhost/',
       refresh,
+      takeSession: () => session,
+      adoptSession: vi.fn<(next: Session) => void>(),
       flash: vi.fn<(cause: Cause) => void>(),
       setRunning: vi.fn<(on: boolean) => void>(),
     };

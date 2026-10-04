@@ -10,5 +10,7 @@ export {
   evalPredicate,
   parseModule,
   parseModuleIndex,
+  runFileTooLarge,
+  traceFileTooLarge,
   validateConfig,
 } from '../pkg/cache_explorer';

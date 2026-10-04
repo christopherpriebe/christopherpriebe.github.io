@@ -27,3 +27,6 @@ export function beatOf(pos: number, lastPos: number): Beat | null {
 
 /** How long the Run button waits between one micro-event and the next. */
 export const RUN_MS = 450;
+
+/** How long a page may take to open before the loading state shows: most finish first (12.8). */
+export const LOADING_DELAY_MS = 200;

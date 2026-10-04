@@ -8,6 +8,7 @@ import '../src/styles/tokens.css';
 import '../src/styles/cache-explorer.css';
 import { start } from '../src/controller';
 import { measureLayout, watchLayout } from '../src/layout';
+import { replayingState } from '../src/page-states';
 import { init } from '../src/wasm';
 import { fixtureSource } from './modules';
 import { SCENARIOS } from './sessions';
@@ -22,6 +23,11 @@ if (!build) throw new Error(`no scenario ${name}: ${Object.keys(SCENARIOS).join(
 root.classList.add('cache-explorer');
 await init();
 const session = build();
+// `&state=loading` draws the state of a run being replayed, from this scenario's own summary.
+if (params.get('state') === 'loading') {
+  root.replaceChildren(replayingState(session.shareSummary()));
+  await new Promise<never>(() => undefined);
+}
 const pos = params.get('pos');
 if (pos !== null) session.seek(Number(pos));
 const controller = start(root, session, measureLayout(root), fixtureSource());

@@ -10,6 +10,17 @@ export const copy = {
   couldNotStart: 'Could not start',
   couldNotStartMessage: 'The Interactive Cache Explorer could not start. Reload to try again.',
   reload: 'Reload',
+  /** After a fault inside the core, once the run has been rebuilt from the last good copy (11.6). */
+  recovered:
+    'Something went wrong inside the Interactive Cache Explorer; the run was restored to its last step.',
+  /** The plane that stands in for the workbench while a link or a file is replayed (5b), and the one for one that cannot be opened (5c). */
+  opening: {
+    lead: 'Replaying a shared run',
+    startFresh: 'Start fresh',
+    showContents: 'Show link contents',
+    hideContents: 'Hide link contents',
+    keepRun: 'Keep the current run',
+  },
   config: {
     title: 'Configuration',
     detailLevel: 'Detail level',
@@ -191,6 +202,18 @@ export const copy = {
     /** What Issue says when the address box holds nothing, or a store's value box does. */
     needAddress: 'Type an address to issue.',
     needValue: 'Type a value to store.',
+    share: 'Share',
+    save: 'Save',
+    openFile: 'Load',
+    /** In front of the field that shows the link when the clipboard cannot take it. */
+    copyThisLink: 'Copy this link:',
+    linkLabel: 'Link to this run',
+    closeLink: 'Done',
+    /** The status lines of Save and of Load, which name the file. */
+    saved: (name: string) => `Saved ${name}.`,
+    opened: (name: string) => `Opened ${name}.`,
+    traceLoaded: (name: string) => `Loaded the trace in ${name}.`,
+    loadFileLabel: 'Saved run or trace file',
   },
   program: {
     /** The drawer's name, by what it holds. */
