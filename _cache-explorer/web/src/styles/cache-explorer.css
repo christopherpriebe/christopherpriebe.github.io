@@ -2543,7 +2543,8 @@ rect.cache-explorer__tick--on {
   display: none;
 }
 
-.cache-explorer__modules + .cache-explorer__config {
+.cache-explorer__modules:not(:has(> .cache-explorer__modules-head:empty))
+  + .cache-explorer__config {
   margin-top: 18px;
 }
 

@@ -1,7 +1,8 @@
-// The guided modules drawer, first inside the plane and built like the program drawer: a line that opens it, with
-// the core's summary beside the name, and under it the modules as ruled rows. A row is the module's
-// number, its title with a text badge when it needs Advanced, what it teaches, and the button that
-// starts it. While a module runs the summary is the core's line about the run, and its row says so.
+// The guided modules drawer, first inside the plane and built like the program drawer: a line that
+// opens it, with the core's summary beside the name, and under it the modules as ruled rows. A row
+// is the module's number, its title with a text badge when it needs Advanced, what it teaches, and
+// the button that starts it. While a module runs the summary is the core's line about the run, and
+// its row says so.
 
 import type { ModuleCard, ModuleView } from '../../pkg/cache_explorer';
 import { copy } from '../copy';
