@@ -21,36 +21,33 @@
   "program": { "source": "R 0x000\nR 0x080\nR 0x000\nR 0x080", "format": "trace" },
   "steps": [
     {
-      "kind": "explain",
-      "text": "The trace loads `0x000`, then `0x080`, then `0x000` and `0x080` again. Both addresses have index `000`, so both use set 0, which has room for one line.",
-      "callout": { "set": 0 }
-    },
-    {
       "kind": "predict",
-      "text": "How many of the four loads will hit?",
+      "text": "The trace loads `0x000`, then `0x080`, then `0x000` and `0x080` again. Both addresses have index `000`, so both use set 0, which has room for one line. How many of the four loads will hit?",
       "options": ["None", "Two", "All four"],
       "answer": 0,
-      "explain": "None. Each load removes the line the next one needs.",
+      "explain": "None. The first two loads bring their lines in for the first time; after that, each load pushes out the line the next one needs.",
       "hint": "Set 0 holds one line. What happens to `0x000` when `0x080` arrives?",
       "callout": { "set": 0 }
     },
     {
       "kind": "instruct",
-      "text": "Run the trace: press Run, or press Space four times.",
+      "text": "Run the trace: press Run, or press Shift+Space four times.",
       "expect": {
         "all": [
           { "counter": "accesses", "op": "==", "value": 4 },
-          { "counter": "misses", "op": "==", "value": 4 }
+          { "counter": "misses", "op": "==", "value": 4 },
+          { "counter": "compulsory", "op": "==", "value": 2 },
+          { "counter": "conflict", "op": "==", "value": 2 }
         ]
       },
-      "hint": "Press Run in the transport bar.",
+      "hint": "Press Run in the transport bar. If the trace has already run, press Undo, then Run.",
       "showMe": [{ "op": "run", "n": 4 }],
       "callout": "transport"
     },
     {
       "kind": "explain",
-      "text": "Four misses. The first two are *compulsory*: those lines had never been loaded. The other two are *conflict* misses: the line had been there, but another line in the same set pushed it out.",
-      "callout": "stats"
+      "text": "The stats show four misses. The first two are *compulsory*: those lines had never been loaded. The other two are *conflict* misses: the line had been there, but another line in the same set pushed it out while the other seven sets stood empty. A cache that could put any line anywhere would have kept it.",
+      "callout": { "set": 0 }
     },
     {
       "kind": "instruct",

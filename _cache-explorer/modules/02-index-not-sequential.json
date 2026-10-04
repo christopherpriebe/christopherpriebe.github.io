@@ -21,7 +21,7 @@
   "steps": [
     {
       "kind": "explain",
-      "text": "The set is chosen by the 3 *index* bits, bits 4 to 6 of the address. That is a different thing from the address counting up, as the next few loads show.",
+      "text": "The set is chosen by the 3 *index* bits, bits 4 to 6 of the address. Counting up through addresses walks through the sets and then wraps round, as the next few loads show.",
       "callout": "addressStrip"
     },
     {
@@ -30,7 +30,7 @@
       "options": ["Set 0", "Set 1", "Set 2"],
       "answer": 0,
       "explain": "Set 0. Its index bits are `000`.",
-      "hint": "Look at bits 4 to 6 in the strip.",
+      "hint": "Type `0x000` in the address box (do not issue it) and read bits 4 to 6 in the strip.",
       "then": [{ "op": "issue", "kind": "read", "addr": "0x000" }],
       "callout": "addressStrip"
     },
@@ -47,7 +47,7 @@
     {
       "kind": "predict",
       "text": "Which set does `0x100` go to?",
-      "options": ["Set 2", "Set 0", "Set 4"],
+      "options": ["Set 2", "Set 0", "Set 1"],
       "answer": 1,
       "explain": "Set 0 again. `0x100` is `1 0000 0000`: the index bits (4 to 6) are `000`, and the extra `1` is part of the *tag*.",
       "hint": "Do not count up. Read bits 4 to 6 of `0x100`. Most of its bits are zero.",

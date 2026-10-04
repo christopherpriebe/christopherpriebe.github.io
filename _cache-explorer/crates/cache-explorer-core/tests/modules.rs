@@ -2106,10 +2106,24 @@ fn the_shipped_modules_parse_and_match_their_index() {
         assert_eq!(Module::parse(&written).unwrap(), module, "{}", module.id());
         assert_eq!(row["id"], module.id());
         assert_eq!(row["title"], module.title());
-        assert!(!module.advanced(), "{}", module.id());
+        assert_eq!(row["advanced"], module.advanced(), "{}", module.id());
         assert!(ids.contains(&module.id()));
     }
     assert_eq!(SHIPPED_SHOW_ME.len(), SHIPPED.len());
+    // Every file in modules/ has an index row and a SHIPPED entry, and back.
+    let mut stems: Vec<String> =
+        std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../../modules"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+            .map(|path| path.file_stem().unwrap().to_string_lossy().into_owned())
+            .filter(|stem| stem != "index")
+            .collect();
+    stems.sort();
+    let mut expected: Vec<String> = ids.iter().map(ToString::to_string).collect();
+    expected.sort();
+    assert_eq!(stems, expected);
+    assert_eq!(stems.len(), SHIPPED.len());
 }
 
 #[test]
@@ -2118,7 +2132,7 @@ fn a_shipped_module_waits_when_a_step_s_predicate_cannot_be_met() {
     // makes the run, the check fails, and the step does not complete.
     let impossible = edited(MODULE_03, |module| {
         let steps = module["steps"].as_array_mut().unwrap();
-        steps.drain(0..2);
+        steps.drain(0..1);
         steps[0]["expect"] = json!({"counter": "misses", "op": "==", "value": 5});
     });
     let (mut run, mut session) = started(&impossible);
@@ -2155,9 +2169,9 @@ fn module_02_puts_the_four_addresses_in_sets_0_1_0_1() {
 fn module_03_misses_four_times_then_hits_twice_with_two_ways() {
     let (mut run, mut session) = started(MODULE_03);
     let views = show_me_path(&mut run, &mut session);
-    // The step after the first run ends with four misses, two of them
-    // conflicts; the final state is the second run's.
-    assert_eq!(views.len(), 8);
+    // The first run ends with four misses, two compulsory and two conflicts
+    // (pinned by that step's expect); the final state is the second run's.
+    assert_eq!(views.len(), 7);
     for (json, expected) in [
         (json!({"counter": "accesses", "op": "==", "value": 4}), true),
         (json!({"counter": "hits", "op": "==", "value": 2}), true),

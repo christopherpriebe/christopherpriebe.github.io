@@ -40,7 +40,7 @@
     },
     {
       "kind": "explain",
-      "text": "Now type `0x0A8` in the address box, but do not issue it. The strip shows the same tag and the same index as `0x0A4`. Only the offset is different.",
+      "text": "Now type `0x0A8` in the address box, but do not issue it. Compare its tag, index and offset in the strip with those of `0x0A4`.",
       "callout": "addressStrip"
     },
     {
@@ -66,7 +66,7 @@
     },
     {
       "kind": "explain",
-      "text": "A hit. The line was already in set 2, so the table did not change. Only the hit count and `r1` did.",
+      "text": "A hit. The line was already in set 2, so the table did not change. Only the counters and `r1` did.",
       "callout": { "set": 2, "way": 0 }
     }
   ]
