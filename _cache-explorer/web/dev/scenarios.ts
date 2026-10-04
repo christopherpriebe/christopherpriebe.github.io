@@ -1,7 +1,7 @@
 // Opens the tool in one of the states of sessions.ts, on the development page: the page picks one
 // with `?scenario=<name>`, may move the cursor with `&pos=<n>`, and may type an address into the
-// memory table's jump box with `&jump=<address>`, and `&modules=shipped` serves the modules folder in
-// place of the fixtures. `&do=click:<selector>` and
+// memory table's jump box with `&jump=<address>`, and `&modules=fixture` serves the core's three test
+// fixtures in place of the shipped modules folder. `&do=click:<selector>` and
 // `&do=type:<selector>=<text>`, as many as wanted, then press a control and type into a field, in
 // order, to reach a state of the editors. Nothing here is in the build.
 
@@ -35,7 +35,7 @@ const controller = start(
   root,
   session,
   measureLayout(root),
-  params.get('modules') === 'shipped' ? shippedSource() : fixtureSource(),
+  params.get('modules') === 'fixture' ? fixtureSource() : shippedSource(),
 );
 watchLayout(root, (layout) => {
   controller.setLayout(layout);
@@ -49,7 +49,7 @@ if (jump !== null && box) {
   box.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-// The fixture modules arrive on a promise, and so does a module that is started: each step waits for
+// The modules arrive on a promise, and so does a module that is started: each step waits for
 // what the one before it asked for.
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 200));
 await settle();

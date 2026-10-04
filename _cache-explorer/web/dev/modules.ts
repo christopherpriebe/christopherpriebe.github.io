@@ -1,5 +1,5 @@
-// Three small modules for looking at the module panel and the picker until the real ones ship: the
-// files the core's own tests read, imported from them so the two cannot drift, and served from
+// The modules the dev pages and the tests read: the shipped folder as it is, and three small fixtures,
+// the files the core's own tests read, imported from them so the two cannot drift, and served from
 // memory in place of the folder a page names. Nothing here is in the build.
 
 import miss from '../../crates/cache-explorer-core/tests/fixtures/modules/01-fixture-miss-then-hit.json?raw';
@@ -41,7 +41,7 @@ const SHIPPED = import.meta.glob<string>('../../modules/*.json', {
   eager: true,
 });
 
-/** A source that answers at once from the modules folder as it is, for checking the real modules. */
+/** A source that answers at once from the shipped modules folder as it is: the dev pages' default. */
 export function shippedSource(): ModuleSource {
   const file = (name: string): Promise<string> => {
     const text = SHIPPED[`../../modules/${name}.json`];

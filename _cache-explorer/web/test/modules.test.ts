@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FIXTURE_INDEX, FIXTURE_MODULES } from '../dev/modules';
+import { FIXTURE_INDEX, FIXTURE_MODULES, shippedSource } from '../dev/modules';
 import type { Context } from '../src/context';
 import { start, type Controller } from '../src/controller';
 import { h } from '../src/dom';
@@ -7,7 +7,7 @@ import { endModule, releaseModule } from '../src/module-actions';
 import { fetchModules, type ModuleSource } from '../src/modules';
 import { renderModulePanel } from '../src/render/module-panel';
 import { initialUiState } from '../src/ui-state';
-import { ModuleRun, Session } from '../src/wasm';
+import { ModuleRun, parseModuleIndex, Session } from '../src/wasm';
 import { loadWasm } from './support/wasm';
 
 const MODULES = FIXTURE_MODULES;
@@ -618,5 +618,18 @@ describe('the controller', () => {
     controller?.dispose();
     controller = null;
     expect(free).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the shipped modules', () => {
+  it('list nine, each of which opens as a run', async () => {
+    const shipped = shippedSource();
+    const index = parseModuleIndex(await shipped.index());
+    expect(index.modules).toHaveLength(9);
+    expect(index.summary).toBe('9 modules · none running');
+    for (const card of index.modules) {
+      const run = ModuleRun.fromJson(await shipped.module(card.id));
+      run.free();
+    }
   });
 });
