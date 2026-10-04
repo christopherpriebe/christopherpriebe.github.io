@@ -1,0 +1,27 @@
+// The skin, restated as CSS custom properties so code outside Sass (the
+// Interactive Cache Explorer's stylesheet, built by Vite) can point at the same
+// values. Nothing on the site reads them, so emitting them changes no pixel.
+@use "sass:meta"
+
+:root
+    --site-paper: #{$PAPER}
+    --site-concrete: #{$CONCRETE}
+    --site-concrete-deep: #{$CONCRETE-DEEP}
+    --site-rule: #{$RULE}
+    --site-slate: #{$SLATE}
+    --site-navy: #{$NAVY}
+    --site-ink: #{$INK}
+    --site-signal-blue: #{$signal-blue}
+    --site-signal-teal: #{$signal-teal}
+    --site-signal-green: #{$signal-green}
+    --site-signal-amber: #{$signal-amber}
+    --site-signal-red: #{$signal-red}
+    --site-ramp-1: #{$ramp-1}
+    --site-ramp-2: #{$ramp-2}
+    --site-ramp-3: #{$ramp-3}
+    --site-ramp-4: #{$ramp-4}
+    --site-font-display: #{meta.inspect($display-font)}
+    --site-font-body: #{meta.inspect($body-font)}
+    --site-font-mono: #{meta.inspect($mono-font)}
+    --site-page-pad-left: #{$page-pad-left}
+    --site-page-pad-right: #{$page-pad-right}

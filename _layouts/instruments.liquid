@@ -6,6 +6,14 @@ layout: base
 
 {% include instruments/cache.liquid %}
 
+{%- if page.working %}
+<ul class="working">
+    {%- for item in page.working %}
+    <li class="working__item"><a href="{{ item.url | relative_url }}">{{ item.title | escape }} &rarr;</a></li>
+    {%- endfor %}
+</ul>
+{%- endif %}
+
 {%- for group in page.planned %}
 <section class="planned">
     <span class="label">{{ group.group | escape }}</span>

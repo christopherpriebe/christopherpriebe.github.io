@@ -1,8 +1,8 @@
 // Instrument 01: cache address decomposition.
 //
 // Real cache geometry, not a mock. sets = size / (associativity × block), and
-// the address fields fall out of it. This is the part of the cache simulator
-// that needs no simulation, so it can be exact.
+// the address fields fall out of it. This is the part of the cache that needs
+// no running machine, so it can be exact.
 //
 // Markup lives in _includes/instruments/cache.liquid; colours are classes
 // from _sass/_instruments.sass so the palette stays in the stylesheet.

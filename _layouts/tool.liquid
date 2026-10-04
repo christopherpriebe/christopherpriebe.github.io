@@ -1,0 +1,17 @@
+---
+layout: base
+---
+
+{%- comment -%}
+A page that is one working instrument: the usual head, then the page's own
+markup with no .prose and no wrapper, so a script-built workbench sets its own
+type and spacing. `lede` is the line under the title; `description` is the meta
+description.
+{%- endcomment -%}
+{% include page_title.liquid lede=page.lede %}
+
+{{ content }}
+
+<noscript>
+    <p class="meta measure page-body">This page needs JavaScript and WebAssembly.</p>
+</noscript>

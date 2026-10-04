@@ -8,13 +8,18 @@ nav: false
 nav_order: 4
 lede: Things you can take apart. Each one is a working model of something undergraduates are usually asked to picture in their heads, with every parameter exposed.
 
+# Working tools that sit under Instrument 01; each is a link row.
+working:
+  - title: Interactive Cache Explorer
+    url: /cache-explorer/
+
 # Work not yet built, listed under the working instruments. `status` is the
 # small note at the end of each row.
 planned:
   - group: Computer architecture
     items:
       - title: Multi-core L1 data cache
-        status: Planned · first
+        status: Planned
         description: Size, associativity and block size against core count, running snooping MSI or MOESI or a directory protocol. Victim cache later.
       - title: Single-cycle RV32I datapath
         status: Planned
