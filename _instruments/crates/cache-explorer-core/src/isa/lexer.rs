@@ -1,28 +1,39 @@
-//! The lexer the assembler and the trace parser share: a line split into
+//! The lexer the assemblers and the trace parsers share: a line split into
 //! tokens, each with the column the program drawer underlines, and the
-//! readings of a token as a register, a number or a label.
+//! readings of a token as a number or a label.
 //!
-//! A comment runs from `;` to the end of the line. Spaces and tabs separate
-//! tokens, as do the punctuation marks `,`, `[`, `]` and `:`, which are
-//! tokens of their own. Everything else belongs to a word: a mnemonic, a
-//! register, a number, an immediate or a label. Columns are 1-based and
-//! counted in Unicode scalar values, so a line with an accented comment
-//! underlines the same characters the student sees.
+//! A comment runs from the syntax's comment mark to the end of the line.
+//! Spaces and tabs separate tokens, as do the punctuation marks `,` and `:`
+//! and the syntax's pair of brackets, which are tokens of their own.
+//! Everything else belongs to a word: a mnemonic, a register, a number, an
+//! immediate or a label. Columns are 1-based and counted in Unicode scalar
+//! values, so a line with an accented comment underlines the same characters
+//! the student sees.
 
 use std::sync::Arc;
 
-use crate::units::Register;
+/// The marks of a language that differ from one instruction set to the
+/// next: where a comment starts and what brackets a memory operand.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Syntax {
+    /// The mark that starts a comment, which runs to the end of the line.
+    pub comment: char,
+    /// The mark that opens a memory operand.
+    pub open: char,
+    /// The mark that closes one.
+    pub close: char,
+}
 
 /// What a token is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TokenKind {
+pub enum TokenKind {
     /// A run of characters other than spaces, tabs and the marks below.
     Word,
     /// `,`, between operands.
     Comma,
-    /// `[`, which opens a memory operand.
+    /// The syntax's opening bracket, which opens a memory operand.
     Open,
-    /// `]`, which closes one.
+    /// Its closing bracket, which closes one.
     Close,
     /// `:`, which ends a label.
     Colon,
@@ -30,27 +41,28 @@ pub(crate) enum TokenKind {
 
 /// One token of a line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Token<'s> {
+pub struct Token<'s> {
     /// What the token is.
-    pub(crate) kind: TokenKind,
+    pub kind: TokenKind,
     /// The token as written.
-    pub(crate) text: &'s str,
+    pub text: &'s str,
     /// The column of its first character, from 1.
-    pub(crate) column: u32,
+    pub column: u32,
     /// Its length in characters.
-    pub(crate) length: u32,
+    pub length: u32,
     /// The byte offset of its first character within the line.
-    pub(crate) start: usize,
+    pub start: usize,
     /// The byte offset just past its last character.
-    pub(crate) end: usize,
+    pub end: usize,
 }
 
-/// What a word reads as where a register may stand.
+/// What a word reads as where a register may stand, for an instruction set
+/// whose registers are of type `R`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RegisterWord {
-    /// `r0` to `r7`, in either case.
-    Register(Register),
-    /// `r` followed by digits that name no register, such as `r8` or `r01`.
+pub enum RegisterWord<R> {
+    /// A register.
+    Register(R),
+    /// A word shaped like a register's name that names none, such as `r8`.
     NotARegister,
     /// Anything else.
     Other,
@@ -58,7 +70,7 @@ pub(crate) enum RegisterWord {
 
 /// What a word reads as where a number may stand.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum NumberWord {
+pub enum NumberWord {
     /// `0x` or `0X` and hex digits.
     Hex(Option<u64>),
     /// Decimal digits.
@@ -67,9 +79,9 @@ pub(crate) enum NumberWord {
     Other,
 }
 
-/// The tokens of `line`, up to its comment.
-pub(crate) fn tokens(line: &str) -> Vec<Token<'_>> {
-    let code = line.split(';').next().unwrap_or_default();
+/// The tokens of `line`, up to its comment, in `syntax`.
+pub fn tokens(line: &str, syntax: Syntax) -> Vec<Token<'_>> {
+    let code = line.split(syntax.comment).next().unwrap_or_default();
     let mut tokens = Vec::new();
     // The word being read: its first byte offset and column.
     let mut word: Option<(usize, u32)> = None;
@@ -78,9 +90,9 @@ pub(crate) fn tokens(line: &str) -> Vec<Token<'_>> {
         column = column.saturating_add(1);
         let kind = match character {
             ',' => Some(TokenKind::Comma),
-            '[' => Some(TokenKind::Open),
-            ']' => Some(TokenKind::Close),
             ':' => Some(TokenKind::Colon),
+            _ if character == syntax.open => Some(TokenKind::Open),
+            _ if character == syntax.close => Some(TokenKind::Close),
             _ => None,
         };
         let separates = kind.is_some() || character == ' ' || character == '\t';
@@ -139,7 +151,7 @@ fn token(
 /// `text` with every run of spaces and tabs made one space, as the drawer's
 /// summary and the CPU box show an instruction. The text is shared: the
 /// program keeps it, and so does the log entry the instruction makes.
-pub(crate) fn collapse(text: &str) -> Arc<str> {
+pub fn collapse(text: &str) -> Arc<str> {
     let mut collapsed = String::with_capacity(text.len());
     for part in text.split([' ', '\t']).filter(|part| !part.is_empty()) {
         if !collapsed.is_empty() {
@@ -152,25 +164,13 @@ pub(crate) fn collapse(text: &str) -> Arc<str> {
 
 impl Token<'_> {
     /// Whether the token is a word written `name` in any case.
-    pub(crate) fn is(&self, name: &str) -> bool {
+    pub fn is(&self, name: &str) -> bool {
         self.kind == TokenKind::Word && self.text.eq_ignore_ascii_case(name)
-    }
-
-    /// The token read as a register.
-    pub(crate) fn register(&self) -> RegisterWord {
-        let digits = match self.text.strip_prefix(['r', 'R']) {
-            Some(digits) if self.kind == TokenKind::Word && is_digits(digits) => digits,
-            _ => return RegisterWord::Other,
-        };
-        match digits.parse::<u32>().ok().and_then(Register::numbered) {
-            Some(register) if digits.len() == 1 => RegisterWord::Register(register),
-            _ => RegisterWord::NotARegister,
-        }
     }
 
     /// The token read as a number: its value, or `None` for one that does
     /// not fit 64 bits.
-    pub(crate) fn number(&self) -> NumberWord {
+    pub fn number(&self) -> NumberWord {
         if self.kind != TokenKind::Word {
             return NumberWord::Other;
         }
@@ -179,7 +179,7 @@ impl Token<'_> {
 
     /// Whether the token is a label as the grammar spells one: a letter or
     /// `_`, then letters, digits and `_`. Letters are ASCII.
-    pub(crate) fn is_label(&self) -> bool {
+    pub fn is_label(&self) -> bool {
         let mut characters = self.text.chars();
         self.kind == TokenKind::Word
             && characters
@@ -190,7 +190,7 @@ impl Token<'_> {
 }
 
 /// `text` read as a number, hex after `0x` or `0X`, decimal otherwise.
-pub(crate) fn number(text: &str) -> NumberWord {
+pub fn number(text: &str) -> NumberWord {
     if let Some(digits) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
         if !digits.is_empty() && digits.chars().all(|digit| digit.is_ascii_hexdigit()) {
             return NumberWord::Hex(value(digits, 16));
@@ -204,7 +204,7 @@ pub(crate) fn number(text: &str) -> NumberWord {
 }
 
 /// Whether `text` is one or more ASCII digits.
-fn is_digits(text: &str) -> bool {
+pub fn is_digits(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
 }
 
@@ -224,9 +224,16 @@ mod tests {
 
     use super::*;
 
+    /// The tiny language's marks.
+    const TINY: Syntax = Syntax {
+        comment: ';',
+        open: '[',
+        close: ']',
+    };
+
     /// Each token's kind, text, column and length.
     fn read(line: &str) -> Vec<(TokenKind, &str, u32, u32)> {
-        tokens(line)
+        tokens(line, TINY)
             .iter()
             .map(|token| (token.kind, token.text, token.column, token.length))
             .collect()
@@ -263,8 +270,8 @@ mod tests {
 
     #[test]
     fn a_comment_ends_the_line() {
-        assert!(tokens("; nothing but a comment").is_empty());
-        assert!(tokens("   \t ").is_empty());
+        assert!(tokens("; nothing but a comment", TINY).is_empty());
+        assert!(tokens("   \t ", TINY).is_empty());
         assert_eq!(read("R 0x0A4;load"), read("R 0x0A4"));
     }
 
@@ -275,7 +282,7 @@ mod tests {
             read("é ld"),
             [(TokenKind::Word, "é", 1, 1), (TokenKind::Word, "ld", 3, 2)]
         );
-        let token = tokens("x\u{e9}y z").first().copied().unwrap();
+        let token = tokens("x\u{e9}y z", TINY).first().copied().unwrap();
         assert_eq!(
             (token.text, token.length, token.start, token.end),
             ("x\u{e9}y", 3, 0, 4)
@@ -286,19 +293,6 @@ mod tests {
     fn runs_of_spaces_and_tabs_collapse_to_one_space() {
         assert_eq!(&*collapse("ld  r1,\t[0x0A4]"), "ld r1, [0x0A4]");
         assert_eq!(&*collapse("  W 0x0A4   7 "), "W 0x0A4 7");
-    }
-
-    #[test]
-    fn registers_are_r0_to_r7_in_either_case() {
-        let register = |text: &str| tokens(text).first().unwrap().register();
-        assert_eq!(register("r0"), RegisterWord::Register(Register::R0));
-        assert_eq!(register("R7"), RegisterWord::Register(Register::R7));
-        for text in ["r8", "R9", "r10", "r01", "r99999999999999999999999"] {
-            assert_eq!(register(text), RegisterWord::NotARegister, "{text}");
-        }
-        for text in ["r", "rx", "x1", "0x0A4", "#1", "loop"] {
-            assert_eq!(register(text), RegisterWord::Other, "{text}");
-        }
     }
 
     #[test]
@@ -323,12 +317,54 @@ mod tests {
 
     #[test]
     fn labels_start_with_a_letter_or_underscore() {
-        let is_label = |text: &str| tokens(text).first().is_some_and(Token::is_label);
+        let is_label = |text: &str| tokens(text, TINY).first().is_some_and(Token::is_label);
         for text in ["loop", "_x", "L2", "end_of_it"] {
             assert!(is_label(text), "{text}");
         }
         for text in ["2x", "my-loop", "caf\u{e9}", "#1"] {
             assert!(!is_label(text), "{text}");
         }
+    }
+
+    /// Each token's kind and text.
+    fn kinds(line: &str, syntax: Syntax) -> Vec<(TokenKind, &str)> {
+        tokens(line, syntax)
+            .iter()
+            .map(|token| (token.kind, token.text))
+            .collect()
+    }
+
+    #[test]
+    fn the_syntax_chooses_the_comment_and_the_brackets() {
+        use TokenKind::{Close, Open, Word};
+        let paren = Syntax {
+            comment: '#',
+            open: '(',
+            close: ')',
+        };
+        assert_eq!(
+            kinds("lw a0, 4(sp) # load", paren),
+            [
+                (Word, "lw"),
+                (Word, "a0"),
+                (TokenKind::Comma, ","),
+                (Word, "4"),
+                (Open, "("),
+                (Word, "sp"),
+                (Close, ")"),
+            ]
+        );
+        // The same line in the tiny syntax: no brackets, and the comment starts at `;`.
+        assert_eq!(
+            kinds("lw a0, 4(sp) # load", TINY),
+            [
+                (Word, "lw"),
+                (Word, "a0"),
+                (TokenKind::Comma, ","),
+                (Word, "4(sp)"),
+                (Word, "#"),
+                (Word, "load"),
+            ]
+        );
     }
 }

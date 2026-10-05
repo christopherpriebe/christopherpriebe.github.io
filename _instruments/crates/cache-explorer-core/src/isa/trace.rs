@@ -16,7 +16,7 @@ use crate::units::Register;
 use super::lexer::{self, NumberWord, Token};
 use super::{
     literal_address, too_long, Address, AddressSpace, Instruction, Operand, ParseError, Placed,
-    Problem,
+    Problem, SYNTAX,
 };
 
 /// Reads the trace in `lines`, each with its number: the accesses, and the
@@ -28,7 +28,7 @@ pub(super) fn parse(
     let mut placed = Vec::new();
     let mut errors = Vec::new();
     for &(number, line) in lines {
-        let tokens = lexer::tokens(line);
+        let tokens = lexer::tokens(line, SYNTAX);
         match access(space, &tokens) {
             Ok(Some(instruction)) => {
                 let (start, end) = match (tokens.first(), tokens.last()) {

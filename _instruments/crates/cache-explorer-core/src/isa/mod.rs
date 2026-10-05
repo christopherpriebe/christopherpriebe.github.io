@@ -33,10 +33,18 @@ use crate::limits::{MAX_PARSE_ERRORS, MAX_PROGRAM_BYTES, MAX_PROGRAM_LINES};
 use crate::op::{OpError, ProgramFormat};
 use crate::units::{Addr, Register};
 
-use lexer::{NumberWord, Token};
+use lexer::{NumberWord, RegisterWord, Syntax, Token, TokenKind};
 
 pub(crate) use asm::Mnemonic;
 pub(crate) use space::AddressSpace;
+
+/// The marks of the tiny language and of a trace: `;` starts a comment and
+/// `[` and `]` bracket a memory operand.
+const SYNTAX: Syntax = Syntax {
+    comment: ';',
+    open: '[',
+    close: ']',
+};
 
 /// A program or trace that parsed under a run's geometry: its source, kept
 /// so a new run can parse it again under its own configuration, and its
@@ -416,6 +424,20 @@ fn too_long(space: &impl AddressSpace, token: &Token<'_>) -> String {
     explain::parse_problem(space, ParseProblem::TooLong { text: token.text })
 }
 
+/// What `token` reads as where a register may stand: `r0` to `r7`, in
+/// either case. `r` and digits that name no register, such as `r8` or `r01`,
+/// are shaped like one.
+fn register(token: &Token<'_>) -> RegisterWord<Register> {
+    let digits = match token.text.strip_prefix(['r', 'R']) {
+        Some(digits) if token.kind == TokenKind::Word && lexer::is_digits(digits) => digits,
+        _ => return RegisterWord::Other,
+    };
+    match digits.parse::<u32>().ok().and_then(Register::numbered) {
+        Some(register) if digits.len() == 1 => RegisterWord::Register(register),
+        _ => RegisterWord::NotARegister,
+    }
+}
+
 /// The number of characters in `text`, as a column count.
 fn chars(text: &str) -> u32 {
     u32::try_from(text.chars().count()).unwrap_or(u32::MAX)
@@ -632,5 +654,18 @@ mod tests {
         // Byte 2 is inside "é", which starts at byte 1.
         assert_eq!(place_of_byte("a\u{e9}b", 2), (1, 2));
         assert_eq!(place_of_byte("ab", 99), (1, 3));
+    }
+
+    #[test]
+    fn registers_are_r0_to_r7_in_either_case() {
+        let read = |text: &str| register(lexer::tokens(text, SYNTAX).first().unwrap());
+        assert_eq!(read("r0"), RegisterWord::Register(Register::R0));
+        assert_eq!(read("R7"), RegisterWord::Register(Register::R7));
+        for text in ["r8", "R9", "r10", "r01", "r99999999999999999999999"] {
+            assert_eq!(read(text), RegisterWord::NotARegister, "{text}");
+        }
+        for text in ["r", "rx", "x1", "0x0A4", "#1", "loop"] {
+            assert_eq!(read(text), RegisterWord::Other, "{text}");
+        }
     }
 }

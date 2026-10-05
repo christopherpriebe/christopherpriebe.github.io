@@ -35,8 +35,8 @@ use crate::units::Register;
 
 use super::lexer::{self, NumberWord, RegisterWord, Token, TokenKind};
 use super::{
-    error, literal_address, too_long, Address, AddressSpace, Instruction, Operand, ParseError,
-    Placed, Problem,
+    error, literal_address, register, too_long, Address, AddressSpace, Instruction, Operand,
+    ParseError, Placed, Problem, SYNTAX,
 };
 
 /// Bytes in a register, the width of an `add` immediate.
@@ -129,7 +129,7 @@ pub(super) fn parse<S: AddressSpace>(
 impl<'s, S: AddressSpace> Assembler<'_, 's, S> {
     /// Reads line `number`, `line`.
     fn line(&mut self, number: u32, line: &'s str) -> Result<(), Problem> {
-        let tokens = lexer::tokens(line);
+        let tokens = lexer::tokens(line, SYNTAX);
         let mut rest = tokens.as_slice();
         if let [label, colon, after @ ..] = rest {
             if colon.kind == TokenKind::Colon {
@@ -197,7 +197,7 @@ impl<'s, S: AddressSpace> Assembler<'_, 's, S> {
         if !token.is_label() {
             return Err(self.problem(token, ParseProblem::NotALabel { text: token.text }));
         }
-        let register = matches!(token.register(), RegisterWord::Register(_));
+        let register = matches!(register(token), RegisterWord::Register(_));
         if register || Mnemonic::read(token).is_some() {
             return Err(self.problem(
                 token,
@@ -332,7 +332,7 @@ impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
     /// A register.
     fn register(&mut self) -> Result<Register, Problem> {
         let token = self.next()?;
-        match token.register() {
+        match register(&token) {
             RegisterWord::Register(register) => Ok(register),
             RegisterWord::NotARegister => Err(self.not_a_register(&token)),
             RegisterWord::Other => Err(self.shape(Some(&token))),
@@ -346,7 +346,7 @@ impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
             return Err(self.shape(Some(&open)));
         }
         let inner = self.next()?;
-        let address = match inner.register() {
+        let address = match register(&inner) {
             RegisterWord::Register(register) => Address::Register(register),
             RegisterWord::NotARegister => return Err(self.not_a_register(&inner)),
             RegisterWord::Other => match literal_address(self.assembler.space, &inner) {
@@ -366,7 +366,7 @@ impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
     /// width.
     fn operand(&mut self, bytes: u32) -> Result<Operand, Problem> {
         let token = self.next()?;
-        match token.register() {
+        match register(&token) {
             RegisterWord::Register(register) => return Ok(Operand::Register(register)),
             RegisterWord::NotARegister => return Err(self.not_a_register(&token)),
             RegisterWord::Other => {}
