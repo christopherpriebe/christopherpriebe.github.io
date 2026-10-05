@@ -501,26 +501,6 @@ impl LoadError {
     }
 }
 
-impl From<Oversize> for TooLarge {
-    fn from(oversize: Oversize) -> Self {
-        match oversize {
-            Oversize::Text { bytes } => TooLarge::Text { bytes },
-            Oversize::Json { bytes } => TooLarge::Json { bytes },
-        }
-    }
-}
-
-impl From<CodecError> for EncodingError {
-    fn from(error: CodecError) -> Self {
-        match error {
-            CodecError::Base64 => EncodingError::Base64,
-            CodecError::Deflate => EncodingError::Deflate,
-            CodecError::Utf8 => EncodingError::Utf8,
-            CodecError::Oversize(oversize) => EncodingError::TooLarge(oversize.into()),
-        }
-    }
-}
-
 impl From<TooLarge> for LoadError {
     fn from(error: TooLarge) -> Self {
         LoadError::Encoding(error.into())
@@ -1074,17 +1054,36 @@ fn to_json(value: &impl Serialize) -> String {
 /// [`TooLarge::Json`] with the JSON's size, or [`TooLarge::Text`] with the
 /// string's length: the first of the two a link could not open.
 fn link(json: &str) -> Result<String, TooLarge> {
-    Ok(codec::link(json, LIMITS)?)
+    codec::link(json, LIMITS).map_err(oversize_words)
 }
 
 /// The JSON text a share string holds, within the limits of a link.
 fn link_text(s: &str) -> Result<String, EncodingError> {
-    Ok(codec::decode(s, LIMITS)?)
+    codec::decode(s, LIMITS).map_err(codec_words)
 }
 
 /// Checks a saved file's size against [`MAX_SHARE_JSON_BYTES`].
 fn file_size(json: &str) -> Result<(), EncodingError> {
-    codec::check_file(json, LIMITS).map_err(|oversize| TooLarge::from(oversize).into())
+    codec::check_file(json, LIMITS)
+        .map_err(|oversize| EncodingError::TooLarge(oversize_words(oversize)))
+}
+
+/// The core's words for a size the codec refused.
+fn oversize_words(oversize: Oversize) -> TooLarge {
+    match oversize {
+        Oversize::Text { bytes } => TooLarge::Text { bytes },
+        Oversize::Json { bytes } => TooLarge::Json { bytes },
+    }
+}
+
+/// The core's words for a failure of the codec.
+fn codec_words(error: CodecError) -> EncodingError {
+    match error {
+        CodecError::Base64 => EncodingError::Base64,
+        CodecError::Deflate => EncodingError::Deflate,
+        CodecError::Utf8 => EncodingError::Utf8,
+        CodecError::Oversize(oversize) => EncodingError::TooLarge(oversize_words(oversize)),
+    }
 }
 
 /// The document `text` holds: its format version first, so a newer

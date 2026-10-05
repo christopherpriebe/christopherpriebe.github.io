@@ -7,6 +7,8 @@ The cache logic is a Rust crate compiled to WebAssembly, and the page is plain T
 ```text
 ../crates/cache-explorer-core   the cache, the access engine, sessions, modules, share links (no JS or OS dependencies)
 ../crates/cache-explorer-wasm   the wasm-bindgen facade over the core, and its TypeScript declarations
+../crates/instrument-session    what the instruments share: the share-string codec, the saved file's room, module text, event positions
+../crates/instrument-asm        the lexer of a line of assembly and the record of an error in it
 web/                            the page: Vite, TypeScript, Vitest
 modules/                        the guided modules (JSON), and their index
 scripts/                        test-glue.mjs, the check of this instrument's wasm glue
@@ -53,14 +55,14 @@ From `_instruments/`, with the toolchain from setup:
 
 ```sh
 cargo fmt --all --check
-sh scripts/check-deps.sh cache-explorer-core
-cargo clippy -p cache-explorer-core --all-targets --locked -- -D warnings
+sh scripts/check-deps.sh
+cargo clippy --workspace --exclude '*-wasm' --all-targets --locked -- -D warnings
 cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
-cargo clippy -p cache-explorer-core --lib --locked -- -D warnings
+cargo clippy --workspace --exclude '*-wasm' --lib --locked -- -D warnings
 cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --lib --locked -- -D warnings
-RUSTDOCFLAGS="-D warnings" cargo doc -p cache-explorer-core --no-deps --document-private-items --locked
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude '*-wasm' --no-deps --document-private-items --locked
 RUSTDOCFLAGS="-D warnings" cargo doc -p cache-explorer-wasm --target wasm32-unknown-unknown --no-deps --document-private-items --locked
-cargo test --workspace --locked
+cargo test --workspace --exclude '*-wasm' --locked
 ```
 
 and from `_instruments/`, after a build (each runs the instrument's web/ script of the same name, except `test`, which runs the glue tests and the facade's tests under Node; `node scripts/instruments.mjs run <script> <name>` runs one for a single instrument):

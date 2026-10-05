@@ -96,7 +96,7 @@ jobs:
 
   web:
     name: web (${{ matrix.instrument }})
-    needs: rust
+    needs: [changes, rust]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
