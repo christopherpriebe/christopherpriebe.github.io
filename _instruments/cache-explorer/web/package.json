@@ -3,14 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:wasm": "node ../scripts/build-wasm.mjs",
+    "build:wasm": "node ../../scripts/build-wasm.mjs cache-explorer",
     "build": "npm run build:wasm && tsc --noEmit -p tsconfig.json && vite build",
     "dev": "vite",
     "test": "vitest run",
     "test:glue": "node ../scripts/test-glue.mjs",
-    "test:wasm": "node ../scripts/test-wasm.mjs",
-    "test:wasm:node": "wasm-pack test --node ../../crates/cache-explorer-wasm",
-    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && eslint . && prettier --check . && node ../scripts/check-tokens.mjs && node ../scripts/check-package.mjs && node ../scripts/check-wasm-paths.mjs && vitest run",
-    "size": "sh ../scripts/wasm-size.sh ../../../assets/cache-explorer/cache_explorer_bg.wasm"
+    "test:wasm": "node ../../scripts/test-wasm.mjs cache-explorer",
+    "test:wasm:node": "node ../../scripts/test-wasm.mjs cache-explorer --node",
+    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && eslint . && prettier --check . && node ../../scripts/check-tokens.mjs cache-explorer && node ../../scripts/check-package.mjs cache-explorer && node ../../scripts/check-wasm-paths.mjs cache-explorer && vitest run",
+    "size": "node ../../scripts/instruments.mjs size cache-explorer"
   }
 }

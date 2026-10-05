@@ -1,0 +1,10 @@
+{
+  "name": "cache-explorer",
+  "facade": "cache-explorer-wasm",
+  "core": "cache-explorer-core",
+  "outName": "cache_explorer",
+  "assets": "assets/cache-explorer",
+  "wasmBudget": 300000,
+  "wasmWarn": 289000,
+  "signalTokens": ["tag", "index", "offset", "evict", "writeback", "writethrough", "dirty", "stale", "correct", "incorrect"]
+}

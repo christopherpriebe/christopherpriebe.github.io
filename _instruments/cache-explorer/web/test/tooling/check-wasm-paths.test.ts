@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
-const script = join(import.meta.dirname, '..', '..', '..', 'scripts', 'check-wasm-paths.mjs');
+const script = join(import.meta.dirname, '..', '..', '..', '..', 'scripts', 'check-wasm-paths.mjs');
 const dir = mkdtempSync(join(tmpdir(), 'wasm-paths-'));
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -13,7 +13,7 @@ afterAll(() => {
 const run = (content: string) => {
   const file = join(dir, 'x.wasm');
   writeFileSync(file, Buffer.from(content, 'latin1'));
-  return spawnSync('node', [script, file], { encoding: 'utf8' });
+  return spawnSync('node', [script, 'cache-explorer', file], { encoding: 'utf8' });
 };
 
 describe('check-wasm-paths', () => {

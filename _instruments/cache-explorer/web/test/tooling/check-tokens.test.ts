@@ -6,14 +6,14 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const script = fileURLToPath(new URL('../../../scripts/check-tokens.mjs', import.meta.url));
+const script = fileURLToPath(new URL('../../../../scripts/check-tokens.mjs', import.meta.url));
 
 /** Runs the script over a folder holding one file. */
 function check(name: string, text: string): { passed: boolean; report: string } {
   const dir = mkdtempSync(join(tmpdir(), 'check-tokens-'));
   try {
     writeFileSync(join(dir, name), text);
-    const run = spawnSync(process.execPath, [script, dir], { encoding: 'utf8' });
+    const run = spawnSync(process.execPath, [script, 'cache-explorer', dir], { encoding: 'utf8' });
     return { passed: run.status === 0, report: run.stderr };
   } finally {
     rmSync(dir, { recursive: true, force: true });

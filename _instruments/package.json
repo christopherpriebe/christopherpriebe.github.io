@@ -12,7 +12,10 @@
     "build": "node scripts/instruments.mjs run build",
     "check": "node scripts/instruments.mjs run check",
     "test": "node scripts/instruments.mjs run test",
-    "size": "node scripts/instruments.mjs run size"
+    "test:glue": "node scripts/instruments.mjs run test:glue",
+    "test:wasm": "node scripts/instruments.mjs run test:wasm",
+    "test:wasm:node": "node scripts/instruments.mjs run test:wasm:node",
+    "size": "node scripts/instruments.mjs size"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

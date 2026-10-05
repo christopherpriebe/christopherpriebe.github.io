@@ -63,7 +63,7 @@ jobs:
           workspaces: _instruments
       - run: cargo fmt --all --check
       - name: Core has no JS or OS dependencies
-        run: sh cache-explorer/scripts/check-core-deps.sh
+        run: sh scripts/check-deps.sh cache-explorer-core
       - run: cargo clippy -p cache-explorer-core --all-targets --locked -- -D warnings
       - run: cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
       # --all-targets builds the core's tests, whose dev-dependency on the core turns
@@ -100,28 +100,23 @@ jobs:
       - run: npm ci
       - name: Facade tests in headless Chrome (fails if a suite was skipped or ran nothing)
         run: npm run test:wasm
-        working-directory: _instruments/cache-explorer/web
       - name: Build
         run: npm run build
-        working-directory: _instruments/cache-explorer/web
       - name: Release glue refuses hostile arguments and stays healthy
         run: npm run test:glue
-        working-directory: _instruments/cache-explorer/web
       - name: Generated declarations match docs/cache_explorer.d.ts
         run: diff -u docs/cache_explorer.d.ts web/pkg/cache_explorer.d.ts
         working-directory: _instruments/cache-explorer
       - name: Typecheck, lint, format, token and package checks, Vitest
         run: npm run check
-        working-directory: _instruments/cache-explorer/web
       - name: Committed build matches a fresh build
         working-directory: .
         run: |
           git diff --exit-code -- assets/cache-explorer
           test -z "$(git status --porcelain -- assets/cache-explorer)"
       - name: wasm size
-        working-directory: .
         shell: bash   # adds -o pipefail: without it the step takes tee's status and never fails
-        run: sh _instruments/cache-explorer/scripts/wasm-size.sh assets/cache-explorer/cache_explorer_bg.wasm | tee -a "$GITHUB_STEP_SUMMARY"
+        run: npm run --silent size | tee -a "$GITHUB_STEP_SUMMARY"
 
   status:
     if: always()

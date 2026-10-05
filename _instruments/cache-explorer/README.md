@@ -9,9 +9,12 @@ The cache logic is a Rust crate compiled to WebAssembly, and the page is plain T
 ../crates/cache-explorer-wasm   the wasm-bindgen facade over the core, and its TypeScript declarations
 web/                            the page: Vite, TypeScript, Vitest
 modules/                        the guided modules (JSON), and their index
-scripts/                        setup, build and check scripts
+scripts/                        test-glue.mjs, the check of this instrument's wasm glue
+instrument.json                 the instrument's name, crates, wasm file name, asset folder, size budget and signal tokens
 docs/                           AUTHORING.md, and cache_explorer.d.ts, the committed TypeScript surface
 ```
+
+The npm workspace and the scripts every instrument shares (build, checks, size, setup) are in `_instruments/`: one `package.json` and lockfile, `.nvmrc`, and `scripts/`, which read each instrument's `instrument.json`.
 
 This folder is excluded from Jekyll (`_instruments/` in `exclude:` of `_config.yml`), so none of it is published as it stands. What the site serves is the built output in `assets/cache-explorer/`.
 
@@ -25,14 +28,14 @@ Two things have to be true first, because both are choices about your whole mach
 Then, from the repository root:
 
 ```sh
-_instruments/cache-explorer/scripts/setup.sh
+_instruments/scripts/setup.sh
 ```
 
 It installs the pinned Rust toolchain through rustup, the pinned JavaScript tools into `_instruments/node_modules`, the one npm workspace's folder (wasm-pack and wasm-opt among them, so nothing else is installed globally), and runs the first build. Each step is safe to rerun. The first build also has wasm-pack fetch the matching `wasm-bindgen` command-line tool and compile it, which takes about a minute, once.
 
 ## Building
 
-From `_instruments/cache-explorer/web/`:
+From `_instruments/`, `npm run build` builds every instrument (one today). From `_instruments/cache-explorer/web/`:
 
 ```sh
 npm run dev          # the development server; the page is at /, scenarios at /dev/scenarios.html
@@ -40,7 +43,7 @@ npm run build        # the facade to wasm and optimised, a type check, then Vite
 npm run build:wasm   # only the first part
 ```
 
-`npm run build` writes `assets/cache-explorer/`: `cache-explorer.js`, `cache-explorer.css`, `cache_explorer_bg.wasm` and `modules/`. The build is meant to give the same bytes on any machine: the Rust version, the dependencies and the tools are all pinned, and `scripts/build-wasm.mjs` maps local paths out of the wasm.
+`npm run build` writes `assets/cache-explorer/`: `cache-explorer.js`, `cache-explorer.css`, `cache_explorer_bg.wasm` and `modules/`. The build is meant to give the same bytes on any machine: the Rust version, the dependencies and the tools are all pinned, and `_instruments/scripts/build-wasm.mjs` maps local paths out of the wasm.
 
 `web/pkg/` is the wasm-pack output, which the build reads and `tsc` checks against. It is not committed.
 
@@ -50,7 +53,7 @@ From `_instruments/`, with the toolchain from setup:
 
 ```sh
 cargo fmt --all --check
-sh cache-explorer/scripts/check-core-deps.sh
+sh scripts/check-deps.sh cache-explorer-core
 cargo clippy -p cache-explorer-core --all-targets --locked -- -D warnings
 cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
 cargo clippy -p cache-explorer-core --lib --locked -- -D warnings
@@ -60,7 +63,16 @@ RUSTDOCFLAGS="-D warnings" cargo doc -p cache-explorer-wasm --target wasm32-unkn
 cargo test --workspace --locked
 ```
 
-and from `_instruments/cache-explorer/web/`, after `npm run build:wasm`:
+and from `_instruments/`, after a build (each runs the instrument's script of the same name; `node scripts/instruments.mjs run <script> <name>` runs one for a single instrument):
+
+```sh
+npm run check            # types, lint, format, the checks in scripts/, and Vitest
+npm run test             # the generated wasm glue, then the facade's tests under Node
+npm run test:wasm        # the facade's tests in headless Chrome (needs a ChromeDriver that matches Chrome)
+npm run size             # the wasm's gzipped size against its budget
+```
+
+or from `_instruments/cache-explorer/web/` for this instrument alone, after `npm run build:wasm`:
 
 ```sh
 npm run check            # types, lint, format, the checks in scripts/, and Vitest

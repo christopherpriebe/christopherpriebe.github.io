@@ -1,12 +1,12 @@
 #!/bin/sh
-# One-command setup and first build for the Interactive Cache Explorer.
+# One-command setup and first build for the instruments.
 #
-# Run it from anywhere; it works inside _instruments/cache-explorer/. Every step is safe to
+# Run it from anywhere; it works inside _instruments/. Every step is safe to
 # rerun. It checks two machine-wide prerequisites and installs neither:
 #   1. rustup's proxies first on PATH, so rust-toolchain.toml takes effect;
 #   2. the Node version in _instruments/.nvmrc.
 # It then installs the pinned Rust toolchain (through rustup), the pinned
-# JavaScript tools (into _instruments/node_modules, the npm workspace's) and runs the first build.
+# JavaScript tools (into _instruments/node_modules, the npm workspace's) and builds every instrument.
 
 set -eu
 
@@ -30,7 +30,7 @@ esac
 rustup toolchain install --no-self-update
 
 # 3. The exact Node version of web/.nvmrc.
-want="v$(cat ../.nvmrc)"
+want="v$(cat .nvmrc)"
 command -v node >/dev/null 2>&1 ||
   fail "node is not on PATH. Install Node ${want#v} (for example 'fnm install ${want#v}') and use it in this folder, then run this again."
 have=$(node -v)
@@ -38,15 +38,14 @@ have=$(node -v)
   fail "node is $have, but this project needs $want (_instruments/.nvmrc). Switch to it (for example 'fnm use' inside _instruments), then run this again."
 
 # 4. The pinned JavaScript tools, wasm-pack and wasm-opt among them, all inside _instruments/node_modules.
-npm ci --prefix ..
+npm ci
 
-# 5. The first build, which also shows that the toolchain works.
-npm --prefix web run build
+# 5. The first build of every instrument, which also shows that the toolchain works.
+npm run build
 
-# 6. What was built.
-bin="$root/../node_modules/.bin"
+# 6. What was built: the tool versions, and each instrument's wasm against its budget.
+bin="$root/node_modules/.bin"
 cargo --version
 "$bin/wasm-pack" --version
 "$bin/wasm-opt" --version
-wasm="$root/../../assets/cache-explorer/cache_explorer_bg.wasm"
-printf 'wasm: %s bytes, %s bytes gzipped\n' "$(wc -c <"$wasm" | tr -d ' ')" "$(gzip -9 -c "$wasm" | wc -c | tr -d ' ')"
+npm run size

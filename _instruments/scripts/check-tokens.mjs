@@ -1,5 +1,5 @@
 // Two rules for the UI's sources, run through `npm run check` in web/ (or on another folder:
-// `node check-tokens.mjs <dir>`):
+// `node check-tokens.mjs <instrument> <dir>`):
 //
 // 1. Signal and ramp colours are fills and strokes, never type: no `color:` declaration, no
 //    `.color =`, `setProperty('color', …)` or `setAttribute('color', …)` in a script, no `<text>`
@@ -8,13 +8,14 @@
 //    see a class that a script puts on a text element, or a text element it cannot follow through a
 //    variable in the same file; a stylesheet rule that fills `text` elements is caught, one that
 //    fills a class is not.
-// 2. No name of the design export's own token set appears: the tokens here are --cache-explorer-*.
+// 2. No name of the design export's own token set appears: the instrument's own are --<name>-*.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { loadInstrument } from './instruments.mjs';
 
-const root = resolve(process.argv[2] ?? join(import.meta.dirname, '..', 'web', 'src'));
-const SIGNAL = ['tag', 'index', 'offset', 'evict', 'writeback', 'writethrough', 'dirty', 'stale', 'correct', 'incorrect'];
-const signalToken = new RegExp(`--cache-explorer-(?:${SIGNAL.join('|')})(?![\\w-])`);
+const { name, web, signalTokens } = loadInstrument(process.argv[2]);
+const root = resolve(process.argv[3] ?? join(web, 'src'));
+const signalToken = new RegExp(`--${name}-(?:${signalTokens.join('|')})(?![\\w-])`);
 const foreignToken = /--cl-/;
 
 function* sources(dir) {
@@ -33,7 +34,7 @@ const report = (file, text, index, what) => {
 
 for (const file of sources(root)) {
   const text = readFileSync(file, 'utf8');
-  if (foreignToken.test(text)) report(file, text, text.search(foreignToken), 'a --cl-* token name; use --cache-explorer-*');
+  if (foreignToken.test(text)) report(file, text, text.search(foreignToken), `a --cl-* token name; use --${name}-*`);
 
   // `color:` as a property (not background-color, border-color and the like), in a stylesheet or a style string.
   for (const m of text.matchAll(/(?<![\w-])color\s*:\s*([^;}`'"]*)/g)) {
