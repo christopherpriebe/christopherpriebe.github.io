@@ -100,7 +100,7 @@ fn an_edit_lists_every_cell_it_changes_and_moves_no_counter() {
         assert_eq!(machine.counters, before.counters, "{op:?}");
         assert_eq!(machine.prng, before.prng, "{op:?}");
         assert_eq!(machine.access, None, "{op:?}");
-        assert_eq!(machine.entries_in_run, before.entries_in_run + 1, "{op:?}");
+        assert_eq!(machine.run.entries, before.run.entries + 1, "{op:?}");
         // A quiet sink reaches the same machine, and gets no event.
         let mut quiet_machine = before.clone();
         let mut quiet = Quiet::default();

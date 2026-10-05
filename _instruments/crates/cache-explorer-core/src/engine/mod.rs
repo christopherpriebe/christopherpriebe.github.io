@@ -201,7 +201,7 @@ impl<'s> Emitter<'s> {
     /// Starts the run's next entry: the events that follow are numbered from
     /// 1 within it.
     pub(crate) fn begin_entry(&mut self, machine: &mut Machine) {
-        machine.entries_in_run = machine.entries_in_run.saturating_add(1);
+        machine.run.entries = machine.run.entries.saturating_add(1);
         self.seq = 0;
         self.setup = false;
     }
@@ -236,7 +236,7 @@ impl<'s> Emitter<'s> {
         let id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
         let event = self.sink.records().then(|| {
-            let entry = (!self.setup).then_some(machine.entries_in_run);
+            let entry = (!self.setup).then_some(machine.run.entries);
             let mut changed = draft.changed;
             changed.sort_unstable();
             changed.dedup();
@@ -246,7 +246,7 @@ impl<'s> Emitter<'s> {
             MicroEvent {
                 id,
                 op_index: self.op,
-                run: machine.run,
+                run: machine.run.run,
                 entry,
                 seq: self.seq,
                 label: entry.map_or_else(String::new, |entry| format::label(entry, self.seq)),
@@ -524,10 +524,10 @@ fn request(
 /// restarts at its first instruction; if it no longer parses, an `Error`
 /// entry after the `Setup` says so, and it is unloaded.
 fn new_run(machine: &mut Machine, start: Machine, out: &mut Emitter<'_>) {
-    let run = machine.run.saturating_add(1);
+    let run = machine.run.run.saturating_add(1);
     let program = machine.program.take();
     *machine = start;
-    machine.run = run;
+    machine.run.run = run;
     let failure = match program
         .map(|program| Program::parse(&machine.geometry, program.source(), program.format()))
     {

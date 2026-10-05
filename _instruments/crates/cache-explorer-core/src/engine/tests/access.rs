@@ -1577,7 +1577,7 @@ fn events_are_numbered_by_log_position_entry_and_step() {
             assert_eq!(event.cycle, None, "{entry}.{seq}");
         }
     }
-    assert_eq!(run.machine.entries_in_run, 2);
+    assert_eq!(run.machine.run.entries, 2);
 }
 
 #[test]
@@ -1858,7 +1858,7 @@ fn a_broken_invariant_at_an_entry_end_ends_the_op_with_an_error() {
          holds. The run stopped here; please report it with a share link."
     );
     assert_eq!(machine.access, None);
-    assert_eq!(machine.entries_in_run, 2);
+    assert_eq!(machine.run.entries, 2);
 }
 
 /// A machine on two-way LRU whose cache is that of a 64 B two-way geometry,
@@ -1912,7 +1912,7 @@ fn check_abandoned_access(mut machine: Machine, explain: &str) {
     // The access is abandoned before its compare: nothing counted, nothing
     // cached.
     assert_eq!(machine.access, None);
-    assert_eq!(machine.entries_in_run, 2);
+    assert_eq!(machine.run.entries, 2);
     assert_eq!(machine.counters, before.counters);
     assert_eq!(machine.cache, before.cache);
 }

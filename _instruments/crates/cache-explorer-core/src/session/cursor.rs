@@ -201,7 +201,7 @@ impl Session {
                 pos,
                 ops_done: 0,
                 op: None,
-                run: self.cursor.machine().run,
+                run: self.cursor.machine().run.run,
                 entry: None,
                 seq: 0,
                 entry_length: 0,

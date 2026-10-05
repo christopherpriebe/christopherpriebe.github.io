@@ -94,10 +94,17 @@ pub struct Machine {
     /// before the run's first access and while the current entry is not an
     /// access.
     pub(crate) access: Option<AccessContext>,
+    /// Where the run has got to: its number and its entries so far.
+    pub(crate) run: RunPlace,
+}
+
+/// Where a run has got to, which is what the emitter numbers events by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct RunPlace {
     /// The run's number, from 1.
     pub(crate) run: u32,
     /// The entries the run has had so far; the current entry's number.
-    pub(crate) entries_in_run: u32,
+    pub(crate) entries: u32,
 }
 
 /// The access an entry is making: the request, where its address falls, and
@@ -278,8 +285,7 @@ impl Machine {
             recent: Recent::default(),
             prng: Prng::new(config.seed),
             access: None,
-            run: 1,
-            entries_in_run: 0,
+            run: RunPlace { run: 1, entries: 0 },
             geometry,
             config,
         })

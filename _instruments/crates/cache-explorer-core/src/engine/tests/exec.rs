@@ -55,7 +55,7 @@ fn a_program_load_resets_the_cpu_and_keeps_the_cache() {
         (None, None, None, None)
     );
     assert_eq!(after.cpu, Cpu::default());
-    assert_eq!(after.entries_in_run, 0);
+    assert_eq!(after.run.entries, 0);
 
     driven.step();
     driven.step();
@@ -80,7 +80,7 @@ fn a_program_load_resets_the_cpu_and_keeps_the_cache() {
     assert_eq!(after.cache, before.cache);
     assert_eq!(after.memory, before.memory);
     assert_eq!(after.counters, before.counters);
-    assert_eq!(after.entries_in_run, before.entries_in_run);
+    assert_eq!(after.run.entries, before.run.entries);
     assert_eq!(after.program.as_deref().map(Program::len), Some(1));
 
     // The new program's load hits the line the old one brought in.
@@ -122,7 +122,7 @@ fn check_instruction_retirement(config: Config, source: &str) {
             "instruction {entries}"
         );
         assert!(!after.in_flight(), "instruction {entries}");
-        assert_eq!(after.entries_in_run, entries, "instruction {entries}");
+        assert_eq!(after.run.entries, entries, "instruction {entries}");
         assert!(
             trace.iter().all(|(event, _)| event.entry == Some(entries)),
             "instruction {entries}"
@@ -258,7 +258,7 @@ fn check_register_address_fault(source: &str, at: Option<Addr>) {
         panic!("one event: {trace:?}");
     };
     assert_eq!(error.kind, EventKind::Error);
-    assert_eq!(error.entry, Some(before.entries_in_run + 1));
+    assert_eq!(error.entry, Some(before.run.entries + 1));
     assert_eq!((error.addr, error.cause), (at, None));
     assert!(error.changed.is_empty());
     assert!(
@@ -278,7 +278,10 @@ fn check_register_address_fault(source: &str, at: Option<Addr>) {
             halted: Some(Halted::Faulted),
             ..before.cpu
         },
-        entries_in_run: before.entries_in_run + 1,
+        run: RunPlace {
+            entries: before.run.entries + 1,
+            ..before.run
+        },
         ..before
     };
     assert_eq!(after, &expected);
@@ -852,7 +855,7 @@ fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
     for (index, op) in [Op::Step, Op::Step].into_iter().enumerate() {
         assert_eq!(apply_op(&mut machine, &op, 0).0, Ok(()), "step {index}");
     }
-    assert_eq!(machine.entries_in_run, 2);
+    assert_eq!(machine.run.entries, 2);
     let config = preset(Preset::TwoWayLru);
     let (result, events) = apply_op(&mut machine, &Op::Config { config }, 0);
     assert_eq!(result, Ok(()));
@@ -865,7 +868,7 @@ fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
     );
     assert!(setup.changed.is_empty());
     let mut expected = Machine::start(config).unwrap();
-    expected.run = 2;
+    expected.run.run = 2;
     expected.program = Program::parse(
         &expected.geometry,
         "ld r1, [0x0A4]\nst [0x0A8], #7",

@@ -333,7 +333,7 @@ impl Session {
         let highlight = self.highlight();
         let rows = MemoryRows::new(machine, &self.view.watch);
         let bus = snapshot::bus_line(machine, event);
-        let (origin, end) = self.log.run_bounds(machine.run);
+        let (origin, end) = self.log.run_bounds(machine.run.run);
         let steps = self
             .log
             .steps_through(end)
@@ -459,7 +459,7 @@ impl Session {
             ControlAction::StepAccess,
             ControlAction::Run,
         ]);
-        let run = self.log.run_entries(self.cursor.machine().run);
+        let run = self.log.run_entries(self.cursor.machine().run.run);
         let reached = self
             .log
             .entries()
@@ -611,7 +611,7 @@ impl Session {
     /// steps a new op would drop.
     fn reset_question(&self) -> String {
         let base = slot(self.base().0);
-        let run = self.cursor.machine().run;
+        let run = self.cursor.machine().run.run;
         let steps = |events: &[MicroEvent]| {
             let count = events
                 .iter()
@@ -1466,8 +1466,8 @@ mod tests {
                 (3, 3, 2, Some(1), "1.1"),
             ]
         );
-        assert_eq!(replay.machine.run, 2);
-        assert_eq!(replay.machine.entries_in_run, 1);
+        assert_eq!(replay.machine.run.run, 2);
+        assert_eq!(replay.machine.run.entries, 1);
         assert!(replay.machine.program.is_some());
     }
 }

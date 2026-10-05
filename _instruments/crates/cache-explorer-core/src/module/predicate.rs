@@ -418,17 +418,16 @@ impl Predicate {
                 event.kind == p.event.kind
                     && p.event.entry.is_none_or(|entry| event.entry == Some(entry))
             }),
-            Predicate::LastAccess(p) => {
-                cx.session
-                    .last_access(cx.pos, machine.run)
-                    .is_some_and(|last| {
-                        let wanted = &p.last_access;
-                        last.serial > cx.since
-                            && wanted.kind.is_none_or(|kind| last.kind == kind)
-                            && wanted.addr.is_none_or(|addr| last.addr == addr)
-                            && wanted.outcome.is_none_or(|outcome| last.outcome == outcome)
-                    })
-            }
+            Predicate::LastAccess(p) => cx
+                .session
+                .last_access(cx.pos, machine.run.run)
+                .is_some_and(|last| {
+                    let wanted = &p.last_access;
+                    last.serial > cx.since
+                        && wanted.kind.is_none_or(|kind| last.kind == kind)
+                        && wanted.addr.is_none_or(|addr| last.addr == addr)
+                        && wanted.outcome.is_none_or(|outcome| last.outcome == outcome)
+                }),
             Predicate::Config(p) => p.config.matches(&machine.config),
         }
     }

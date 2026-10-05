@@ -362,7 +362,7 @@ impl Entries {
             records: Vec::new(),
             last_base: None,
             steps,
-            run: start.run,
+            run: start.run.run,
             pc: start.cpu.pc,
         }
     }
@@ -372,7 +372,7 @@ impl Entries {
         let pos = position_of(event);
         if event.seq == 1 {
             self.close();
-            if event.kind == EventKind::Setup && after.run != self.run {
+            if event.kind == EventKind::Setup && after.run.run != self.run {
                 // A new run's origin, which is not an entry: the values its
                 // entries are compared with are the new run's.
                 self.origin = after.clone();
@@ -417,7 +417,7 @@ impl Entries {
             self.latest.insert(cell, after.cell(cell));
         }
         self.pc = after.cpu.pc;
-        self.run = after.run;
+        self.run = after.run.run;
     }
 
     /// The records of the stretch's entries, and the base of its last entry
@@ -578,7 +578,7 @@ impl Session {
     /// view: the run, its bounds and steps, the header, the live region's
     /// sentence, and the cursor's entry with its events.
     pub fn timeline(&self) -> Timeline {
-        let run = self.cursor.machine().run;
+        let run = self.cursor.machine().run.run;
         let cursor = self.cursor.pos();
         let (origin, end) = self.log.run_bounds(run);
         let at_origin = self.log.steps_through(origin);
@@ -608,7 +608,7 @@ impl Session {
     /// them, for the rows of the log in view. The current entry comes with
     /// its events; the others without.
     pub fn entries(&self, first: u32, count: u32) -> Vec<EntryView> {
-        let entries = self.log.run_entries(self.cursor.machine().run);
+        let entries = self.log.run_entries(self.cursor.machine().run.run);
         let start = entries
             .start
             .saturating_add(usize::try_from(first).unwrap_or(usize::MAX))
@@ -629,7 +629,7 @@ impl Session {
     /// One byte per step of the displayed run, in order: bit 0 set on an
     /// entry's first step, bit 1 on every step of an entry that missed.
     pub fn ticks(&self) -> Vec<u8> {
-        let entries = self.log.run_entries(self.cursor.machine().run);
+        let entries = self.log.run_entries(self.cursor.machine().run.run);
         self.log
             .entries()
             .get(entries)
@@ -656,7 +656,7 @@ impl Session {
     /// follows the step. While a gate is set, a target beyond its limit is
     /// the limit, as for [`Session::seek`].
     pub fn seek_step(&mut self, step: u32) {
-        let (origin, end) = self.log.run_bounds(self.cursor.machine().run);
+        let (origin, end) = self.log.run_bounds(self.cursor.machine().run.run);
         let wanted = self
             .log
             .steps_through(origin)
@@ -907,7 +907,7 @@ mod tests {
     fn the_highlight_is_the_net_change_since_the_entry_began_wherever_the_cursor_comes_from() {
         let mut session = varied();
         let end = session.log.end().get();
-        assert_eq!(session.machine().run, 2);
+        assert_eq!(session.machine().run.run, 2);
         // Backwards, so every move but the first lands in another entry
         // from a position that is not its start; then forwards one event at
         // a time, as Space moves.

@@ -129,7 +129,7 @@ fn a_run_starts_with_an_empty_cache_and_a_seeded_generator() {
     assert_eq!(machine.recent, Recent::default());
     assert_eq!(machine.prng, Prng::new(config.seed));
     assert_eq!(machine.access, None);
-    assert_eq!((machine.run, machine.entries_in_run), (1, 0));
+    assert_eq!((machine.run.run, machine.run.entries), (1, 0));
     assert!(!machine.in_flight());
     assert_eq!(machine.config, config);
     assert_eq!(machine.check_invariants(), Ok(()));

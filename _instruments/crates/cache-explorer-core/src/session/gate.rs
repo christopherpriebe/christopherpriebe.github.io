@@ -134,7 +134,7 @@ impl Session {
         predicate: &Predicate,
         since: u64,
     ) -> Result<Option<EventPos>, ReplayError> {
-        let (origin, end) = self.log.run_bounds(self.cursor.machine().run);
+        let (origin, end) = self.log.run_bounds(self.cursor.machine().run.run);
         let at_origin = self.machine_at(origin)?;
         if predicate.eval(&EvalContext::at(self, &at_origin, origin, since)) {
             return Ok(Some(origin));

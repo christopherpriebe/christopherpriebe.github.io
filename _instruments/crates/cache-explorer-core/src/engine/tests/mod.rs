@@ -20,7 +20,7 @@ use crate::isa::Program;
 use crate::limits::{
     INSTRUCTION_BUDGET, MAX_ADDRESS_BITS, MAX_EVENTS_PER_ENTRY, MAX_LINES, MAX_SHARE_OPS,
 };
-use crate::machine::Stalled;
+use crate::machine::{RunPlace, Stalled};
 use crate::memory::StaleInfo;
 use crate::op::{EditPatch, EditTarget, OpError, ProgramFormat, WayPatch};
 use crate::prng::Prng;
