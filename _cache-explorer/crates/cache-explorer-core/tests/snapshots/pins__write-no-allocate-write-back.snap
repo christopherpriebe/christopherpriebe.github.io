@@ -1,0 +1,10 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "Write-no-allocate under write-back: a store miss goes around the cache and counts as a write-around; the second writes the value memory already holds (case 9)."
+---
+share: jVC7bsMwDPwXzlryqBt4q7cuRfeiKAiJaYnIkiEqKlxD_14qryFTJoHHOx3vFhD7QyN-FUrCMUC_MmBj2PM39Augc4lEBs6im7WB35jcMGfScatEVHHjCf_RBV6tdwY8h9vcGUCRaBkzF87zySLR5NHSSCFDDz4dQf9OnOk9erbKOU8D2oNu0Pto8X75Fl8uOFQDQuSa-2b7pAJXMNgG7NELGRhpjGl-DdzsJsyZUmiqOOmJH4u-irPIkdTuwMFdTZq7ltByaOCCXhn9czWPSXY3SdfVT8Vza6sptQMqp_SbWv8B
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":1,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeNoAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"write","addr":164,"value":7},{"op":"issue","kind":"write","addr":168,"value":66}],"at":{"op":1,"event":3}}
+cursors:
+0 | {"op":0,"event":0} | abab6c3ce0c040f3 | f1c5c0690bcf394b
+1 | {"op":0,"event":3} | 8e39b4ab6585fc09 | d5ba670fdac8fd43
+2 | {"op":1,"event":3} | c419a8059b1c54de | efe04c8a633fe90d

@@ -1,0 +1,13 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "Flow B under FIFO: the hit moves no rank, so 0x080 evicts way 0, filled earliest, and 0x0C0 evicts way 1."
+---
+share: jZExT8QwDIX_i-cMXCkHZKMbGztCyEpcsC5NqjgUlSr_HQdON9zUKXrPn_0iewNxnzTh-0JZOEWwBwMuxZE_wG6A3mcSGbiIVjoD3yn7YS2kslcQtblxwj90tg_dg4HA8aKPBlAkOcbCC5cVrM7JNAd0NFEsYGHkMYEOz1zoJQV2Cv2rAd1JKxhCcnhdfDq7UA0IkW_ht_2d4n7B6JoxYhAyMNGU8vocuaXNWArl2LrSrD983fRVn0W-SMNOHLVTv4i-ResKwN5Us4M69ruwfcN0kfu4x66-qSjtEI3Ww9Dyt9j7Wn8B
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":2,"replacement":"fifo","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"read","addr":0},{"op":"issue","kind":"read","addr":64},{"op":"issue","kind":"read","addr":0},{"op":"issue","kind":"read","addr":128},{"op":"issue","kind":"read","addr":192}],"at":{"op":4,"event":7}}
+cursors:
+0 | {"op":0,"event":0} | 53dac7af9cff871f | 4b6880d7d18b9133
+1 | {"op":0,"event":5} | d4d4387e98780811 | 223762e7f4b159c6
+2 | {"op":1,"event":6} | 865b61eb567b952d | 4743e2630d1d9f33
+3 | {"op":2,"event":3} | cd4df679f0ef334e | f4b1db14b1c919c6
+4 | {"op":3,"event":7} | ae329c831899cd8b | 97604f108fc30a27
+5 | {"op":4,"event":7} | 0336bd728538054d | 78b29e4be74280f2

@@ -1,0 +1,13 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "Frame 3b's accesses issued by hand on two-way-lru, untimed, in the order of its program: a store dirties 0x0B0 in set 3, a load fills way 0 of set 2 and a store dirties 0x1A0 in way 1, a hit makes way 0 the most recent, and the load of 0x2A4 writes back and evicts the dirty 0x1A0 from way 1 (cases 7, 2, 7, 1 and 4). Every load goes to r1, where the program loads r1, r2 and r3."
+---
+share: jVFNT8MwDP0vPufARtdWvdEbN-4IISvxwFqaVHFWVKr-dxwYQyAm7RS95_eRxAuIfaUBnydKwjFAtzFgY9jzC3QLoHOJRHrOopOtgbeYXD9nUlipENVcdMLvdKI329aA53DGtQEUiZYx88R5hk5zEo0eLQ0UMnTg0xE0O3Gmh-jZquYL9WgPOkHvo8W_w7sTC6sBIXKl-7baqdxNGGwh9uiFDAw0xDTfBy5lI-ZMKRRXHPWCj4ueyrPIkbTswMF9V5Ru_QJNbvQZE3pVdLvV_G9JhO7HUVeXdL-jq-3NObq5Mrq9Slc39fqkIJcVFbWujKbPL2_X9QM
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":2,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"write","addr":176,"value":5},{"op":"issue","kind":"read","addr":164},{"op":"issue","kind":"write","addr":420,"value":7},{"op":"issue","kind":"read","addr":168},{"op":"issue","kind":"read","addr":676}],"at":{"op":4,"event":8}}
+cursors:
+0 | {"op":0,"event":0} | 0407c4e47bacded6 | 32ec55c00965ce3d
+1 | {"op":0,"event":5} | 357d35330f54e1e9 | 2955b35c5f9fe2c2
+2 | {"op":1,"event":5} | 9120f6612622fd6d | 4643c48b87a1b186
+3 | {"op":2,"event":6} | 4880fd0822748167 | 33cee0301d6cc8e7
+4 | {"op":3,"event":4} | 5d37f1c3acf18284 | 57f6149c239f1d35
+5 | {"op":4,"event":8} | 0f852b7589c43912 | a9eaddaa18d441a0

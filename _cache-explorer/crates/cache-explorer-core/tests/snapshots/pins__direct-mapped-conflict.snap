@@ -1,0 +1,11 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "Direct-mapped-8: 0x000 and 0x080 share set 0, its only way, so each load evicts the other (cases 2 and 3). The first two misses are compulsory; the return of 0x000 is a conflict, since a fully associative cache of eight lines would still hold it."
+---
+share: jZAxbwIxDIX_i-cMQCmqbutt3bpXVWUlprXIJafYXHWc8t9xADEwMSV-_pznvAXE_9GAPxMV4ZygWzvwOe35F7oFMIRCIj2rWGfj4D-X0M9KVm4NRBtunPCJbvJ68-YgcrrXOwcokj2j8sQ6XywKjRE9DZQUOojlCPZ2YaXPHNkbc6169AfrYIzZ42Pz_aZCdSBEoXm_bF8NDxMm34Q9RiEHAw25zB-Jm9mIqlRSm8qjLfi12Gk6ixzJzA6cbNI2xNCsLQHoVtU9QdnXn-JW9duu2oJrrMVK0yWIXa1n
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":1,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"read","addr":0},{"op":"issue","kind":"read","addr":128},{"op":"issue","kind":"read","addr":0}],"at":{"op":2,"event":6}}
+cursors:
+0 | {"op":0,"event":0} | ff6e889b7dc15884 | b7db752bef70c3e8
+1 | {"op":0,"event":5} | f7eccdae89a8d9ca | 83151c7062a05bee
+2 | {"op":1,"event":6} | fb93246c16fa0cd9 | f74ce1e4dc4510c7
+3 | {"op":2,"event":6} | bad6d4cedcb631ca | 7f3713351f13c7b2

@@ -1,0 +1,15 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "Frame 3b's program on two-way-lru, untimed, loaded and stepped to its end one instruction per op, as Space steps it. The load is a setup without a number or a label; each instruction's last event moves the pc, after the rank update when there is one; and access #5, the dirty eviction, loads into r3 (cases 7, 2, 7, 1, 4 and 3)."
+---
+share: rZG9bsMwDIRfRWBXDbHjNIG3eOvWPTUKQmZSofoxRMVtGuTdS7luhs6dhPt4FE_iFdi8kcfXiRLbGKCtNJgYjvYE7RVwGBIxdzazVGoNHzEN3SWTyEaMKM3Fx_aLFlzVOw3Ohrt-1IDM0VjMdrL5Aq3ck2h0aMhTyNCCS2eQu5PN9BydNeL5UR2ad6mgc9Hg3-J-oXDTwERDmb1uNmIfJgymgCM6Jg2efEyXp2DLsBFzphRKVxwl4OEqZ-EpnhJ6GcfxnIy8C5TirNRh9bnqVr1WD5uXoJQblEqVnvG-6QtaXJVIcW3vrnpx7fo7Ws-oXhpn1OjfZpl9jMljiYnsJeKSjTON_6V6-aBcllaYLIemeQnb2-0b
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":2,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"program","source":"  st  [0x0B0], #5\n  ld  r1, [0x0A4]\n  st  [0x1A4], #7\n  ld  r2, [0x0A8]\n  ld  r3, [0x2A4]\n  ld  r4, [0x1A4]","format":"asm"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"}],"at":{"op":6,"event":7}}
+cursors:
+0 | {"op":0,"event":0} | 4f629c4565878d6b | aaead31fe93a12ff
+1 | {"op":0,"event":1} | c89633ff04430ca3 | bf1d8b76e301e1c2
+2 | {"op":1,"event":5} | 12e046a914d36783 | fc67b9fe5851da41
+3 | {"op":2,"event":5} | d91c4d37d47ded98 | 557652aaa1c361e9
+4 | {"op":3,"event":6} | 3692f66d11ee750a | 2f64489659223941
+5 | {"op":4,"event":4} | 04a7e45b781aeb82 | 965138b736a0d38f
+6 | {"op":5,"event":8} | 19c5c1a39120fb15 | c1041e7493a38672
+7 | {"op":6,"event":7} | 734b226482cf11b4 | abc5ecb3aece9150

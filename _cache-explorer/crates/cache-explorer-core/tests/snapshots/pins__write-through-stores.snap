@@ -1,0 +1,12 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "Write-through on direct-mapped-8: a store miss fills then writes the cache and memory; store hits write both, the second with the value memory already holds; a store miss evicts a clean line (cases 8 and 6)."
+---
+share: tZExT8QwDIX_i-cMXFu4oxu3sTGwIYSsxHe1SJMqTotK1f-OcxwdmFiYIj-_Ly92FhDbUY9vEyXhGKDdGbAxnPgM7QLoXCKRI2fRTmXgIyZ3nDNp2agRFS4-4U-6yrvqYMBz2Oo7AygSLWPmifN8iUg0eLTUU8jQgk8j6N2JMz1Fz1Y939Vzl-J47rSJ3keLv_sPVxVWA0LkSnzd3KrdTRhsEU7ohQz01Mc0PwYueQPmTCkUKg76xpdFT9VZZCQNe-fgfiJKtm6hDKITT-jV0e5X8zfksCH3_4Y01c2G1Ouryrn8SQFrAzRddrxf1y8
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":1,"replacement":"lru","writePolicy":"writeThrough","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"write","addr":164,"value":7},{"op":"issue","kind":"write","addr":168,"value":9},{"op":"issue","kind":"write","addr":168,"value":9},{"op":"issue","kind":"write","addr":420,"value":3}],"at":{"op":3,"event":7}}
+cursors:
+0 | {"op":0,"event":0} | 953589c20998a84d | 15d317edfdff1ccb
+1 | {"op":0,"event":6} | 33922c7cc631fc5e | 07345c7bb4029638
+2 | {"op":1,"event":4} | bf13339e09576769 | 76875ac5504ed3b7
+3 | {"op":2,"event":4} | 8ba121f5f2681d8b | cfae4f7a4faf96bf
+4 | {"op":3,"event":7} | c93a9a99bfaf88fc | b67f56c7d7ad4078

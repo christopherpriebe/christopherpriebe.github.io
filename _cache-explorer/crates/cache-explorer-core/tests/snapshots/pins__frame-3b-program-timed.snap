@@ -1,0 +1,15 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "Frame 3b's program as in frame-3b-program, timed 1/20: the dirty eviction of access #5 stalls for 40 cycles, and a program load, like every event, is stamped with the run's cycle count."
+---
+share: rZG9bsMwDIRfRWBXDbbjtIG3uFO37qlRCDKTCNWPISpu3SDvXsp1PHTuJNzHI3Ugr0D6jE69jxjJBA9NKUEHfzQnaK6g-j4iUWsScaWS8Bli304JWdZsVNycfWS-ccFltZNgjV_1owRFFLRRyYwmTdDwnIiDVRod-gQN2HgBnh1NwtdgjWbPr2qV_uCKsjZo9be4XyjcJCTjjJ8jn016nrSdv5bgDNFdVgUbCbHPITf1luf2o_I6g6OyhGxHF-L04k1ONaiUMPo8Pgzcf7jym3kMp6gc56JwiZoXAEJQEuJQfBVt0UnxsH3zQtheiFjKGe_rLqPFVbJk19PqqhbXrlvRZkbV0jijWt6b-e9jiE7lmIocR1yyUcLhv1THC0p5pZnxFXGcr7W73X4A
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":2,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"timing":{"hitCycles":1,"missCycles":20},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"program","source":"  st  [0x0B0], #5\n  ld  r1, [0x0A4]\n  st  [0x1A4], #7\n  ld  r2, [0x0A8]\n  ld  r3, [0x2A4]\n  ld  r4, [0x1A4]","format":"asm"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"}],"at":{"op":6,"event":8}}
+cursors:
+0 | {"op":0,"event":0} | 096ca7070a467ebd | f9a89518dc24b4fb
+1 | {"op":0,"event":1} | 24fa4b0d62997c86 | 13a6f3f41a9f07fc
+2 | {"op":1,"event":6} | a406c561bf57bc25 | 9febbce33d1aed47
+3 | {"op":2,"event":6} | 6144bb49153a5e93 | e24b34d44a4d26ac
+4 | {"op":3,"event":7} | 3c2a001f9bccd75d | 1479a1a85644a2c6
+5 | {"op":4,"event":4} | 35bb122be0ba04a3 | 76e8c2e2f2bf40a2
+6 | {"op":5,"event":9} | 7455c639e5fec49d | 4fa211bb9729487f
+7 | {"op":6,"event":8} | f54d40b8271d7709 | c9040a0db8d9a679

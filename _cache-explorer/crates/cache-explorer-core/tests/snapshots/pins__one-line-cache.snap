@@ -1,0 +1,11 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "A 16 B cache of one 16 B line: fully associative with one way, so the decode names no set and the victim line does not say direct-mapped (cases 2, 1 and 3)."
+---
+share: jZCxbsMwDET_hbOGJnWDwlu9deteFAUhMS0RWTJExYVr6N9DJhmCTJmMOz76qFtB_C-N-D1TEc4J-o0Dn9Oef6BfAUMoJDJwFZ1sHfzlEoalkspOQdRl44T_6Wpvdg4ip1uJItkzVp65LueEQlNETyOlCj3EcgT9deFKHzmyV-aiBvQHnWCM2eP98O3qQnMgRMEOfO5eFA8zJm_GHqOQg5HGXJb3xBY2Ya1Ukm3lSQ_8XPWrPoscScMOnHRTL8Rg0VqAPaJr7iHu9SGu2z61LxXVujNam6X5XMautRM
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":16,"lineBytes":16,"associativity":1,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"read","addr":164},{"op":"issue","kind":"read","addr":168},{"op":"issue","kind":"read","addr":420}],"at":{"op":2,"event":6}}
+cursors:
+0 | {"op":0,"event":0} | a5f4488c99306012 | 0248c66df46f9952
+1 | {"op":0,"event":5} | 4bf138446694dacf | 812145d9c4311b49
+2 | {"op":1,"event":3} | 75612048e1eb5272 | 7981f9f89a3aeabe
+3 | {"op":2,"event":6} | 242698ccb85cd831 | 46569001c2480709

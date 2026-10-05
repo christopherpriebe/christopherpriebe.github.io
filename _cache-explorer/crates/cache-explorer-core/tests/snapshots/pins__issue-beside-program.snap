@@ -1,0 +1,14 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "A load issued by hand writes r1 even while a program is loaded, and its line says the program's r1 changed; once the program has finished, it does not. A hand-issued access moves neither the pc nor the budget."
+---
+share: nZFPT8MwDMW_yuRzDmtXxuhtu3HjPiZkJd6Ilj9VnBVG1e-OU6ohIXHZqXr2L3726wCs38njW0-JbQzQVgp0DEd7gnYANCYR885mlk6t4CMms7tmEtkIiPK4cGy_aC5X9UaBs-Gm1wqQOWqL2fY2XyeLRJ1DTZ5ChhZcuoDMTjbTS3RWC_OjdqjP0kHnosa_ze1chVEBE5nivWoeBDc9Bl0KR3RMCjz5mK7PwRazDnOmFMqr2MmC-0G-pZ7iKaEXO46XpKnsZRapUov98nO5bQ6voeh61puDkMeYPJahyF4GzpM4U_erLPOFhD3bIBvJ5WjKSZKsZFgv_-OmE29g9Sgx9uiEaJ_uMKrWzXgQkcvfKrTERP2U_mocvwE
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":1,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"program","source":"ld r1, [0x0A4]\nld r2, [0x0A8]","format":"asm"},{"op":"step"},{"op":"issue","kind":"read","addr":420},{"op":"issue","kind":"write","addr":176,"value":9},{"op":"step"},{"op":"issue","kind":"read","addr":164}],"at":{"op":5,"event":3}}
+cursors:
+0 | {"op":0,"event":0} | 5d1b4b180d69e7b3 | 411f502a1309619d
+1 | {"op":0,"event":1} | 820060c3e2e6957c | 1a77b50e98d44ecf
+2 | {"op":1,"event":5} | 0849593445ca5197 | 3bb1bdbaf7fd766f
+3 | {"op":2,"event":6} | 1087470389f6f544 | 320ad9299dbdfd41
+4 | {"op":3,"event":5} | 79b6f211b265ff8a | 49623fed4d67b9af
+5 | {"op":4,"event":6} | c3f9bf575b4167b0 | da410a3aec23e5dd
+6 | {"op":5,"event":3} | 7a268f4f00c7caa1 | f1f92fccf3cd3a66

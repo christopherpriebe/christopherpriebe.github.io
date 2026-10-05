@@ -1,0 +1,14 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "A memory word the clean line in set 2, way 0 holds, edited at the end of frame 3b's access #4: memory and the cached copy change together, so the line stays clean, and a load hits on the new value."
+---
+share: jZG9bsMwDITfhbOG2nF-4K3eunUvioKQmISILBmS4sI1_O6lEtdFihTIJJD87k6URoj6SC1-9BQiewd1oUB7t-cD1COgMYFibDhFmZQKPn0wzZBIykpAFHHmIn_R3C7KnQLLbqk3CjBGrxkT95wGqMUnUGdRU0suQQ02nEG8Ayd69Za1MNeqQX2SCVrrNf4dPs9dmBREIpOzV9VacNOj07mxRxtJQUutD8OL4xzWYUoUXFb5Ti74NsopfY7xTBJ2Ymd-InK2PIE4b2WNHq0Q9XpS9yWB0PwqNtV_3K11VT4t1tsHrXcLR0aWUpAwHCjlr5gF15VvJXl1fbwHzfFFOT18gXcpLoGZlken_vKXq2n6Bg
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":2,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"write","addr":176,"value":5},{"op":"issue","kind":"read","addr":164},{"op":"issue","kind":"write","addr":420,"value":7},{"op":"issue","kind":"read","addr":168},{"op":"edit","target":{"kind":"memory","addr":168},"patch":{"kind":"memory","value":12}},{"op":"issue","kind":"read","addr":168}],"at":{"op":5,"event":3}}
+cursors:
+0 | {"op":0,"event":0} | 8bcea01e379228e4 | ac566ad1a40f4079
+1 | {"op":0,"event":5} | 789ff877b4723261 | 59c7ff688e6d78ae
+2 | {"op":1,"event":5} | 041ebe01341256e1 | a03834e91bc6e62a
+3 | {"op":2,"event":6} | 6109c06a0e35208f | e2cea7fe8195d5a3
+4 | {"op":3,"event":4} | fef1aac177b32eca | 44c55e5b7a311f21
+5 | {"op":4,"event":1} | ea6a63dfcf757787 | e7024ee1f2f8bef9
+6 | {"op":5,"event":3} | 28d558b068b25aff | 0e95f74e4e51c40d

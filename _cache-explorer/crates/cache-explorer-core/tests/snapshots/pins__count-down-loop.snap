@@ -1,0 +1,21 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "A bnez loop on direct-mapped-8 that counts r1 down from 3 with a negative immediate, storing each value from the register; the branch is taken twice, then falls through. An add and a load into r0 are dropped, and the last instruction finishes the program."
+---
+share: zVJBbsIwEPyK5V7dihCoqnCCnnrrHVDlOhuwanujtRMKiL93HaK2Qn1AI0XWzsx6PPaeZTR78PqtB4oWg6wKJQ2Gxu5kdZa6rgliXNkUmZkqeUCqV8cEXM5YqLk566I9wQgX0yclnQ3f9aOSOkY0Vifb23QcLAhapw14CElW0lEneW-yCV7RWcOaa7XS5oMZ7RwafUsuR1RelIwAdfYuZ3OW170OJgONdhGU9OCRji_BZrNWpwQUche2fMD1mdeME-5Ie7aL2JHhXHIhnrELSVAhajwE0RB6USoRE5INOwGcX_TadbAQaQ9BDOcSNHnYBDF-fIXcrxhU4q7cBIfYVozHJNaTz8lytmWu-EPP_939L-I9wGlA8w43-smon__g7gqPHpyqQfI6X4COnsOPqWOC9j9XW37OlEcsY3kCoR9mprxcvgA
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":1,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"program","source":"; Count r1 down from 3, storing each value; then write r0.\n        add r1, r0, #3\nloop:   st [0x0A4], r1\n        add r1, r1, #-1\n        bnez r1, loop\n        add r0, r1, #5\n        ld r0, [0x0A4]","format":"asm"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"}],"at":{"op":12,"event":3}}
+cursors:
+0 | {"op":0,"event":0} | 90fc3dc80747ed0e | 337680efbd76d9c0
+1 | {"op":0,"event":1} | d05db59601637f20 | ae2017862a090820
+2 | {"op":1,"event":1} | 051113fa9cd46b4b | d51525b1dbc7d397
+3 | {"op":2,"event":5} | 3faaef6fa1dd94c4 | 05374329b8cf500f
+4 | {"op":3,"event":1} | 8efe2d84e820f4a2 | 34b5d17d0f97ea65
+5 | {"op":4,"event":1} | eecbc0ba03a4ff4d | 18b39fffcdac3814
+6 | {"op":5,"event":3} | f68b6adf4b9b92b5 | 5c7254e8b6cf8f0f
+7 | {"op":6,"event":1} | ecd9ea77b6bab3ee | e212e62d740eca7b
+8 | {"op":7,"event":1} | 1672397e25eb6aac | 180e9b95944452b2
+9 | {"op":8,"event":3} | f6394f2a97af81df | 93bff941debbc80e
+10 | {"op":9,"event":1} | 4c7ef6ce4333ce70 | 4d1a6b34a23399a6
+11 | {"op":10,"event":1} | 8f608d34d9458f25 | cee0185c16fdaa70
+12 | {"op":11,"event":1} | 94338bacc0b5b049 | 05b5a412afaeb771
+13 | {"op":12,"event":3} | dad4b4c4098eaf19 | 75e9f129fc0d6930

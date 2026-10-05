@@ -1,0 +1,14 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "A memory word no line holds, edited at the end of frame 3b's access #4: only memory changes, and a load then brings the new value in."
+---
+share: jZFBT8MwDIX_i885sNKuU2_0xo07QshKvM1amlRJVlSq_necrRSBhrRTZPt778XJBFEfqcP3gUJk76DZKNDe7fkAzQRoTKAYW05RJoWCDx9MOyaSshQQRZy5yJ-0tDfFToFlt9ZbBRij14yJB04jNOITqLeoqSOXoAEbziDegRO9eMtamGvVoj7JBK31Gv8On5YuzAoikcnZj2UluBnQ6dzYo42koKPOh_HZcQ7rMSUKLqt8Lxd8neSUPsd4Jgk7sTPfETlbnkCca1ljQCtEU83qtiQQmh_FtvyP-21dFg-rdX2n9W7lyMhSChKGA6X8FYvguvIqqbMkr66Pt6AlfjPflZ_N3qS45GVa3pyGy1dW8_wF
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":2,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"write","addr":176,"value":5},{"op":"issue","kind":"read","addr":164},{"op":"issue","kind":"write","addr":420,"value":7},{"op":"issue","kind":"read","addr":168},{"op":"edit","target":{"kind":"memory","addr":768},"patch":{"kind":"memory","value":1}},{"op":"issue","kind":"read","addr":768}],"at":{"op":5,"event":5}}
+cursors:
+0 | {"op":0,"event":0} | 48655bb62b16e331 | 011a2e0ee88665c3
+1 | {"op":0,"event":5} | 728fbcc6a683cca0 | 38c716fd080bc96c
+2 | {"op":1,"event":5} | 5f4343c20b2a347f | 40bda8dc5f9ff218
+3 | {"op":2,"event":6} | 5474d4975768667d | c7560228b1549cd9
+4 | {"op":3,"event":4} | b88e1046708e7459 | f28cec388293c1cb
+5 | {"op":4,"event":1} | 7fb3173bdb7a4a65 | 1760c442f12068d8
+6 | {"op":5,"event":5} | 10fc14cb888e0698 | e1223c2c62fcf8e0

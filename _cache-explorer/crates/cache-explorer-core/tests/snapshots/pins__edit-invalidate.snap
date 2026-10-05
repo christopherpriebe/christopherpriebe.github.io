@@ -1,0 +1,16 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "Ways made empty at the end of frame 3b's access #4: the clean 0x0A0 in set 2, way 0, which ranks last, then the dirty 0x1A0 in way 1, which discards the 7 memory never received. Loads of 0x0A4 and 0x1A4 then miss as compulsory, since the edits took their lines out of the run's record of lines filled; they fill the lowest empty way first, and 0x1A4 reads the 12 memory kept."
+---
+share: nVK7bsMwDPwXzhqS1HnAW711614UBSExCRFZMiTFhWv430u5sYv0AbSZhCOPd-JJPUR9pBpfWgqRvYNyqUB7t-cDlD2gMYFirDhF6awUvPpgqi6RwEKIKMOZF_mNLuXlaqfAspvxRgHG6DVj4pZTB6XoBGosaqrJJSjBhjOIduBEj96yFs4HqlCfpIPWeo1fm_eXKgwKIpHJ3nfFWuimRadzYY82koKaah-6B8fZrMGUKLg85Ru54FMvp9Q5xjOJ2YmdmSyyt0QgyltZo0UrjHI9qJ9HAqH5nNgUv_GupYvVYpbe_lF6N_PIyFIKEoYDpfwUkwd2kGNJY9wZlQvZWJbXx280cecpreEW6eU_pW8M7oonuQ3PAsarZfZWAbXjh9oMwzs
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":2,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"write","addr":176,"value":5},{"op":"issue","kind":"read","addr":164},{"op":"issue","kind":"write","addr":420,"value":7},{"op":"issue","kind":"read","addr":168},{"op":"edit","target":{"kind":"way","set":2,"way":0},"patch":{"kind":"way","valid":false}},{"op":"edit","target":{"kind":"way","set":2,"way":1},"patch":{"kind":"way","valid":false}},{"op":"issue","kind":"read","addr":164},{"op":"issue","kind":"read","addr":420}],"at":{"op":7,"event":6}}
+cursors:
+0 | {"op":0,"event":0} | 99a0c0d7cf8723f3 | 1387bf08fb999f09
+1 | {"op":0,"event":5} | 11e8baf5c2e81715 | e54062a4d987b886
+2 | {"op":1,"event":5} | 0e7e86b5bf6f630e | 88a0b87b18bbff1a
+3 | {"op":2,"event":6} | fe603968605e6bbd | e90ce91a213e745f
+4 | {"op":3,"event":4} | a181d3b4d9b0e776 | 2f15900403091871
+5 | {"op":4,"event":1} | b54fd0ed33446f07 | 98c9ba05b1b1be17
+6 | {"op":5,"event":1} | 65760e94b84c8426 | 58fb0d7af109d5f9
+7 | {"op":6,"event":5} | 820222f92fbccd8b | 6e78e4e2c6ce549e
+8 | {"op":7,"event":6} | e29b9ca9efc7f832 | d281ccb724c416cb

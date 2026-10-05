@@ -1,0 +1,15 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "Store hits under write-back on direct-mapped-8: a clean line becomes dirty and memory stale; a dirty line is written again, once with a value memory already holds; then a store miss writes the dirty line back before it evicts it (cases 2, 5 and 7)."
+---
+share: jZJBT8MwDIX_i885sK60ozd648YdIWQlHlhLkyrJikrV_45Tpg4QSD1Vfn6fn9NkgqjfqMOXgUJk76DZKdDeHfkVmgnQmEAxtpyidAoF7z6YdkwkZSlGFDj7In_QRd4VBwWW3VpXCjBGrxkTD5zGJSJQb1FTRy5BAzacQWYHTvToLWvxfFUt6pN00Fqv8Xfz_qLCrCASmZy9L2_FbgZ0OgtHtJEUdNT5MD44zmE9pkTBZcr3suDTJF_ROcYzSdiJnZCyIZocLX8gH6Kc1d--ZZXvRgUDWnE09VbksCJ3G5G6uKb8y_w8QV1tnV1d1ym2MWVxszL7-VnklF9FBmUYDcst1_P8CQ
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":1,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"read","addr":164},{"op":"issue","kind":"write","addr":164,"value":7},{"op":"issue","kind":"write","addr":168,"value":9},{"op":"issue","kind":"write","addr":172,"value":79},{"op":"issue","kind":"read","addr":176},{"op":"issue","kind":"write","addr":176,"value":92},{"op":"issue","kind":"write","addr":420,"value":3}],"at":{"op":6,"event":7}}
+cursors:
+0 | {"op":0,"event":0} | 517897bb867fb1f6 | 8de7b778fc39e829
+1 | {"op":0,"event":5} | f9ddd5901e6b5ef5 | 958628c2f94ec20b
+2 | {"op":1,"event":3} | 12ccdc5e7f0185f9 | 1c16d2cdfffe50ed
+3 | {"op":2,"event":3} | 78601730953e9763 | d02a4dbd19ae973e
+4 | {"op":3,"event":3} | f152454c29a0835a | 7b9f05219f12e1f4
+5 | {"op":4,"event":5} | 0eb6501459d3ba81 | 716f902a9d0bf252
+6 | {"op":5,"event":3} | 0e7c9b61eb42801a | c7f96e1f4f7d9763
+7 | {"op":6,"event":7} | 306dfd06bf822bcc | a0c81e9a4d437779

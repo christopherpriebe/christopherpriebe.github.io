@@ -1,0 +1,11 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "Write-through on two ways with LRU: after a store miss and a store hit, the rank move comes last, after the write-through (cases 2, 8 and 6)."
+---
+share: jVCxTsQwDP0Xzxm4XotQN25jY2BDCFmJ72qRJlWcFpUq_45znDogBqbIz-_5vbwNxA404vtCSTgG6A8GbAxnvkC_ATqXSOTEWXTTGPiMyZ3WTDq2SkQVV57wF93gQ_NgwHPY53sDKBItY-aF8wq93kk0ebQ0UsjQg08z6O3EmZ6jZ6ucn-llSHG-DLpE76PF3_vHGwrFgBC5an9sO6W7BYOtwBm9kIGRxpjWp8DVb8KcKYWqipNmfN30VZxFZlKzDw6q1JDoqrWWUP_RFvM37xplJ7bNnYEFvTL64_8kenuXdOVN4VxbrULtipZrS10p3w
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":2,"replacement":"lru","writePolicy":"writeThrough","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"read","addr":164},{"op":"issue","kind":"write","addr":420,"value":3},{"op":"issue","kind":"write","addr":164,"value":5}],"at":{"op":2,"event":5}}
+cursors:
+0 | {"op":0,"event":0} | 1a48649b1436427b | 018394b47d756123
+1 | {"op":0,"event":5} | 3b55d4126767289c | 0399a5559fe4d795
+2 | {"op":1,"event":7} | 451327af11cae3e5 | 9efb5796caac1b2d
+3 | {"op":2,"event":5} | ac38c59b5faafc58 | e86550e43ee3db0c

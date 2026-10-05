@@ -1,0 +1,14 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "The sample trace on direct-mapped-8: each R loads into r1 and each W stores its value, and the log counts accesses, not instructions (cases 2, 1, 5, 4 and 3)."
+---
+share: nVA9T8MwEP0r1c0ZmhJKla3Z2BALA0Xo5FyKhT-iOzcQovx3zk0EEiOT_T7Oz-8mEPNGHl8HYrExQF0WYGLo7BnqCbBtmUQam0SVXQEfkdtmTKSwUiPqcPaJ_aKVLneHApwNP3hfAIpEYzHZwabxGsHUOzTkKSSowfEF9G22iR6is0Y9C2rQvKuCzkWDf8XjysJcgBC1OfumulV7O2AwmejQCRXgyUce74PNYT2mRBzyVOz1g8-TnpnneGb0GifxwkZ7weNm-7k9VqewXA6n8LQwm7uFK3_FSge7yB5zRmItpwnr05Ko_z960UYpbzlzWo-G69b28_wN
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":1,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"program","source":"R 0x0A4\nR 0x0A8\nW 0x0A4 7\nR 0x1A4\nR 0x0A4","format":"trace"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"},{"op":"step"}],"at":{"op":5,"event":6}}
+cursors:
+0 | {"op":0,"event":0} | 341a97cc802ad35d | 8b976fb17169f516
+1 | {"op":0,"event":1} | 68e003fb5bf71b0e | f08a942f0e594087
+2 | {"op":1,"event":5} | b5f2913e165532fd | 083627dcbec51fdd
+3 | {"op":2,"event":3} | 2721336bffffc53f | 71d86300304ed510
+4 | {"op":3,"event":3} | 0547624a78c96859 | 7cc0dadbce6a6bf7
+5 | {"op":4,"event":7} | b7c7426bc3a79f73 | 19e65708c76dffe6
+6 | {"op":5,"event":6} | 0a15197f388fd3f7 | 0ab297e1246d9d0c

@@ -1,0 +1,14 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: "0x1A4, which the dirty line in set 2, way 1 holds as 7, edited to 7 at the end of frame 3b's access #4: memory now matches the line, so the word is no longer stale, though the line stays dirty."
+---
+share: jVFLb8IwDP4vPucwWHmot3HbbfdpmqzEgEWaoDh06qr-9znQdQ-BxCmy_T3y2T2I3VOD7y0l4RignhmwMWx5B3UP6FwikQ1n0cncwEdMbtNl0rJSICq54IQ_aWzP5msDnsNULw2gSLSMmVvOHdSqk-jo0VJDIUMNPp1AtRNneomerWIu1QbtQSfofbT4f_g0dmEwIESueD9WC4W7FoMtjS16IQMNNTF1z4GL2RFzphQKKx71g6-9vtpnkROp2YGD-7Yo3roCVV5pjBa9IurFYK5TEqH7YSyrW7i_0tX8YZJe3Sm9nnDkNJSBjGlHuZxiJFwi_zbRvBrd7q-BJvu7_IvYmxZnv4LWnVN7PmU1DF8
+file: {"schema_version":1,"config":{"addressBits":12,"wordBytes":4,"cache":{"sizeBytes":128,"lineBytes":16,"associativity":2,"replacement":"lru","writePolicy":"writeBack","allocatePolicy":"writeAllocate"},"seed":12345,"advanced":false,"memoryInit":"pattern"},"ops":[{"op":"issue","kind":"write","addr":176,"value":5},{"op":"issue","kind":"read","addr":164},{"op":"issue","kind":"write","addr":420,"value":7},{"op":"issue","kind":"read","addr":168},{"op":"edit","target":{"kind":"memory","addr":420},"patch":{"kind":"memory","value":7}},{"op":"issue","kind":"read","addr":420}],"at":{"op":5,"event":4}}
+cursors:
+0 | {"op":0,"event":0} | 1f1243fc4e3dabe6 | 1518c4f7f2a0b634
+1 | {"op":0,"event":5} | c8230f079a318219 | f7f7220d4ce0837b
+2 | {"op":1,"event":5} | 5c309da0f2020e1a | 389cd7af1912f2b7
+3 | {"op":2,"event":6} | 02354b148d705fde | 45a998e9b5b586f6
+4 | {"op":3,"event":4} | 51040e6b8d7d2a0c | d0c1a45620ffdd3c
+5 | {"op":4,"event":1} | 07fde0244d9e5970 | a708a013c4f7f487
+6 | {"op":5,"event":4} | 107f8c91315124ad | 0c5730c56a8dc9ee
