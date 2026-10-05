@@ -8,6 +8,9 @@
 //! already checked. A value deserialized from JavaScript or JSON is unchecked
 //! until it is validated against the geometry in force.
 //!
+//! The two positions the session's log is read by, [`EventPos`] and
+//! [`OpIndex`], are held by `instrument-session` and re-exported here.
+//!
 //! `Display` prints the width-free form: hex for addresses and tags, padded to
 //! the two digits the narrowest configuration shows, and decimal for the rest.
 //! Text shown to the student is padded to the configuration's widths by the
@@ -19,6 +22,8 @@ use serde::{Deserialize, Serialize, Serializer};
 
 use crate::de::deserialize_unit_enum;
 use crate::format;
+
+pub use instrument_session::units::{EventPos, OpIndex};
 
 /// Hex digits of the width-free form of an address or a tag.
 const HEX_DIGITS: usize = 2;
@@ -64,19 +69,6 @@ pub struct WordIndex(u32);
 #[cfg_attr(feature = "ts", derive(tsify::Tsify))]
 #[serde(transparent)]
 pub struct Cycle(u64);
-
-/// A position in the session's log of micro-events: 0 is the state before the
-/// first event, and k the state after the k-th event.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
-#[serde(transparent)]
-pub struct EventPos(u32);
-
-/// An index into the session's ops.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-#[cfg_attr(feature = "ts", derive(tsify::Tsify))]
-#[serde(transparent)]
-pub struct OpIndex(u32);
 
 /// A data value, zero-extended from the configuration's word size.
 ///
@@ -205,32 +197,6 @@ impl Cycle {
 
     /// The cycle count as a number.
     pub const fn get(self) -> u64 {
-        self.0
-    }
-}
-
-impl EventPos {
-    /// Wraps a position the session has checked against its log.
-    #[doc(hidden)]
-    pub const fn new_unchecked(value: u32) -> Self {
-        Self(value)
-    }
-
-    /// The position as a number.
-    pub const fn get(self) -> u32 {
-        self.0
-    }
-}
-
-impl OpIndex {
-    /// Wraps an op index the session has checked against its log.
-    #[doc(hidden)]
-    pub const fn new_unchecked(value: u32) -> Self {
-        Self(value)
-    }
-
-    /// The op index as a number.
-    pub const fn get(self) -> u32 {
         self.0
     }
 }
