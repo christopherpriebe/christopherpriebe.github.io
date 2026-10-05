@@ -57,7 +57,7 @@ The `instruments` layout holds the interactive instruments and a list of planned
 
 ### Tool
 
-The `tool` layout is for a page that is one working instrument: the page head, then the page's own markup with no prose wrapper, so a script-built tool sets its own type and spacing. The Interactive Cache Explorer (`_pages/cache-explorer.md`) is its one use; see `_cache-explorer/README.md` for how to embed it.
+The `tool` layout is for a page that is one working instrument: the page head, then the page's own markup with no prose wrapper, so a script-built tool sets its own type and spacing. The Interactive Cache Explorer (`_pages/cache-explorer.md`) is its one use; see `_instruments/cache-explorer/README.md` for how to embed it.
 
 | Variable      | Description                                                                    | Required             | Type   |
 |---------------|--------------------------------------------------------------------------------|----------------------|--------|
@@ -75,7 +75,7 @@ The `resume` layout is specifically for a resume/CV page, built from the `resume
 
 ## Interactive Cache Explorer
 
-The tool at `/cache-explorer/` is built from `_instruments/cache-explorer/` (Rust compiled to WebAssembly, and TypeScript); its built files are committed in `assets/cache-explorer/`. Setup, building and testing are in `_instruments/cache-explorer/README.md`, and the format of its guided modules in `_instruments/cache-explorer/docs/AUTHORING.md`.
+The tool at `/cache-explorer/` is built from `_instruments/` (Rust compiled to WebAssembly, and TypeScript; the crates are in `crates/` and the tool in `cache-explorer/`); its built files are committed in `assets/cache-explorer/`. Setup, building and testing are in `_instruments/cache-explorer/README.md`, and the format of its guided modules in `_instruments/cache-explorer/docs/AUTHORING.md`.
 
 ## Design Notes
 
