@@ -47,7 +47,7 @@ pub(crate) use deserialize_unit_enum;
 /// # Errors
 ///
 /// serde's derive's error for a value that is not one of the variants.
-pub(crate) fn read_unit_enum<'de, D: Deserializer<'de>, T: Copy>(
+pub fn read_unit_enum<'de, D: Deserializer<'de>, T: Copy>(
     deserializer: D,
     name: &'static str,
     names: &'static [&'static str],
