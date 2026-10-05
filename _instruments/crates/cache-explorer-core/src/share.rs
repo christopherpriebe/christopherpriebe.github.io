@@ -24,14 +24,11 @@
 //! configuration or the actions before the op that failed. A link or a file
 //! calls its ops actions, since a step is one micro-event.
 
-use base64::engine::general_purpose::{URL_SAFE_NO_PAD, URL_SAFE_NO_PAD_INDIFFERENT};
-use base64::Engine as _;
-use miniz_oxide::deflate::compress_to_vec;
-use miniz_oxide::inflate::{decompress_to_vec_with_limit, TINFLStatus};
 use serde::de::{Error as _, Unexpected};
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
+use crate::codec::{self, CodecError, Limits, Oversize};
 use crate::config::{Config, ConfigError};
 use crate::event::{EventKind, MicroEvent};
 use crate::explain;
@@ -50,9 +47,11 @@ use crate::units::EventPos;
 /// to what the same ops replay to.
 pub const SCHEMA_VERSION: u32 = 1;
 
-/// The deflate level of a share string: the shortest links, and always the
-/// same string for the same document.
-const DEFLATE_LEVEL: u8 = 9;
+/// What a link and a file may hold.
+const LIMITS: Limits = Limits {
+    text_bytes: MAX_SHARE_TEXT_BYTES,
+    json_bytes: MAX_SHARE_JSON_BYTES,
+};
 
 /// A session's log as a link or a file holds it.
 ///
@@ -428,7 +427,7 @@ impl ShareDoc {
     /// here: a document read from a file may be too large for one, and
     /// [`Session::to_share_string`] checks a session's.
     pub fn to_share_string(&self) -> String {
-        encode(&to_json(self))
+        codec::encode(&to_json(self))
     }
 
     /// The document as a saved file holds it: compact JSON, the text a
@@ -497,6 +496,26 @@ impl LoadError {
                 .then(code_spans(message))
                 .into_vec(),
             error => code_spans(&error.to_string()),
+        }
+    }
+}
+
+impl From<Oversize> for TooLarge {
+    fn from(oversize: Oversize) -> Self {
+        match oversize {
+            Oversize::Text { bytes } => TooLarge::Text { bytes },
+            Oversize::Json { bytes } => TooLarge::Json { bytes },
+        }
+    }
+}
+
+impl From<CodecError> for EncodingError {
+    fn from(error: CodecError) -> Self {
+        match error {
+            CodecError::Base64 => EncodingError::Base64,
+            CodecError::Deflate => EncodingError::Deflate,
+            CodecError::Utf8 => EncodingError::Utf8,
+            CodecError::Oversize(oversize) => EncodingError::TooLarge(oversize.into()),
         }
     }
 }
@@ -890,7 +909,7 @@ impl Session {
     /// [`LinkTooLong`] when the string is too long for a link; the saved
     /// file holds the run.
     pub fn to_share_string(&self) -> Result<String, LinkTooLong> {
-        let share = encode(&self.share_json());
+        let share = codec::encode(&self.share_json());
         if exceeds(share.len(), MAX_SHARE_TEXT_BYTES) {
             return Err(LinkTooLong {
                 bytes: count(share.len()),
@@ -1145,11 +1164,6 @@ fn to_json(value: &impl Serialize) -> String {
     serde_json::to_string(value).unwrap_or_default()
 }
 
-/// `json` as a share string: deflated, then base64url without padding.
-fn encode(json: &str) -> String {
-    URL_SAFE_NO_PAD.encode(compress_to_vec(json.as_bytes(), DEFLATE_LEVEL))
-}
-
 /// `json` as a share string, if a link can open it: the JSON within
 /// [`MAX_SHARE_JSON_BYTES`], the most a link unpacks to, and the string
 /// within [`MAX_SHARE_TEXT_BYTES`].
@@ -1159,54 +1173,17 @@ fn encode(json: &str) -> String {
 /// [`TooLarge::Json`] with the JSON's size, or [`TooLarge::Text`] with the
 /// string's length: the first of the two a link could not open.
 fn link(json: &str) -> Result<String, TooLarge> {
-    if exceeds(json.len(), MAX_SHARE_JSON_BYTES) {
-        return Err(TooLarge::Json {
-            bytes: Some(count(json.len())),
-        });
-    }
-    let share = encode(json);
-    if exceeds(share.len(), MAX_SHARE_TEXT_BYTES) {
-        return Err(TooLarge::Text {
-            bytes: count(share.len()),
-        });
-    }
-    Ok(share)
+    Ok(codec::link(json, LIMITS)?)
 }
 
-/// The JSON text a share string holds: bounded first, then decoded from
-/// base64url with or without padding and inflated, the inflating stopped at
-/// [`MAX_SHARE_JSON_BYTES`] so that a short link cannot unpack into
-/// unbounded memory.
+/// The JSON text a share string holds, within the limits of a link.
 fn link_text(s: &str) -> Result<String, EncodingError> {
-    if exceeds(s.len(), MAX_SHARE_TEXT_BYTES) {
-        return Err(TooLarge::Text {
-            bytes: count(s.len()),
-        }
-        .into());
-    }
-    let deflated = URL_SAFE_NO_PAD_INDIFFERENT
-        .decode(s)
-        .map_err(|_| EncodingError::Base64)?;
-    let limit = usize::try_from(MAX_SHARE_JSON_BYTES).unwrap_or(usize::MAX);
-    let json = decompress_to_vec_with_limit(&deflated, limit).map_err(|error| {
-        if error.status == TINFLStatus::HasMoreOutput {
-            EncodingError::TooLarge(TooLarge::Json { bytes: None })
-        } else {
-            EncodingError::Deflate
-        }
-    })?;
-    String::from_utf8(json).map_err(|_| EncodingError::Utf8)
+    Ok(codec::decode(s, LIMITS)?)
 }
 
 /// Checks a saved file's size against [`MAX_SHARE_JSON_BYTES`].
 fn file_size(json: &str) -> Result<(), EncodingError> {
-    if exceeds(json.len(), MAX_SHARE_JSON_BYTES) {
-        return Err(TooLarge::Json {
-            bytes: Some(count(json.len())),
-        }
-        .into());
-    }
-    Ok(())
+    codec::check_file(json, LIMITS).map_err(|oversize| TooLarge::from(oversize).into())
 }
 
 /// The document `text` holds: its format version first, so a newer

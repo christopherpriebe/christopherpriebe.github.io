@@ -57,6 +57,7 @@
 pub mod limits;
 
 mod cache;
+mod codec;
 mod config;
 mod cpu;
 mod de {
