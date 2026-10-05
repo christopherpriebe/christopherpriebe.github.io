@@ -82,7 +82,9 @@ mod session;
 mod share;
 mod snapshot;
 mod stats;
-mod text;
+mod text {
+    pub use instrument_session::text::*;
+}
 mod units;
 
 pub use config::{

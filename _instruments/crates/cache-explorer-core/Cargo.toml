@@ -11,12 +11,15 @@ publish.workspace = true
 workspace = true
 
 [features]
-ts = ["dep:tsify", "dep:wasm-bindgen"]   # enabled only by cache-explorer-wasm; tsify's derive names wasm_bindgen by path,
-                                         # so both are needed; tsify's "js" feature brings serde-wasm-bindgen and js-sys
+ts = ["dep:tsify", "dep:wasm-bindgen", "instrument-session/ts"]
+                                         # enabled only by cache-explorer-wasm; tsify's derive names wasm_bindgen by
+                                         # path, so both are needed; tsify's "js" feature brings serde-wasm-bindgen
+                                         # and js-sys; the shared crate's types derive their declarations too
 golden = []                              # enabled only by dev-dependencies, the core's own and the facade's:
                                          # the golden fixtures and render
 
 [dependencies]
+instrument-session = { path = "../instrument-session" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

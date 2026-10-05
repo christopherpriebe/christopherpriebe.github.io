@@ -65,6 +65,7 @@ dependencies = [
  "base64",
  "cache-explorer-core",
  "insta",
+ "instrument-session",
  "miniz_oxide",
  "proptest",
  "rand_core 0.10.1",
@@ -238,6 +239,9 @@ dependencies = [
 name = "instrument-session"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
  "tsify",
  "wasm-bindgen",
 ]
