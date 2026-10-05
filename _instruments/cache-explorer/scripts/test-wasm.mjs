@@ -1,5 +1,5 @@
 // Runs the facade's wasm-bindgen-test suite in headless Chrome, and fails unless every suite ran tests.
-// Run through `npm run test:wasm` in web/, which puts web/node_modules/.bin, where wasm-pack is,
+// Run through `npm run test:wasm` in web/, which puts _instruments/node_modules/.bin, where wasm-pack is,
 // first on PATH.
 import { spawnSync } from 'node:child_process';
 

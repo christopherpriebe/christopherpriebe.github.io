@@ -4,9 +4,9 @@
 # Run it from anywhere; it works inside _instruments/cache-explorer/. Every step is safe to
 # rerun. It checks two machine-wide prerequisites and installs neither:
 #   1. rustup's proxies first on PATH, so rust-toolchain.toml takes effect;
-#   2. the Node version in web/.nvmrc.
+#   2. the Node version in _instruments/.nvmrc.
 # It then installs the pinned Rust toolchain (through rustup), the pinned
-# JavaScript tools (into web/node_modules) and runs the first build.
+# JavaScript tools (into _instruments/node_modules, the npm workspace's) and runs the first build.
 
 set -eu
 
@@ -30,21 +30,21 @@ esac
 rustup toolchain install --no-self-update
 
 # 3. The exact Node version of web/.nvmrc.
-want="v$(cat web/.nvmrc)"
+want="v$(cat ../.nvmrc)"
 command -v node >/dev/null 2>&1 ||
   fail "node is not on PATH. Install Node ${want#v} (for example 'fnm install ${want#v}') and use it in this folder, then run this again."
 have=$(node -v)
 [ "$have" = "$want" ] ||
-  fail "node is $have, but this project needs $want (web/.nvmrc). Switch to it (for example 'fnm use' inside _instruments/cache-explorer/web), then run this again."
+  fail "node is $have, but this project needs $want (_instruments/.nvmrc). Switch to it (for example 'fnm use' inside _instruments), then run this again."
 
-# 4. The pinned JavaScript tools, wasm-pack and wasm-opt among them, all inside web/node_modules.
-npm ci --prefix web
+# 4. The pinned JavaScript tools, wasm-pack and wasm-opt among them, all inside _instruments/node_modules.
+npm ci --prefix ..
 
 # 5. The first build, which also shows that the toolchain works.
 npm --prefix web run build
 
 # 6. What was built.
-bin="$root/web/node_modules/.bin"
+bin="$root/../node_modules/.bin"
 cargo --version
 "$bin/wasm-pack" --version
 "$bin/wasm-opt" --version

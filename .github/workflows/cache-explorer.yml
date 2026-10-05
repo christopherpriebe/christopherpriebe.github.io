@@ -94,11 +94,10 @@ jobs:
           workspaces: _instruments
       - uses: actions/setup-node@v7
         with:
-          node-version-file: _instruments/cache-explorer/web/.nvmrc
+          node-version-file: _instruments/.nvmrc
           cache: npm
-          cache-dependency-path: _instruments/cache-explorer/web/package-lock.json
+          cache-dependency-path: _instruments/package-lock.json
       - run: npm ci
-        working-directory: _instruments/cache-explorer/web
       - name: Facade tests in headless Chrome (fails if a suite was skipped or ran nothing)
         run: npm run test:wasm
         working-directory: _instruments/cache-explorer/web

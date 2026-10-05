@@ -20,7 +20,7 @@ This folder is excluded from Jekyll (`_instruments/` in `exclude:` of `_config.y
 Two things have to be true first, because both are choices about your whole machine, so setup checks them and does not change them:
 
 1. **rustup's proxies come first on `PATH`.** `rust-toolchain.toml` pins the Rust version, and only rustup's `cargo` and `rustc` read it. Another Rust ahead of it (Homebrew's `rust`, for instance) ignores the file and has no wasm32 standard library. With Homebrew's keg-only rustup, put `$(brew --prefix rustup)/bin` first on `PATH` in your shell profile and remove the other Rust.
-2. **Node is the version in `web/.nvmrc`** (24.21.0). `package.json` pins it exactly and `npm ci` refuses any other. A version manager such as fnm or nvm that reads `.nvmrc` does this for you.
+2. **Node is the version in `_instruments/.nvmrc`** (24.21.0). `_instruments/package.json` pins it exactly and `npm ci` refuses any other. A version manager such as fnm or nvm that reads `.nvmrc` does this for you.
 
 Then, from the repository root:
 
@@ -28,7 +28,7 @@ Then, from the repository root:
 _instruments/cache-explorer/scripts/setup.sh
 ```
 
-It installs the pinned Rust toolchain through rustup, the pinned JavaScript tools into `web/node_modules` (wasm-pack and wasm-opt among them, so nothing else is installed globally), and runs the first build. Each step is safe to rerun. The first build also has wasm-pack fetch the matching `wasm-bindgen` command-line tool and compile it, which takes about a minute, once.
+It installs the pinned Rust toolchain through rustup, the pinned JavaScript tools into `_instruments/node_modules`, the one npm workspace's folder (wasm-pack and wasm-opt among them, so nothing else is installed globally), and runs the first build. Each step is safe to rerun. The first build also has wasm-pack fetch the matching `wasm-bindgen` command-line tool and compile it, which takes about a minute, once.
 
 ## Building
 

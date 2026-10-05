@@ -1,5 +1,5 @@
 // Builds the facade with wasm-pack, then optimises it with the pinned binaryen.
-// Run through `npm run build:wasm` in web/, which puts web/node_modules/.bin,
+// Run through `npm run build:wasm` in web/, which puts _instruments/node_modules/.bin,
 // where both tools are, first on PATH.
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
