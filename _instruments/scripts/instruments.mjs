@@ -2,10 +2,11 @@
 // of _instruments/ with an instrument.json (its name, crates, wasm file name, asset folder, size
 // budget and signal tokens) and a web/ package that holds its npm scripts.
 //
-// As a module it exports `instrumentNames` and `loadInstrument`. As a command, run from
-// _instruments/ (the root package.json's scripts call it):
+// As a module it exports `instrumentNames` and `loadInstrument`. As a command, from any directory
+// (the root package.json's scripts call it):
 //   node scripts/instruments.mjs list [--json]   the instrument names
-//   node scripts/instruments.mjs run <task> [name]   an npm script of each instrument's web/
+//   node scripts/instruments.mjs run <task> [name]   an npm script of each instrument's web/;
+//     the one exception is `test`, which runs test:glue and test:wasm:node, not web/'s own `test`
 //   node scripts/instruments.mjs size [name]   the wasm's size against its budget
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -47,7 +48,7 @@ export function loadInstrument(name) {
 const tasks = { test: ['test:glue', 'test:wasm:node'] };
 
 function run(command, args) {
-  const result = spawnSync(command, args, { stdio: 'inherit' });
+  const result = spawnSync(command, args, { stdio: 'inherit', cwd: workspace });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
@@ -60,7 +61,7 @@ if (import.meta.main) {
     console.log(rest.includes('--json') ? JSON.stringify(names) : names.join('\n'));
   } else if (command === 'run' && rest[0] !== undefined) {
     for (const name of selected(rest[1])) {
-      for (const script of tasks[rest[0]] ?? [rest[0]]) run('npm', ['run', script, '--workspace', `${name}/web`]);
+      for (const script of Object.hasOwn(tasks, rest[0]) ? tasks[rest[0]] : [rest[0]]) run('npm', ['run', script, '--workspace', `${name}/web`]);
     }
   } else if (command === 'size') {
     for (const name of selected(rest[0])) {

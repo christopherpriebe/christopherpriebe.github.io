@@ -1,6 +1,6 @@
 // Builds an instrument's facade with wasm-pack, then optimises it with the pinned binaryen.
-// Usage: node build-wasm.mjs <instrument>. Run through `npm run build:wasm` in its web/, which puts _instruments/node_modules/.bin,
-// where both tools are, first on PATH.
+// Usage: node build-wasm.mjs <instrument>. Run through `npm run build:wasm` in its web/, which
+// puts _instruments/node_modules/.bin, where both tools are, first on PATH.
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { relative, resolve } from 'node:path';

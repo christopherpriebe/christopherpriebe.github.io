@@ -1,7 +1,7 @@
-// Runs an instrument's facade's wasm-bindgen-test suite in headless Chrome, and fails unless every suite
-// ran tests. Usage: node test-wasm.mjs <instrument> [--node]; with --node it runs the suite under Node
-// and reports wasm-pack's own result. Run through `npm run test:wasm` in its web/, which puts _instruments/node_modules/.bin, where wasm-pack is,
-// first on PATH.
+// Runs an instrument's facade's wasm-bindgen-test suite in headless Chrome, and fails unless every
+// suite ran tests. Usage: node test-wasm.mjs <instrument> [--node]; with --node it runs the suite
+// under Node and reports wasm-pack's own result. Run through `npm run test:wasm` in its web/, which
+// puts _instruments/node_modules/.bin, where wasm-pack is, first on PATH.
 import { spawnSync } from 'node:child_process';
 import { relative, resolve } from 'node:path';
 import { loadInstrument } from './instruments.mjs';

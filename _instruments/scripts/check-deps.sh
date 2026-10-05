@@ -9,11 +9,17 @@
 # some platforms, such as a crate's wasm32-only ones; without it cargo tree
 # shows only the host's, and the crate also builds for wasm32.
 #
-# Usage: sh scripts/check-deps.sh <crate>...
+# Usage: sh scripts/check-deps.sh [<crate>...]
+# With no crate it checks every crate of crates/ whose name does not end in -wasm.
 set -eu
 cd "$(dirname "$0")/.."
 
-[ "$#" -gt 0 ] || { echo "usage: sh scripts/check-deps.sh <crate>..." >&2; exit 2; }
+if [ "$#" -eq 0 ]; then
+  for dir in crates/*/; do
+    name=$(basename "$dir")
+    case "$name" in *-wasm) ;; *) set -- "$@" "$name" ;; esac
+  done
+fi
 for crate in "$@"; do
   tree=$(cargo tree -p "$crate" -e normal --target all --prefix none --locked)
   if printf '%s\n' "$tree" | grep -Eq '^(wasm-bindgen|js-sys|serde-wasm-bindgen|tsify|getrandom|web-sys) '; then

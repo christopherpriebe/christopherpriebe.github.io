@@ -28,7 +28,7 @@ cache-explorer-core = { path = "../cache-explorer-core", features = ["golden"] }
 wasm-bindgen-test = { workspace = true }
 
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = false          # run the pinned binaryen from web/node_modules instead
+wasm-opt = false          # run the pinned binaryen from _instruments/node_modules instead
 [package.metadata.wasm-pack.profile.release.wasm-bindgen]
 debug-js-glue = true      # type checks on arguments and freed objects: wrong types throw instead of trapping
 demangle-name-section = false

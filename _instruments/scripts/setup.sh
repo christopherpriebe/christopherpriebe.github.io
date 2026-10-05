@@ -29,7 +29,7 @@ esac
 # 2. The pinned toolchain: rustfmt, clippy and the wasm32 target come from the toolchain file.
 rustup toolchain install --no-self-update
 
-# 3. The exact Node version of web/.nvmrc.
+# 3. The exact Node version of _instruments/.nvmrc.
 want="v$(cat .nvmrc)"
 command -v node >/dev/null 2>&1 ||
   fail "node is not on PATH. Install Node ${want#v} (for example 'fnm install ${want#v}') and use it in this folder, then run this again."

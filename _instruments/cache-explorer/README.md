@@ -23,7 +23,7 @@ This folder is excluded from Jekyll (`_instruments/` in `exclude:` of `_config.y
 Two things have to be true first, because both are choices about your whole machine, so setup checks them and does not change them:
 
 1. **rustup's proxies come first on `PATH`.** `rust-toolchain.toml` pins the Rust version, and only rustup's `cargo` and `rustc` read it. Another Rust ahead of it (Homebrew's `rust`, for instance) ignores the file and has no wasm32 standard library. With Homebrew's keg-only rustup, put `$(brew --prefix rustup)/bin` first on `PATH` in your shell profile and remove the other Rust.
-2. **Node is the version in `_instruments/.nvmrc`** (24.21.0). `_instruments/package.json` pins it exactly and `npm ci` refuses any other. A version manager such as fnm or nvm that reads `.nvmrc` does this for you.
+2. **Node is the version in `_instruments/.nvmrc`** (24.21.0). `_instruments/package.json` pins it exactly and `npm ci` refuses any other. A version manager that reads `.nvmrc` does this for you: run `fnm use` in `_instruments/`, or start fnm with `--version-file-strategy=recursive` so it also finds the file from `cache-explorer/web/`; nvm already walks up.
 
 Then, from the repository root:
 
@@ -63,7 +63,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc -p cache-explorer-wasm --target wasm32-unkn
 cargo test --workspace --locked
 ```
 
-and from `_instruments/`, after a build (each runs the instrument's script of the same name; `node scripts/instruments.mjs run <script> <name>` runs one for a single instrument):
+and from `_instruments/`, after a build (each runs the instrument's web/ script of the same name, except `test`, which runs the glue tests and the facade's tests under Node; `node scripts/instruments.mjs run <script> <name>` runs one for a single instrument):
 
 ```sh
 npm run check            # types, lint, format, the checks in scripts/, and Vitest
