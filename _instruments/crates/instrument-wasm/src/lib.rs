@@ -26,6 +26,7 @@ use wasm_bindgen::JsCast;
 ///
 /// A `JsError` whose message is the `Display` of `invalid`'s error, when
 /// `value` does not have `T`'s shape.
+#[inline]
 pub fn read<T, E>(value: JsValue, invalid: impl FnOnce(String) -> E) -> Result<T, JsError>
 where
     T: DeserializeOwned,
@@ -45,6 +46,7 @@ where
 /// # Errors
 ///
 /// As [`read`].
+#[inline]
 pub fn arg<T, E>(value: &Ts<T>, invalid: impl FnOnce(String) -> E) -> Result<T, JsError>
 where
     T: DeserializeOwned + Tsify,
@@ -54,13 +56,20 @@ where
 }
 
 /// Serializes `items` to the JavaScript value a `T` holding them would give,
-/// without a copy of them: `T` must serialize as `items` does.
+/// without a copy of them.
+///
+/// # Caller's obligation
+///
+/// `T` must serialize as `items` does. Nothing checks it: the value is typed
+/// as a `T` whatever it holds, so a `T` that differs gives JavaScript a value
+/// whose declared type is wrong.
 ///
 /// # Errors
 ///
 /// A `JsError` carrying serde-wasm-bindgen's message, when `items` do not
 /// convert.
-pub fn serialize_as<T, S>(items: &S) -> Result<Ts<T>, JsError>
+#[inline]
+pub fn serialize_as_unchecked<T, S>(items: &S) -> Result<Ts<T>, JsError>
 where
     T: Tsify,
     S: Serialize + ?Sized,

@@ -8,6 +8,7 @@ The cache logic is a Rust crate compiled to WebAssembly, and the page is plain T
 ../crates/cache-explorer-core   the cache, the access engine, sessions, modules, share links (no JS or OS dependencies)
 ../crates/cache-explorer-wasm   the wasm-bindgen facade over the core, and its TypeScript declarations
 ../crates/instrument-session    what the instruments share: the share-string codec, the saved file's room, module text, event positions
+../crates/instrument-wasm       what the facades share: reading an argument with a typed error, serializing a list as its declared type
 ../crates/instrument-asm        the lexer of a line of assembly, the record of an error in it, the instruction-set trait and the program read under it
 web/                            the page: Vite, TypeScript, Vitest
 modules/                        the guided modules (JSON), and their index
@@ -57,11 +58,11 @@ From `_instruments/`, with the toolchain from setup:
 cargo fmt --all --check
 sh scripts/check-deps.sh
 cargo clippy --workspace --exclude '*-wasm' --all-targets --locked -- -D warnings
-cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
+cargo clippy -p instrument-wasm -p cache-explorer-wasm --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
 cargo clippy --workspace --exclude '*-wasm' --lib --locked -- -D warnings
-cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --lib --locked -- -D warnings
+cargo clippy -p instrument-wasm -p cache-explorer-wasm --target wasm32-unknown-unknown --lib --locked -- -D warnings
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude '*-wasm' --no-deps --document-private-items --locked
-RUSTDOCFLAGS="-D warnings" cargo doc -p cache-explorer-wasm --target wasm32-unknown-unknown --no-deps --document-private-items --locked
+RUSTDOCFLAGS="-D warnings" cargo doc -p instrument-wasm -p cache-explorer-wasm --target wasm32-unknown-unknown --no-deps --document-private-items --locked
 cargo test --workspace --exclude '*-wasm' --locked
 ```
 

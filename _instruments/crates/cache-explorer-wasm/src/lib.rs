@@ -131,7 +131,8 @@ fn read<T: Argument>(value: JsValue) -> Result<T, JsError> {
 ///
 /// Never in practice: events always convert.
 fn events_ts(events: &[MicroEvent]) -> Result<Ts<MicroEvents>, JsError> {
-    instrument_wasm::serialize_as(events)
+    // A `MicroEvents` serializes as its events do.
+    instrument_wasm::serialize_as_unchecked::<MicroEvents, _>(events)
 }
 
 /// A run of the Interactive Cache Explorer: the log of ops over a first

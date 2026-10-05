@@ -7,9 +7,9 @@ members = [
     "crates/instrument-wasm",
     "crates/cache-explorer-wasm",
 ]
-# A plain `cargo build`, `cargo test` or `cargo clippy` builds every crate but the facade, so
-# its `ts` feature is never unified into them. CI passes `--workspace --exclude '*-wasm'` for
-# the pure crates and `-p` for a facade.
+# A plain `cargo build`, `cargo test` or `cargo clippy` builds every crate but the facade side
+# (the facades and instrument-wasm), so a facade's `ts` feature is never unified into them. CI
+# passes `--workspace --exclude '*-wasm'` for the pure crates and `-p` for the facade side.
 default-members = [
     "crates/instrument-session",
     "crates/instrument-asm",

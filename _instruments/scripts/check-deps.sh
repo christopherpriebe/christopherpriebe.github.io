@@ -1,8 +1,9 @@
 #!/bin/sh
 # Fails if the default build of a pure crate depends on a JavaScript or
-# operating-system crate, or on instrument-wasm, the crate the facades share. Only an optional "ts" feature, which a facade
-# enables, may bring in tsify, wasm-bindgen and what they pull; the default
-# build, which every test of the crate uses, must have none of them.
+# operating-system crate, or on instrument-wasm, the crate the facades share.
+# Only an optional "ts" feature, which a facade enables, may bring in tsify,
+# wasm-bindgen and what they pull; the default build, which every test of the
+# crate uses, must have none of them.
 #
 # `cargo tree -p <crate>` resolves the crate alone, so a facade's "ts" feature
 # is not unified into it. `--target all` keeps dependencies that apply only on
