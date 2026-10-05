@@ -1,0 +1,9 @@
+---
+source: crates/cache-explorer-core/tests/pins.rs
+description: 3000 loads and stores of a fixed sequence on the default configuration.
+---
+ops: 3000
+share length: 13751
+share: fdb0fc43677dc934
+file length: 132694
+file: c7e9bb1eded4fd0a
