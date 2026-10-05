@@ -38,6 +38,7 @@ use crate::limits::{
     MAX_SHARE_TEXT_BYTES, SESSION_EVENT_LIMIT,
 };
 use crate::op::{Op, OpError};
+use crate::saved::{FileRoom, SavedOps};
 use crate::session::{position_in_op, Loader, ReplayError, Session, FIRST_TICK, MISS_TICK};
 use crate::text::{code_spans, Segments, TextSegment};
 use crate::units::EventPos;
@@ -1014,119 +1015,19 @@ pub(crate) fn op_json(op: &Op) -> String {
     to_json(op)
 }
 
-/// A session's ops as its saved file writes them, kept as ops are appended
-/// and dropped, so that a file or a link written after a cursor move
-/// serializes only the configuration and the cursor, and the file's size is
-/// known op by op without writing it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SavedOps {
-    /// The most bytes the file takes besides its ops' JSON, whatever the
-    /// mode and wherever the cursor is: see [`frame`].
-    frame: usize,
-    /// Each op's JSON, in order, with a comma between two: what the
-    /// document's `ops` array holds between its brackets.
-    text: String,
-    /// Where each op's JSON ends in `text`.
-    ends: Vec<usize>,
+/// The ops of a session on `initial`, none yet, as its saved file keeps
+/// them.
+pub(crate) fn saved_ops(initial: &Config) -> SavedOps {
+    SavedOps::new(
+        frame(initial),
+        usize::try_from(MAX_SHARE_JSON_BYTES).unwrap_or(usize::MAX),
+    )
 }
 
-/// The room a saved file has for more ops, taken as ops are checked in
-/// turn.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct FileRoom {
-    /// The bytes left under [`MAX_SHARE_JSON_BYTES`].
-    left: usize,
-    /// Whether the file holds an op already, from which a comma separates
-    /// the next.
-    after_op: bool,
-}
-
-impl SavedOps {
-    /// No op yet, for a session whose first run's configuration is
-    /// `initial`.
-    pub(crate) fn new(initial: &Config) -> Self {
-        Self {
-            frame: frame(initial),
-            text: String::new(),
-            ends: Vec::new(),
-        }
-    }
-
-    /// The ops' JSON, a comma between two.
-    pub(crate) fn text(&self) -> &str {
-        &self.text
-    }
-
-    /// Keeps the JSON of the first `ops` ops only.
-    pub(crate) fn truncate(&mut self, ops: usize) {
-        // Each end is where an op's JSON ended as it was appended, so it
-        // falls between two characters.
-        self.text.truncate(self.len_of(ops));
-        self.ends.truncate(ops);
-    }
-
-    /// Appends the next op's JSON, `json`.
-    pub(crate) fn push(&mut self, json: &str) {
-        if !self.ends.is_empty() {
-            self.text.push(',');
-        }
-        self.text.push_str(json);
-        self.ends.push(self.text.len());
-    }
-
-    /// The room the file has for ops after its first `ops`, those after
-    /// them not counted, since an op appended there drops them.
-    pub(crate) fn room_after(&self, ops: usize) -> FileRoom {
-        let used = self.frame.saturating_add(self.len_of(ops));
-        let limit = usize::try_from(MAX_SHARE_JSON_BYTES).unwrap_or(usize::MAX);
-        FileRoom {
-            left: limit.saturating_sub(used),
-            after_op: ops.min(self.ends.len()) > 0,
-        }
-    }
-
-    /// The bytes of the first `ops` ops' JSON, the commas between them
-    /// included.
-    fn len_of(&self, ops: usize) -> usize {
-        ops.min(self.ends.len())
-            .checked_sub(1)
-            .and_then(|last| self.ends.get(last))
-            .copied()
-            .unwrap_or(0)
-    }
-}
-
-impl FileRoom {
-    /// The room of the saved file of a log with no op yet over a first run
-    /// of `initial`: where the fold and a load start.
-    pub(crate) fn new(initial: &Config) -> Self {
-        SavedOps::new(initial).room_after(0)
-    }
-
-    /// Whether an op whose JSON is `json` fits.
-    pub(crate) fn fits(self, json: &str) -> bool {
-        self.needed(json) <= self.left
-    }
-
-    /// Takes the room of an op whose JSON is `json`.
-    ///
-    /// # Errors
-    ///
-    /// [`OpError::FileFull`] when it does not fit; nothing is taken.
-    pub(crate) fn take(&mut self, json: &str) -> Result<(), OpError> {
-        if !self.fits(json) {
-            return Err(OpError::FileFull);
-        }
-        self.left = self.left.saturating_sub(self.needed(json));
-        self.after_op = true;
-        Ok(())
-    }
-
-    /// The bytes an op whose JSON is `json` adds to the file, with the comma
-    /// before it.
-    fn needed(self, json: &str) -> usize {
-        json.len().saturating_add(usize::from(self.after_op))
-    }
+/// The room of the saved file of a log with no op yet over a first run of
+/// `initial`: where the fold and a load start.
+pub(crate) fn file_room(initial: &Config) -> FileRoom {
+    saved_ops(initial).room_after(0)
 }
 
 /// The most bytes a saved file of a session on `initial` takes besides its
@@ -1513,10 +1414,9 @@ mod tests {
     }
 
     #[test]
-    fn a_files_room_is_what_its_frame_and_its_ops_leave() {
+    fn a_files_frame_is_the_longest_document_with_no_op_and_its_room_is_what_it_leaves() {
         let initial = Preset::TwoWayLru.config();
         let limit = usize::try_from(MAX_SHARE_JSON_BYTES).unwrap();
-        let mut saved = SavedOps::new(&initial);
         // The frame is the document with no op at its longest: in the mode
         // that writes it longer, with the longest place a cursor can have.
         let longest = ShareDoc {
@@ -1539,54 +1439,24 @@ mod tests {
             ..longest.clone()
         };
         assert!(to_json(&advanced).len() < to_json(&longest).len());
-        assert_eq!(saved.frame, to_json(&longest).len());
-        let empty = FileRoom {
-            left: limit - saved.frame,
-            after_op: false,
-        };
-        assert_eq!(saved.room_after(0), empty);
-        // An op takes its JSON, and a comma before it after the first.
+        let frame_len = to_json(&longest).len();
+        assert_eq!(frame(&initial), frame_len);
+        // The room is what the frame leaves under the limit, to the byte.
+        let room = file_room(&initial);
+        assert!(room.fits(&"x".repeat(limit - frame_len)));
+        assert!(!room.fits(&"x".repeat(limit - frame_len + 1)));
+        // The document with ops at its longest is the frame and the ops'
+        // JSON, to the byte.
         let ops = [load(0x0A4), Op::Step];
-        let mut room = empty;
-        for (count, op) in (1..).zip(&ops) {
-            let json = op_json(op);
-            room.take(&json).unwrap();
-            saved.push(&json);
-            assert_eq!(room, saved.room_after(count));
+        let mut saved = saved_ops(&initial);
+        for op in &ops {
+            saved.push(&op_json(op));
         }
-        let (first, second) = (op_json(&load(0x0A4)), op_json(&Op::Step));
-        assert_eq!(saved.text(), format!("{first},{second}"));
-        assert_eq!(
-            room.left,
-            limit - saved.frame - first.len() - 1 - second.len()
-        );
-        // The document with those ops at its longest is the frame and the
-        // ops' JSON, to the byte.
         let doc = ShareDoc {
             ops: ops.to_vec(),
             ..longest
         };
-        assert_eq!(to_json(&doc).len(), saved.frame + saved.text().len());
-        // An op that fills the room to the byte fits; one a byte longer does
-        // not, and takes nothing.
-        let exact = "x".repeat(room.left - 1);
-        let over = format!("{exact}x");
-        assert!(room.fits(&exact));
-        assert!(!room.fits(&over));
-        let mut full = room;
-        assert_eq!(full.take(&over), Err(OpError::FileFull));
-        assert_eq!(full, room);
-        full.take(&exact).unwrap();
-        assert_eq!(full.left, 0);
-        assert!(!full.fits(""));
-        // Dropping ops gives their room back; counting past the ops kept
-        // counts those.
-        saved.truncate(1);
-        assert_eq!(saved.text(), first);
-        assert_eq!(saved.room_after(5), saved.room_after(1));
-        saved.truncate(0);
-        assert_eq!(saved.text(), "");
-        assert_eq!(saved.room_after(0), empty);
+        assert_eq!(to_json(&doc).len(), frame_len + saved.text().len());
     }
 
     #[test]

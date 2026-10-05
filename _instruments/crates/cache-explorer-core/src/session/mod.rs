@@ -78,7 +78,8 @@ use crate::geometry::{AccessError, Decoded};
 use crate::isa::ParseResult;
 use crate::machine::Machine;
 use crate::op::{Op, OpError, ProgramFormat};
-use crate::share::{self, FileRoom};
+use crate::saved::FileRoom;
+use crate::share;
 use crate::snapshot::{
     self, BusView, CacheView, ControlAction, Controls, CpuView, Labels, MemoryLineView, MemoryRows,
     MemoryView, ProgramView, RequestView, State,
@@ -229,7 +230,7 @@ impl Session {
             &origin,
             OpIndex::new_unchecked(0),
         );
-        let file = Some(FileRoom::new(initial));
+        let file = Some(share::file_room(initial));
         let mut sink = Recorder::default();
         let machine = resume_into(start, ops, &mut sink, file)?;
         Ok(Replay {
@@ -254,7 +255,7 @@ impl Session {
             &origin,
             OpIndex::new_unchecked(0),
         );
-        let file = Some(FileRoom::new(initial));
+        let file = Some(share::file_room(initial));
         replay_capturing(start, ops, pos, None, file).map(|(machine, _)| machine)
     }
 

@@ -23,7 +23,8 @@ use crate::config::Config;
 use crate::event::MicroEvent;
 use crate::machine::Machine;
 use crate::op::{AccessKind, Op};
-use crate::share::{FileRoom, SavedOps};
+use crate::saved::{FileRoom, SavedOps};
+use crate::share;
 use crate::stats::Outcome;
 use crate::units::{Addr, EventPos, OpIndex};
 
@@ -176,7 +177,7 @@ impl Log {
             ops: Vec::new(),
             serials: Vec::new(),
             last_serial: 0,
-            saved: SavedOps::new(initial),
+            saved: share::saved_ops(initial),
             events: Vec::new(),
             op_ends: Vec::new(),
             entries: Vec::new(),

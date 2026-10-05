@@ -83,6 +83,7 @@ mod op;
 mod prng;
 mod replacement;
 mod request;
+mod saved;
 mod session;
 mod share;
 mod snapshot;

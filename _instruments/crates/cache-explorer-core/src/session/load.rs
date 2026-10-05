@@ -24,7 +24,7 @@ use crate::event::MicroEvent;
 use crate::limits::{MAX_EVENTS_PER_ENTRY, PARSE_BYTES_PER_EVENT};
 use crate::machine::Machine;
 use crate::op::Op;
-use crate::share::{FileRoom, SavedOps};
+use crate::saved::{FileRoom, SavedOps};
 use crate::units::{EventPos, OpIndex};
 
 /// A log being replayed a slice at a time into a session on its initial
