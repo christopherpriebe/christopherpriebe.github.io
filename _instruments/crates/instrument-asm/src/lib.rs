@@ -9,4 +9,5 @@
 
 #![forbid(unsafe_code)]
 
+pub mod diag;
 pub mod lexer;

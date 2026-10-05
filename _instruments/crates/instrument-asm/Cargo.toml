@@ -15,5 +15,6 @@ ts = ["dep:tsify", "dep:wasm-bindgen"]   # enabled only through an instrument's 
                                          # wasm_bindgen by path, so both are needed
 
 [dependencies]
+serde = { workspace = true }
 tsify = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }

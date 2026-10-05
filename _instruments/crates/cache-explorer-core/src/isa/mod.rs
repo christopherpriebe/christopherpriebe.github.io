@@ -19,12 +19,12 @@
 //! [`MAX_PARSE_ERRORS`] errors.
 
 mod asm;
-mod diag;
 mod space;
 mod trace;
 
 use std::sync::Arc;
 
+use instrument_asm::diag::{chars, place_of_byte};
 use instrument_asm::lexer::{self, NumberWord, RegisterWord, Syntax, Token, TokenKind};
 use serde::Serialize;
 
@@ -33,10 +33,9 @@ use crate::geometry::{AccessError, Geometry};
 use crate::limits::{MAX_PARSE_ERRORS, MAX_PROGRAM_BYTES, MAX_PROGRAM_LINES};
 use crate::op::{OpError, ProgramFormat};
 use crate::units::{Addr, Register};
-use diag::{chars, place_of_byte};
 
 pub(crate) use asm::Mnemonic;
-pub use diag::ParseError;
+pub use instrument_asm::diag::ParseError;
 pub(crate) use space::AddressSpace;
 
 /// The marks of the tiny language and of a trace: `;` starts a comment and

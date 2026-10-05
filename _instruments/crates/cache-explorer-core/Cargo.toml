@@ -11,7 +11,7 @@ publish.workspace = true
 workspace = true
 
 [features]
-ts = ["dep:tsify", "dep:wasm-bindgen", "instrument-session/ts"]
+ts = ["dep:tsify", "dep:wasm-bindgen", "instrument-asm/ts", "instrument-session/ts"]
                                          # enabled only by cache-explorer-wasm; tsify's derive names wasm_bindgen by
                                          # path, so both are needed; tsify's "js" feature brings serde-wasm-bindgen
                                          # and js-sys; the shared crate's types derive their declarations too
