@@ -5,8 +5,8 @@ import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
-const workspace = resolve(import.meta.dirname, '..'); // _instruments/cache-explorer
-const web = resolve(workspace, 'web');
+const workspace = resolve(import.meta.dirname, '..', '..'); // _instruments, the Cargo workspace
+const web = resolve(import.meta.dirname, '..', 'web');
 const cargoHome = process.env.CARGO_HOME ?? resolve(homedir(), '.cargo');
 // Run in the workspace, so that rust-toolchain.toml picks the toolchain, as it does for cargo.
 const rustc = (...args) => execFileSync('rustc', args, { cwd: workspace, encoding: 'utf8' });
@@ -16,6 +16,8 @@ if (!commitHash) throw new Error('build-wasm: no commit-hash line in `rustc -vV`
 const env = {
   ...process.env,
   // Absolute paths end up in panic locations; remap them so the committed wasm is the same on every machine.
+  // The sources of the workspace's own crates are already relative to the workspace root, so the
+  // workspace remap is a safeguard for any absolute path under it.
   // The prebuilt std carries /rustc/<commit>/ paths, but when the rust-src component is installed
   // rustc swaps them for the local copy under the sysroot, so that is remapped back too. The build
   // is then the same with and without rust-src.
