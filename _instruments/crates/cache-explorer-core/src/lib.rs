@@ -59,7 +59,9 @@ pub mod limits;
 mod cache;
 mod config;
 mod cpu;
-mod de;
+mod de {
+    pub use instrument_session::deserialize_unit_enum;
+}
 mod engine;
 mod error;
 mod event;

@@ -1,6 +1,6 @@
-//! Reading the core's enums of unit variants, such as `Replacement` or
-//! `EventKind`, as serde's derive reads them, with one set of visitors for
-//! all of them.
+//! Reading an instrument's enums of unit variants, such as a replacement
+//! policy or a kind of event, as serde's derive reads them, with one set of
+//! visitors for all of them.
 //!
 //! serde's derive gives each enum visitors of its own, and each is compiled
 //! again for every deserializer that reads the enum: JSON text,
@@ -20,7 +20,9 @@ use serde::de::{
 /// Implements `Deserialize` for an enum of unit variants, as serde's derive
 /// would for the same names: `deserialize_unit_enum!(Kind { "read" => Read,
 /// "write" => Write })`. Every variant must be listed, in the enum's order,
-/// with the name its `Serialize` writes.
+/// with the name its `Serialize` writes. The crate that expands it depends
+/// on `serde`.
+#[macro_export]
 macro_rules! deserialize_unit_enum {
     ($type:ident { $($name:literal => $variant:ident),+ $(,)? }) => {
         impl<'de> ::serde::Deserialize<'de> for $type {
@@ -38,8 +40,6 @@ macro_rules! deserialize_unit_enum {
         }
     };
 }
-
-pub(crate) use deserialize_unit_enum;
 
 /// The variant of the enum `name` that `deserializer` holds: the one of
 /// `values` at the place of its name in `names`.

@@ -10,4 +10,5 @@
 
 #![forbid(unsafe_code)]
 
+pub mod de;
 pub mod text;
