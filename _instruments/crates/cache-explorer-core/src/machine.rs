@@ -31,7 +31,7 @@ use thiserror::Error;
 
 use crate::cache::{Cache, Dirtiness, Set, Slot, Way};
 use crate::config::{Config, ConfigError, Replacement, WritePolicy};
-use crate::cpu::CpuState;
+use crate::cpu::{CpuHost, CpuState};
 use crate::event::ChangeRef;
 use crate::format;
 use crate::geometry::{Geometry, Location};
@@ -96,6 +96,27 @@ pub(crate) struct RunPlace {
     pub(crate) run: u32,
     /// The entries the run has had so far; the current entry's number.
     pub(crate) entries: u32,
+}
+
+impl CpuHost for Machine {
+    type Core = ();
+    type Space = Geometry;
+
+    fn cpu(&self, (): ()) -> &CpuState {
+        &self.cpu
+    }
+
+    fn cpu_mut(&mut self, (): ()) -> &mut CpuState {
+        &mut self.cpu
+    }
+
+    fn space(&self) -> &Geometry {
+        &self.geometry
+    }
+
+    fn entry_begun(&mut self) {
+        self.access = None;
+    }
 }
 
 /// The access an entry is making: the request, where its address falls, and

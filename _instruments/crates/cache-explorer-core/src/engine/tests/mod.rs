@@ -217,6 +217,7 @@ impl Run {
 /// A load of `at` into `into`, issued by hand.
 fn load(at: u32, into: Register) -> Request {
     Request::Load {
+        core: (),
         addr: addr(at),
         into,
         origin: Origin::Hand,
@@ -226,6 +227,7 @@ fn load(at: u32, into: Register) -> Request {
 /// A store of `value` to `at`, issued by hand.
 fn store(at: u32, value: u64) -> Request {
     Request::Store {
+        core: (),
         addr: addr(at),
         value,
         from: None,
@@ -620,7 +622,7 @@ impl Driven {
     #[track_caller]
     fn load_as(&mut self, source: &str, format: ProgramFormat) -> Vec<(MicroEvent, Machine)> {
         let program = Program::parse(&self.run.machine.geometry, source, format).unwrap();
-        let (flow, trace) = self.apply(|machine, out| load_program(machine, program, out));
+        let (flow, trace) = self.apply(|machine, out| load_program(machine, (), program, out));
         assert_eq!(flow, Flow::Continue);
         trace
     }

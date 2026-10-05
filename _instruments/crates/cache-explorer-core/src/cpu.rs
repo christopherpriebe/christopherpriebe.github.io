@@ -12,7 +12,9 @@
 
 use std::sync::Arc;
 
-use crate::isa::{Placed, Program};
+use std::fmt::Debug;
+
+use crate::isa::{AddressSpace, Placed, Program};
 use crate::op::ProgramFormat;
 use crate::units::Register;
 
@@ -38,6 +40,33 @@ pub(crate) struct CpuState {
     executed: u32,
     /// Why the program stopped before its end, if it did.
     halted: Option<Halted>,
+}
+
+/// What instruction execution needs of the machine around a CPU: the CPU of
+/// each core, the address space its addresses are checked against, and a hook
+/// for the start of an entry that is not an access.
+///
+/// A machine with one CPU has the core `()`; one with several names each by
+/// a value of its own, and one executor steps whichever core it is told to.
+pub(crate) trait CpuHost {
+    /// Which CPU an instruction runs on.
+    type Core: Copy + Eq + Debug;
+    /// The address space a program's addresses are checked against. Small
+    /// and `Copy`, so a message can be worded after the host changes.
+    type Space: AddressSpace + Copy;
+
+    /// The CPU of `core`.
+    fn cpu(&self, core: Self::Core) -> &CpuState;
+
+    /// The CPU of `core`, to change through [`CpuState`]'s methods.
+    fn cpu_mut(&mut self, core: Self::Core) -> &mut CpuState;
+
+    /// The address space.
+    fn space(&self) -> &Self::Space;
+
+    /// An entry that is not an access has begun, so the access of the entry
+    /// before it, if the host keeps one, is no longer the one in progress.
+    fn entry_begun(&mut self);
 }
 
 /// Why a program stopped before its end. Either way the pc stays at the

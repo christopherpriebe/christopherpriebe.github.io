@@ -457,6 +457,7 @@ fn i2_and_i6_are_not_checked_while_an_access_is_in_flight() {
     let addr = geometry.addr(0x0A4).unwrap();
     machine.access = Some(AccessContext {
         request: Request::Load {
+            core: (),
             addr,
             into: crate::units::Register::R1,
             origin: crate::request::Origin::Hand,

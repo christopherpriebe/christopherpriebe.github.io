@@ -1,4 +1,5 @@
-//! A load or store as the engine executes it, and who made it.
+//! A load or store as the engine executes it, which CPU made it, and who
+//! asked for it.
 //!
 //! The machine holds the request of the access in flight; the state views
 //! and the timeline read who made it.
@@ -8,10 +9,15 @@ use crate::units::{Addr, Register};
 
 /// A load or store the engine executes. Its address has been checked: it
 /// fits the address width and is a multiple of the word size.
+///
+/// `C` names the core that made the request, `()` where the machine has one
+/// CPU.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Request {
+pub(crate) enum Request<C = ()> {
     /// A load of the word at `addr` into register `into`.
     Load {
+        /// The core that made the request.
+        core: C,
         /// The word's address.
         addr: Addr,
         /// The register the word goes into.
@@ -22,6 +28,8 @@ pub(crate) enum Request {
     /// A store of `value` to the word at `addr`. Only the value's low
     /// `8 × word_bytes` bits are stored.
     Store {
+        /// The core that made the request.
+        core: C,
         /// The word's address.
         addr: Addr,
         /// The value, as wide as a register.
@@ -46,7 +54,7 @@ pub(crate) enum Origin {
     Program,
 }
 
-impl Request {
+impl<C: Copy> Request<C> {
     /// The address the request reads or writes.
     pub(crate) fn addr(self) -> Addr {
         match self {

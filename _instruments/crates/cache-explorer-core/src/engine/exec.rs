@@ -22,19 +22,24 @@
 //! stays at the instruction that did not execute. Literal addresses and
 //! immediates were checked when the program was parsed, so they never fault.
 //!
-//! An instruction's `ld` and `st` are performed by a [`MemoryPort`], which the
-//! executor is generic over: the cache machine's own memory in a run, and any
-//! other memory system that takes a request and emits its events in a test.
+//! The executor reaches the machine only through [`CpuHost`], which gives it
+//! a core's CPU and the address space, and through the emitter; an
+//! instruction's `ld` and `st` are performed by a [`MemoryPort`]. It is
+//! generic over both: the cache machine and its own memory in a run, and in a
+//! test any other host and any other memory system that takes a request and
+//! emits its events.
 //!
 //! `StepAccess` and `Run` execute one instruction after another, each its own
 //! entry, until an access has completed or until they have executed as many
 //! as asked; the program finishing or stopping ends them too. Between two
 //! instructions they check the session's limit, and stop with an `Error`
 //! event, as the budget does, when the log has no room for another entry.
+//!
+//! [`CpuHost`]: crate::cpu::CpuHost
 
-use crate::cpu::{Halted, NotReady};
+use crate::cpu::{CpuState, Halted, NotReady};
 use crate::engine::port::{CacheMemory, MemoryPort};
-use crate::engine::{end_entry, Draft, Emitter, Flow, Halt, OpProgress};
+use crate::engine::{end_entry, Draft, Emitter, EventHost, Flow, Halt, OpProgress};
 use crate::event::{ChangeRef, EventKind};
 use crate::explain;
 use crate::isa::{Address, AddressSpace, Instruction, Operand, Program};
@@ -80,11 +85,16 @@ enum Fault {
 ///
 /// Returns [`Flow::Stop`] when the sink stopped the load, or when an
 /// invariant no longer holds.
-pub(crate) fn load_program(machine: &mut Machine, program: Program, out: &mut Emitter<'_>) -> Flow {
+pub(crate) fn load_program<H: EventHost>(
+    host: &mut H,
+    core: H::Core,
+    program: Program,
+    out: &mut Emitter<'_>,
+) -> Flow {
     out.begin_setup();
-    machine.access = None;
+    host.entry_begun();
     let (format, instructions) = (program.format(), program.len());
-    let cleared = machine.cpu.load(program);
+    let cleared = host.cpu_mut(core).load(program);
     let mut changed: Vec<ChangeRef> = cleared
         .registers
         .into_iter()
@@ -97,10 +107,10 @@ pub(crate) fn load_program(machine: &mut Machine, program: Program, out: &mut Em
         changed,
         ..Draft::new(EventKind::Setup, None)
     };
-    let result = out.emit(machine, draft, || {
+    let result = out.emit(host, draft, || {
         explain::program_loaded(format, instructions)
     });
-    end_entry(machine, result, out)
+    end_entry(host, result, out)
 }
 
 /// Whether the loaded program can execute an instruction.
@@ -120,14 +130,14 @@ pub(crate) fn ready(machine: &Machine) -> Result<(), OpError> {
 
 /// [`step_through`] on the cache machine's own memory.
 pub(crate) fn step(machine: &mut Machine, out: &mut Emitter<'_>) -> Flow {
-    step_through(&mut CacheMemory, machine, out)
+    step_through(&mut CacheMemory, machine, (), out)
 }
 
-/// Executes the instruction at the pc as the run's next entry: its access,
-/// or its `Complete` event; or, when the budget is spent or its address
-/// faults, an `Error` event that stops the program. The caller has checked
-/// with [`ready`] that there is an instruction to execute; if there is none,
-/// nothing happens.
+/// Executes the instruction at the pc of `core` as the run's next entry: its
+/// access, or its `Complete` event; or, when the budget is spent or its
+/// address faults, an `Error` event that stops the program. The caller has
+/// checked with [`ready`] that there is an instruction to execute; if there
+/// is none, nothing happens.
 ///
 /// Returns [`Flow::Continue`] when the instruction retired, and
 /// [`Flow::Stop`] when the op ends here: the sink stopped it, an `Error`
@@ -135,18 +145,20 @@ pub(crate) fn step(machine: &mut Machine, out: &mut Emitter<'_>) -> Flow {
 ///
 /// A `ld` or `st` is performed by `memory`; everything else is the
 /// executor's own.
-pub(crate) fn step_through(
-    memory: &mut impl MemoryPort,
-    machine: &mut Machine,
+pub(crate) fn step_through<H: EventHost>(
+    memory: &mut impl MemoryPort<H>,
+    host: &mut H,
+    core: H::Core,
     out: &mut Emitter<'_>,
 ) -> Flow {
-    let Some(placed) = machine.cpu.next_instruction() else {
+    let Some(placed) = host.cpu(core).next_instruction() else {
         return Flow::Stop;
     };
     let (instruction, line) = (placed.instruction.clone(), placed.line);
-    if machine.cpu.executed() >= INSTRUCTION_BUDGET {
+    if host.cpu(core).executed() >= INSTRUCTION_BUDGET {
         return stop(
-            machine,
+            host,
+            core,
             Halted::OutOfBudget,
             None,
             out,
@@ -155,7 +167,8 @@ pub(crate) fn step_through(
     }
     let request = match instruction {
         Instruction::Load { into, from } => {
-            address(machine, &machine.geometry, from).map(|addr| Request::Load {
+            address(host.cpu(core), host.space(), from).map(|addr| Request::Load {
+                core,
                 addr,
                 into,
                 origin: Origin::Program,
@@ -163,10 +176,11 @@ pub(crate) fn step_through(
         }
         Instruction::Store { to, value } => {
             let (value, from) = match value {
-                Operand::Register(register) => (machine.cpu.register(register), Some(register)),
+                Operand::Register(register) => (host.cpu(core).register(register), Some(register)),
                 Operand::Immediate(value) => (value, None),
             };
-            address(machine, &machine.geometry, to).map(|addr| Request::Store {
+            address(host.cpu(core), host.space(), to).map(|addr| Request::Store {
+                core,
                 addr,
                 value,
                 from,
@@ -174,48 +188,47 @@ pub(crate) fn step_through(
             })
         }
         Instruction::Add { into, left, right } => {
-            let sum = machine
-                .cpu
-                .register(left)
-                .wrapping_add(read(machine, right));
-            let next = machine.cpu.pc().saturating_add(1);
-            let result = complete(machine, Some((into, sum)), next, out, || {
+            let cpu = host.cpu(core);
+            let sum = cpu.register(left).wrapping_add(read(cpu, right));
+            let next = cpu.pc().saturating_add(1);
+            let result = complete(host, core, Some((into, sum)), next, out, || {
                 explain::add(into, sum)
             });
-            return end_entry(machine, result, out);
+            return end_entry(host, result, out);
         }
         Instruction::BranchIfNotZero {
             test,
             target,
             label,
         } => {
-            let value = machine.cpu.register(test);
+            let cpu = host.cpu(core);
+            let value = cpu.register(test);
             let taken = value != 0;
             let next = if taken {
                 target
             } else {
-                machine.cpu.pc().saturating_add(1)
+                cpu.pc().saturating_add(1)
             };
-            let result = complete(machine, None, next, out, || {
+            let result = complete(host, core, None, next, out, || {
                 explain::bnez(test, value, taken.then_some(label.as_str()))
             });
-            return end_entry(machine, result, out);
+            return end_entry(host, result, out);
         }
     };
     match request {
-        Ok(request) => memory.access(machine, request, out),
+        Ok(request) => memory.access(host, request, out),
         Err(fault) => {
-            let geometry = machine.geometry;
+            let space = *host.space();
             let addr = match fault {
                 Fault::Misaligned { addr, .. } => Some(addr),
                 Fault::OutOfRange { .. } => None,
             };
-            stop(machine, Halted::Faulted, addr, out, || match fault {
+            stop(host, core, Halted::Faulted, addr, out, || match fault {
                 Fault::OutOfRange { register, value } => {
-                    explain::fault_out_of_range(&geometry, line, register, value)
+                    explain::fault_out_of_range(&space, line, register, value)
                 }
                 Fault::Misaligned { register, addr } => {
-                    explain::fault_misaligned(&geometry, line, register, addr)
+                    explain::fault_misaligned(&space, line, register, addr)
                 }
             })
         }
@@ -229,13 +242,13 @@ pub(crate) fn execute(
     progress: OpProgress,
     out: &mut Emitter<'_>,
 ) {
-    execute_through(&mut CacheMemory, machine, until, progress, out);
+    execute_through(&mut CacheMemory, machine, (), until, progress, out);
 }
 
-/// Executes instructions as entries of one op until `until` says to stop,
-/// the program finishes, or an `Error` event ends the op, starting after the
-/// `progress` instructions the op has already executed. The caller has
-/// checked with [`ready`] that there is an instruction to execute at the
+/// Executes instructions of `core` as entries of one op until `until` says to
+/// stop, the program finishes, or an `Error` event ends the op, starting
+/// after the `progress` instructions the op has already executed. The caller
+/// has checked with [`ready`] that there is an instruction to execute at the
 /// op's start.
 ///
 /// At each entry boundary where the op goes on, the sink is told of it with
@@ -245,9 +258,10 @@ pub(crate) fn execute(
 /// its budget would, and the op ends.
 ///
 /// [`resume`]: crate::engine::resume
-pub(crate) fn execute_through(
-    memory: &mut impl MemoryPort,
-    machine: &mut Machine,
+pub(crate) fn execute_through<H: EventHost>(
+    memory: &mut impl MemoryPort<H>,
+    host: &mut H,
+    core: H::Core,
     until: Until,
     mut progress: OpProgress,
     out: &mut Emitter<'_>,
@@ -255,15 +269,16 @@ pub(crate) fn execute_through(
     loop {
         if progress != OpProgress::START {
             let counted = matches!(until, Until::Count(n) if progress.get() >= n);
-            if counted || machine.cpu.next_instruction().is_none() {
+            if counted || host.cpu(core).next_instruction().is_none() {
                 return;
             }
-            if out.boundary(machine, progress) == Flow::Stop {
+            if out.boundary(host, progress) == Flow::Stop {
                 return;
             }
             if !out.has_room() {
                 stop(
-                    machine,
+                    host,
+                    core,
                     Halted::OutOfBudget,
                     None,
                     out,
@@ -272,13 +287,13 @@ pub(crate) fn execute_through(
                 return;
             }
         }
-        let accesses = machine.cpu.next_instruction().is_some_and(|placed| {
+        let accesses = host.cpu(core).next_instruction().is_some_and(|placed| {
             matches!(
                 placed.instruction,
                 Instruction::Load { .. } | Instruction::Store { .. }
             )
         });
-        if step_through(memory, machine, out) == Flow::Stop {
+        if step_through(memory, host, core, out) == Flow::Stop {
             return;
         }
         progress = progress.next();
@@ -290,12 +305,12 @@ pub(crate) fn execute_through(
 
 /// The address `from` names: a literal as parsed, or a register's value,
 /// which must fit the address width and be a multiple of the word size.
-fn address(machine: &Machine, space: &impl AddressSpace, from: Address) -> Result<Addr, Fault> {
+fn address(cpu: &CpuState, space: &impl AddressSpace, from: Address) -> Result<Addr, Fault> {
     let register = match from {
         Address::Literal(addr) => return Ok(addr),
         Address::Register(register) => register,
     };
-    let value = machine.cpu.register(register);
+    let value = cpu.register(register);
     let Some(addr) = u32::try_from(value)
         .ok()
         .and_then(|value| space.addr(value))
@@ -309,9 +324,9 @@ fn address(machine: &Machine, space: &impl AddressSpace, from: Address) -> Resul
 }
 
 /// The value `operand` reads.
-fn read(machine: &Machine, operand: Operand) -> u64 {
+fn read(cpu: &CpuState, operand: Operand) -> u64 {
     match operand {
-        Operand::Register(register) => machine.cpu.register(register),
+        Operand::Register(register) => cpu.register(register),
         Operand::Immediate(value) => value,
     }
 }
@@ -320,49 +335,52 @@ fn read(machine: &Machine, operand: Operand) -> u64 {
 /// the value of `write`, if any, into its register, retires the instruction
 /// and moves the pc to `next`. The event lists the register if its value
 /// changed, and the pc if it moved.
-fn complete(
-    machine: &mut Machine,
+fn complete<H: EventHost>(
+    host: &mut H,
+    core: H::Core,
     write: Option<(Register, u64)>,
     next: u32,
     out: &mut Emitter<'_>,
     explain: impl FnOnce() -> String,
 ) -> Result<(), Halt> {
-    out.begin_entry(machine);
-    machine.access = None;
+    out.begin_entry(host);
+    host.entry_begun();
+    let cpu = host.cpu_mut(core);
     let mut changed = Vec::new();
     if let Some((register, value)) = write {
-        if machine.cpu.write(register, value) {
+        if cpu.write(register, value) {
             changed.push(ChangeRef::Register { register });
         }
     }
-    if machine.cpu.retire(next) {
+    if cpu.retire(next) {
         changed.push(ChangeRef::Pc);
     }
     let draft = Draft {
         changed,
         ..Draft::new(EventKind::Complete, None)
     };
-    out.emit(machine, draft, explain)
+    out.emit(host, draft, explain)
 }
 
-/// Stops the program before the instruction at the pc, which does not
-/// execute: an `Error` entry of its own, at `addr` if the fault has one,
+/// Stops the program of `core` before the instruction at the pc, which does
+/// not execute: an `Error` entry of its own, at `addr` if the fault has one,
 /// which ends the op.
-fn stop(
-    machine: &mut Machine,
+fn stop<H: EventHost>(
+    host: &mut H,
+    core: H::Core,
     halted: Halted,
     addr: Option<Addr>,
     out: &mut Emitter<'_>,
     explain: impl FnOnce() -> String,
 ) -> Flow {
-    out.begin_entry(machine);
-    machine.access = None;
-    machine.cpu.halt(halted);
+    out.begin_entry(host);
+    host.entry_begun();
+    host.cpu_mut(core).halt(halted);
     let draft = Draft {
         addr,
         ..Draft::new(EventKind::Error, None)
     };
     // The op ends here whatever the sink answers.
-    let _ = out.emit(machine, draft, explain);
+    let _ = out.emit(host, draft, explain);
     Flow::Stop
 }

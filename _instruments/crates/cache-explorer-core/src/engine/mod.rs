@@ -38,6 +38,7 @@ pub use edit::{
 use access::access;
 use exec::{execute, load_program, ready, step, Until};
 
+use crate::cpu::CpuHost;
 use crate::event::{Cause, ChangeRef, EventKind, MicroEvent};
 use crate::explain;
 use crate::format;
@@ -56,6 +57,26 @@ pub(crate) enum Flow {
     Continue,
     /// Stop here, leaving the machine as it stands after the last event.
     Stop,
+}
+
+/// A host of a CPU that the engine can emit events for, which is one that
+/// has the machine the sinks are handed after each event.
+pub(crate) trait EventHost: CpuHost {
+    /// The machine as the sink sees it.
+    fn machine(&self) -> &Machine;
+
+    /// The machine, whose entry count the emitter advances.
+    fn machine_mut(&mut self) -> &mut Machine;
+}
+
+impl EventHost for Machine {
+    fn machine(&self) -> &Machine {
+        self
+    }
+
+    fn machine_mut(&mut self) -> &mut Machine {
+        self
+    }
 }
 
 /// Where the engine sends an op's events.
@@ -192,14 +213,15 @@ impl<'s> Emitter<'s> {
     /// Tells the sink that the op, which has executed `progress`
     /// instructions, goes on from an entry boundary here, unless the sink
     /// stops it.
-    fn boundary(&mut self, machine: &Machine, progress: OpProgress) -> Flow {
-        self.sink.boundary(machine, progress)
+    fn boundary(&mut self, host: &impl EventHost, progress: OpProgress) -> Flow {
+        self.sink.boundary(host.machine(), progress)
     }
 
     /// Starts the run's next entry: the events that follow are numbered from
     /// 1 within it.
-    pub(crate) fn begin_entry(&mut self, machine: &mut Machine) {
-        machine.run.entries = machine.run.entries.saturating_add(1);
+    pub(crate) fn begin_entry(&mut self, host: &mut impl EventHost) {
+        let run = &mut host.machine_mut().run;
+        run.entries = run.entries.saturating_add(1);
         self.seq = 0;
         self.setup = false;
     }
@@ -226,10 +248,11 @@ impl<'s> Emitter<'s> {
     /// [`Halt::Stopped`] when the sink stops the op here.
     pub(crate) fn emit(
         &mut self,
-        machine: &Machine,
+        host: &impl EventHost,
         draft: Draft,
         explain: impl FnOnce() -> String,
     ) -> Result<(), Halt> {
+        let machine = host.machine();
         self.seq = self.seq.saturating_add(1);
         let id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
@@ -268,12 +291,16 @@ impl<'s> Emitter<'s> {
     /// Ends the op with an `Error` event, an entry of its own, saying that
     /// `violation` no longer holds. The access in progress, if any, is
     /// abandoned.
-    pub(crate) fn internal_error(&mut self, machine: &mut Machine, violation: InvariantViolation) {
-        self.begin_entry(machine);
-        machine.access = None;
+    pub(crate) fn internal_error(
+        &mut self,
+        host: &mut impl EventHost,
+        violation: InvariantViolation,
+    ) {
+        self.begin_entry(host);
+        host.entry_begun();
         let draft = Draft::new(EventKind::Error, None);
         // The op ends here whatever the sink answers.
-        let _ = self.emit(machine, draft, || explain::internal_error(&violation));
+        let _ = self.emit(host, draft, || explain::internal_error(&violation));
     }
 }
 
@@ -284,15 +311,15 @@ impl<'s> Emitter<'s> {
 /// Returns [`Flow::Stop`] when the sink stopped the entry, or when an
 /// invariant no longer holds.
 pub(crate) fn end_entry(
-    machine: &mut Machine,
+    host: &mut impl EventHost,
     result: Result<(), Halt>,
     out: &mut Emitter<'_>,
 ) -> Flow {
-    match result.and_then(|()| machine.check_invariants().map_err(Halt::Broken)) {
+    match result.and_then(|()| host.machine().check_invariants().map_err(Halt::Broken)) {
         Ok(()) => Flow::Continue,
         Err(Halt::Stopped) => Flow::Stop,
         Err(Halt::Broken(violation)) => {
-            out.internal_error(machine, violation);
+            out.internal_error(host, violation);
             Flow::Stop
         }
     }
@@ -368,7 +395,7 @@ pub(crate) fn apply(machine: &mut Machine, op: &Op, out: &mut Emitter<'_>) -> Re
             access(machine, request, out);
         }
         Checked::Load(program) => {
-            load_program(machine, program, out);
+            load_program(machine, (), program, out);
         }
         Checked::Step => {
             step(machine, out);
@@ -494,6 +521,7 @@ fn request(
     }
     match (kind, value) {
         (AccessKind::Read, None) => Ok(Request::Load {
+            core: (),
             addr,
             into: Register::R1,
             origin: Origin::Hand,
@@ -507,6 +535,7 @@ fn request(
             })
         }
         (AccessKind::Write, Some(value)) => Ok(Request::Store {
+            core: (),
             addr,
             value: value.get(),
             from: None,
