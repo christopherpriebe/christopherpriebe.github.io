@@ -84,6 +84,7 @@ version = "0.1.0"
 dependencies = [
  "cache-explorer-core",
  "console_error_panic_hook",
+ "instrument-wasm",
  "js-sys",
  "serde",
  "serde-wasm-bindgen",
@@ -246,6 +247,17 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "instrument-wasm"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
  "tsify",
  "wasm-bindgen",
 ]

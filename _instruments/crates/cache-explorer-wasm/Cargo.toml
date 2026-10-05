@@ -17,14 +17,15 @@ doctest = false    # no doc-tests; their empty summary, `0 passed`, would fail s
 [dependencies]
 cache-explorer-core = { path = "../cache-explorer-core", features = ["ts"] }
 console_error_panic_hook = { workspace = true }   # debug builds only: the start function is cfg(debug_assertions)
-js-sys = { workspace = true }
+instrument-wasm = { path = "../instrument-wasm" }
 serde = { workspace = true }
-serde-wasm-bindgen = { workspace = true }
 tsify = { workspace = true }
 wasm-bindgen = { workspace = true }
 
 [dev-dependencies]
 cache-explorer-core = { path = "../cache-explorer-core", features = ["golden"] }
+js-sys = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
 wasm-bindgen-test = { workspace = true }
 
 [package.metadata.wasm-pack.profile.release]

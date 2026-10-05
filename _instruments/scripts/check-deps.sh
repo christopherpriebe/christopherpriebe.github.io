@@ -1,6 +1,6 @@
 #!/bin/sh
 # Fails if the default build of a pure crate depends on a JavaScript or
-# operating-system crate. Only an optional "ts" feature, which a facade
+# operating-system crate, or on instrument-wasm, the crate the facades share. Only an optional "ts" feature, which a facade
 # enables, may bring in tsify, wasm-bindgen and what they pull; the default
 # build, which every test of the crate uses, must have none of them.
 #
@@ -10,7 +10,8 @@
 # shows only the host's, and the crate also builds for wasm32.
 #
 # Usage: sh scripts/check-deps.sh [<crate>...]
-# With no crate it checks every crate of crates/ whose name does not end in -wasm.
+# With no crate it checks every crate of crates/ whose name does not end in -wasm:
+# the facades and instrument-wasm are the crates that may use these dependencies.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -22,7 +23,7 @@ if [ "$#" -eq 0 ]; then
 fi
 for crate in "$@"; do
   tree=$(cargo tree -p "$crate" -e normal --target all --prefix none --locked)
-  if printf '%s\n' "$tree" | grep -Eq '^(wasm-bindgen|js-sys|serde-wasm-bindgen|tsify|getrandom|web-sys) '; then
+  if printf '%s\n' "$tree" | grep -Eq '^(wasm-bindgen|js-sys|serde-wasm-bindgen|tsify|getrandom|web-sys|instrument-wasm) '; then
     echo "$crate pulls a JS or OS dependency in its default build" >&2; exit 1
   fi
 done

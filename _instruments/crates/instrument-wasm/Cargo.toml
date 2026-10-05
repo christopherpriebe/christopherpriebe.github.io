@@ -1,0 +1,21 @@
+[package]
+name = "instrument-wasm"
+version = "0.1.0"
+description = "What the WebAssembly facades of this workspace share: reading an argument from JavaScript with a typed error, and serializing a list as its declared type."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+doctest = false    # a facade-side crate: its code runs only on wasm32, where doc-tests cannot
+
+[dependencies]
+js-sys = { workspace = true }
+serde = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
+tsify = { workspace = true }
+wasm-bindgen = { workspace = true }

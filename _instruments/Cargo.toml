@@ -4,6 +4,7 @@ members = [
     "crates/instrument-session",
     "crates/instrument-asm",
     "crates/cache-explorer-core",
+    "crates/instrument-wasm",
     "crates/cache-explorer-wasm",
 ]
 # A plain `cargo build`, `cargo test` or `cargo clippy` builds every crate but the facade, so

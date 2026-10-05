@@ -76,14 +76,14 @@ jobs:
       - name: The pure crates have no JS or OS dependencies
         run: sh scripts/check-deps.sh
       - run: cargo clippy --workspace --exclude '*-wasm' --all-targets --locked -- -D warnings
-      - run: cargo clippy -p ${{ matrix.facade }} --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
+      - run: cargo clippy -p instrument-wasm -p ${{ matrix.facade }} --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
       # --all-targets builds the core's tests, whose dev-dependency on the core turns
       # "golden" on for its library too. These two lint the libraries as they ship: the
-      # pure crates' default build, and the facade with the core's "ts" alone on wasm32.
+      # pure crates' default build, and the facades with the core's "ts" alone on wasm32.
       - name: Pure libraries without the golden feature
         run: cargo clippy --workspace --exclude '*-wasm' --lib --locked -- -D warnings
       - name: Shipped build (facade library, core with ts alone)
-        run: cargo clippy -p ${{ matrix.facade }} --target wasm32-unknown-unknown --lib --locked -- -D warnings
+        run: cargo clippy -p instrument-wasm -p ${{ matrix.facade }} --target wasm32-unknown-unknown --lib --locked -- -D warnings
       - run: cargo test --workspace --exclude '*-wasm' --locked
       - name: Docs build, private items included (pure crates)
         env:
@@ -92,7 +92,7 @@ jobs:
       - name: Docs build, private items included (facade)
         env:
           RUSTDOCFLAGS: "-D warnings"
-        run: cargo doc -p ${{ matrix.facade }} --target wasm32-unknown-unknown --no-deps --document-private-items --locked
+        run: cargo doc -p instrument-wasm -p ${{ matrix.facade }} --target wasm32-unknown-unknown --no-deps --document-private-items --locked
 
   web:
     name: web (${{ matrix.instrument }})

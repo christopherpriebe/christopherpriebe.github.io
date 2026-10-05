@@ -23,10 +23,8 @@ use cache_explorer_core::{
     ShareSummary, State, Stats, StepOutcome, Timeline, WayForm, WayIndex, WordInput,
 };
 use serde::de::DeserializeOwned;
-use serde::Serialize;
 use tsify::{Ts, Tsify};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
 
 /// Prints a panic's message to the console before the module traps, in debug
 /// builds only. A release build aborts with `RuntimeError: unreachable`.
@@ -113,7 +111,7 @@ fn arg<T>(value: &Ts<T>) -> Result<T, JsError>
 where
     T: Argument + Tsify,
 {
-    read(value.js_value())
+    instrument_wasm::arg(value, |detail| ArgumentError::new(T::KIND, detail))
 }
 
 /// `value` read as a `T`, for an argument passed as a plain `JsValue`
@@ -123,13 +121,7 @@ where
 ///
 /// As [`arg`].
 fn read<T: Argument>(value: JsValue) -> Result<T, JsError> {
-    serde_wasm_bindgen::from_value(value).map_err(|error| {
-        let detail = JsValue::from(error)
-            .dyn_into::<js_sys::Error>()
-            .map(|error| String::from(error.message()))
-            .unwrap_or_default();
-        JsError::new(&ArgumentError::new(T::KIND, detail).to_string())
-    })
+    instrument_wasm::read(value, |detail| ArgumentError::new(T::KIND, detail))
 }
 
 /// Serializes `events` to the JavaScript value a [`MicroEvents`] holding
@@ -139,14 +131,7 @@ fn read<T: Argument>(value: JsValue) -> Result<T, JsError> {
 ///
 /// Never in practice: events always convert.
 fn events_ts(events: &[MicroEvent]) -> Result<Ts<MicroEvents>, JsError> {
-    // Configured as `Tsify::into_js` configures it for a `MicroEvents`, which
-    // serializes as its events do.
-    let config = <MicroEvents as Tsify>::SERIALIZATION_CONFIG;
-    let serializer = serde_wasm_bindgen::Serializer::new()
-        .serialize_missing_as_null(config.missing_as_null)
-        .serialize_maps_as_objects(config.hashmap_as_object)
-        .serialize_large_number_types_as_bigints(config.large_number_types_as_bigints);
-    Ok(Ts::new_unchecked(events.serialize(&serializer)?))
+    instrument_wasm::serialize_as(events)
 }
 
 /// A run of the Interactive Cache Explorer: the log of ops over a first
