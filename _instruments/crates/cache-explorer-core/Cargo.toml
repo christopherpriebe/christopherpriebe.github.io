@@ -23,8 +23,6 @@ instrument-session = { path = "../instrument-session" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-miniz_oxide = { workspace = true }
-base64 = { workspace = true }
 rand_core = { workspace = true }
 rand_xoshiro = { workspace = true }
 tsify = { workspace = true, optional = true }
@@ -36,5 +34,8 @@ wasm-bindgen = { workspace = true, optional = true }
 # Cargo then builds the library with it too whenever a test target is built, as
 # --all-targets does, so CI also lints the library alone with --lib.
 cache-explorer-core = { path = ".", features = ["golden"] }
+# tests/share.rs builds and reads share strings by hand.
+base64 = { workspace = true }
+miniz_oxide = { workspace = true }
 insta = { workspace = true }
 proptest = { workspace = true }

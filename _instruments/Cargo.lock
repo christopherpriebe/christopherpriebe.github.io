@@ -239,6 +239,8 @@ dependencies = [
 name = "instrument-session"
 version = "0.1.0"
 dependencies = [
+ "base64",
+ "miniz_oxide",
  "serde",
  "serde_json",
  "thiserror",

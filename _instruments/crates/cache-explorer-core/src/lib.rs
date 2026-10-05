@@ -57,7 +57,9 @@
 pub mod limits;
 
 mod cache;
-mod codec;
+mod codec {
+    pub use instrument_session::codec::*;
+}
 mod config;
 mod cpu;
 mod de {
