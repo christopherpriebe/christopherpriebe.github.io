@@ -32,10 +32,17 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       relevant: ${{ steps.diff.outputs.relevant }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: _instruments/.nvmrc
+      - id: matrix
+        name: One matrix entry per instrument, from its instrument.json
+        run: echo "matrix=$(node scripts/instruments.mjs matrix)" >> "$GITHUB_OUTPUT"
       - id: diff
         working-directory: .
         env:
@@ -57,13 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - instrument: cache-explorer
-            core: cache-explorer-core
-            facade: cache-explorer-wasm
-            out: cache_explorer
-            assets: assets/cache-explorer
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
       - name: Toolchain from rust-toolchain.toml
@@ -99,13 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - instrument: cache-explorer
-            core: cache-explorer-core
-            facade: cache-explorer-wasm
-            out: cache_explorer
-            assets: assets/cache-explorer
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
       - run: rustup toolchain install --no-self-update

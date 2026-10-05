@@ -5,6 +5,8 @@
 // As a module it exports `instrumentNames` and `loadInstrument`. As a command, from any directory
 // (the root package.json's scripts call it):
 //   node scripts/instruments.mjs list [--json]   the instrument names
+//   node scripts/instruments.mjs matrix   a CI job matrix as JSON: each instrument's name, crates, wasm
+//     file name and asset folder
 //   node scripts/instruments.mjs run <task> [name]   an npm script of each instrument's web/;
 //     the one exception is `test`, which runs test:glue and test:wasm:node, not web/'s own `test`
 //   node scripts/instruments.mjs size [name]   the wasm's size against its budget
@@ -59,6 +61,13 @@ if (import.meta.main) {
   if (command === 'list') {
     const names = instrumentNames();
     console.log(rest.includes('--json') ? JSON.stringify(names) : names.join('\n'));
+  } else if (command === 'matrix') {
+    const include = instrumentNames().map((name) => {
+      const { core, facade, outName } = loadInstrument(name);
+      const { assets } = JSON.parse(readFileSync(resolve(workspace, name, 'instrument.json'), 'utf8'));
+      return { instrument: name, core, facade, out: outName, assets };
+    });
+    console.log(JSON.stringify({ include }));
   } else if (command === 'run' && rest[0] !== undefined) {
     for (const name of selected(rest[1])) {
       for (const script of Object.hasOwn(tasks, rest[0]) ? tasks[rest[0]] : [rest[0]]) run('npm', ['run', script, '--workspace', `${name}/web`]);
@@ -69,7 +78,7 @@ if (import.meta.main) {
       run('sh', [resolve(import.meta.dirname, 'wasm-size.sh'), wasm, String(wasmBudget), String(wasmWarn)]);
     }
   } else {
-    console.error('usage: node scripts/instruments.mjs list [--json] | run <task> [name] | size [name]');
+    console.error('usage: node scripts/instruments.mjs list [--json] | matrix | run <task> [name] | size [name]');
     process.exit(2);
   }
 }
