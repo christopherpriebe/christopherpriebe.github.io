@@ -65,6 +65,7 @@ dependencies = [
  "base64",
  "cache-explorer-core",
  "insta",
+ "instrument-asm",
  "instrument-session",
  "miniz_oxide",
  "proptest",

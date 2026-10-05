@@ -8,3 +8,5 @@
 //! declarations for the types that cross the boundary.
 
 #![forbid(unsafe_code)]
+
+pub mod lexer;

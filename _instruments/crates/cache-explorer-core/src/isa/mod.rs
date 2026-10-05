@@ -19,12 +19,12 @@
 //! [`MAX_PARSE_ERRORS`] errors.
 
 mod asm;
-mod lexer;
 mod space;
 mod trace;
 
 use std::sync::Arc;
 
+use instrument_asm::lexer::{self, NumberWord, RegisterWord, Syntax, Token, TokenKind};
 use serde::Serialize;
 
 use crate::explain::{self, ParseProblem};
@@ -32,8 +32,6 @@ use crate::geometry::{AccessError, Geometry};
 use crate::limits::{MAX_PARSE_ERRORS, MAX_PROGRAM_BYTES, MAX_PROGRAM_LINES};
 use crate::op::{OpError, ProgramFormat};
 use crate::units::{Addr, Register};
-
-use lexer::{NumberWord, RegisterWord, Syntax, Token, TokenKind};
 
 pub(crate) use asm::Mnemonic;
 pub(crate) use space::AddressSpace;

@@ -19,6 +19,7 @@ golden = []                              # enabled only by dev-dependencies, the
                                          # the golden fixtures and render
 
 [dependencies]
+instrument-asm = { path = "../instrument-asm" }
 instrument-session = { path = "../instrument-session" }
 serde = { workspace = true }
 serde_json = { workspace = true }
