@@ -83,7 +83,9 @@ mod op;
 mod prng;
 mod replacement;
 mod request;
-mod saved;
+mod saved {
+    pub use instrument_session::saved::*;
+}
 mod session;
 mod share;
 mod snapshot;
