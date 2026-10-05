@@ -1,0 +1,19 @@
+[package]
+name = "instrument-session"
+version = "0.1.0"
+description = "What the instruments of this workspace share about a session: styled text, the unit-enum reader, event positions, the share-string codec and the saved file's room."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+ts = ["dep:tsify", "dep:wasm-bindgen"]   # enabled only through an instrument's own "ts" feature; tsify's derive names
+                                         # wasm_bindgen by path, so both are needed
+
+[dependencies]
+tsify = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }

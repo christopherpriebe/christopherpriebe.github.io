@@ -1,0 +1,19 @@
+[package]
+name = "instrument-asm"
+version = "0.1.0"
+description = "What the instruments of this workspace share about assembly: the lexer and the record of a parse error."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+ts = ["dep:tsify", "dep:wasm-bindgen"]   # enabled only through an instrument's own "ts" feature; tsify's derive names
+                                         # wasm_bindgen by path, so both are needed
+
+[dependencies]
+tsify = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }

@@ -227,6 +227,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "instrument-asm"
+version = "0.1.0"
+dependencies = [
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "instrument-session"
+version = "0.1.0"
+dependencies = [
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"

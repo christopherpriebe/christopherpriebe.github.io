@@ -73,22 +73,22 @@ jobs:
         with:
           workspaces: _instruments
       - run: cargo fmt --all --check
-      - name: Core has no JS or OS dependencies
-        run: sh scripts/check-deps.sh ${{ matrix.core }}
-      - run: cargo clippy -p ${{ matrix.core }} --all-targets --locked -- -D warnings
+      - name: The pure crates have no JS or OS dependencies
+        run: sh scripts/check-deps.sh
+      - run: cargo clippy --workspace --exclude '*-wasm' --all-targets --locked -- -D warnings
       - run: cargo clippy -p ${{ matrix.facade }} --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
       # --all-targets builds the core's tests, whose dev-dependency on the core turns
-      # "golden" on for its library too. These two lint the library as it ships: the
-      # core's default build, and the facade with the core's "ts" alone on wasm32.
-      - name: Core library without the golden feature
-        run: cargo clippy -p ${{ matrix.core }} --lib --locked -- -D warnings
+      # "golden" on for its library too. These two lint the libraries as they ship: the
+      # pure crates' default build, and the facade with the core's "ts" alone on wasm32.
+      - name: Pure libraries without the golden feature
+        run: cargo clippy --workspace --exclude '*-wasm' --lib --locked -- -D warnings
       - name: Shipped build (facade library, core with ts alone)
         run: cargo clippy -p ${{ matrix.facade }} --target wasm32-unknown-unknown --lib --locked -- -D warnings
-      - run: cargo test -p ${{ matrix.core }} --locked
-      - name: Docs build, private items included (core)
+      - run: cargo test --workspace --exclude '*-wasm' --locked
+      - name: Docs build, private items included (pure crates)
         env:
           RUSTDOCFLAGS: "-D warnings"
-        run: cargo doc -p ${{ matrix.core }} --no-deps --document-private-items --locked
+        run: cargo doc --workspace --exclude '*-wasm' --no-deps --document-private-items --locked
       - name: Docs build, private items included (facade)
         env:
           RUSTDOCFLAGS: "-D warnings"
