@@ -45,7 +45,7 @@ use crate::format;
 use crate::geometry::{AccessError, Geometry};
 use crate::isa::{ParseFailure, Program};
 use crate::limits::{MAX_EVENTS_PER_ENTRY, MAX_RUN_STEPS, MAX_SHARE_OPS, SESSION_EVENT_LIMIT};
-use crate::machine::{InvariantViolation, Machine};
+use crate::machine::{InvariantViolation, Machine, RunPlace};
 use crate::op::{AccessKind, Op, OpError};
 use crate::request::{Origin, Request};
 use crate::units::{Addr, OpIndex, Register, SetIndex, WayIndex, Word};
@@ -65,8 +65,8 @@ pub(crate) trait EventHost: CpuHost {
     /// The machine as the sink sees it.
     fn machine(&self) -> &Machine;
 
-    /// The machine, whose entry count the emitter advances.
-    fn machine_mut(&mut self) -> &mut Machine;
+    /// The run's place, whose entry count the emitter advances.
+    fn run_mut(&mut self) -> &mut RunPlace;
 }
 
 impl EventHost for Machine {
@@ -74,8 +74,8 @@ impl EventHost for Machine {
         self
     }
 
-    fn machine_mut(&mut self) -> &mut Machine {
-        self
+    fn run_mut(&mut self) -> &mut RunPlace {
+        &mut self.run
     }
 }
 
@@ -220,7 +220,7 @@ impl<'s> Emitter<'s> {
     /// Starts the run's next entry: the events that follow are numbered from
     /// 1 within it.
     pub(crate) fn begin_entry(&mut self, host: &mut impl EventHost) {
-        let run = &mut host.machine_mut().run;
+        let run = host.run_mut();
         run.entries = run.entries.saturating_add(1);
         self.seq = 0;
         self.setup = false;

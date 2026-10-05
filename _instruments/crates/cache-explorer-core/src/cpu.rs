@@ -10,9 +10,8 @@
 //! the program was loaded, which the budget bounds, and whether the program
 //! stopped before its end: on a fault, or when the budget ran out.
 
-use std::sync::Arc;
-
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use crate::isa::{AddressSpace, Placed, Program};
 use crate::op::ProgramFormat;
@@ -21,9 +20,11 @@ use crate::units::Register;
 /// The CPU: its registers, the loaded program or trace, and its place in it,
 /// all zero, empty and running when a run starts.
 ///
-/// Its fields are private: the program is replaced by [`CpuState::load`], a
-/// register by [`CpuState::write`], and the pc moves only as an instruction
-/// retires, so every state the CPU is in is one of those calls reached.
+/// Its fields are private: the program is replaced by [`CpuState::load`],
+/// which also resets the registers, the pc and the budget; a register
+/// changes by [`CpuState::write`]; the pc moves forward by
+/// [`CpuState::retire`]; and [`CpuState::halt`] stops the program. Every
+/// state the CPU is in is one of those calls reached.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct CpuState {
     /// The CPU's registers.
@@ -286,7 +287,7 @@ mod tests {
         assert_eq!(cpu.register(Register::R3), 0);
         assert_eq!((cpu.pc(), cpu.executed(), cpu.halted()), (0, 0, None));
         assert_eq!(cpu.program().map(|loaded| loaded.len()), Some(1));
-        // On a fresh CPU a load changes nothing to report.
+        // Loading again right after a load changes nothing to report.
         let again = cpu.load(program("add r1, r0, #1"));
         assert_eq!(
             again,

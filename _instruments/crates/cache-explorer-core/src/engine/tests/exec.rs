@@ -8,12 +8,6 @@ use super::*;
 
 /// Frame 3b's program, as `golden::FRAME_3B` has it. The unit tests do not
 /// depend on the `golden` feature, so they keep this copy.
-/// The CPU's place in its program: the pc, the instructions executed, and
-/// why it stopped, if it did.
-fn place(cpu: &CpuState) -> (u32, u32, Option<Halted>) {
-    (cpu.pc(), cpu.executed(), cpu.halted())
-}
-
 const FRAME_3B: &str = concat!(
     "  st  [0x0B0], #5\n",
     "  ld  r1, [0x0A4]\n",
@@ -22,6 +16,12 @@ const FRAME_3B: &str = concat!(
     "  ld  r3, [0x2A4]\n",
     "  ld  r4, [0x1A4]",
 );
+
+/// The CPU's place in its program: the pc, the instructions executed, and
+/// why it stopped, if it did.
+fn place(cpu: &CpuState) -> (u32, u32, Option<Halted>) {
+    (cpu.pc(), cpu.executed(), cpu.halted())
+}
 
 /// A loop over six words 0x44 apart, within the first 24 lines: each is
 /// loaded, incremented and stored back through a register, beside a store

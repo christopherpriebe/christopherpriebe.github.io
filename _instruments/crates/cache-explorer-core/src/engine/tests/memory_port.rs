@@ -1,5 +1,6 @@
 //! The memory port: instruction execution with a memory that is not the
-//! cache, a flat array of words that has no lines, hits or misses.
+//! cache, a flat array of words that has no lines, hits or misses, and a host
+//! with two CPUs that one executor steps either of.
 
 use std::collections::BTreeMap;
 
@@ -110,6 +111,13 @@ fn a_run_goes_through_the_port_to_the_end_of_the_program() {
     assert_eq!(driven.machine().counters, crate::stats::Counters::default());
 }
 
+/// The cores of [`Duo`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DuoCore {
+    First,
+    Second,
+}
+
 /// A machine with two CPUs and one memory: the first CPU is the cache
 /// machine's own, the second a CPU of its own beside it.
 struct Duo {
@@ -118,20 +126,20 @@ struct Duo {
 }
 
 impl CpuHost for Duo {
-    type Core = u8;
+    type Core = DuoCore;
     type Space = Geometry;
 
-    fn cpu(&self, core: u8) -> &CpuState {
+    fn cpu(&self, core: DuoCore) -> &CpuState {
         match core {
-            0 => &self.machine.cpu,
-            _ => &self.second,
+            DuoCore::First => &self.machine.cpu,
+            DuoCore::Second => &self.second,
         }
     }
 
-    fn cpu_mut(&mut self, core: u8) -> &mut CpuState {
+    fn cpu_mut(&mut self, core: DuoCore) -> &mut CpuState {
         match core {
-            0 => &mut self.machine.cpu,
-            _ => &mut self.second,
+            DuoCore::First => &mut self.machine.cpu,
+            DuoCore::Second => &mut self.second,
         }
     }
 
@@ -149,8 +157,8 @@ impl EventHost for Duo {
         &self.machine
     }
 
-    fn machine_mut(&mut self) -> &mut Machine {
-        &mut self.machine
+    fn run_mut(&mut self) -> &mut RunPlace {
+        &mut self.machine.run
     }
 }
 
@@ -165,7 +173,10 @@ fn one_executor_steps_either_core_of_a_two_core_host() {
     let mut flat = Flat::default();
     let mut recorder = Recorder::default();
     let mut out = Emitter::new(&mut recorder, OpIndex::new_unchecked(0), 0);
-    let programs = [(0, "st [0x0A4], #5"), (1, "ld r1, [0x0A4]\nld r2, [0x0A4]")];
+    let programs = [
+        (DuoCore::First, "st [0x0A4], #5"),
+        (DuoCore::Second, "ld r1, [0x0A4]\nld r2, [0x0A4]"),
+    ];
     for (core, source) in programs {
         let program = Program::parse(&geometry, source, ProgramFormat::Asm).unwrap();
         let flow = load_program(&mut duo, core, program, &mut out);
@@ -174,7 +185,7 @@ fn one_executor_steps_either_core_of_a_two_core_host() {
 
     // The second core loads before anything is stored, the first stores, and
     // the second loads what it stored.
-    for core in [1, 0, 1] {
+    for core in [DuoCore::Second, DuoCore::First, DuoCore::Second] {
         let flow = step_through(&mut flat, &mut duo, core, &mut out);
         assert_eq!(flow, Flow::Continue);
     }
