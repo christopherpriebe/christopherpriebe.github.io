@@ -863,7 +863,7 @@ fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
     assert!(setup.changed.is_empty());
     let mut expected = Machine::start(config).unwrap();
     expected.run.run = 2;
-    let program = Program::parse(
+    let program = isa::parse(
         &expected.geometry,
         "ld r1, [0x0A4]\nst [0x0A8], #7",
         ProgramFormat::Asm,

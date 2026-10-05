@@ -114,11 +114,9 @@ impl InstructionSet for Toy {
 
     fn read_line<'s>(
         context: &Context<'_, Self>,
-        tokens: &[Token<'s>],
+        first: &Token<'s>,
+        rest: &[Token<'s>],
     ) -> Result<Read<'s, Op>, Problem> {
-        let [first, rest @ ..] = tokens else {
-            return Err(problem(tokens.first(), "empty line"));
-        };
         let mut operands = Operands {
             tokens: rest,
             at: first,

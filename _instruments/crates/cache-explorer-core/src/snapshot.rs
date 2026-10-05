@@ -25,6 +25,7 @@ use crate::event::{ChangeRef, EventKind, MicroEvent};
 use crate::explain::{self, EntryNoun};
 use crate::format;
 use crate::geometry::{Decoded, Geometry};
+use crate::isa;
 use crate::machine::{AccessContext, Machine};
 use crate::memory::{word_at, Memory};
 use crate::op::{AccessKind, ProgramFormat};
@@ -1118,7 +1119,7 @@ impl ProgramView {
             instructions: program.len(),
             executed: machine.cpu.executed(),
             finished: at.is_none(),
-            summary: program.summary(pc),
+            summary: isa::summary(program, pc),
         })
     }
 }

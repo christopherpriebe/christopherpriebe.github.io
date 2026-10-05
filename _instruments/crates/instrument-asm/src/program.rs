@@ -244,13 +244,14 @@ impl<'a, 's, I: InstructionSet> Reading<'a, 's, I> {
                 }
             }
         }
-        let (Some(first), Some(last)) = (rest.first(), rest.last()) else {
+        let [first, operands @ ..] = rest else {
             return Ok(());
         };
+        let last = operands.last().unwrap_or(first);
         let Read {
             instructions,
             branch,
-        } = I::read_line(&self.context, rest)?;
+        } = I::read_line(&self.context, first, operands)?;
         if let Some(limit) = self.limits.instructions {
             let after = self.instructions.len().saturating_add(instructions.len());
             if after > usize::try_from(limit).unwrap_or(usize::MAX) {

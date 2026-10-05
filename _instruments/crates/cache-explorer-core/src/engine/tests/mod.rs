@@ -16,7 +16,7 @@ use crate::config::{
 };
 use crate::cpu::{CpuState, Halted};
 use crate::event::Counter;
-use crate::isa::Program;
+use crate::isa;
 use crate::limits::{
     INSTRUCTION_BUDGET, MAX_ADDRESS_BITS, MAX_EVENTS_PER_ENTRY, MAX_LINES, MAX_SHARE_OPS,
 };
@@ -621,7 +621,7 @@ impl Driven {
     /// Loads `source` as `format`.
     #[track_caller]
     fn load_as(&mut self, source: &str, format: ProgramFormat) -> Vec<(MicroEvent, Machine)> {
-        let program = Program::parse(&self.run.machine.geometry, source, format).unwrap();
+        let program = isa::parse(&self.run.machine.geometry, source, format).unwrap();
         let (flow, trace) = self.apply(|machine, out| load_program(machine, (), program, out));
         assert_eq!(flow, Flow::Continue);
         trace

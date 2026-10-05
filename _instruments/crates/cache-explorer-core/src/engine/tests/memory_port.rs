@@ -8,7 +8,7 @@ use super::*;
 use crate::cpu::CpuHost;
 use crate::engine::exec::{execute_through, step_through};
 use crate::geometry::Geometry;
-use crate::isa::AddressSpace;
+use crate::isa::{self, AddressSpace};
 
 /// A memory of words by address, which every access takes one entry and one
 /// `Complete` event to reach.
@@ -178,7 +178,7 @@ fn one_executor_steps_either_core_of_a_two_core_host() {
         (DuoCore::Second, "ld r1, [0x0A4]\nld r2, [0x0A4]"),
     ];
     for (core, source) in programs {
-        let program = Program::parse(&geometry, source, ProgramFormat::Asm).unwrap();
+        let program = isa::parse(&geometry, source, ProgramFormat::Asm).unwrap();
         let flow = load_program(&mut duo, core, program, &mut out);
         assert_eq!(flow, Flow::Continue);
     }

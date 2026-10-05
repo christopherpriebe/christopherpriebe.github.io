@@ -172,16 +172,17 @@ pub trait InstructionSet: Sized {
     /// label and a colon.
     fn has_labels(format: Self::Format) -> bool;
 
-    /// Reads the `tokens` of a line, after its label, if it has one: the
-    /// instructions they stand for, or the line's first problem. `tokens` is
-    /// never empty.
+    /// Reads a line, after its label if it has one, whose first token is
+    /// `first` and whose others are `operands`: the instructions they stand
+    /// for, or the line's first problem.
     ///
     /// # Errors
     ///
     /// The first problem on the line, as the program drawer underlines it.
     fn read_line<'s>(
         context: &Context<'_, Self>,
-        tokens: &[Token<'s>],
+        first: &Token<'s>,
+        operands: &[Token<'s>],
     ) -> Result<Read<'s, Self::Instruction>, Problem>;
 
     /// Points the branch `instruction`, which is the `at`th of the program,

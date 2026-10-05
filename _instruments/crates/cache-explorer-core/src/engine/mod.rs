@@ -43,7 +43,7 @@ use crate::event::{Cause, ChangeRef, EventKind, MicroEvent};
 use crate::explain;
 use crate::format;
 use crate::geometry::{AccessError, Geometry};
-use crate::isa::{ParseFailure, Program};
+use crate::isa::{self, Program};
 use crate::limits::{MAX_EVENTS_PER_ENTRY, MAX_RUN_STEPS, MAX_SHARE_OPS, SESSION_EVENT_LIMIT};
 use crate::machine::{InvariantViolation, Machine, RunPlace};
 use crate::op::{AccessKind, Op, OpError};
@@ -448,9 +448,9 @@ fn check(machine: &Machine, op: &Op, index: OpIndex, events: u64) -> Result<Chec
         Op::Issue { kind, addr, value } => {
             request(&machine.geometry, *kind, *addr, *value).map(Checked::Access)
         }
-        Op::Program { source, format } => Program::parse(&machine.geometry, source, *format)
+        Op::Program { source, format } => isa::parse(&machine.geometry, source, *format)
             .map(Checked::Load)
-            .map_err(ParseFailure::into_op_error),
+            .map_err(|failure| isa::op_error(&failure)),
         Op::Step => ready(machine).map(|()| Checked::Step),
         Op::StepAccess => ready(machine).map(|()| Checked::Execute(Until::Access)),
         Op::Run { n } => {
@@ -481,9 +481,9 @@ pub(crate) fn check_form(machine: &Machine, op: &Op) -> Result<(), OpError> {
         Op::Issue { kind, addr, value } => {
             request(&machine.geometry, *kind, *addr, *value).map(|_| ())
         }
-        Op::Program { source, format } => Program::parse(&machine.geometry, source, *format)
+        Op::Program { source, format } => isa::parse(&machine.geometry, source, *format)
             .map(|_| ())
-            .map_err(ParseFailure::into_op_error),
+            .map_err(|failure| isa::op_error(&failure)),
         Op::Step | Op::StepAccess => Ok(()),
         Op::Run { n } => {
             if (1..=MAX_RUN_STEPS).contains(n) {
@@ -556,7 +556,7 @@ fn new_run(machine: &mut Machine, start: Machine, out: &mut Emitter<'_>) {
     *machine = start;
     machine.run.run = run;
     let failure = match program
-        .map(|program| Program::parse(&machine.geometry, program.source(), program.format()))
+        .map(|program| isa::parse(&machine.geometry, program.source(), program.format()))
     {
         Some(Ok(program)) => {
             machine.cpu.load(program);

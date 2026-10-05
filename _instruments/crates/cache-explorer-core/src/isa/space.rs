@@ -26,6 +26,37 @@ pub(crate) trait AddressSpace {
     }
 }
 
+/// The two numbers a program is checked against, copied out of any address
+/// space: the one type the program reader is instantiated for, however many
+/// kinds of space ask it to read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Bounds {
+    /// Width of a byte address.
+    address_bits: u8,
+    /// Bytes per word.
+    word_bytes: u32,
+}
+
+impl Bounds {
+    /// The bounds of `space`.
+    pub(crate) fn of(space: &impl AddressSpace) -> Self {
+        Self {
+            address_bits: space.address_bits(),
+            word_bytes: space.word_bytes(),
+        }
+    }
+}
+
+impl AddressSpace for Bounds {
+    fn address_bits(&self) -> u8 {
+        self.address_bits
+    }
+
+    fn word_bytes(&self) -> u32 {
+        self.word_bytes
+    }
+}
+
 impl AddressSpace for Geometry {
     fn address_bits(&self) -> u8 {
         Geometry::address_bits(self)
@@ -43,7 +74,7 @@ mod tests {
     use super::*;
     use crate::geometry::AccessError;
     use crate::input;
-    use crate::isa::{Address, Instruction, Operand, Program};
+    use crate::isa::{Address, Instruction, Operand};
     use crate::op::ProgramFormat;
     use crate::units::Register;
 
@@ -62,7 +93,7 @@ mod tests {
     }
 
     fn first_error(source: &str, format: ProgramFormat) -> String {
-        Program::parse(&Narrow, source, format)
+        crate::isa::parse(&Narrow, source, format)
             .unwrap_err()
             .first()
             .message
@@ -71,7 +102,7 @@ mod tests {
 
     #[test]
     fn the_assembler_checks_against_the_space_it_is_given() {
-        let program = Program::parse(
+        let program = crate::isa::parse(
             &Narrow,
             "ld r1, [0x3E]\nst [0x10], #65535\nst [0x12], #-32768",
             ProgramFormat::Asm,
@@ -128,7 +159,7 @@ mod tests {
     #[test]
     fn the_trace_parser_checks_against_the_space_it_is_given() {
         let program =
-            Program::parse(&Narrow, "R 0x20\nW 0x22 0xFFFF", ProgramFormat::Trace).unwrap();
+            crate::isa::parse(&Narrow, "R 0x20\nW 0x22 0xFFFF", ProgramFormat::Trace).unwrap();
         assert_eq!(
             program.get(1).map(|placed| &placed.instruction),
             Some(&Instruction::Store {

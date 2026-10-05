@@ -16,7 +16,7 @@
 //! instruction) but none before `[` (`st[0x0A4], #7` is a store).
 //!
 //! Mnemonics and registers are read in either case; labels are
-//! case-sensitive, at most [`MAX_LABEL_CHARS`] characters, not a register or
+//! case-sensitive, at most [`MAX_LABEL_CHARS`](crate::limits::MAX_LABEL_CHARS) characters, not a register or
 //! a mnemonic, and defined once. A branch may name a label defined further
 //! down, so labels are resolved once every line is read, and a label after
 //! the last instruction marks the program's end.
@@ -26,17 +26,16 @@
 //! fit, and a bad label each have their own message; any other misshapen
 //! operand list gets the instruction's own example.
 
-use std::collections::BTreeMap;
+use instrument_asm::lexer::{self, NumberWord, RegisterWord, Token, TokenKind};
+use instrument_asm::set::{Context, Problem, Read};
 
-use crate::explain::{self, ParseProblem};
+use crate::explain::ParseProblem;
 use crate::input::fit_word;
-use crate::limits::{MAX_LABEL_CHARS, MAX_PROGRAM_INSTRUCTIONS};
 use crate::units::Register;
 
-use super::lexer::{self, NumberWord, RegisterWord, Token, TokenKind};
+use super::tiny::register;
 use super::{
-    error, literal_address, register, too_long, Address, AddressSpace, Instruction, Operand,
-    ParseError, Placed, Problem, SYNTAX,
+    literal_address, problem, too_long, Address, AddressSpace, Bounds, Instruction, Operand, Tiny,
 };
 
 /// Bytes in a register, the width of an `add` immediate.
@@ -57,7 +56,8 @@ pub(crate) enum Mnemonic {
 
 impl Mnemonic {
     /// Every mnemonic.
-    const ALL: [Mnemonic; 4] = [Mnemonic::Ld, Mnemonic::St, Mnemonic::Add, Mnemonic::Bnez];
+    pub(super) const ALL: [Mnemonic; 4] =
+        [Mnemonic::Ld, Mnemonic::St, Mnemonic::Add, Mnemonic::Bnez];
 
     /// The mnemonic as the assembler reads it.
     pub(crate) const fn name(self) -> &'static str {
@@ -77,185 +77,33 @@ impl Mnemonic {
     }
 }
 
-/// A branch whose label is resolved once every line is read.
-struct Branch<'s> {
-    /// The instruction's index.
-    index: usize,
-    /// The label token, for an error if it is never defined.
-    label: Token<'s>,
-    /// Its line.
-    line: u32,
-}
-
-/// What the assembler has read so far.
-struct Assembler<'sp, 's, S> {
-    /// The address space, which literals must fit.
-    space: &'sp S,
-    /// The instructions, with the branches' targets still to resolve.
-    instructions: Vec<Placed>,
-    /// Each label, with the index of the instruction it marks and its line.
-    labels: BTreeMap<&'s str, (u32, u32)>,
-    /// The branches to resolve.
-    branches: Vec<Branch<'s>>,
-    /// The errors so far.
-    errors: Vec<ParseError>,
-    /// Whether the instruction limit has been reported.
-    too_many: bool,
-}
-
-/// Assembles `lines`, each with its number: the instructions, and the
-/// errors.
-pub(super) fn parse<S: AddressSpace>(
-    space: &S,
-    lines: &[(u32, &str)],
-) -> (Vec<Placed>, Vec<ParseError>) {
-    let mut assembler = Assembler {
-        space,
-        instructions: Vec::new(),
-        labels: BTreeMap::new(),
-        branches: Vec::new(),
-        errors: Vec::new(),
-        too_many: false,
+/// Reads the instruction of a line whose first token is `first`, after its
+/// label if it has one, and whose others are `tokens`.
+pub(super) fn line<'s>(
+    context: &Context<'_, Tiny>,
+    first: &Token<'s>,
+    tokens: &[Token<'s>],
+) -> Result<Read<'s, Instruction>, Problem> {
+    let Some(mnemonic) = Mnemonic::read(first) else {
+        let unknown = ParseProblem::UnknownInstruction { name: first.text };
+        return Err(problem(context.space(), first, unknown));
     };
-    for &(number, line) in lines {
-        if let Err(problem) = assembler.line(number, line) {
-            assembler.errors.push(problem.on(number));
-        }
-    }
-    assembler.resolve();
-    (assembler.instructions, assembler.errors)
-}
-
-impl<'s, S: AddressSpace> Assembler<'_, 's, S> {
-    /// Reads line `number`, `line`.
-    fn line(&mut self, number: u32, line: &'s str) -> Result<(), Problem> {
-        let tokens = lexer::tokens(line, SYNTAX);
-        let mut rest = tokens.as_slice();
-        if let [label, colon, after @ ..] = rest {
-            if colon.kind == TokenKind::Colon {
-                self.define(number, label)?;
-                rest = after;
-            }
-        }
-        let [first, operands @ ..] = rest else {
-            return Ok(());
-        };
-        let Some(mnemonic) = Mnemonic::read(first) else {
-            return Err(self.problem(first, ParseProblem::UnknownInstruction { name: first.text }));
-        };
-        let reader = Operands {
-            assembler: self,
-            mnemonic,
-            at: *first,
-            tokens: operands,
-        };
-        let (instruction, branch) = reader.read()?;
-        if self.instructions.len()
-            >= usize::try_from(MAX_PROGRAM_INSTRUCTIONS).unwrap_or(usize::MAX)
-        {
-            if self.too_many {
-                return Ok(());
-            }
-            self.too_many = true;
-            return Err(self.problem(first, ParseProblem::TooManyInstructions));
-        }
-        if let Some(label) = branch {
-            self.branches.push(Branch {
-                index: self.instructions.len(),
-                label,
-                line: number,
-            });
-        }
-        let end = operands.last().unwrap_or(first).end;
-        self.instructions.push(Placed {
-            instruction,
-            line: number,
-            text: lexer::collapse(line.get(first.start..end).unwrap_or_default()),
-        });
-        Ok(())
-    }
-
-    /// Defines `label` on line `number`, marking the next instruction.
-    fn define(&mut self, number: u32, label: &Token<'s>) -> Result<(), Problem> {
-        self.label(label)?;
-        if let Some(&(_, line)) = self.labels.get(label.text) {
-            return Err(self.problem(
-                label,
-                ParseProblem::DuplicateLabel {
-                    name: label.text,
-                    line,
-                },
-            ));
-        }
-        let index = u32::try_from(self.instructions.len()).unwrap_or(u32::MAX);
-        self.labels.insert(label.text, (index, number));
-        Ok(())
-    }
-
-    /// Checks that `token` can be a label, where one is defined or named.
-    fn label(&self, token: &Token<'s>) -> Result<(), Problem> {
-        if !token.is_label() {
-            return Err(self.problem(token, ParseProblem::NotALabel { text: token.text }));
-        }
-        let register = matches!(register(token), RegisterWord::Register(_));
-        if register || Mnemonic::read(token).is_some() {
-            return Err(self.problem(
-                token,
-                ParseProblem::ReservedLabel {
-                    name: token.text,
-                    register,
-                },
-            ));
-        }
-        if token.length > MAX_LABEL_CHARS {
-            return Err(self.problem(
-                token,
-                ParseProblem::LabelTooLong {
-                    chars: token.length,
-                },
-            ));
-        }
-        Ok(())
-    }
-
-    /// Resolves every branch to the instruction its label marks, or reports
-    /// the label as not defined.
-    fn resolve(&mut self) {
-        for branch in &self.branches {
-            let Some(&(index, _)) = self.labels.get(branch.label.text) else {
-                let message = explain::parse_problem(
-                    self.space,
-                    ParseProblem::UndefinedLabel {
-                        name: branch.label.text,
-                    },
-                );
-                self.errors.push(error(
-                    branch.line,
-                    branch.label.column,
-                    branch.label.length,
-                    message,
-                ));
-                continue;
-            };
-            let placed = self.instructions.get_mut(branch.index);
-            if let Some(Instruction::BranchIfNotZero { target, .. }) =
-                placed.map(|placed| &mut placed.instruction)
-            {
-                *target = index;
-            }
-        }
-    }
-
-    /// `problem` at `token`.
-    fn problem(&self, token: &Token<'_>, problem: ParseProblem<'_>) -> Problem {
-        Problem::at(token, explain::parse_problem(self.space, problem))
-    }
+    let reader = Operands {
+        context,
+        mnemonic,
+        at: *first,
+        tokens,
+    };
+    Ok(match reader.read()? {
+        (instruction, Some(label)) => Read::branching(instruction, label),
+        (instruction, None) => Read::one(instruction),
+    })
 }
 
 /// The operands of one instruction, read in order.
-struct Operands<'a, 'sp, 's, S> {
-    /// The assembler, for the address space and the messages.
-    assembler: &'a Assembler<'sp, 's, S>,
+struct Operands<'a, 's> {
+    /// What the line is read under: the address space, and the label checks.
+    context: &'a Context<'a, Tiny>,
     /// The instruction.
     mnemonic: Mnemonic,
     /// The mnemonic's token, where an error goes when an operand is missing.
@@ -264,7 +112,12 @@ struct Operands<'a, 'sp, 's, S> {
     tokens: &'a [Token<'s>],
 }
 
-impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
+impl<'a, 's> Operands<'a, 's> {
+    /// The address space the literals must fit.
+    fn space(&self) -> &'a Bounds {
+        self.context.space()
+    }
+
     /// The instruction, with its label token if it is a branch.
     fn read(mut self) -> Result<(Instruction, Option<Token<'s>>), Problem> {
         if self.tokens.is_empty() {
@@ -280,7 +133,7 @@ impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
             Mnemonic::St => {
                 let to = self.memory()?;
                 self.comma()?;
-                let value = self.operand(self.assembler.space.word_bytes())?;
+                let value = self.operand(self.space().word_bytes())?;
                 (Instruction::Store { to, value }, None)
             }
             Mnemonic::Add => {
@@ -295,7 +148,7 @@ impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
                 let test = self.register()?;
                 self.comma()?;
                 let label = self.next()?;
-                self.assembler.label(&label)?;
+                self.context.label(&label)?;
                 let branch = Instruction::BranchIfNotZero {
                     test,
                     target: 0,
@@ -349,7 +202,7 @@ impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
         let address = match register(&inner) {
             RegisterWord::Register(register) => Address::Register(register),
             RegisterWord::NotARegister => return Err(self.not_a_register(&inner)),
-            RegisterWord::Other => match literal_address(self.assembler.space, &inner) {
+            RegisterWord::Other => match literal_address(self.space(), &inner) {
                 Some(addr) => Address::Literal(addr?),
                 None => return Err(self.shape(Some(&inner))),
             },
@@ -381,7 +234,7 @@ impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
         let magnitude = match lexer::number(digits) {
             NumberWord::Hex(Some(value)) | NumberWord::Decimal(Some(value)) => value,
             NumberWord::Hex(None) | NumberWord::Decimal(None) => {
-                return Err(Problem::at(&token, too_long(self.assembler.space, &token)));
+                return Err(Problem::at(&token, too_long(self.space(), &token)));
             }
             NumberWord::Other => return Err(self.shape(Some(&token))),
         };
@@ -393,7 +246,8 @@ impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
     /// The instruction's own example, at `token`, or at the mnemonic when an
     /// operand is missing.
     fn shape(&self, token: Option<&Token<'_>>) -> Problem {
-        self.assembler.problem(
+        problem(
+            self.space(),
             token.unwrap_or(&self.at),
             ParseProblem::Operands {
                 mnemonic: self.mnemonic,
@@ -403,7 +257,10 @@ impl<'s, S: AddressSpace> Operands<'_, '_, 's, S> {
 
     /// The message for a register-shaped word that names no register.
     fn not_a_register(&self, token: &Token<'_>) -> Problem {
-        self.assembler
-            .problem(token, ParseProblem::NotARegister { name: token.text })
+        problem(
+            self.space(),
+            token,
+            ParseProblem::NotARegister { name: token.text },
+        )
     }
 }

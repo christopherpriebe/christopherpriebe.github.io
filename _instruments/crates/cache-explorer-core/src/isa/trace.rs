@@ -9,50 +9,31 @@
 //! assembler's rules; the value is required, has no sign and must fit the
 //! word as an unsigned number.
 
+use instrument_asm::lexer::{NumberWord, Token};
+use instrument_asm::set::{Problem, Read};
+
 use crate::explain::{self, ParseProblem};
 use crate::op::AccessKind;
 use crate::units::Register;
 
-use super::lexer::{self, NumberWord, Token};
-use super::{
-    literal_address, too_long, Address, AddressSpace, Instruction, Operand, ParseError, Placed,
-    Problem, SYNTAX,
-};
+use super::{literal_address, too_long, Address, AddressSpace, Bounds, Instruction, Operand};
 
-/// Reads the trace in `lines`, each with its number: the accesses, and the
-/// errors.
-pub(super) fn parse(
-    space: &impl AddressSpace,
-    lines: &[(u32, &str)],
-) -> (Vec<Placed>, Vec<ParseError>) {
-    let mut placed = Vec::new();
-    let mut errors = Vec::new();
-    for &(number, line) in lines {
-        let tokens = lexer::tokens(line, SYNTAX);
-        match access(space, &tokens) {
-            Ok(Some(instruction)) => {
-                let (start, end) = match (tokens.first(), tokens.last()) {
-                    (Some(first), Some(last)) => (first.start, last.end),
-                    _ => (0, 0),
-                };
-                placed.push(Placed {
-                    instruction,
-                    line: number,
-                    text: lexer::collapse(line.get(start..end).unwrap_or_default()),
-                });
-            }
-            Ok(None) => {}
-            Err(problem) => errors.push(problem.on(number)),
-        }
-    }
-    (placed, errors)
+/// Reads the access of a line whose first token is `first` and whose others
+/// are `operands`.
+pub(super) fn line<'s>(
+    space: Bounds,
+    first: &Token<'s>,
+    operands: &[Token<'s>],
+) -> Result<Read<'s, Instruction>, Problem> {
+    access(&space, first, operands).map(Read::one)
 }
 
-/// The access a line's `tokens` stand for; `None` for a line with none.
-fn access(space: &impl AddressSpace, tokens: &[Token<'_>]) -> Result<Option<Instruction>, Problem> {
-    let [first, operands @ ..] = tokens else {
-        return Ok(None);
-    };
+/// The access a line stands for.
+fn access(
+    space: &impl AddressSpace,
+    first: &Token<'_>,
+    operands: &[Token<'_>],
+) -> Result<Instruction, Problem> {
     let kind = if first.is("R") {
         AccessKind::Read
     } else if first.is("W") {
@@ -75,10 +56,10 @@ fn access(space: &impl AddressSpace, tokens: &[Token<'_>]) -> Result<Option<Inst
     };
     let from = Address::Literal(addr);
     match (kind, rest) {
-        (AccessKind::Read, []) => Ok(Some(Instruction::Load {
+        (AccessKind::Read, []) => Ok(Instruction::Load {
             into: Register::R1,
             from,
-        })),
+        }),
         (AccessKind::Write, []) => {
             let message = explain::parse_problem(space, ParseProblem::StoreWithoutValue { addr });
             Err(Problem::at(first, message))
@@ -102,10 +83,10 @@ fn access(space: &impl AddressSpace, tokens: &[Token<'_>]) -> Result<Option<Inst
             if let Some(extra) = after.first() {
                 return Err(shape(extra));
             }
-            Ok(Some(Instruction::Store {
+            Ok(Instruction::Store {
                 to: from,
                 value: Operand::Immediate(word.get()),
-            }))
+            })
         }
         (AccessKind::Read, [extra, ..]) => Err(shape(extra)),
     }

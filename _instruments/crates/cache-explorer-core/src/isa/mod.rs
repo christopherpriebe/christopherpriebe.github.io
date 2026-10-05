@@ -14,64 +14,41 @@
 //! it executes.
 //!
 //! The limits of `limits.rs` bound the work: a source of more than
-//! [`MAX_PROGRAM_BYTES`] is refused before it is read, only the first
-//! [`MAX_PROGRAM_LINES`] lines are read, and a result lists at most
-//! [`MAX_PARSE_ERRORS`] errors.
+//! [`MAX_PROGRAM_BYTES`](crate::limits::MAX_PROGRAM_BYTES) is refused before it is read, only the first
+//! [`MAX_PROGRAM_LINES`](crate::limits::MAX_PROGRAM_LINES) lines are read, and a
+//! result lists at most [`MAX_PARSE_ERRORS`] errors.
 
 mod asm;
 mod space;
+mod tiny;
 mod trace;
 
-use std::sync::Arc;
-
-use instrument_asm::diag::{chars, place_of_byte};
-use instrument_asm::lexer::{self, NumberWord, RegisterWord, Syntax, Token, TokenKind};
+use instrument_asm::lexer::{NumberWord, Token};
+use instrument_asm::set::Problem;
 use serde::Serialize;
 
 use crate::explain::{self, ParseProblem};
 use crate::geometry::{AccessError, Geometry};
-use crate::limits::{MAX_PARSE_ERRORS, MAX_PROGRAM_BYTES, MAX_PROGRAM_LINES};
+use crate::limits::MAX_PARSE_ERRORS;
 use crate::op::{OpError, ProgramFormat};
 use crate::units::{Addr, Register};
 
 pub(crate) use asm::Mnemonic;
 pub use instrument_asm::diag::ParseError;
-pub(crate) use space::AddressSpace;
-
-/// The marks of the tiny language and of a trace: `;` starts a comment and
-/// `[` and `]` bracket a memory operand.
-const SYNTAX: Syntax = Syntax {
-    comment: ';',
-    open: '[',
-    close: ']',
-};
+pub(crate) use space::{AddressSpace, Bounds};
+pub(crate) use tiny::Tiny;
 
 /// A program or trace that parsed under a run's geometry: its source, kept
 /// so a new run can parse it again under its own configuration, and its
 /// instructions in order. A trace's `R` and `W` lines are the loads and
 /// stores they stand for.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Program {
-    /// Whether the source is assembly or a trace.
-    format: ProgramFormat,
-    /// The source as the student wrote it.
-    source: String,
-    /// The instructions, in order; never empty.
-    instructions: Vec<Placed>,
-}
+pub(crate) type Program = instrument_asm::program::Program<Tiny>;
 
-/// An instruction and where it came from.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Placed {
-    /// The instruction.
-    pub(crate) instruction: Instruction,
-    /// Its source line, from 1.
-    pub(crate) line: u32,
-    /// Its source text without its label and comment, with each run of
-    /// spaces and tabs made one space: `ld r1, [0x0A4]`, `W 0x0A4 7`. Shared
-    /// with the label of the log entry the instruction makes.
-    pub(crate) text: Arc<str>,
-}
+/// An instruction and where it came from: its source line, and its source
+/// text without its label and comment, with each run of spaces and tabs made
+/// one space (`ld r1, [0x0A4]`, `W 0x0A4 7`), shared with the label of the
+/// log entry the instruction makes.
+pub(crate) type Placed = instrument_asm::program::Placed<Instruction>;
 
 /// One instruction.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -163,200 +140,72 @@ pub enum ParseResult {
 }
 
 /// Why a source is not a program: every error it has, in source order.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ParseFailure {
-    /// Whether the source was read as assembly or as a trace.
-    format: ProgramFormat,
-    /// The first error.
-    first: ParseError,
-    /// The others, which the drawer lists up to its limit.
-    rest: Vec<ParseError>,
-}
-
-/// A problem on a line: where it is and what it is.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Problem {
-    /// Its first column.
-    column: u32,
-    /// Its length in characters.
-    length: u32,
-    /// Its message.
-    message: String,
-}
+pub(crate) type ParseFailure = instrument_asm::program::ParseFailure<ProgramFormat>;
 
 impl Geometry {
     /// Parses `source` as a program or a trace whose literal addresses and
     /// values must fit this geometry: the drawer's summary, or the errors,
     /// at most [`MAX_PARSE_ERRORS`], in source order.
     pub fn parse_program(&self, source: &str, format: ProgramFormat) -> ParseResult {
-        match Program::parse(self, source, format) {
+        match parse(self, source, format) {
             Ok(program) => ParseResult::Ok {
                 instructions: program.len(),
-                summary: program.summary(0),
+                summary: summary(&program, 0),
             },
             Err(failure) => ParseResult::Invalid {
-                summary: failure.summary(),
-                errors: failure.listed(),
+                summary: failure_summary(&failure),
+                errors: failure.into_listed(MAX_PARSE_ERRORS),
             },
         }
     }
 }
 
-impl Program {
-    /// Parses `source` as `format` under `space`.
-    ///
-    /// # Errors
-    ///
-    /// Every error the source has, in source order: each line's first
-    /// problem, and each branch to a label never defined; or, for a source
-    /// with neither errors nor instructions, that it is empty. A source
-    /// larger than [`MAX_PROGRAM_BYTES`] has that error alone.
-    pub(crate) fn parse(
-        space: &impl AddressSpace,
-        source: &str,
-        format: ProgramFormat,
-    ) -> Result<Program, ParseFailure> {
-        let fail = |errors: Vec<ParseError>| ParseFailure::new(format, errors, space);
-        if u64::try_from(source.len()).unwrap_or(u64::MAX) > u64::from(MAX_PROGRAM_BYTES) {
-            let (line, column) = place_of_byte(source, MAX_PROGRAM_BYTES);
-            let message = explain::parse_problem(space, ParseProblem::TooLarge { format });
-            return Err(fail(vec![error(line, column, 1, message)]));
-        }
-        let mut lines = (1_u32..).zip(source.lines());
-        let read: Vec<(u32, &str)> = lines
-            .by_ref()
-            .take(usize::try_from(MAX_PROGRAM_LINES).unwrap_or(usize::MAX))
-            .collect();
-        let (instructions, mut errors) = match format {
-            ProgramFormat::Asm => asm::parse(space, &read),
-            ProgramFormat::Trace => trace::parse(space, &read),
-        };
-        if let Some((line, text)) = lines.next() {
-            let message = explain::parse_problem(space, ParseProblem::TooManyLines { format });
-            errors.push(error(line, 1, chars(text), message));
-        }
-        if !errors.is_empty() || instructions.is_empty() {
-            return Err(fail(errors));
-        }
-        Ok(Program {
-            format,
-            source: source.to_owned(),
-            instructions,
-        })
-    }
+/// Parses `source` as `format` under `space`.
+///
+/// # Errors
+///
+/// Every error the source has, in source order: each line's first problem,
+/// and each branch to a label never defined; or, for a source with neither
+/// errors nor instructions, that it is empty. A source larger than
+/// [`MAX_PROGRAM_BYTES`](crate::limits::MAX_PROGRAM_BYTES) has that error alone.
+pub(crate) fn parse(
+    space: &impl AddressSpace,
+    source: &str,
+    format: ProgramFormat,
+) -> Result<Program, ParseFailure> {
+    Program::parse(&Bounds::of(space), source, format)
+}
 
-    /// Whether the source is assembly or a trace.
-    pub(crate) fn format(&self) -> ProgramFormat {
-        self.format
-    }
+/// The drawer's line with the pc at `pc`: how many instructions, and the
+/// next one, `end` past the last.
+pub(crate) fn summary(program: &Program, pc: u32) -> String {
+    let next = program.get(pc).map(|placed| &*placed.text);
+    explain::program_summary(program.format(), program.len(), next)
+}
 
-    /// The source as the student wrote it.
-    pub(crate) fn source(&self) -> &str {
-        &self.source
-    }
-
-    /// How many instructions the program has.
-    pub(crate) fn len(&self) -> u32 {
-        u32::try_from(self.instructions.len()).unwrap_or(u32::MAX)
-    }
-
-    /// The instruction at index `index`, if the program has one there.
-    pub(crate) fn get(&self, index: u32) -> Option<&Placed> {
-        usize::try_from(index)
-            .ok()
-            .and_then(|index| self.instructions.get(index))
-    }
-
-    /// The drawer's line with the pc at `pc`: how many instructions, and the
-    /// next one, `end` past the last.
-    pub(crate) fn summary(&self, pc: u32) -> String {
-        let next = self.get(pc).map(|placed| &*placed.text);
-        explain::program_summary(self.format, self.len(), next)
+/// The drawer's line for the errors of `failure`: how many, and where the
+/// first is.
+fn failure_summary(failure: &ParseFailure) -> String {
+    let line = failure.first().line;
+    match failure.count() {
+        1 => format!("1 error on line {line}"),
+        count => format!("{count} errors \u{b7} first on line {line}"),
     }
 }
 
-impl ParseFailure {
-    /// The failure of a source read as `format` with `errors`, sorted into
-    /// source order here; with no errors, the source is empty.
-    fn new(format: ProgramFormat, mut errors: Vec<ParseError>, space: &impl AddressSpace) -> Self {
-        errors.sort_by_key(|error| (error.line, error.column));
-        let mut errors = errors.into_iter();
-        let first = errors.next().unwrap_or_else(|| {
-            let message = explain::parse_problem(space, ParseProblem::Empty { format });
-            error(1, 1, 0, message)
-        });
-        Self {
-            format,
-            first,
-            rest: errors.collect(),
-        }
-    }
-
-    /// Whether the source was read as assembly or as a trace.
-    pub(crate) fn format(&self) -> ProgramFormat {
-        self.format
-    }
-
-    /// The first error in source order.
-    pub(crate) fn first(&self) -> &ParseError {
-        &self.first
-    }
-
-    /// The drawer's line for these errors: how many, and where the first is.
-    pub(crate) fn summary(&self) -> String {
-        let line = self.first.line;
-        match self.rest.len() {
-            0 => format!("1 error on line {line}"),
-            more => format!("{} errors · first on line {line}", more.saturating_add(1)),
-        }
-    }
-
-    /// The errors the drawer lists: the first [`MAX_PARSE_ERRORS`].
-    pub(crate) fn listed(self) -> Vec<ParseError> {
-        std::iter::once(self.first)
-            .chain(self.rest)
-            .take(usize::try_from(MAX_PARSE_ERRORS).unwrap_or(usize::MAX))
-            .collect()
-    }
-
-    /// The error that refuses a `Program` op with this source, which counts
-    /// every error and quotes the first.
-    pub(crate) fn into_op_error(self) -> OpError {
-        OpError::Program {
-            format: self.format,
-            errors: u32::try_from(self.rest.len())
-                .unwrap_or(u32::MAX)
-                .saturating_add(1),
-            first: self.first,
-        }
+/// The error that refuses a `Program` op with this source, which counts
+/// every error and quotes the first.
+pub(crate) fn op_error(failure: &ParseFailure) -> OpError {
+    OpError::Program {
+        format: failure.format(),
+        errors: failure.count(),
+        first: failure.first().clone(),
     }
 }
 
-impl Problem {
-    /// A problem at `token`.
-    fn at(token: &Token<'_>, message: String) -> Self {
-        Self {
-            column: token.column,
-            length: token.length,
-            message,
-        }
-    }
-
-    /// The error this problem is on line `line`.
-    fn on(self, line: u32) -> ParseError {
-        error(line, self.column, self.length, self.message)
-    }
-}
-
-/// An error on line `line` at column `column`, `length` characters long.
-fn error(line: u32, column: u32, length: u32, message: String) -> ParseError {
-    ParseError {
-        text: explain::parse_error(line, column, &message),
-        line,
-        column,
-        length,
-        message,
-    }
+/// A problem at `token`, worded as `reason` under `space`.
+fn problem(space: &impl AddressSpace, token: &Token<'_>, reason: ParseProblem<'_>) -> Problem {
+    Problem::at(token, explain::parse_problem(space, reason))
 }
 
 /// `token` read as a literal address: hex, within the address width, and a
@@ -403,20 +252,6 @@ fn too_long(space: &impl AddressSpace, token: &Token<'_>) -> String {
     explain::parse_problem(space, ParseProblem::TooLong { text: token.text })
 }
 
-/// What `token` reads as where a register may stand: `r0` to `r7`, in
-/// either case. `r` and digits that name no register, such as `r8` or `r01`,
-/// are shaped like one.
-fn register(token: &Token<'_>) -> RegisterWord<Register> {
-    let digits = match token.text.strip_prefix(['r', 'R']) {
-        Some(digits) if token.kind == TokenKind::Word && lexer::is_digits(digits) => digits,
-        _ => return RegisterWord::Other,
-    };
-    match digits.parse::<u32>().ok().and_then(Register::numbered) {
-        Some(register) if digits.len() == 1 => RegisterWord::Register(register),
-        _ => RegisterWord::NotARegister,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::disallowed_macros)] // assertions are how tests fail
@@ -438,9 +273,10 @@ mod tests {
     }
 
     fn placed(source: &str, format: ProgramFormat) -> Vec<Placed> {
-        Program::parse(&geometry(), source, format)
-            .unwrap()
-            .instructions
+        let program = parse(&geometry(), source, format).unwrap();
+        (0..program.len())
+            .filter_map(|index| program.get(index).cloned())
+            .collect()
     }
 
     fn addr(value: u32) -> Address {
@@ -550,19 +386,19 @@ mod tests {
     #[test]
     fn a_program_keeps_its_source_and_names_its_next_instruction() {
         let source = "ld r1, [0x0A4]\nld r2, [0x0A8]\n";
-        let program = Program::parse(&geometry(), source, ProgramFormat::Asm).unwrap();
+        let program = parse(&geometry(), source, ProgramFormat::Asm).unwrap();
         assert_eq!(program.source(), source);
         assert_eq!(program.format(), ProgramFormat::Asm);
         assert_eq!(program.len(), 2);
         assert_eq!(
-            program.summary(0),
+            summary(&program, 0),
             "2 instructions \u{b7} next: ld r1, [0x0A4]"
         );
         assert_eq!(
-            program.summary(1),
+            summary(&program, 1),
             "2 instructions \u{b7} next: ld r2, [0x0A8]"
         );
-        assert_eq!(program.summary(2), "2 instructions \u{b7} next: end");
+        assert_eq!(summary(&program, 2), "2 instructions \u{b7} next: end");
         assert!(program.get(2).is_none());
     }
 
@@ -575,7 +411,7 @@ mod tests {
         }
         .validate()
         .unwrap();
-        let program = Program::parse(&geometry, "st [0x0A4], #-128", ProgramFormat::Asm).unwrap();
+        let program = parse(&geometry, "st [0x0A4], #-128", ProgramFormat::Asm).unwrap();
         assert_eq!(
             program.get(0).map(|placed| &placed.instruction),
             Some(&Instruction::Store {
@@ -588,31 +424,18 @@ mod tests {
     #[test]
     fn a_failure_counts_every_error_and_lists_the_first_ones() {
         let source = "lw r1\n".repeat(usize::try_from(MAX_PARSE_ERRORS).unwrap() + 3);
-        let failure = Program::parse(&geometry(), &source, ProgramFormat::Asm).unwrap_err();
+        let failure = parse(&geometry(), &source, ProgramFormat::Asm).unwrap_err();
         assert_eq!(
-            failure.clone().into_op_error(),
+            op_error(&failure),
             OpError::Program {
                 format: ProgramFormat::Asm,
                 errors: MAX_PARSE_ERRORS + 3,
-                first: failure.first.clone(),
+                first: failure.first().clone(),
             }
         );
-        let listed = failure.listed();
+        let listed = failure.into_listed(MAX_PARSE_ERRORS);
         assert_eq!(listed.len(), usize::try_from(MAX_PARSE_ERRORS).unwrap());
         let lines: Vec<u32> = listed.iter().map(|error| error.line).collect();
         assert_eq!(lines, (1..=MAX_PARSE_ERRORS).collect::<Vec<u32>>());
-    }
-
-    #[test]
-    fn registers_are_r0_to_r7_in_either_case() {
-        let read = |text: &str| register(lexer::tokens(text, SYNTAX).first().unwrap());
-        assert_eq!(read("r0"), RegisterWord::Register(Register::R0));
-        assert_eq!(read("R7"), RegisterWord::Register(Register::R7));
-        for text in ["r8", "R9", "r10", "r01", "r99999999999999999999999"] {
-            assert_eq!(read(text), RegisterWord::NotARegister, "{text}");
-        }
-        for text in ["r", "rx", "x1", "0x0A4", "#1", "loop"] {
-            assert_eq!(read(text), RegisterWord::Other, "{text}");
-        }
     }
 }

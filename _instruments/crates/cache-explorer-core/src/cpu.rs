@@ -265,7 +265,7 @@ mod tests {
     /// A program of `source`, assembled for the default configuration.
     fn program(source: &str) -> Program {
         let geometry = Config::default().validate().unwrap();
-        Program::parse(&geometry, source, ProgramFormat::Asm).unwrap()
+        crate::isa::parse(&geometry, source, ProgramFormat::Asm).unwrap()
     }
 
     #[test]
