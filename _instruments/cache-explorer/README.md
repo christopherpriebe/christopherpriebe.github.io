@@ -8,7 +8,7 @@ The cache logic is a Rust crate compiled to WebAssembly, and the page is plain T
 ../crates/cache-explorer-core   the cache, the access engine, sessions, modules, share links (no JS or OS dependencies)
 ../crates/cache-explorer-wasm   the wasm-bindgen facade over the core, and its TypeScript declarations
 ../crates/instrument-session    what the instruments share: the share-string codec, the saved file's room, module text, event positions
-../crates/instrument-asm        the lexer of a line of assembly and the record of an error in it
+../crates/instrument-asm        the lexer of a line of assembly, the record of an error in it, the instruction-set trait and the program read under it
 web/                            the page: Vite, TypeScript, Vitest
 modules/                        the guided modules (JSON), and their index
 scripts/                        test-glue.mjs, the check of this instrument's wasm glue

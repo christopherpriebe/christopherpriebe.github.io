@@ -16,7 +16,6 @@ use instrument_asm::set::{
 };
 
 /// The language.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Toy {}
 
 /// How a source is written.
@@ -51,10 +50,13 @@ const REACH: i64 = 12;
 /// The ABI names of the first registers.
 const ABI: [(&str, u32); 3] = [("zero", 0), ("ra", 1), ("sp", 2)];
 
+impl Toy {
+    /// How many registers the language has.
+    const REGISTERS: u32 = 32;
+}
+
 impl RegisterFile for Toy {
     type Register = Reg;
-
-    const COUNT: u32 = 32;
 
     fn read(token: &Token<'_>) -> RegisterWord<Reg> {
         if token.kind != TokenKind::Word {
@@ -70,15 +72,11 @@ impl RegisterFile for Toy {
             return RegisterWord::Other;
         }
         match digits.parse::<u32>() {
-            Ok(number) if number < Self::COUNT && digits.len() == number.to_string().len() => {
+            Ok(number) if number < Self::REGISTERS && digits.len() == number.to_string().len() => {
                 RegisterWord::Register(Reg(number))
             }
             _ => RegisterWord::NotARegister,
         }
-    }
-
-    fn number(register: Reg) -> u32 {
-        register.0
     }
 }
 
@@ -94,7 +92,8 @@ impl InstructionSet for Toy {
         close: ')',
     };
 
-    const MNEMONICS: &'static [&'static str] = &["addi", "lui", "lw", "beq", "li", "nop", "j"];
+    const MNEMONICS: &'static [&'static str] =
+        &["addi", "lui", "lw", "beq", "li", "nop", "j", "j2", "lbez"];
 
     fn limits(format: Format) -> Limits {
         Limits {
@@ -162,6 +161,34 @@ impl InstructionSet for Toy {
                 Op::Beq {
                     rs1: zero,
                     rs2: zero,
+                    offset: 0,
+                },
+                label,
+            )
+        } else if first.is("j2") {
+            // Two jumps, as a far `call` is two instructions that both need
+            // the label.
+            let label = operands.label(context)?;
+            let jump = Op::Beq {
+                rs1: Reg(0),
+                rs2: Reg(0),
+                offset: 0,
+            };
+            Read::branching(jump.clone(), label).then_branching(jump, label)
+        } else if first.is("lbez") {
+            // A load, then a branch, which is the second instruction.
+            let rd = operands.register()?;
+            operands.comma()?;
+            let label = operands.label(context)?;
+            Read::one(Op::Lw {
+                rd,
+                base: rd,
+                offset: 0,
+            })
+            .then_branching(
+                Op::Beq {
+                    rs1: rd,
+                    rs2: Reg(0),
                     offset: 0,
                 },
                 label,
@@ -272,16 +299,15 @@ fn li<'s>(rd: Reg, value: i64) -> Read<'s, Op> {
             imm: lower,
         });
     }
-    let mut read = Read::one(Op::Lui {
+    Read::one(Op::Lui {
         rd,
         imm: ((value - lower) >> 12) & 0xF_FFFF,
-    });
-    read.instructions.push(Op::Addi {
+    })
+    .then(Op::Addi {
         rd,
         rs1: rd,
         imm: lower,
-    });
-    read
+    })
 }
 
 /// The operands of one instruction, read in order.
@@ -437,7 +463,7 @@ fn a_program_reads_into_instructions_with_their_lines_and_text() {
 }
 
 #[test]
-fn registers_have_numbers_and_abi_names() {
+fn registers_are_read_by_number_and_by_abi_name() {
     let read = |text: &str| <Toy as RegisterFile>::read(&lexer::tokens(text, Toy::SYNTAX)[0]);
     assert_eq!(read("x0"), RegisterWord::Register(Reg(0)));
     assert_eq!(read("X31"), RegisterWord::Register(Reg(31)));
@@ -449,8 +475,6 @@ fn registers_have_numbers_and_abi_names() {
     for text in ["x", "xx", "r1", "loop", "12"] {
         assert_eq!(read(text), RegisterWord::Other, "{text}");
     }
-    assert_eq!(<Toy as RegisterFile>::COUNT, 32);
-    assert_eq!(<Toy as RegisterFile>::number(Reg(7)), 7);
 }
 
 #[test]
@@ -507,6 +531,44 @@ fn a_pseudo_instruction_stands_for_several_instructions() {
                 imm: -1
             },
         ]
+    );
+}
+
+#[test]
+fn a_branch_can_be_any_instruction_of_a_line_and_a_line_can_have_several() {
+    let program = read("lbez x1, end\nnop\nend: nop", Format::Asm).unwrap();
+    // The branch is the second instruction, so it is measured from there.
+    assert_eq!(
+        ops(&program)[..2],
+        [
+            Op::Lw {
+                rd: Reg(1),
+                base: Reg(1),
+                offset: 0
+            },
+            Op::Beq {
+                rs1: Reg(1),
+                rs2: Reg(0),
+                offset: 8
+            },
+        ]
+    );
+    let program = read("j2 end\nnop\nend: nop", Format::Asm).unwrap();
+    let offsets: Vec<i64> = ops(&program)
+        .into_iter()
+        .filter_map(|op| match op {
+            Op::Beq { offset, .. } => Some(offset),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offsets, [12, 8]);
+    // An undefined label is an error at its token, once for each branch.
+    assert_eq!(
+        read("j2 gone", Format::Asm),
+        Err(vec![
+            "1:4 4 `gone` is nowhere".to_owned(),
+            "1:4 4 `gone` is nowhere".to_owned()
+        ])
     );
 }
 
@@ -602,17 +664,29 @@ fn a_format_decides_the_labels_and_the_limits() {
 
 #[test]
 fn the_limits_are_the_instruction_sets_and_each_is_reported_at_its_place() {
-    // 200 bytes is allowed, and the first byte past it is the error's place.
-    let at_limit = format!("{}\n", "# ".repeat(99));
-    assert_eq!(at_limit.len(), 199);
+    // 200 bytes are allowed, and the first byte past them is the error's
+    // place.
+    let at_limit = format!("nop{}", " ".repeat(197));
+    assert_eq!(at_limit.len(), 200);
+    assert_eq!(read(&at_limit, Format::Asm).unwrap().len(), 1);
+    let one_over = format!("{at_limit} ");
     assert_eq!(
-        read(&at_limit, Format::Asm),
-        Err(vec!["1:1 0 nothing to read".to_owned()])
+        read(&one_over, Format::Asm),
+        Err(vec!["1:201 1 Asm source too large".to_owned()])
     );
     let too_large = "# ".repeat(101);
     assert_eq!(
         read(&too_large, Format::Asm),
         Err(vec!["1:201 1 Asm source too large".to_owned()])
+    );
+    // Six instructions are allowed, and a line that makes the seventh is the
+    // error, though it starts within the limit.
+    let six = "nop\n".repeat(4) + "li x1, 0x12345678";
+    assert_eq!(read(&six, Format::Asm).unwrap().len(), 6);
+    let seven = "nop\n".repeat(5) + "li x1, 0x12345678";
+    assert_eq!(
+        read(&seven, Format::Asm),
+        Err(vec!["6:1 2 too many instructions".to_owned()])
     );
     // Ten lines are read; the eleventh is underlined whole.
     let lines = "# c\n".repeat(10) + "addi x1, x1, 1";

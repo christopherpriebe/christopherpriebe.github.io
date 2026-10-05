@@ -16,8 +16,9 @@
 //! instruction) but none before `[` (`st[0x0A4], #7` is a store).
 //!
 //! Mnemonics and registers are read in either case; labels are
-//! case-sensitive, at most [`MAX_LABEL_CHARS`](crate::limits::MAX_LABEL_CHARS) characters, not a register or
-//! a mnemonic, and defined once. A branch may name a label defined further
+//! case-sensitive, at most
+//! [`MAX_LABEL_CHARS`](crate::limits::MAX_LABEL_CHARS) characters, not a
+//! register or a mnemonic, and defined once. A branch may name a label defined further
 //! down, so labels are resolved once every line is read, and a label after
 //! the last instruction marks the program's end.
 //!
@@ -56,8 +57,7 @@ pub(crate) enum Mnemonic {
 
 impl Mnemonic {
     /// Every mnemonic.
-    pub(super) const ALL: [Mnemonic; 4] =
-        [Mnemonic::Ld, Mnemonic::St, Mnemonic::Add, Mnemonic::Bnez];
+    const ALL: [Mnemonic; 4] = [Mnemonic::Ld, Mnemonic::St, Mnemonic::Add, Mnemonic::Bnez];
 
     /// The mnemonic as the assembler reads it.
     pub(crate) const fn name(self) -> &'static str {

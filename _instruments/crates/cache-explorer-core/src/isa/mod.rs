@@ -14,9 +14,10 @@
 //! it executes.
 //!
 //! The limits of `limits.rs` bound the work: a source of more than
-//! [`MAX_PROGRAM_BYTES`](crate::limits::MAX_PROGRAM_BYTES) is refused before it is read, only the first
-//! [`MAX_PROGRAM_LINES`](crate::limits::MAX_PROGRAM_LINES) lines are read, and a
-//! result lists at most [`MAX_PARSE_ERRORS`] errors.
+//! [`MAX_PROGRAM_BYTES`](crate::limits::MAX_PROGRAM_BYTES) is refused before
+//! it is read, only the first
+//! [`MAX_PROGRAM_LINES`](crate::limits::MAX_PROGRAM_LINES) lines are read, and
+//! a result lists at most [`MAX_PARSE_ERRORS`] errors.
 
 mod asm;
 mod space;
@@ -35,8 +36,9 @@ use crate::units::{Addr, Register};
 
 pub(crate) use asm::Mnemonic;
 pub use instrument_asm::diag::ParseError;
-pub(crate) use space::{AddressSpace, Bounds};
-pub(crate) use tiny::Tiny;
+pub(crate) use space::AddressSpace;
+use space::Bounds;
+use tiny::Tiny;
 
 /// A program or trace that parsed under a run's geometry: its source, kept
 /// so a new run can parse it again under its own configuration, and its

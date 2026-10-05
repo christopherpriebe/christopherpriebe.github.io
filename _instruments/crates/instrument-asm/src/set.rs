@@ -24,17 +24,10 @@ pub trait RegisterFile {
     /// One register.
     type Register: Copy + Debug + Eq;
 
-    /// How many registers the file has.
-    const COUNT: u32;
-
     /// What `token` reads as where a register may stand. A word shaped like
     /// a register's name that names none is [`RegisterWord::NotARegister`],
     /// so the instruction set can say so, rather than call it a label.
     fn read(token: &Token<'_>) -> RegisterWord<Self::Register>;
-
-    /// The number of `register` in the file, from 0: the number an encoding
-    /// holds.
-    fn number(register: Self::Register) -> u32;
 }
 
 /// The limits that bound the work of reading a source, so a pasted or shared
@@ -109,25 +102,30 @@ pub struct Problem {
     pub message: String,
 }
 
-/// One line read: its instructions, and the branch among them to resolve
-/// once every label is known.
+/// One line read: the instructions it stands for, and the branches among
+/// them to resolve once every label is known.
+///
+/// A line stands for at least one instruction, which a pseudo-instruction
+/// makes several; a line of no instruction, such as a blank one or a comment,
+/// never reaches the instruction set. A branch can only be added to an
+/// instruction the line has, so every branch points at one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Read<'s, T> {
-    /// The instructions the line stands for, in order; never empty. A
-    /// pseudo-instruction stands for several.
-    pub instructions: Vec<T>,
-    /// The branch among them, if the line has one.
-    pub branch: Option<Branch<'s>>,
+    /// The instructions the line stands for, in order; never empty.
+    instructions: Vec<T>,
+    /// The branches among them.
+    branches: Vec<Branch<'s>>,
 }
 
 /// A branch to a label, which is resolved when the whole source is read, so
 /// the label may be defined further down.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Branch<'s> {
-    /// Which of the line's instructions branches, from 0.
-    pub index: usize,
+pub(crate) struct Branch<'s> {
+    /// Which of the line's instructions branches, from 0; always one the
+    /// line has.
+    pub(crate) index: usize,
     /// The label's token, where an error goes if it is never defined.
-    pub label: Token<'s>,
+    pub(crate) label: Token<'s>,
 }
 
 /// What a line is read under: the space its literals must fit, the format
@@ -232,7 +230,7 @@ impl<'s, T> Read<'s, T> {
     pub fn one(instruction: T) -> Self {
         Self {
             instructions: vec![instruction],
-            branch: None,
+            branches: Vec::new(),
         }
     }
 
@@ -241,8 +239,31 @@ impl<'s, T> Read<'s, T> {
     pub fn branching(instruction: T, label: Token<'s>) -> Self {
         Self {
             instructions: vec![instruction],
-            branch: Some(Branch { index: 0, label }),
+            branches: vec![Branch { index: 0, label }],
         }
+    }
+
+    /// The line with `instruction` after its instructions.
+    #[must_use]
+    pub fn then(mut self, instruction: T) -> Self {
+        self.instructions.push(instruction);
+        self
+    }
+
+    /// The line with `instruction` after its instructions, a branch to the
+    /// label in `label`. A line can have several such instructions, as
+    /// `la`'s two both need the label's offset.
+    #[must_use]
+    pub fn then_branching(mut self, instruction: T, label: Token<'s>) -> Self {
+        let index = self.instructions.len();
+        self.instructions.push(instruction);
+        self.branches.push(Branch { index, label });
+        self
+    }
+
+    /// The instructions and the branches.
+    pub(crate) fn into_parts(self) -> (Vec<T>, Vec<Branch<'s>>) {
+        (self.instructions, self.branches)
     }
 }
 

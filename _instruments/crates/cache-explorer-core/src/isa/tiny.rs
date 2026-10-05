@@ -13,24 +13,17 @@ use crate::limits::{
 use crate::op::ProgramFormat;
 use crate::units::Register;
 
-use super::{asm, trace, Bounds, Instruction};
+use super::{asm, trace, Bounds, Instruction, Mnemonic};
 
 /// The tiny assembly language and the trace format. No value has this type;
 /// it names the instruction set.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Tiny {}
 
 impl RegisterFile for Tiny {
     type Register = Register;
 
-    const COUNT: u32 = 8;
-
     fn read(token: &Token<'_>) -> RegisterWord<Register> {
         register(token)
-    }
-
-    fn number(register: Register) -> u32 {
-        u32::from(register.get())
     }
 }
 
@@ -47,7 +40,12 @@ impl InstructionSet for Tiny {
         close: ']',
     };
 
-    const MNEMONICS: &'static [&'static str] = &["ld", "st", "add", "bnez"];
+    const MNEMONICS: &'static [&'static str] = &[
+        Mnemonic::Ld.name(),
+        Mnemonic::St.name(),
+        Mnemonic::Add.name(),
+        Mnemonic::Bnez.name(),
+    ];
 
     fn limits(format: ProgramFormat) -> Limits {
         Limits {
@@ -127,7 +125,6 @@ mod tests {
     use instrument_asm::lexer::tokens;
 
     use super::*;
-    use crate::isa::Mnemonic;
 
     /// What the first token of `text` reads as where a register may stand.
     fn read(text: &str) -> RegisterWord<Register> {
@@ -144,23 +141,6 @@ mod tests {
         for text in ["r", "rx", "x1", "0x0A4", "#1", "loop"] {
             assert_eq!(read(text), RegisterWord::Other, "{text}");
         }
-    }
-
-    #[test]
-    fn the_register_file_counts_and_numbers_the_registers() {
-        assert_eq!(usize::try_from(Tiny::COUNT), Ok(Register::ALL.len()));
-        for (number, register) in (0..).zip(Register::ALL) {
-            assert_eq!(<Tiny as RegisterFile>::number(register), number);
-        }
-    }
-
-    #[test]
-    fn the_mnemonics_are_the_assemblers() {
-        let names: Vec<&str> = Mnemonic::ALL
-            .iter()
-            .map(|mnemonic| mnemonic.name())
-            .collect();
-        assert_eq!(Tiny::MNEMONICS, names);
     }
 
     #[test]

@@ -55,7 +55,7 @@ pub fn place_of_byte(source: &str, byte: u32) -> (u32, u32) {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::disallowed_macros)] // assertions are how tests fail
+    #![expect(clippy::disallowed_macros, reason = "assertions are how tests fail")]
 
     use super::*;
 

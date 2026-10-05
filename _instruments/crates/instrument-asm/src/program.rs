@@ -2,16 +2,16 @@
 //! error it has.
 
 use std::collections::BTreeMap;
+use std::fmt::{self, Debug, Formatter};
 use std::sync::Arc;
 
 use crate::diag::{chars, place_of_byte, ParseError};
 use crate::lexer::{self, Token, TokenKind};
-use crate::set::{Context, Encode, InstructionSet, Limits, Problem, Read, Reason};
+use crate::set::{Context, Encode, InstructionSet, Limits, Problem, Reason};
 
 /// A source that was read under an instruction set: the source, kept so a
 /// new run can read it again under its own space, and its instructions in
 /// order.
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program<I: InstructionSet> {
     /// The format the source was read as.
     format: I::Format,
@@ -72,6 +72,39 @@ struct Reading<'a, 's, I: InstructionSet> {
     /// Whether the instruction limit has been reported.
     too_many: bool,
 }
+
+// Written by hand, so that the marker type of an instruction set need not
+// implement them: only what the program holds does.
+impl<I: InstructionSet> Clone for Program<I> {
+    fn clone(&self) -> Self {
+        Self {
+            format: self.format,
+            source: self.source.clone(),
+            instructions: self.instructions.clone(),
+        }
+    }
+}
+
+impl<I: InstructionSet> Debug for Program<I> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Program")
+            .field("format", &self.format)
+            .field("source", &self.source)
+            .field("instructions", &self.instructions)
+            .finish()
+    }
+}
+
+impl<I: InstructionSet> PartialEq for Program<I> {
+    fn eq(&self, other: &Self) -> bool {
+        self.format == other.format
+            && self.source == other.source
+            && self.instructions == other.instructions
+    }
+}
+
+impl<I: InstructionSet> Eq for Program<I> {}
 
 impl<I: InstructionSet> Program<I> {
     /// Reads `source` as `format` under `space`.
@@ -248,10 +281,7 @@ impl<'a, 's, I: InstructionSet> Reading<'a, 's, I> {
             return Ok(());
         };
         let last = operands.last().unwrap_or(first);
-        let Read {
-            instructions,
-            branch,
-        } = I::read_line(&self.context, first, operands)?;
+        let (instructions, branches) = I::read_line(&self.context, first, operands)?.into_parts();
         if let Some(limit) = self.limits.instructions {
             let after = self.instructions.len().saturating_add(instructions.len());
             if after > usize::try_from(limit).unwrap_or(usize::MAX) {
@@ -262,13 +292,13 @@ impl<'a, 's, I: InstructionSet> Reading<'a, 's, I> {
                 return Err(self.context.problem(first, Reason::TooManyInstructions));
             }
         }
-        if let Some(branch) = branch {
-            self.branches.push(Pending {
-                index: self.instructions.len().saturating_add(branch.index),
+        let start = self.instructions.len();
+        self.branches
+            .extend(branches.into_iter().map(|branch| Pending {
+                index: start.saturating_add(branch.index),
                 label: branch.label,
                 line: number,
-            });
-        }
+            }));
         let text = lexer::collapse(line.get(first.start..last.end).unwrap_or_default());
         self.instructions
             .extend(instructions.into_iter().map(|instruction| Placed {
