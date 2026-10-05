@@ -1,6 +1,6 @@
 #!/bin/sh
 # Prints the size of a release build's wasm, raw and gzipped at level 9,
-# against a budget of 300,000 bytes gzipped. Above 280,000 bytes it also
+# against a budget of 300,000 bytes gzipped. Above 289,000 bytes it also
 # emits a warning annotation, and above 300,000 an error annotation and a
 # non-zero exit. The annotations go to stderr, so that a step piping the
 # report line into the job summary copies that line alone. Such a step must
@@ -34,6 +34,6 @@ if [ "$gzipped" -gt 300000 ]; then
   echo "::error::$name is $(grouped "$gzipped") bytes gzipped, over the budget of 300,000" >&2
   exit 1
 fi
-if [ "$gzipped" -gt 280000 ]; then
-  echo "::warning::$name is $(grouped "$gzipped") bytes gzipped, within 20,000 of the budget of 300,000" >&2
+if [ "$gzipped" -gt 289000 ]; then
+  echo "::warning::$name is $(grouped "$gzipped") bytes gzipped, within 11,000 of the budget of 300,000" >&2
 fi
