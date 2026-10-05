@@ -46,24 +46,24 @@ pub enum TextStyle {
 /// before it joins it, and an empty run is dropped, so the page receives
 /// each stretch of one style as a single segment.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct Segments(Vec<TextSegment>);
+pub struct Segments(Vec<TextSegment>);
 
 impl Segments {
     /// No segments yet.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
     /// These segments, then `text` as running text.
     #[must_use]
-    pub(crate) fn plain(mut self, text: &str) -> Self {
+    pub fn plain(mut self, text: &str) -> Self {
         self.push(TextStyle::Plain, text);
         self
     }
 
     /// These segments, then `text` in mono.
     #[must_use]
-    pub(crate) fn code(mut self, text: &str) -> Self {
+    pub fn code(mut self, text: &str) -> Self {
         self.push(TextStyle::Code, text);
         self
     }
@@ -72,7 +72,7 @@ impl Segments {
     /// them. Each segment's text moves in; it is copied only where it joins
     /// the last segment.
     #[must_use]
-    pub(crate) fn then(mut self, segments: Vec<TextSegment>) -> Self {
+    pub fn then(mut self, segments: Vec<TextSegment>) -> Self {
         for segment in segments {
             self.push(segment.style, segment.text);
         }
@@ -83,7 +83,7 @@ impl Segments {
     /// and as a new segment otherwise; nothing when `text` is empty. A
     /// `String` becomes the new segment's text as it is, and a `&str` is
     /// copied into it.
-    pub(crate) fn push<'a>(&mut self, style: TextStyle, text: impl Into<Cow<'a, str>>) {
+    pub fn push<'a>(&mut self, style: TextStyle, text: impl Into<Cow<'a, str>>) {
         let text = text.into();
         if text.is_empty() {
             return;
@@ -98,7 +98,7 @@ impl Segments {
     }
 
     /// The segments.
-    pub(crate) fn into_vec(self) -> Vec<TextSegment> {
+    pub fn into_vec(self) -> Vec<TextSegment> {
         self.0
     }
 }
@@ -111,7 +111,7 @@ impl Segments {
 /// quoted as it came keeps a backtick of its own: ``unknown field `a`b` ``
 /// sets ``a`b`` in mono. A backtick that opens no stretch, or opens one
 /// that nothing closes, stays as it is.
-pub(crate) fn code_spans(text: &str) -> Vec<TextSegment> {
+pub fn code_spans(text: &str) -> Vec<TextSegment> {
     let mut segments = Segments::new();
     // Where the running text starts, and where the open stretch of code
     // starts, after its backtick, if one is open.
@@ -267,7 +267,7 @@ impl fmt::Display for Markdown {
 ///
 /// The [`MarkupError`] of the first thing in `text` that is not plain
 /// text, code or emphasis, or of code or emphasis written wrongly.
-pub(crate) fn markup(text: &str) -> Result<Vec<TextSegment>, MarkupError> {
+pub fn markup(text: &str) -> Result<Vec<TextSegment>, MarkupError> {
     if text.trim().is_empty() {
         return Err(MarkupError::Empty);
     }
