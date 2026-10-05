@@ -82,7 +82,7 @@ npm run test:wasm        # the same tests in headless Chrome (needs a ChromeDriv
 npm run size             # the wasm's gzipped size against its budget
 ```
 
-`.github/workflows/cache-explorer.yml` runs all of this on pushes to `master` that touch the tool's paths (`_instruments/`, `assets/cache-explorer/`, the page, the `tool` layout, the workflow) and on every pull request (it skips the work when none is touched), and its `status` job is the one to require on `master`.
+`.github/workflows/instruments.yml` runs all of this on pushes to `master` that touch the tool's paths (`_instruments/`, `assets/cache-explorer/`, the page, the `tool` layout, the workflow) and on every pull request (it skips the work when none is touched), and its `status` job is the one to require on `master`.
 
 The core's tests include every guided module: each file in `modules/` is parsed and then run to its end through its own Show me path. See [docs/AUTHORING.md](docs/AUTHORING.md) for the module format and how to add one.
 

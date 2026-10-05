@@ -1,4 +1,4 @@
-name: Interactive Cache Explorer
+name: Instruments
 
 on:
   push:
@@ -8,9 +8,9 @@ on:
       - "assets/cache-explorer/**"
       - "_pages/cache-explorer.md"
       - "_layouts/tool.liquid"
-      - ".github/workflows/cache-explorer.yml"
+      - ".github/workflows/instruments.yml"
   # Runs on every pull request, with no path filter: the `changes` job skips the real
-  # work when the tool's paths are untouched, so `status` can be a required check on
+  # work when the instruments' paths are untouched, so `status` can be a required check on
   # master without hanging as pending on unrelated pull requests. `status` is the one
   # check to mark required. If the first run shows a macOS/Linux difference in the
   # built assets, the fallback is a CI job on master that commits assets/cache-explorer/.
@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cache-explorer-${{ github.ref }}
+  group: instruments-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -44,16 +44,26 @@ jobs:
         run: |
           if [ "$EVENT" != "pull_request" ]; then echo "relevant=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           if git diff --name-only "origin/$BASE_REF...HEAD" |
-             grep -Eq '^(_instruments/|assets/cache-explorer/|_pages/cache-explorer\.md$|_layouts/tool\.liquid$|\.github/workflows/cache-explorer\.yml$)'; then
+             grep -Eq '^(_instruments/|assets/cache-explorer/|_pages/cache-explorer\.md$|_layouts/tool\.liquid$|\.github/workflows/instruments\.yml$)'; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "relevant=false" >> "$GITHUB_OUTPUT"
           fi
 
   rust:
+    name: rust (${{ matrix.instrument }})
     needs: changes
     if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - instrument: cache-explorer
+            core: cache-explorer-core
+            facade: cache-explorer-wasm
+            out: cache_explorer
+            assets: assets/cache-explorer
     steps:
       - uses: actions/checkout@v7
       - name: Toolchain from rust-toolchain.toml
@@ -63,29 +73,39 @@ jobs:
           workspaces: _instruments
       - run: cargo fmt --all --check
       - name: Core has no JS or OS dependencies
-        run: sh scripts/check-deps.sh cache-explorer-core
-      - run: cargo clippy -p cache-explorer-core --all-targets --locked -- -D warnings
-      - run: cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
+        run: sh scripts/check-deps.sh ${{ matrix.core }}
+      - run: cargo clippy -p ${{ matrix.core }} --all-targets --locked -- -D warnings
+      - run: cargo clippy -p ${{ matrix.facade }} --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
       # --all-targets builds the core's tests, whose dev-dependency on the core turns
       # "golden" on for its library too. These two lint the library as it ships: the
       # core's default build, and the facade with the core's "ts" alone on wasm32.
       - name: Core library without the golden feature
-        run: cargo clippy -p cache-explorer-core --lib --locked -- -D warnings
+        run: cargo clippy -p ${{ matrix.core }} --lib --locked -- -D warnings
       - name: Shipped build (facade library, core with ts alone)
-        run: cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --lib --locked -- -D warnings
-      - run: cargo test -p cache-explorer-core --locked
+        run: cargo clippy -p ${{ matrix.facade }} --target wasm32-unknown-unknown --lib --locked -- -D warnings
+      - run: cargo test -p ${{ matrix.core }} --locked
       - name: Docs build, private items included (core)
         env:
           RUSTDOCFLAGS: "-D warnings"
-        run: cargo doc -p cache-explorer-core --no-deps --document-private-items --locked
+        run: cargo doc -p ${{ matrix.core }} --no-deps --document-private-items --locked
       - name: Docs build, private items included (facade)
         env:
           RUSTDOCFLAGS: "-D warnings"
-        run: cargo doc -p cache-explorer-wasm --target wasm32-unknown-unknown --no-deps --document-private-items --locked
+        run: cargo doc -p ${{ matrix.facade }} --target wasm32-unknown-unknown --no-deps --document-private-items --locked
 
   web:
+    name: web (${{ matrix.instrument }})
     needs: rust
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - instrument: cache-explorer
+            core: cache-explorer-core
+            facade: cache-explorer-wasm
+            out: cache_explorer
+            assets: assets/cache-explorer
     steps:
       - uses: actions/checkout@v7
       - run: rustup toolchain install --no-self-update
@@ -99,24 +119,28 @@ jobs:
           cache-dependency-path: _instruments/package-lock.json
       - run: npm ci
       - name: Facade tests in headless Chrome (fails if a suite was skipped or ran nothing)
-        run: npm run test:wasm
+        run: node scripts/instruments.mjs run test:wasm ${{ matrix.instrument }}
       - name: Build
-        run: npm run build
+        run: node scripts/instruments.mjs run build ${{ matrix.instrument }}
+      - name: Facade tests in Node
+        run: node scripts/instruments.mjs run test:wasm:node ${{ matrix.instrument }}
       - name: Release glue refuses hostile arguments and stays healthy
-        run: npm run test:glue
-      - name: Generated declarations match docs/cache_explorer.d.ts
-        run: diff -u docs/cache_explorer.d.ts web/pkg/cache_explorer.d.ts
-        working-directory: _instruments/cache-explorer
+        run: node scripts/instruments.mjs run test:glue ${{ matrix.instrument }}
+      - name: Generated declarations match the committed copy
+        run: diff -u docs/${{ matrix.out }}.d.ts web/pkg/${{ matrix.out }}.d.ts
+        working-directory: _instruments/${{ matrix.instrument }}
       - name: Typecheck, lint, format, token and package checks, Vitest
-        run: npm run check
+        run: node scripts/instruments.mjs run check ${{ matrix.instrument }}
       - name: Committed build matches a fresh build
         working-directory: .
+        env:
+          ASSETS: ${{ matrix.assets }}
         run: |
-          git diff --exit-code -- assets/cache-explorer
-          test -z "$(git status --porcelain -- assets/cache-explorer)"
+          git diff --exit-code -- "$ASSETS"
+          test -z "$(git status --porcelain -- "$ASSETS")"
       - name: wasm size
         shell: bash   # adds -o pipefail: without it the step takes tee's status and never fails
-        run: npm run --silent size | tee -a "$GITHUB_STEP_SUMMARY"
+        run: node scripts/instruments.mjs size ${{ matrix.instrument }} | tee -a "$GITHUB_STEP_SUMMARY"
 
   status:
     if: always()
