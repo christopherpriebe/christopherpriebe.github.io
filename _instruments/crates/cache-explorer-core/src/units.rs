@@ -211,7 +211,8 @@ impl Cycle {
 
 impl EventPos {
     /// Wraps a position the session has checked against its log.
-    pub(crate) const fn new_unchecked(value: u32) -> Self {
+    #[doc(hidden)]
+    pub const fn new_unchecked(value: u32) -> Self {
         Self(value)
     }
 
@@ -223,7 +224,8 @@ impl EventPos {
 
 impl OpIndex {
     /// Wraps an op index the session has checked against its log.
-    pub(crate) const fn new_unchecked(value: u32) -> Self {
+    #[doc(hidden)]
+    pub const fn new_unchecked(value: u32) -> Self {
         Self(value)
     }
 
@@ -352,18 +354,6 @@ impl fmt::Display for Cycle {
     }
 }
 
-impl fmt::Display for EventPos {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&format::Data(u64::from(self.0)), f)
-    }
-}
-
-impl fmt::Display for OpIndex {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&format::Data(u64::from(self.0)), f)
-    }
-}
-
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&format::Data(self.0), f)
@@ -393,8 +383,6 @@ mod tests {
         assert_eq!(WordIndex::new_unchecked(3).to_string(), "3");
         assert_eq!(Cycle::new_unchecked(105).to_string(), "105");
         assert_eq!(Cycle::new_unchecked(20_000).to_string(), "20,000");
-        assert_eq!(EventPos::new_unchecked(9).to_string(), "9");
-        assert_eq!(OpIndex::new_unchecked(4).to_string(), "4");
         assert_eq!(Word::new_unchecked(4_096).to_string(), "4096");
         assert_eq!(Word::new_unchecked(10_000).to_string(), "10,000");
         assert_eq!(Register::R3.to_string(), "r3");
