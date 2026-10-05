@@ -533,7 +533,7 @@ mod tests {
     fn end_of(session: &Session, kept: u32) -> EventPos {
         kept.checked_sub(1)
             .and_then(|last| session.log.op_end(OpIndex::new_unchecked(last)))
-            .unwrap_or(pos(0))
+            .unwrap_or_else(|| pos(0))
     }
 
     /// Asserts the lists of `log` agree: one serial, one JSON and one end
@@ -552,7 +552,7 @@ mod tests {
         );
         let end = log.end();
         assert_eq!(
-            log.op_ends.last().copied().unwrap_or(pos(0)),
+            log.op_ends.last().copied().unwrap_or_else(|| pos(0)),
             end,
             "{when}: the last op ends the events"
         );
