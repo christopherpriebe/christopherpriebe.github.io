@@ -273,6 +273,7 @@ fn parse_cost(machine: &Machine, op: &Op) -> u64 {
     let bytes = match op {
         Op::Program { source, .. } => source.len(),
         Op::Config { .. } => machine
+            .cpu
             .program
             .as_ref()
             .map_or(0, |program| program.source().len()),

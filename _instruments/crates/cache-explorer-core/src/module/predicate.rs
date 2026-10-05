@@ -410,7 +410,7 @@ impl Predicate {
                     CmpOp::AtMost => counter <= value,
                 }
             }
-            Predicate::Register(p) => machine.registers.get(p.register) == p.equals.get(),
+            Predicate::Register(p) => machine.cpu.registers.get(p.register) == p.equals.get(),
             Predicate::All(p) => p.all.iter().all(|p| p.eval(cx)),
             Predicate::Any(p) => p.any.iter().any(|p| p.eval(cx)),
             Predicate::Not(p) => !p.not.eval(cx),

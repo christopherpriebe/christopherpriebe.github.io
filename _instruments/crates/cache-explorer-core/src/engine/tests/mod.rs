@@ -14,7 +14,7 @@ use crate::config::{
     AllocatePolicy, CacheConfig, Config, MemoryInit, Mode, Preset, Replacement, Timing, WordBytes,
     WritePolicy,
 };
-use crate::cpu::{Cpu, Halted, Registers};
+use crate::cpu::{CpuState, Halted, Registers};
 use crate::event::Counter;
 use crate::isa::Program;
 use crate::limits::{
@@ -484,7 +484,7 @@ fn diff(before: &Machine, after: &Machine) -> Vec<ChangeRef> {
         Register::R7,
     ];
     for register in registers {
-        if before.registers.get(register) != after.registers.get(register) {
+        if before.cpu.registers.get(register) != after.cpu.registers.get(register) {
             changed.push(self::register(register));
         }
     }
@@ -595,7 +595,7 @@ impl Driven {
                 "after {}",
                 event.label
             );
-            let length = after.program.as_deref().map_or(0, Program::len);
+            let length = after.cpu.program.as_deref().map_or(0, Program::len);
             assert!(after.cpu.pc <= length, "after {}", event.label);
         }
         (

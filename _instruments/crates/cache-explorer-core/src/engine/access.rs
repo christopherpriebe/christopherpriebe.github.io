@@ -417,7 +417,7 @@ fn complete(
         _ => return Err(lost(machine, location.set)),
     };
     let mut changed = Vec::new();
-    if machine.registers.set(into, value) {
+    if machine.cpu.registers.set(into, value) {
         changed.push(ChangeRef::Register { register: into });
     }
     if !ranked {
@@ -429,7 +429,7 @@ fn complete(
     // registers on show. A trace reads no register, so beside one the line
     // says nothing more.
     let beside_program = origin(machine) == Some(Origin::Hand)
-        && machine.program.as_ref().is_some_and(|program| {
+        && machine.cpu.program.as_ref().is_some_and(|program| {
             program.format() == ProgramFormat::Asm && machine.cpu.pc < program.len()
         });
     let draft = Draft {

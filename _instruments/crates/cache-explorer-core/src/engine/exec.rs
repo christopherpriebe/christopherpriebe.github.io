@@ -34,7 +34,7 @@
 
 use std::sync::Arc;
 
-use crate::cpu::{Cpu, Halted};
+use crate::cpu::{CpuState, Halted};
 use crate::engine::port::{CacheMemory, MemoryPort};
 use crate::engine::{end_entry, Draft, Emitter, Flow, Halt, OpProgress};
 use crate::event::{ChangeRef, EventKind};
@@ -86,6 +86,7 @@ pub(crate) fn load_program(machine: &mut Machine, program: Program, out: &mut Em
     out.begin_setup();
     machine.access = None;
     let mut changed: Vec<ChangeRef> = machine
+        .cpu
         .registers
         .clear()
         .into_iter()
@@ -94,9 +95,9 @@ pub(crate) fn load_program(machine: &mut Machine, program: Program, out: &mut Em
     if machine.cpu.pc != 0 {
         changed.push(ChangeRef::Pc);
     }
-    machine.cpu = Cpu::default();
+    machine.cpu = CpuState::default();
     let (format, instructions) = (program.format(), program.len());
-    machine.program = Some(Arc::new(program));
+    machine.cpu.program = Some(Arc::new(program));
     let draft = Draft {
         changed,
         ..Draft::new(EventKind::Setup, None)
@@ -115,7 +116,7 @@ pub(crate) fn load_program(machine: &mut Machine, program: Program, out: &mut Em
 /// it has faulted or run out of budget, naming the line it stopped at; and
 /// [`OpError::Finished`] once it has executed its last instruction.
 pub(crate) fn ready(machine: &Machine) -> Result<(), OpError> {
-    let Some(program) = &machine.program else {
+    let Some(program) = &machine.cpu.program else {
         return Err(OpError::NoProgram);
     };
     let at = program.get(machine.cpu.pc);
@@ -171,7 +172,9 @@ pub(crate) fn step_through(
         }
         Instruction::Store { to, value } => {
             let (value, from) = match value {
-                Operand::Register(register) => (machine.registers.get(register), Some(register)),
+                Operand::Register(register) => {
+                    (machine.cpu.registers.get(register), Some(register))
+                }
                 Operand::Immediate(value) => (value, None),
             };
             address(machine, &machine.geometry, to).map(|addr| Request::Store {
@@ -183,6 +186,7 @@ pub(crate) fn step_through(
         }
         Instruction::Add { into, left, right } => {
             let sum = machine
+                .cpu
                 .registers
                 .get(left)
                 .wrapping_add(read(machine, right));
@@ -197,7 +201,7 @@ pub(crate) fn step_through(
             target,
             label,
         } => {
-            let value = machine.registers.get(test);
+            let value = machine.cpu.registers.get(test);
             let taken = value != 0;
             let next = if taken {
                 target
@@ -303,7 +307,7 @@ fn address(machine: &Machine, space: &impl AddressSpace, from: Address) -> Resul
         Address::Literal(addr) => return Ok(addr),
         Address::Register(register) => register,
     };
-    let value = machine.registers.get(register);
+    let value = machine.cpu.registers.get(register);
     let Some(addr) = u32::try_from(value)
         .ok()
         .and_then(|value| space.addr(value))
@@ -319,7 +323,7 @@ fn address(machine: &Machine, space: &impl AddressSpace, from: Address) -> Resul
 /// The value `operand` reads.
 fn read(machine: &Machine, operand: Operand) -> u64 {
     match operand {
-        Operand::Register(register) => machine.registers.get(register),
+        Operand::Register(register) => machine.cpu.registers.get(register),
         Operand::Immediate(value) => value,
     }
 }
@@ -339,7 +343,7 @@ fn complete(
     machine.access = None;
     let mut changed = Vec::new();
     if let Some((register, value)) = write {
-        if machine.registers.set(register, value) {
+        if machine.cpu.registers.set(register, value) {
             changed.push(ChangeRef::Register { register });
         }
     }

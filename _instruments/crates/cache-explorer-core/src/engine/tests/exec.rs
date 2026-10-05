@@ -8,6 +8,12 @@ use super::*;
 
 /// Frame 3b's program, as `golden::FRAME_3B` has it. The unit tests do not
 /// depend on the `golden` feature, so they keep this copy.
+/// The CPU's place in its program: the pc, the instructions executed, and
+/// why it stopped, if it did.
+fn place(cpu: &CpuState) -> (u32, u32, Option<Halted>) {
+    (cpu.pc, cpu.executed, cpu.halted)
+}
+
 const FRAME_3B: &str = concat!(
     "  st  [0x0B0], #5\n",
     "  ld  r1, [0x0A4]\n",
@@ -54,13 +60,13 @@ fn a_program_load_resets_the_cpu_and_keeps_the_cache() {
         (setup.cause, setup.addr, setup.set, setup.way),
         (None, None, None, None)
     );
-    assert_eq!(after.cpu, Cpu::default());
+    assert_eq!(place(&after.cpu), (0, 0, None));
     assert_eq!(after.run.entries, 0);
 
     driven.step();
     driven.step();
     let before = driven.machine().clone();
-    assert_eq!(before.registers.get(Register::R2), 54);
+    assert_eq!(before.cpu.registers.get(Register::R2), 54);
     assert_eq!(before.cpu.pc, 2);
 
     let trace = driven.load("ld r4, [0x0A8]");
@@ -73,15 +79,15 @@ fn a_program_load_resets_the_cpu_and_keeps_the_cache() {
             ChangeRef::Pc
         ]
     );
-    assert_eq!(after.registers, Registers::default());
-    assert_eq!(after.cpu, Cpu::default());
+    assert_eq!(after.cpu.registers, Registers::default());
+    assert_eq!(place(&after.cpu), (0, 0, None));
     assert_eq!(after.access, None);
     // The cache, memory, counters and entries are kept.
     assert_eq!(after.cache, before.cache);
     assert_eq!(after.memory, before.memory);
     assert_eq!(after.counters, before.counters);
     assert_eq!(after.run.entries, before.run.entries);
-    assert_eq!(after.program.as_deref().map(Program::len), Some(1));
+    assert_eq!(after.cpu.program.as_deref().map(Program::len), Some(1));
 
     // The new program's load hits the line the old one brought in.
     let kinds = kinds(
@@ -108,7 +114,7 @@ fn check_instruction_retirement(config: Config, source: &str) {
         let (last, after) = trace.last().unwrap();
         // In flight, the instruction is the one at the pc.
         for (event, during) in &trace[..trace.len() - 1] {
-            assert_eq!(during.cpu, before.cpu, "{}", event.label);
+            assert_eq!(place(&during.cpu), place(&before.cpu), "{}", event.label);
             assert!(!event.changed.contains(&ChangeRef::Pc), "{}", event.label);
         }
         assert_eq!(
@@ -128,7 +134,7 @@ fn check_instruction_retirement(config: Config, source: &str) {
             "instruction {entries}"
         );
     }
-    let program = driven.machine().program.as_ref().unwrap();
+    let program = driven.machine().cpu.program.as_ref().unwrap();
     assert_eq!(driven.machine().cpu.pc, program.len());
     assert_eq!(ready(driven.machine()), Err(OpError::Finished));
 }
@@ -274,9 +280,9 @@ fn check_register_address_fault(source: &str, at: Option<Addr>) {
     // Only the program's status and the entry count change: the pc stays
     // at the instruction, which does not count against the budget.
     let expected = Machine {
-        cpu: Cpu {
+        cpu: CpuState {
             halted: Some(Halted::Faulted),
-            ..before.cpu
+            ..before.cpu.clone()
         },
         run: RunPlace {
             entries: before.run.entries + 1,
@@ -325,17 +331,17 @@ fn the_budget_replaces_the_instruction_after_its_last() {
     assert_eq!((error.addr, error.cause), (None, None));
     assert_eq!(
         after.cpu,
-        Cpu {
+        CpuState {
             halted: Some(Halted::OutOfBudget),
-            ..before.cpu
+            ..before.cpu.clone()
         }
     );
-    assert_eq!(after.registers, before.registers);
+    assert_eq!(after.cpu.registers, before.cpu.registers);
     assert_eq!(ready(after), Err(OpError::Stopped { line: 2 }));
 
     // Loading the program again gives it a fresh budget.
     driven.load("add r1, r0, #1\nloop: bnez r1, loop");
-    assert_eq!(driven.machine().cpu, Cpu::default());
+    assert_eq!(place(&driven.machine().cpu), (0, 0, None));
     assert_eq!(driven.step()[0].0.kind, Complete);
 }
 
@@ -433,15 +439,9 @@ fn a_branch_moves_the_pc_to_its_label_or_on() {
     let mut driven = Driven::new(preset(Preset::DirectMapped8));
     driven.load("add r1, r0, #1\nbnez r1, end\nadd r2, r0, #5\nend:");
     driven.finish();
-    assert_eq!(
-        driven.machine().cpu,
-        Cpu {
-            pc: 3,
-            executed: 2,
-            halted: None
-        }
-    );
-    assert_eq!(driven.machine().registers.get(Register::R2), 0);
+    let cpu = &driven.machine().cpu;
+    assert_eq!((cpu.pc, cpu.executed, cpu.halted), (3, 2, None));
+    assert_eq!(driven.machine().cpu.registers.get(Register::R2), 0);
     let mut driven = Driven::new(preset(Preset::DirectMapped8));
     driven.load("add r1, r0, #1\nloop: bnez r1, loop");
     driven.step();
@@ -455,9 +455,9 @@ fn a_hand_issued_access_leaves_the_program_where_it_is() {
     let mut driven = Driven::new(preset(Preset::DirectMapped8));
     driven.load("add r1, r0, #5\nadd r2, r1, #0");
     driven.step();
-    let cpu = driven.machine().cpu;
+    let cpu = place(&driven.machine().cpu);
     let trace = driven.issue(load(0x0A4, Register::R1));
-    assert_eq!(driven.machine().cpu, cpu);
+    assert_eq!(place(&driven.machine().cpu), cpu);
     assert!(trace
         .iter()
         .all(|(event, _)| !event.changed.contains(&ChangeRef::Pc)));
@@ -466,10 +466,10 @@ fn a_hand_issued_access_leaves_the_program_where_it_is() {
         "Read word 1 of way 0 (53) into r1. A program is loaded, so its r1 now holds 53."
     );
     driven.issue(store(0x0A8, 9));
-    assert_eq!(driven.machine().cpu, cpu);
+    assert_eq!(place(&driven.machine().cpu), cpu);
     // The program reads the r1 the hand-issued load wrote.
     driven.step();
-    assert_eq!(driven.machine().registers.get(Register::R2), 53);
+    assert_eq!(driven.machine().cpu.registers.get(Register::R2), 53);
     // Once the program has finished, a hand-issued load says nothing of it.
     let trace = driven.issue(load(0x0A4, Register::R1));
     assert_eq!(
@@ -869,7 +869,7 @@ fn a_new_run_starts_over_with_the_program_kept_and_the_next_run_number() {
     assert!(setup.changed.is_empty());
     let mut expected = Machine::start(config).unwrap();
     expected.run.run = 2;
-    expected.program = Program::parse(
+    expected.cpu.program = Program::parse(
         &expected.geometry,
         "ld r1, [0x0A4]\nst [0x0A8], #7",
         ProgramFormat::Asm,

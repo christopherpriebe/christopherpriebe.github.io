@@ -26,17 +26,16 @@
 //!   as touched.
 
 use std::collections::BTreeSet;
-use std::sync::Arc;
 
 use thiserror::Error;
 
 use crate::cache::{Cache, Dirtiness, Set, Slot, Way};
 use crate::config::{Config, ConfigError, Replacement, WritePolicy};
-use crate::cpu::{Cpu, Registers};
+use crate::cpu::CpuState;
 use crate::event::ChangeRef;
 use crate::format;
 use crate::geometry::{Geometry, Location};
-use crate::isa::{Placed, Program};
+use crate::isa::Placed;
 use crate::limits::MAX_LINES;
 use crate::memory::{word_at, Memory};
 use crate::prng::Prng;
@@ -47,10 +46,10 @@ use crate::units::{Cycle, LineAddr, SetIndex, Tag, WayIndex};
 
 /// The state of a run at one point.
 ///
-/// It holds the run's configuration and geometry, the cache, memory,
-/// registers and counters, the loaded program and the CPU's place in it, what
-/// the classification of misses and the sparkline remember, the access in
-/// progress, and the run's generator.
+/// It holds the run's configuration and geometry, the cache, memory, the CPU
+/// with its registers, the loaded program and its place in it, the counters,
+/// what the classification of misses and the sparkline remember, the access
+/// in progress, the run's place, and the run's generator.
 ///
 /// There is no way to obtain one from outside the core other than by replaying
 /// a run, so every machine is one a sequence of ops can reach. Not
@@ -66,16 +65,9 @@ pub struct Machine {
     pub(crate) cache: Cache,
     /// Main memory.
     pub(crate) memory: Memory,
-    /// The CPU's registers.
-    pub(crate) registers: Registers,
-    /// The loaded program or trace, if any. It is never changed once
-    /// parsed, so a copy of the machine, such as a checkpoint, shares it
-    /// with the machine it was copied from; `Arc` rather than `Rc` keeps
-    /// machines and sessions `Send` and `Sync`.
-    pub(crate) program: Option<Arc<Program>>,
-    /// The CPU's place in the program: the pc, the instructions executed
-    /// against the budget, and whether the program stopped early.
-    pub(crate) cpu: Cpu,
+    /// The CPU: its registers, the loaded program or trace, if any, and the
+    /// CPU's place in it.
+    pub(crate) cpu: CpuState,
     /// The run's counters.
     pub(crate) counters: Counters,
     /// The fully associative LRU cache that tells capacity misses from
@@ -276,9 +268,7 @@ impl Machine {
         Ok(Self {
             cache: Cache::new(&geometry),
             memory: Memory::new(&geometry, config.memory_init),
-            registers: Registers::default(),
-            program: None,
-            cpu: Cpu::default(),
+            cpu: CpuState::default(),
             counters: Counters::default(),
             shadow: Shadow::new(geometry.lines()),
             filled: BTreeSet::new(),
@@ -302,7 +292,7 @@ impl Machine {
         if self.cpu.halted.is_some() {
             return None;
         }
-        self.program.as_ref()?.get(self.cpu.pc)
+        self.cpu.program.as_ref()?.get(self.cpu.pc)
     }
 
     /// The stall countdown the CPU shows: from a miss's `Stall` event until
@@ -346,7 +336,7 @@ impl Machine {
                 Slot::Invalid => None,
             },
             ChangeRef::Memory { addr } => Some(self.memory.word(addr).get()),
-            ChangeRef::Register { register } => Some(self.registers.get(register)),
+            ChangeRef::Register { register } => Some(self.cpu.registers.get(register)),
             ChangeRef::Pc => Some(u64::from(self.cpu.pc)),
             ChangeRef::Counter { counter } => Some(self.counters.get(counter)),
         }

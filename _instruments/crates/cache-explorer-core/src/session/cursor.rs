@@ -405,6 +405,7 @@ impl Session {
         let same = self
             .cursor
             .machine()
+            .cpu
             .program
             .as_ref()
             .is_some_and(|loaded| {

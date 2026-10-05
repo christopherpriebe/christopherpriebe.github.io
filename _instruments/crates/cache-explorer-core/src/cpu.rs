@@ -1,4 +1,4 @@
-//! The CPU: its registers, and its place in the loaded program.
+//! The CPU: its registers, the loaded program, and its place in it.
 //!
 //! Eight 64-bit registers, `r0` to `r7`, whatever the word size, so a program
 //! runs unchanged between word-size experiments. `r0` always reads 0, and
@@ -10,12 +10,22 @@
 //! the program was loaded, which the budget bounds, and whether the program
 //! stopped before its end: on a fault, or when the budget ran out.
 
+use std::sync::Arc;
+
+use crate::isa::Program;
 use crate::units::Register;
 
-/// The CPU's place in the loaded program, all zero and running when a run
-/// starts and when a program is loaded.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct Cpu {
+/// The CPU: its registers, the loaded program or trace, and its place in it,
+/// all zero, empty and running when a run starts.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CpuState {
+    /// The CPU's registers.
+    pub(crate) registers: Registers,
+    /// The loaded program or trace, if any. It is never changed once
+    /// parsed, so a copy of the CPU, such as a checkpoint's, shares it with
+    /// the CPU it was copied from; `Arc` rather than `Rc` keeps machines and
+    /// sessions `Send` and `Sync`.
+    pub(crate) program: Option<Arc<Program>>,
     /// The index of the next instruction to execute. At the program's
     /// length, the program has finished.
     pub(crate) pc: u32,
@@ -37,7 +47,7 @@ pub(crate) enum Halted {
     OutOfBudget,
 }
 
-impl Cpu {
+impl CpuState {
     /// Retires the instruction at the pc and moves the pc to `next`. Says
     /// whether the pc changed: a branch to itself leaves it where it was.
     pub(crate) fn retire(&mut self, next: u32) -> bool {
@@ -97,17 +107,17 @@ mod tests {
 
     #[test]
     fn retiring_moves_the_pc_and_counts_the_instruction() {
-        let mut cpu = Cpu::default();
+        let mut cpu = CpuState::default();
         assert!(cpu.retire(1));
         assert!(cpu.retire(5));
         // A branch to itself leaves the pc where it was.
         assert!(!cpu.retire(5));
         assert_eq!(
             cpu,
-            Cpu {
+            CpuState {
                 pc: 5,
                 executed: 3,
-                halted: None
+                ..CpuState::default()
             }
         );
     }

@@ -525,14 +525,14 @@ fn request(
 /// entry after the `Setup` says so, and it is unloaded.
 fn new_run(machine: &mut Machine, start: Machine, out: &mut Emitter<'_>) {
     let run = machine.run.run.saturating_add(1);
-    let program = machine.program.take();
+    let program = machine.cpu.program.take();
     *machine = start;
     machine.run.run = run;
     let failure = match program
         .map(|program| Program::parse(&machine.geometry, program.source(), program.format()))
     {
         Some(Ok(program)) => {
-            machine.program = Some(Arc::new(program));
+            machine.cpu.program = Some(Arc::new(program));
             None
         }
         Some(Err(failure)) => Some(failure),
@@ -540,6 +540,7 @@ fn new_run(machine: &mut Machine, start: Machine, out: &mut Emitter<'_>) {
     };
     out.begin_setup();
     let restart = machine
+        .cpu
         .program
         .as_ref()
         .and_then(|program| Some((program.format(), program.get(0)?.line)));

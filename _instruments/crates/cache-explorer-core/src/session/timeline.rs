@@ -486,6 +486,7 @@ fn describe(
     let no_instruction = || Arc::<str>::from(explain::no_instruction());
     let instruction = |at: u32| {
         after
+            .cpu
             .program
             .as_ref()
             .and_then(|program| program.get(at))
@@ -494,6 +495,7 @@ fn describe(
     match event.kind {
         EventKind::Setup => {
             let (format, count) = after
+                .cpu
                 .program
                 .as_ref()
                 .map_or((ProgramFormat::Asm, 0), |program| {
@@ -965,7 +967,7 @@ mod tests {
             })
             .unwrap();
         session.apply(Op::Run { n: 2 }).unwrap();
-        let program = session.machine().program.clone().unwrap();
+        let program = session.machine().cpu.program.clone().unwrap();
         let entries: Vec<&EntryRecord> = session
             .log
             .entries()

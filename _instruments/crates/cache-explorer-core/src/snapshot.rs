@@ -1034,7 +1034,7 @@ impl CpuView {
                 .into_iter()
                 .map(|register| RegisterView {
                     register,
-                    text: format::data(machine.registers.get(register)),
+                    text: format::data(machine.cpu.registers.get(register)),
                 })
                 .collect(),
         }
@@ -1045,7 +1045,7 @@ impl CpuView {
 /// program: the error that stopped it, or the instruction after which it
 /// had none left to execute.
 fn ends_program(machine: &Machine, entry: &EntryRecord) -> bool {
-    let Some(program) = &machine.program else {
+    let Some(program) = &machine.cpu.program else {
         return false;
     };
     match entry.kind {
@@ -1066,7 +1066,7 @@ fn ends_program(machine: &Machine, entry: &EntryRecord) -> bool {
 /// What the CPU says of the loaded program where the cursor is on no
 /// entry's step, and on the last step of the entry that ended it.
 fn between_entries(machine: &Machine) -> (CpuStatus, String) {
-    let Some(program) = &machine.program else {
+    let Some(program) = &machine.cpu.program else {
         return (CpuStatus::NoProgram, explain::ready());
     };
     let at = program.get(machine.cpu.pc);
@@ -1095,7 +1095,7 @@ pub(crate) fn noun(kind: EntryKind) -> EntryNoun {
 impl ProgramView {
     /// The program loaded on `machine`, if any.
     pub(crate) fn new(machine: &Machine) -> Option<Self> {
-        let program = machine.program.as_ref()?;
+        let program = machine.cpu.program.as_ref()?;
         let pc = machine.cpu.pc;
         let at = program.get(pc);
         let executing = machine.in_flight()
