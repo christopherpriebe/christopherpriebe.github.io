@@ -21,7 +21,7 @@ impl MemoryPort for Flat {
         let explain = match request {
             Request::Load { addr, into, .. } => {
                 let value = self.words.get(&addr.get()).copied().unwrap_or(0);
-                if machine.cpu.registers.set(into, value) {
+                if machine.cpu.write(into, value) {
                     changed.push(ChangeRef::Register { register: into });
                 }
                 format!("flat load {value}")
@@ -33,7 +33,7 @@ impl MemoryPort for Flat {
             }
         };
         if request.origin() == Origin::Program {
-            let next = machine.cpu.pc.saturating_add(1);
+            let next = machine.cpu.pc().saturating_add(1);
             if machine.cpu.retire(next) {
                 changed.push(ChangeRef::Pc);
             }
@@ -74,8 +74,8 @@ fn a_step_hands_its_access_to_the_port_given() {
 
     let (_, loaded) = driven.apply(|machine, out| step_through(&mut flat, machine, out));
     assert_eq!(loaded[0].0.explain, "flat load 5");
-    assert_eq!(driven.machine().cpu.registers.get(Register::R1), 5);
-    assert_eq!(driven.machine().cpu.pc, 2);
+    assert_eq!(driven.machine().cpu.register(Register::R1), 5);
+    assert_eq!(driven.machine().cpu.pc(), 2);
     // Neither the cache nor its counters were touched.
     assert_eq!(driven.machine().cache, cold.cache);
     assert_eq!(driven.machine().counters, cold.counters);
@@ -93,7 +93,7 @@ fn a_run_goes_through_the_port_to_the_end_of_the_program() {
     // Five instructions, one entry and one event each.
     assert_eq!(trace.len(), 5);
     assert_eq!(ready(driven.machine()), Err(OpError::Finished));
-    assert_eq!(driven.machine().cpu.registers.get(Register::R2), 7);
+    assert_eq!(driven.machine().cpu.register(Register::R2), 7);
     assert_eq!(flat.words.get(&0xA8), Some(&7));
     assert_eq!(driven.machine().counters, crate::stats::Counters::default());
 }

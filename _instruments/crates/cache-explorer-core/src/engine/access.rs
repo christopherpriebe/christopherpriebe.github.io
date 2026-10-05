@@ -55,7 +55,7 @@ use crate::explain::{self, StallFor, WriteNote};
 use crate::geometry::Location;
 use crate::machine::{AccessContext, InvariantViolation, Lookup, Machine, StallWindow};
 use crate::memory::{set_word_at, word_at};
-use crate::op::{AccessKind, ProgramFormat};
+use crate::op::AccessKind;
 use crate::replacement::{RankMove, VictimReason};
 use crate::request::{Origin, Request};
 use crate::stats::{self, Outcome};
@@ -417,7 +417,7 @@ fn complete(
         _ => return Err(lost(machine, location.set)),
     };
     let mut changed = Vec::new();
-    if machine.cpu.registers.set(into, value) {
+    if machine.cpu.write(into, value) {
         changed.push(ChangeRef::Register { register: into });
     }
     if !ranked {
@@ -428,10 +428,7 @@ fn complete(
     // or by its budget has not finished: it is still loaded, with its
     // registers on show. A trace reads no register, so beside one the line
     // says nothing more.
-    let beside_program = origin(machine) == Some(Origin::Hand)
-        && machine.cpu.program.as_ref().is_some_and(|program| {
-            program.format() == ProgramFormat::Asm && machine.cpu.pc < program.len()
-        });
+    let beside_program = origin(machine) == Some(Origin::Hand) && machine.cpu.asm_unfinished();
     let draft = Draft {
         addr: Some(addr),
         set: Some(location.set),
@@ -678,7 +675,7 @@ fn finish(machine: &mut Machine) -> Option<ChangeRef> {
     match access.request.origin() {
         Origin::Hand => None,
         Origin::Program => {
-            let next = machine.cpu.pc.saturating_add(1);
+            let next = machine.cpu.pc().saturating_add(1);
             machine.cpu.retire(next).then_some(ChangeRef::Pc)
         }
     }

@@ -35,7 +35,6 @@ use crate::cpu::CpuState;
 use crate::event::ChangeRef;
 use crate::format;
 use crate::geometry::{Geometry, Location};
-use crate::isa::Placed;
 use crate::limits::MAX_LINES;
 use crate::memory::{word_at, Memory};
 use crate::prng::Prng;
@@ -286,15 +285,6 @@ impl Machine {
         self.access.as_ref().is_some_and(|access| !access.done)
     }
 
-    /// The instruction the program executes next: the one at the pc, while
-    /// a program is loaded, has not stopped and has not finished.
-    pub(crate) fn next_instruction(&self) -> Option<&Placed> {
-        if self.cpu.halted.is_some() {
-            return None;
-        }
-        self.cpu.program.as_ref()?.get(self.cpu.pc)
-    }
-
     /// The stall countdown the CPU shows: from a miss's `Stall` event until
     /// the event that ends its last transfer, the cycles left and the stall's
     /// length in all. With a dirty victim and 20-cycle misses it reads 40,
@@ -336,8 +326,8 @@ impl Machine {
                 Slot::Invalid => None,
             },
             ChangeRef::Memory { addr } => Some(self.memory.word(addr).get()),
-            ChangeRef::Register { register } => Some(self.cpu.registers.get(register)),
-            ChangeRef::Pc => Some(u64::from(self.cpu.pc)),
+            ChangeRef::Register { register } => Some(self.cpu.register(register)),
+            ChangeRef::Pc => Some(u64::from(self.cpu.pc())),
             ChangeRef::Counter { counter } => Some(self.counters.get(counter)),
         }
     }

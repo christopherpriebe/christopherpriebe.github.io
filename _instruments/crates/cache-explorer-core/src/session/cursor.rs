@@ -402,15 +402,9 @@ impl Session {
     /// same format is the same program.
     fn load_first(&self, program: Option<&ProgramSource>) -> Option<Op> {
         let program = program?;
-        let same = self
-            .cursor
-            .machine()
-            .cpu
-            .program
-            .as_ref()
-            .is_some_and(|loaded| {
-                loaded.source() == program.source && loaded.format() == program.format
-            });
+        let same = self.cursor.machine().cpu.program().is_some_and(|loaded| {
+            loaded.source() == program.source && loaded.format() == program.format
+        });
         (!same).then(|| Op::Program {
             source: program.source.clone(),
             format: program.format,

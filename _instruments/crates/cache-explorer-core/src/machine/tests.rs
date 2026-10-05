@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::config::{AllocatePolicy, CacheConfig, MemoryInit, Preset, WordBytes};
-use crate::cpu::Registers;
+use crate::cpu::CpuState;
 use crate::limits::{MAX_ADDRESS_BITS, MAX_LINES};
 use crate::units::Tag;
 
@@ -122,7 +122,7 @@ fn a_run_starts_with_an_empty_cache_and_a_seeded_generator() {
         machine.memory,
         Memory::new(&machine.geometry, MemoryInit::Pattern)
     );
-    assert_eq!(machine.cpu.registers, Registers::default());
+    assert_eq!(machine.cpu, CpuState::default());
     assert_eq!(machine.counters, Counters::default());
     assert_eq!(machine.shadow, Shadow::new(machine.geometry.lines()));
     assert!(machine.shadow.lines().is_empty());

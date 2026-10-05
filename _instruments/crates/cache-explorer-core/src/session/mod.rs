@@ -1293,7 +1293,7 @@ mod tests {
             if at >= target {
                 break;
             }
-            let left = INSTRUCTION_BUDGET - session.machine().cpu.executed;
+            let left = INSTRUCTION_BUDGET - session.machine().cpu.executed();
             if left <= 1 {
                 session.apply(endless()).unwrap();
                 continue;
@@ -1337,8 +1337,8 @@ mod tests {
         let (at, checkpoint) = session.log.checkpoints().at_or_before(session.log.end());
         assert!(at >= pos(CHECKPOINT_INTERVAL));
         let (Some(held), Some(current)) = (
-            &checkpoint.machine.cpu.program,
-            &session.machine().cpu.program,
+            checkpoint.machine.cpu.program(),
+            session.machine().cpu.program(),
         ) else {
             panic!("the loop is loaded at the checkpoint and at the cursor");
         };
@@ -1470,6 +1470,6 @@ mod tests {
         );
         assert_eq!(replay.machine.run.run, 2);
         assert_eq!(replay.machine.run.entries, 1);
-        assert!(replay.machine.cpu.program.is_some());
+        assert!(replay.machine.cpu.program().is_some());
     }
 }

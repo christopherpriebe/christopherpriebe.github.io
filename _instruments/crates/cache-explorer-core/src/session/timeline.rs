@@ -363,7 +363,7 @@ impl Entries {
             last_base: None,
             steps,
             run: start.run.run,
-            pc: start.cpu.pc,
+            pc: start.cpu.pc(),
         }
     }
 
@@ -416,7 +416,7 @@ impl Entries {
         for &cell in &event.changed {
             self.latest.insert(cell, after.cell(cell));
         }
-        self.pc = after.cpu.pc;
+        self.pc = after.cpu.pc();
         self.run = after.run.run;
     }
 
@@ -487,8 +487,7 @@ fn describe(
     let instruction = |at: u32| {
         after
             .cpu
-            .program
-            .as_ref()
+            .program()
             .and_then(|program| program.get(at))
             .map_or_else(no_instruction, |placed| Arc::clone(&placed.text))
     };
@@ -496,8 +495,7 @@ fn describe(
         EventKind::Setup => {
             let (format, count) = after
                 .cpu
-                .program
-                .as_ref()
+                .program()
                 .map_or((ProgramFormat::Asm, 0), |program| {
                     (program.format(), program.len())
                 });
@@ -518,8 +516,8 @@ fn describe(
         EventKind::Error => {
             // A program stopped at an instruction names it; any other error
             // stands for no instruction.
-            let label = if after.cpu.halted.is_some() {
-                instruction(after.cpu.pc)
+            let label = if after.cpu.halted().is_some() {
+                instruction(after.cpu.pc())
             } else {
                 no_instruction()
             };
@@ -536,7 +534,7 @@ fn describe(
                 }
                 // The instruction is still at the pc: it retires at the
                 // access's last event.
-                _ => instruction(after.cpu.pc),
+                _ => instruction(after.cpu.pc()),
             };
             (EntryKind::Access, label, None)
         }
@@ -967,7 +965,7 @@ mod tests {
             })
             .unwrap();
         session.apply(Op::Run { n: 2 }).unwrap();
-        let program = session.machine().cpu.program.clone().unwrap();
+        let program = session.machine().cpu.program().cloned().unwrap();
         let entries: Vec<&EntryRecord> = session
             .log
             .entries()

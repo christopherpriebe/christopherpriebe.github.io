@@ -32,9 +32,7 @@
 //! instructions they check the session's limit, and stop with an `Error`
 //! event, as the budget does, when the log has no room for another entry.
 
-use std::sync::Arc;
-
-use crate::cpu::{CpuState, Halted};
+use crate::cpu::{Halted, NotReady};
 use crate::engine::port::{CacheMemory, MemoryPort};
 use crate::engine::{end_entry, Draft, Emitter, Flow, Halt, OpProgress};
 use crate::event::{ChangeRef, EventKind};
@@ -85,19 +83,16 @@ enum Fault {
 pub(crate) fn load_program(machine: &mut Machine, program: Program, out: &mut Emitter<'_>) -> Flow {
     out.begin_setup();
     machine.access = None;
-    let mut changed: Vec<ChangeRef> = machine
-        .cpu
+    let (format, instructions) = (program.format(), program.len());
+    let cleared = machine.cpu.load(program);
+    let mut changed: Vec<ChangeRef> = cleared
         .registers
-        .clear()
         .into_iter()
         .map(|register| ChangeRef::Register { register })
         .collect();
-    if machine.cpu.pc != 0 {
+    if cleared.pc {
         changed.push(ChangeRef::Pc);
     }
-    machine.cpu = CpuState::default();
-    let (format, instructions) = (program.format(), program.len());
-    machine.cpu.program = Some(Arc::new(program));
     let draft = Draft {
         changed,
         ..Draft::new(EventKind::Setup, None)
@@ -116,15 +111,11 @@ pub(crate) fn load_program(machine: &mut Machine, program: Program, out: &mut Em
 /// it has faulted or run out of budget, naming the line it stopped at; and
 /// [`OpError::Finished`] once it has executed its last instruction.
 pub(crate) fn ready(machine: &Machine) -> Result<(), OpError> {
-    let Some(program) = &machine.cpu.program else {
-        return Err(OpError::NoProgram);
-    };
-    let at = program.get(machine.cpu.pc);
-    match (machine.cpu.halted, at) {
-        (None, Some(_)) => Ok(()),
-        (Some(_), Some(placed)) => Err(OpError::Stopped { line: placed.line }),
-        (_, None) => Err(OpError::Finished),
-    }
+    machine.cpu.ready().map_err(|not_ready| match not_ready {
+        NotReady::NoProgram => OpError::NoProgram,
+        NotReady::Stopped { line } => OpError::Stopped { line },
+        NotReady::Finished => OpError::Finished,
+    })
 }
 
 /// [`step_through`] on the cache machine's own memory.
@@ -149,11 +140,11 @@ pub(crate) fn step_through(
     machine: &mut Machine,
     out: &mut Emitter<'_>,
 ) -> Flow {
-    let Some(placed) = machine.next_instruction() else {
+    let Some(placed) = machine.cpu.next_instruction() else {
         return Flow::Stop;
     };
     let (instruction, line) = (placed.instruction.clone(), placed.line);
-    if machine.cpu.executed >= INSTRUCTION_BUDGET {
+    if machine.cpu.executed() >= INSTRUCTION_BUDGET {
         return stop(
             machine,
             Halted::OutOfBudget,
@@ -172,9 +163,7 @@ pub(crate) fn step_through(
         }
         Instruction::Store { to, value } => {
             let (value, from) = match value {
-                Operand::Register(register) => {
-                    (machine.cpu.registers.get(register), Some(register))
-                }
+                Operand::Register(register) => (machine.cpu.register(register), Some(register)),
                 Operand::Immediate(value) => (value, None),
             };
             address(machine, &machine.geometry, to).map(|addr| Request::Store {
@@ -187,10 +176,9 @@ pub(crate) fn step_through(
         Instruction::Add { into, left, right } => {
             let sum = machine
                 .cpu
-                .registers
-                .get(left)
+                .register(left)
                 .wrapping_add(read(machine, right));
-            let next = machine.cpu.pc.saturating_add(1);
+            let next = machine.cpu.pc().saturating_add(1);
             let result = complete(machine, Some((into, sum)), next, out, || {
                 explain::add(into, sum)
             });
@@ -201,12 +189,12 @@ pub(crate) fn step_through(
             target,
             label,
         } => {
-            let value = machine.cpu.registers.get(test);
+            let value = machine.cpu.register(test);
             let taken = value != 0;
             let next = if taken {
                 target
             } else {
-                machine.cpu.pc.saturating_add(1)
+                machine.cpu.pc().saturating_add(1)
             };
             let result = complete(machine, None, next, out, || {
                 explain::bnez(test, value, taken.then_some(label.as_str()))
@@ -267,7 +255,7 @@ pub(crate) fn execute_through(
     loop {
         if progress != OpProgress::START {
             let counted = matches!(until, Until::Count(n) if progress.get() >= n);
-            if counted || machine.next_instruction().is_none() {
+            if counted || machine.cpu.next_instruction().is_none() {
                 return;
             }
             if out.boundary(machine, progress) == Flow::Stop {
@@ -284,7 +272,7 @@ pub(crate) fn execute_through(
                 return;
             }
         }
-        let accesses = machine.next_instruction().is_some_and(|placed| {
+        let accesses = machine.cpu.next_instruction().is_some_and(|placed| {
             matches!(
                 placed.instruction,
                 Instruction::Load { .. } | Instruction::Store { .. }
@@ -307,7 +295,7 @@ fn address(machine: &Machine, space: &impl AddressSpace, from: Address) -> Resul
         Address::Literal(addr) => return Ok(addr),
         Address::Register(register) => register,
     };
-    let value = machine.cpu.registers.get(register);
+    let value = machine.cpu.register(register);
     let Some(addr) = u32::try_from(value)
         .ok()
         .and_then(|value| space.addr(value))
@@ -323,7 +311,7 @@ fn address(machine: &Machine, space: &impl AddressSpace, from: Address) -> Resul
 /// The value `operand` reads.
 fn read(machine: &Machine, operand: Operand) -> u64 {
     match operand {
-        Operand::Register(register) => machine.cpu.registers.get(register),
+        Operand::Register(register) => machine.cpu.register(register),
         Operand::Immediate(value) => value,
     }
 }
@@ -343,7 +331,7 @@ fn complete(
     machine.access = None;
     let mut changed = Vec::new();
     if let Some((register, value)) = write {
-        if machine.cpu.registers.set(register, value) {
+        if machine.cpu.write(register, value) {
             changed.push(ChangeRef::Register { register });
         }
     }
@@ -369,7 +357,7 @@ fn stop(
 ) -> Flow {
     out.begin_entry(machine);
     machine.access = None;
-    machine.cpu.halted = Some(halted);
+    machine.cpu.halt(halted);
     let draft = Draft {
         addr,
         ..Draft::new(EventKind::Error, None)

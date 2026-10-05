@@ -274,8 +274,7 @@ fn parse_cost(machine: &Machine, op: &Op) -> u64 {
         Op::Program { source, .. } => source.len(),
         Op::Config { .. } => machine
             .cpu
-            .program
-            .as_ref()
+            .program()
             .map_or(0, |program| program.source().len()),
         Op::Issue { .. } | Op::Step | Op::StepAccess | Op::Run { .. } | Op::Edit { .. } => 0,
     };

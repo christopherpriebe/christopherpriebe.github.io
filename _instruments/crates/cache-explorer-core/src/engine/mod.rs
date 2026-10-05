@@ -35,8 +35,6 @@ pub use edit::{
     MemoryEditDraft, RefusalReason, Suggestion, Tone, WayForm, WordMark,
 };
 
-use std::sync::Arc;
-
 use access::access;
 use exec::{execute, load_program, ready, step, Until};
 
@@ -525,14 +523,14 @@ fn request(
 /// entry after the `Setup` says so, and it is unloaded.
 fn new_run(machine: &mut Machine, start: Machine, out: &mut Emitter<'_>) {
     let run = machine.run.run.saturating_add(1);
-    let program = machine.cpu.program.take();
+    let program = machine.cpu.program().cloned();
     *machine = start;
     machine.run.run = run;
     let failure = match program
         .map(|program| Program::parse(&machine.geometry, program.source(), program.format()))
     {
         Some(Ok(program)) => {
-            machine.cpu.program = Some(Arc::new(program));
+            machine.cpu.load(program);
             None
         }
         Some(Err(failure)) => Some(failure),
@@ -541,8 +539,7 @@ fn new_run(machine: &mut Machine, start: Machine, out: &mut Emitter<'_>) {
     out.begin_setup();
     let restart = machine
         .cpu
-        .program
-        .as_ref()
+        .program()
         .and_then(|program| Some((program.format(), program.get(0)?.line)));
     let draft = Draft::new(EventKind::Setup, None);
     let config = &machine.config;

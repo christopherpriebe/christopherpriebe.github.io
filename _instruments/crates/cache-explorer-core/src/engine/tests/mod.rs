@@ -14,7 +14,7 @@ use crate::config::{
     AllocatePolicy, CacheConfig, Config, MemoryInit, Mode, Preset, Replacement, Timing, WordBytes,
     WritePolicy,
 };
-use crate::cpu::{CpuState, Halted, Registers};
+use crate::cpu::{CpuState, Halted};
 use crate::event::Counter;
 use crate::isa::Program;
 use crate::limits::{
@@ -31,6 +31,13 @@ use EventKind::{
     Complete, Decode, Evict, Fill, Hit, MemWrite, Miss, Rank, Stall, Victim, Write, WriteBack,
     WriteThrough,
 };
+
+/// Whether every register of `cpu` holds 0.
+fn registers_zero(cpu: &CpuState) -> bool {
+    Register::ALL
+        .into_iter()
+        .all(|register| cpu.register(register) == 0)
+}
 
 /// Keeps every event and the machine after it, and stops after `stop_after`
 /// events when that is set.
@@ -484,11 +491,11 @@ fn diff(before: &Machine, after: &Machine) -> Vec<ChangeRef> {
         Register::R7,
     ];
     for register in registers {
-        if before.cpu.registers.get(register) != after.cpu.registers.get(register) {
+        if before.cpu.register(register) != after.cpu.register(register) {
             changed.push(self::register(register));
         }
     }
-    if before.cpu.pc != after.cpu.pc {
+    if before.cpu.pc() != after.cpu.pc() {
         changed.push(ChangeRef::Pc);
     }
     let (old, new) = (before.counters, after.counters);
@@ -595,8 +602,8 @@ impl Driven {
                 "after {}",
                 event.label
             );
-            let length = after.cpu.program.as_deref().map_or(0, Program::len);
-            assert!(after.cpu.pc <= length, "after {}", event.label);
+            let length = after.cpu.program().map_or(0, |program| program.len());
+            assert!(after.cpu.pc() <= length, "after {}", event.label);
         }
         (
             flow,

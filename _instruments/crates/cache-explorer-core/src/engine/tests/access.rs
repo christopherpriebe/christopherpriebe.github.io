@@ -53,7 +53,7 @@ fn case_1_a_load_hit_reads_the_way_and_ranks_last_if_it_moved() {
             None
         )
     );
-    assert_eq!(run.machine.cpu.registers.get(Register::R2), 53);
+    assert_eq!(run.machine.cpu.register(Register::R2), 53);
 
     // A second line in the set pushes way 0 back, so the next hit on it
     // moves it to the front, reported last.
@@ -136,7 +136,7 @@ fn case_2_a_load_miss_fills_an_invalid_way() {
             None
         )
     );
-    assert_eq!(run.machine.cpu.registers.get(Register::R1), 53);
+    assert_eq!(run.machine.cpu.register(Register::R1), 53);
     match &run.way(2, 0).slot {
         Slot::Valid { tag, dirty, data } => {
             assert_eq!(*tag, Tag::new_unchecked(0x02));
@@ -201,7 +201,7 @@ fn case_3_a_load_miss_evicts_a_clean_victim() {
         Slot::Invalid
     );
     assert_eq!(event(&events, Complete).changed, [register(Register::R1)]);
-    assert_eq!(run.machine.cpu.registers.get(Register::R1), 12);
+    assert_eq!(run.machine.cpu.register(Register::R1), 12);
     let counters = run.machine.counters;
     assert_eq!(
         (counters.misses, counters.fills, counters.evictions),
@@ -302,7 +302,7 @@ fn case_4_a_dirty_victim_is_written_back_before_it_is_evicted() {
         )
     );
     assert_eq!(event(&events, Complete).changed, [register(Register::R3)]);
-    assert_eq!(run.machine.cpu.registers.get(Register::R3), 68);
+    assert_eq!(run.machine.cpu.register(Register::R3), 68);
     assert_eq!(event(&events, Rank).changed, [rank_of(2, 0), rank_of(2, 1)]);
     assert_eq!((run.way(2, 1).rank, run.way(2, 0).rank), (0, 1));
     let counters = run.machine.counters;
@@ -735,7 +735,7 @@ fn a_no_allocate_store_then_a_load_of_its_line_both_miss() {
     run.store(0x0A4, 7);
     let events = run.load(0x0A4);
     assert_eq!(kinds(&events), [Decode, Miss, Victim, Fill, Complete]);
-    assert_eq!(run.machine.cpu.registers.get(Register::R1), 7);
+    assert_eq!(run.machine.cpu.register(Register::R1), 7);
     assert_eq!(run.machine.counters.misses, 2);
     // The store filled no line, so both misses are compulsory.
     assert_eq!(three_c(&run), (2, 0, 0));
@@ -760,7 +760,7 @@ fn a_store_keeps_the_low_bytes_of_its_value() {
         assert_eq!(run.memory(at), stored, "{word_bytes:?}");
         run.events(load(at, Register::R4));
         assert_eq!(
-            run.machine.cpu.registers.get(Register::R4),
+            run.machine.cpu.register(Register::R4),
             stored,
             "{word_bytes:?}"
         );
@@ -802,7 +802,7 @@ fn a_load_into_r0_changes_no_register() {
         complete.explain,
         "Read word 1 of way 0 (53); r0 always reads 0, so the value is dropped."
     );
-    assert_eq!(run.machine.cpu.registers, Registers::default());
+    assert!(registers_zero(&run.machine.cpu));
 }
 
 // ---------------------------------------------------------------------------
