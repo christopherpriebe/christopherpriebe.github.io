@@ -9,7 +9,7 @@
 # apply only on some platforms, such as a crate's wasm32-only ones; without it
 # cargo tree shows only the host's, and the core also builds for wasm32.
 set -eu
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 tree=$(cargo tree -p cache-explorer-core -e normal --target all --prefix none --locked)
 if printf '%s\n' "$tree" | grep -Eq '^(wasm-bindgen|js-sys|serde-wasm-bindgen|tsify|getrandom|web-sys) '; then

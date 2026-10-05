@@ -40,7 +40,7 @@ for (let i = 0; i < 20_000; i += 1) throws(() => freed.state(), /^Attempt to use
 // which `using` calls when its block ends, passes a null pointer into wasm and throws from Rust.
 // Each such throw leaks its stack frame, and a few hundred break the module, so the page releases
 // every object exactly once. Checked here, a few times only, so that a change in the glue shows.
-const modules = resolve(import.meta.dirname, '..', 'crates', 'cache-explorer-core', 'tests', 'fixtures', 'modules');
+const modules = resolve(import.meta.dirname, '..', '..', 'crates', 'cache-explorer-core', 'tests', 'fixtures', 'modules');
 const moduleJson = readFileSync(resolve(modules, '01-fixture-miss-then-hit.json'), 'utf8');
 for (const make of [() => new Session(), () => ShareLoad.fromJson(json), () => ModuleRun.fromJson(moduleJson)]) {
   const twice = make();

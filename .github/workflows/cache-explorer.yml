@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
     paths:
-      - "_cache-explorer/**"
+      - "_instruments/**"
       - "assets/cache-explorer/**"
       - "_pages/cache-explorer.md"
       - "_layouts/tool.liquid"
@@ -25,7 +25,7 @@ concurrency:
 
 defaults:
   run:
-    working-directory: _cache-explorer
+    working-directory: _instruments
 
 jobs:
   changes:
@@ -44,7 +44,7 @@ jobs:
         run: |
           if [ "$EVENT" != "pull_request" ]; then echo "relevant=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           if git diff --name-only "origin/$BASE_REF...HEAD" |
-             grep -Eq '^(_cache-explorer/|assets/cache-explorer/|_pages/cache-explorer\.md$|_layouts/tool\.liquid$|\.github/workflows/cache-explorer\.yml$)'; then
+             grep -Eq '^(_instruments/|assets/cache-explorer/|_pages/cache-explorer\.md$|_layouts/tool\.liquid$|\.github/workflows/cache-explorer\.yml$)'; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "relevant=false" >> "$GITHUB_OUTPUT"
@@ -60,10 +60,10 @@ jobs:
         run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: _cache-explorer
+          workspaces: _instruments
       - run: cargo fmt --all --check
       - name: Core has no JS or OS dependencies
-        run: sh scripts/check-core-deps.sh
+        run: sh cache-explorer/scripts/check-core-deps.sh
       - run: cargo clippy -p cache-explorer-core --all-targets --locked -- -D warnings
       - run: cargo clippy -p cache-explorer-wasm --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
       # --all-targets builds the core's tests, whose dev-dependency on the core turns
@@ -91,28 +91,29 @@ jobs:
       - run: rustup toolchain install --no-self-update
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: _cache-explorer
+          workspaces: _instruments
       - uses: actions/setup-node@v7
         with:
-          node-version-file: _cache-explorer/web/.nvmrc
+          node-version-file: _instruments/cache-explorer/web/.nvmrc
           cache: npm
-          cache-dependency-path: _cache-explorer/web/package-lock.json
+          cache-dependency-path: _instruments/cache-explorer/web/package-lock.json
       - run: npm ci
-        working-directory: _cache-explorer/web
+        working-directory: _instruments/cache-explorer/web
       - name: Facade tests in headless Chrome (fails if a suite was skipped or ran nothing)
         run: npm run test:wasm
-        working-directory: _cache-explorer/web
+        working-directory: _instruments/cache-explorer/web
       - name: Build
         run: npm run build
-        working-directory: _cache-explorer/web
+        working-directory: _instruments/cache-explorer/web
       - name: Release glue refuses hostile arguments and stays healthy
         run: npm run test:glue
-        working-directory: _cache-explorer/web
+        working-directory: _instruments/cache-explorer/web
       - name: Generated declarations match docs/cache_explorer.d.ts
         run: diff -u docs/cache_explorer.d.ts web/pkg/cache_explorer.d.ts
+        working-directory: _instruments/cache-explorer
       - name: Typecheck, lint, format, token and package checks, Vitest
         run: npm run check
-        working-directory: _cache-explorer/web
+        working-directory: _instruments/cache-explorer/web
       - name: Committed build matches a fresh build
         working-directory: .
         run: |
@@ -121,7 +122,7 @@ jobs:
       - name: wasm size
         working-directory: .
         shell: bash   # adds -o pipefail: without it the step takes tee's status and never fails
-        run: sh _cache-explorer/scripts/wasm-size.sh assets/cache-explorer/cache_explorer_bg.wasm | tee -a "$GITHUB_STEP_SUMMARY"
+        run: sh _instruments/cache-explorer/scripts/wasm-size.sh assets/cache-explorer/cache_explorer_bg.wasm | tee -a "$GITHUB_STEP_SUMMARY"
 
   status:
     if: always()

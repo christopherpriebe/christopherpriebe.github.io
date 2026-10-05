@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 // Browser mode without run_in_browser, so `test:wasm:node` keeps working. Without the variable,
 // wasm-pack's browser run finds a suite configured for Node, prints "so skipping" and exits 0.
 const env = { ...process.env, WASM_BINDGEN_USE_BROWSER: '1' };
-const r = spawnSync('wasm-pack', ['test', '--headless', '--chrome', '../crates/cache-explorer-wasm'],
+const r = spawnSync('wasm-pack', ['test', '--headless', '--chrome', '../../crates/cache-explorer-wasm'],
                     { env, encoding: 'utf8', stdio: ['inherit', 'pipe', 'pipe'] });
 process.stdout.write(r.stdout ?? '');
 process.stderr.write(r.stderr ?? '');

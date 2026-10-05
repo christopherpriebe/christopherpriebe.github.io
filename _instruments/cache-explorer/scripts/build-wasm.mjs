@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
-const workspace = resolve(import.meta.dirname, '..'); // _cache-explorer
+const workspace = resolve(import.meta.dirname, '..'); // _instruments/cache-explorer
 const web = resolve(workspace, 'web');
 const cargoHome = process.env.CARGO_HOME ?? resolve(homedir(), '.cargo');
 // Run in the workspace, so that rust-toolchain.toml picks the toolchain, as it does for cargo.
@@ -27,9 +27,9 @@ const env = {
 };
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: web, env, stdio: 'inherit' });
 
-// --out-dir is relative to the crate, so ../../web/pkg is _cache-explorer/web/pkg.
-run('wasm-pack', ['build', '../crates/cache-explorer-wasm', '--target', 'web', '--release',
-                  '--out-dir', '../../web/pkg', '--out-name', 'cache_explorer', '--', '--locked']);
+// --out-dir is relative to the crate, so ../../cache-explorer/web/pkg is web/pkg of this folder.
+run('wasm-pack', ['build', '../../crates/cache-explorer-wasm', '--target', 'web', '--release',
+                  '--out-dir', '../../cache-explorer/web/pkg', '--out-name', 'cache_explorer', '--', '--locked']);
 // --converge repeats -Oz while the module keeps shrinking, which doubles the time wasm-opt takes.
 // --low-memory-unused lets wasm-opt fold a constant below 1,024 that is added to an address into the
 // load's or store's offset. The two differ only when the addition wraps past 2^32, and no address

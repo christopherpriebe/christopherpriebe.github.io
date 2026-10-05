@@ -50,17 +50,22 @@ const SWITCH_CONFIG: &str = include_str!("fixtures/modules/02-fixture-switch-con
 /// the write-back.
 const STALE_MEMORY: &str = include_str!("fixtures/modules/03-fixture-stale-memory.json");
 
-/// The guided modules that ship, `_cache-explorer/modules/`, and their index.
-const MODULE_01: &str = include_str!("../../../modules/01-direct-mapped-miss-then-hit.json");
-const MODULE_02: &str = include_str!("../../../modules/02-index-not-sequential.json");
-const MODULE_03: &str = include_str!("../../../modules/03-conflict-misses.json");
-const MODULE_04: &str = include_str!("../../../modules/04-tracking-lru.json");
-const MODULE_05: &str = include_str!("../../../modules/05-fifo-vs-lru.json");
-const MODULE_06: &str = include_str!("../../../modules/06-spatial-locality-line-size.json");
-const MODULE_07: &str = include_str!("../../../modules/07-write-back-stale-memory.json");
-const MODULE_08: &str = include_str!("../../../modules/08-write-through-and-allocate.json");
-const MODULE_09: &str = include_str!("../../../modules/09-amat.json");
-const MODULE_INDEX: &str = include_str!("../../../modules/index.json");
+/// The guided modules that ship, `_instruments/cache-explorer/modules/`, and their index.
+const MODULE_01: &str =
+    include_str!("../../../cache-explorer/modules/01-direct-mapped-miss-then-hit.json");
+const MODULE_02: &str =
+    include_str!("../../../cache-explorer/modules/02-index-not-sequential.json");
+const MODULE_03: &str = include_str!("../../../cache-explorer/modules/03-conflict-misses.json");
+const MODULE_04: &str = include_str!("../../../cache-explorer/modules/04-tracking-lru.json");
+const MODULE_05: &str = include_str!("../../../cache-explorer/modules/05-fifo-vs-lru.json");
+const MODULE_06: &str =
+    include_str!("../../../cache-explorer/modules/06-spatial-locality-line-size.json");
+const MODULE_07: &str =
+    include_str!("../../../cache-explorer/modules/07-write-back-stale-memory.json");
+const MODULE_08: &str =
+    include_str!("../../../cache-explorer/modules/08-write-through-and-allocate.json");
+const MODULE_09: &str = include_str!("../../../cache-explorer/modules/09-amat.json");
+const MODULE_INDEX: &str = include_str!("../../../cache-explorer/modules/index.json");
 
 /// Every shipped module that has a test here, in index order.
 const SHIPPED: [&str; 9] = [
@@ -2159,14 +2164,16 @@ fn the_shipped_modules_parse_and_match_their_index() {
     }
     assert_eq!(SHIPPED_SHOW_ME.len(), SHIPPED.len());
     // Every file in modules/ has an index row and a SHIPPED entry, and back.
-    let mut stems: Vec<String> =
-        std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../../modules"))
-            .unwrap()
-            .map(|entry| entry.unwrap().path())
-            .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
-            .map(|path| path.file_stem().unwrap().to_string_lossy().into_owned())
-            .filter(|stem| stem != "index")
-            .collect();
+    let mut stems: Vec<String> = std::fs::read_dir(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../cache-explorer/modules"
+    ))
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+    .map(|path| path.file_stem().unwrap().to_string_lossy().into_owned())
+    .filter(|stem| stem != "index")
+    .collect();
     stems.sort();
     let mut expected: Vec<String> = ids.iter().map(ToString::to_string).collect();
     expected.sort();

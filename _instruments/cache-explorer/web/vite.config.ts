@@ -56,9 +56,9 @@ export default defineConfig({
   define: { __BUILD_HASH__: JSON.stringify(buildHash()) },
   plugins: [modules()],
   // The dev pages read the core's module fixtures, which live outside this folder.
-  server: { fs: { allow: ['..'] } },
+  server: { fs: { allow: ['../..'] } },
   build: {
-    outDir: '../../assets/cache-explorer',
+    outDir: '../../../assets/cache-explorer',
     emptyOutDir: true,
     target: 'es2022',
     assetsInlineLimit: 0,

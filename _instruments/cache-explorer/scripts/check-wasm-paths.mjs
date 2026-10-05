@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const file = process.argv[2] ?? resolve(import.meta.dirname, '..', '..', 'assets', 'cache-explorer', 'cache_explorer_bg.wasm');
+const file = process.argv[2] ?? resolve(import.meta.dirname, '..', '..', '..', 'assets', 'cache-explorer', 'cache_explorer_bg.wasm');
 const text = readFileSync(file).toString('latin1');
 const leaks = [...new Set(text.match(/(?:\/Users|\/home|[A-Za-z]:\\Users)[\x21-\x7e]*|[\x21-\x7e]*\.rustup[\x21-\x7e]*/g) ?? [])];
 if (leaks.length > 0) {

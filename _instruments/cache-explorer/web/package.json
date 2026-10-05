@@ -12,9 +12,9 @@
     "test": "vitest run",
     "test:glue": "node ../scripts/test-glue.mjs",
     "test:wasm": "node ../scripts/test-wasm.mjs",
-    "test:wasm:node": "wasm-pack test --node ../crates/cache-explorer-wasm",
+    "test:wasm:node": "wasm-pack test --node ../../crates/cache-explorer-wasm",
     "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && eslint . && prettier --check . && node ../scripts/check-tokens.mjs && node ../scripts/check-package.mjs && node ../scripts/check-wasm-paths.mjs && vitest run",
-    "size": "sh ../scripts/wasm-size.sh ../../assets/cache-explorer/cache_explorer_bg.wasm"
+    "size": "sh ../scripts/wasm-size.sh ../../../assets/cache-explorer/cache_explorer_bg.wasm"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

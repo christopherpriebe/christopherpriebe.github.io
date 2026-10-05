@@ -23,8 +23,8 @@
 //! shrinks:
 //!
 //! ```sh
-//! cd web && WASM_BINDGEN_USE_BROWSER=1 WASM_BINDGEN_TEST_TIMEOUT=600 \
-//!   npx wasm-pack test --headless --chrome --release ../crates/cache-explorer-wasm \
+//! cd cache-explorer/web && WASM_BINDGEN_USE_BROWSER=1 WASM_BINDGEN_TEST_TIMEOUT=600 \
+//!   npx wasm-pack test --headless --chrome --release ../../crates/cache-explorer-wasm \
 //!   --test costs -- --include-ignored --nocapture --exact logs::hit_loop
 //! ```
 //!

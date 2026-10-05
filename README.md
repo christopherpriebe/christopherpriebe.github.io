@@ -75,7 +75,7 @@ The `resume` layout is specifically for a resume/CV page, built from the `resume
 
 ## Interactive Cache Explorer
 
-The tool at `/cache-explorer/` is built from `_cache-explorer/` (Rust compiled to WebAssembly, and TypeScript); its built files are committed in `assets/cache-explorer/`. Setup, building and testing are in `_cache-explorer/README.md`, and the format of its guided modules in `_cache-explorer/docs/AUTHORING.md`.
+The tool at `/cache-explorer/` is built from `_instruments/cache-explorer/` (Rust compiled to WebAssembly, and TypeScript); its built files are committed in `assets/cache-explorer/`. Setup, building and testing are in `_instruments/cache-explorer/README.md`, and the format of its guided modules in `_instruments/cache-explorer/docs/AUTHORING.md`.
 
 ## Design Notes
 

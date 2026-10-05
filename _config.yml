@@ -133,6 +133,6 @@ exclude:
   # module JSON and docs. Jekyll's reader skips _-prefixed folders anyway, but
   # the `jekyll serve` watcher ignores only what is listed here, so without this
   # line every cargo or npm build would trigger a regeneration.
-  - _cache-explorer/
+  - _instruments/
   # .wasm is served as application/wasm by Jekyll's own mime.types; no webrick
   # headers are needed (a webrick Content-Type header applies to every response).

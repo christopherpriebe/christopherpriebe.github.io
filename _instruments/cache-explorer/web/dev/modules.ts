@@ -2,9 +2,9 @@
 // the files the core's own tests read, imported from them so the two cannot drift, and served from
 // memory in place of the folder a page names. Nothing here is in the build.
 
-import miss from '../../crates/cache-explorer-core/tests/fixtures/modules/01-fixture-miss-then-hit.json?raw';
-import config from '../../crates/cache-explorer-core/tests/fixtures/modules/02-fixture-switch-config.json?raw';
-import stale from '../../crates/cache-explorer-core/tests/fixtures/modules/03-fixture-stale-memory.json?raw';
+import miss from '../../../crates/cache-explorer-core/tests/fixtures/modules/01-fixture-miss-then-hit.json?raw';
+import config from '../../../crates/cache-explorer-core/tests/fixtures/modules/02-fixture-switch-config.json?raw';
+import stale from '../../../crates/cache-explorer-core/tests/fixtures/modules/03-fixture-stale-memory.json?raw';
 import type { ModuleSource } from '../src/modules';
 
 /** The modules' files, by id. */

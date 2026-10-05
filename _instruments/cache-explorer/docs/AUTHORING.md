@@ -1,6 +1,6 @@
 # Authoring guided modules
 
-A guided module is one JSON file in `_cache-explorer/modules/`, named by its id, plus a row in `modules/index.json`. This page is the whole format: every field, every step kind, every predicate, the markdown a module may use, the errors you will see, and how to add a module.
+A guided module is one JSON file in `_instruments/cache-explorer/modules/`, named by its id, plus a row in `modules/index.json`. This page is the whole format: every field, every step kind, every predicate, the markdown a module may use, the errors you will see, and how to add a module.
 
 The core reads and checks modules (`Module::parse`); the page only draws what it returns. So the rules below hold whatever is on screen, and a mistake is an error at test time, not a surprise in the browser.
 
@@ -316,7 +316,7 @@ For the other kinds, read: `modules/07-write-back-stale-memory.json` for `observ
 
 ## Adding a module
 
-1. **Write the file.** Make `_cache-explorer/modules/NN-short-name.json`. The number is the next free one; the name is lower case with hyphens; the `id` field is the name without `.json`.
+1. **Write the file.** Make `_instruments/cache-explorer/modules/NN-short-name.json`. The number is the next free one; the name is lower case with hyphens; the `id` field is the name without `.json`.
 2. **Add its row to `modules/index.json`.** The index is an array, in picker order, and each row repeats four of the file's fields:
 
    ```json
@@ -329,15 +329,15 @@ For the other kinds, read: `modules/07-write-back-stale-memory.json` for `observ
    ```
 
    The core's test reads both and fails if a row disagrees with its file, if an id is listed twice, or if a file has no row or a row no file.
-3. **Add it to the core's module tests**, `crates/cache-explorer-core/tests/modules.rs`:
-   - an `include_str!` constant beside the others (`const MODULE_10: &str = include_str!("../../../modules/10-short-name.json");`);
+3. **Add it to the core's module tests**, `_instruments/crates/cache-explorer-core/tests/modules.rs`:
+   - an `include_str!` constant beside the others (`const MODULE_10: &str = include_str!("../../../cache-explorer/modules/10-short-name.json");`);
    - the constant in the `SHIPPED` array at its index position (the test zips `SHIPPED` with the index rows), and the array's length;
    - a line in the `cases!` list that runs the module through its Show me path: `shipped_module_10_completes_through_its_show_me_path => (MODULE_10),`.
 
    A shipped module therefore needs a `showMe` that completes every instruct step, and every observe `until` must be reachable in the run. (`showMe` is optional for the format, not for a shipped module.)
 
    The Show me path test starts the module, applies every step's Show me or answer, and fails unless the module reaches the done screen. It is what proves that every `expect` and `until` can be made true by its own ops. A module that cannot complete this way is broken for a student who gets stuck.
-4. **Run the tests** from `_cache-explorer/`:
+4. **Run the tests** from `_instruments/`:
 
    ```sh
    cargo test -p cache-explorer-core --test modules --locked

@@ -13,7 +13,7 @@ function wasmBytes(): Uint8Array | null {
 export default defineConfig({
   define: { __BUILD_HASH__: JSON.stringify('test') },
   // The module tests read the core's fixtures, which live outside this folder.
-  server: { fs: { allow: ['..'] } },
+  server: { fs: { allow: ['../..'] } },
   test: {
     environment: 'jsdom',
     include: ['test/**/*.test.ts'],
