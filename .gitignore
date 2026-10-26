@@ -12,3 +12,7 @@ Gemfile.lock
 node_modules
 assets/css/main.css
 assets/js/*
+
+# Rust workspace build output (_instruments)
+_instruments/target/
+_instruments/cache-explorer/web/pkg/
